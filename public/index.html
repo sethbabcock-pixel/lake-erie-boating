@@ -77,6 +77,9 @@
     .mapwrap { height: 340px; }
     .camwrap { aspect-ratio: 16 / 9; }
     .mapwrap iframe, .camwrap iframe { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; }
+    .camwrap img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+    .cambadge { position: absolute; left: 8px; bottom: 8px; font-size: 10px; background: rgba(6,8,15,0.72);
+      color: var(--text-secondary); padding: 3px 7px; border-radius: 6px; }
     .camtabs { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 10px; }
     .camtabs button { padding: 5px 10px; font-size: 12px; font-weight: 600; cursor: pointer;
       background: var(--bg-primary); color: var(--text-secondary); border: 1px solid var(--border); border-radius: 8px; }
@@ -134,6 +137,11 @@
       { name: "Vermilion · Main St Beach", lat: 41.42, lon: -82.36, pixelcaster: "lesi/vermilion/mainstreet" },
       { name: "Cleveland Water Crib", lat: 41.54, lon: -81.71, ytChannel: "UCzmBlmDzPkaDGV72tSQ0yYw" },
       { name: "Cranberry Creek · Huron", lat: 41.39, lon: -82.55, yt: "zwlq7jscPc4" },
+      // WTOL (Toledo) snapshot cams — refreshing JPEGs, not video. Jet Express
+      // looks out over Lake Erie; the other two are downtown Toledo.
+      { name: "Jet Express · Lake Erie (Port Clinton)", lat: 41.51, lon: -82.94, img: "https://cdn.tegna-media.com/wtol/weather/webcams/jetexpress/snap_c1.jpg", link: "https://www.wtol.com/webcams" },
+      { name: "Toledo · Fifth Third Field (WTOL)", lat: 41.65, lon: -83.54, img: "https://cdn.tegna-media.com/wtol/weather/webcams/fifththird/snap_c1.jpg", link: "https://www.wtol.com/webcams" },
+      { name: "Toledo · Mercy Health (WTOL)", lat: 41.66, lon: -83.55, img: "https://cdn.tegna-media.com/wtol/weather/webcams/mercy/snap_c1.jpg", link: "https://www.wtol.com/webcams" },
     ];
     // Cams whose sites block embedding — opened in a new tab so they're still here.
     const LINK_CAMS = [
@@ -148,10 +156,26 @@
           : c.ytChannel ? `https://www.youtube.com/embed/live_stream?channel=${c.ytChannel}&autoplay=1&mute=1`
             : `https://www.youtube.com/embed/${c.yt}?autoplay=1&mute=1&rel=0`;
     const camLink = (c) =>
-      c.angelcam ? `https://v.angelcam.com/${c.angelcam}`
-        : c.pixelcaster ? `https://pixelcaster.com/live/${c.pixelcaster}/`
-          : c.ytChannel ? `https://www.youtube.com/channel/${c.ytChannel}/live`
-            : `https://www.youtube.com/watch?v=${c.yt}`;
+      c.img ? (c.link || c.img)
+        : c.angelcam ? `https://v.angelcam.com/${c.angelcam}`
+          : c.pixelcaster ? `https://pixelcaster.com/live/${c.pixelcaster}/`
+            : c.ytChannel ? `https://www.youtube.com/channel/${c.ytChannel}/live`
+              : `https://www.youtube.com/watch?v=${c.yt}`;
+    // Render a cam into its box: refreshing <img> for snapshot cams, else iframe.
+    let camTimer = null;
+    function showCam(cam, wrap, openEl) {
+      if (camTimer) { clearInterval(camTimer); camTimer = null; }
+      if (cam.img) {
+        const bust = () => `${cam.img}?t=${Date.now()}`;
+        wrap.innerHTML = `<img id="camimg" alt="${esc(cam.name)}" src="${bust()}">` +
+          `<div class="cambadge">snapshot · refreshes every 15s</div>`;
+        const el = wrap.querySelector("#camimg");
+        camTimer = setInterval(() => { el.src = bust(); }, 15000);
+      } else {
+        wrap.innerHTML = `<iframe title="Live cam" src="${camSrc(cam)}" loading="lazy" allow="autoplay; fullscreen" allowfullscreen></iframe>`;
+      }
+      if (openEl) openEl.href = camLink(cam);
+    }
     const esc = (s) => String(s).replace(/[&<>]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" }[c]));
     const dist = (la, lo, la2, lo2) => {
       const dx = (lo - lo2) * Math.cos(((la + la2) / 2) * Math.PI / 180);
@@ -202,16 +226,17 @@
         <div class="card">
           <h2>Live cams · nearest to ${s.name}</h2>
           <div class="camtabs" id="camtabs">${cams.map((c, i) => `<button data-i="${i}" class="${i === 0 ? "active" : ""}">${c.name}</button>`).join("")}</div>
-          <div class="camwrap"><iframe id="camframe" title="Live cam" src="${camSrc(first)}" loading="lazy" allow="autoplay; fullscreen" allowfullscreen></iframe></div>
-          <div class="hint"><a id="camopen" href="${camLink(first)}" target="_blank" rel="noopener">Open this cam full ↗</a></div>
+          <div class="camwrap" id="camwrap"></div>
+          <div class="hint"><a id="camopen" href="#" target="_blank" rel="noopener">Open this cam full ↗</a></div>
           <div class="linkcams">More cams (open in new tab): ${LINK_CAMS.map(c => `<a href="${c.url}" target="_blank" rel="noopener">${c.name} ↗</a>`).join("")}</div>
         </div>`;
+      const wrap = document.getElementById("camwrap");
+      const openEl = document.getElementById("camopen");
+      showCam(first, wrap, openEl);
       const tabs = document.getElementById("camtabs");
       tabs.querySelectorAll("button").forEach(btn =>
         btn.addEventListener("click", () => {
-          const c = cams[+btn.dataset.i];
-          document.getElementById("camframe").src = camSrc(c);
-          document.getElementById("camopen").href = camLink(c);
+          showCam(cams[+btn.dataset.i], wrap, openEl);
           tabs.querySelectorAll("button").forEach(x => x.classList.toggle("active", x === btn));
         })
       );
