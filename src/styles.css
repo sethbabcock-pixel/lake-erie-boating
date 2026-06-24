@@ -142,18 +142,34 @@ details.card { margin-bottom: var(--s4); }
 
 /* ---------- Hour-by-hour strip ---------- */
 .hourcard { margin-bottom: var(--s4); }
-.hours { display: flex; gap: var(--s2); overflow-x: auto; padding-bottom: 6px; scrollbar-width: thin; }
-.hour { flex: 0 0 auto; width: 54px; text-align: center; border-radius: var(--r-md); padding: 8px 0;
+.legend { font-size: var(--fs-xs); color: var(--text-muted); display: inline-flex; align-items: center; }
+.legend .lg { width: 9px; height: 9px; border-radius: 2px; display: inline-block; margin: 0 3px 0 8px; }
+.legend .lg.go { background: var(--success); }
+.legend .lg.caution { background: var(--warning); }
+.legend .lg.nogo { background: var(--danger); }
+.hours { display: flex; gap: 5px; overflow-x: auto; padding-bottom: 8px; scrollbar-width: thin; }
+.day-sep { flex: 0 0 auto; align-self: stretch; display: flex; align-items: center; padding: 0 1px; }
+.day-sep span { writing-mode: vertical-rl; transform: rotate(180deg); font-size: 10px; font-weight: var(--fw-bold);
+  text-transform: uppercase; letter-spacing: var(--tracking-wide); color: var(--accent); }
+.hour { flex: 0 0 auto; width: 50px; text-align: center; border-radius: var(--r-md); padding: 7px 0;
   background: var(--surface-sunk); border: 1px solid var(--border); }
-.hour .ht { font-size: var(--fs-xs); color: var(--text-muted); }
-.hour .hbar { height: 5px; border-radius: 3px; margin: 7px 9px; }
+.hour .ht { font-size: 10.5px; color: var(--text-muted); font-weight: var(--fw-semibold); }
+.hour .hicon { font-size: 14px; line-height: 1.5; }
+.hour .hbar { height: 4px; border-radius: 3px; margin: 4px 8px 5px; }
 .hour.go .hbar { background: var(--success); }
 .hour.caution .hbar { background: var(--warning); }
 .hour.nogo .hbar { background: var(--danger); }
-.hour .hw { font-family: var(--font-mono); font-size: var(--fs-sm); font-weight: var(--fw-semibold); color: var(--text); }
-.hour .hw span { font-size: 9px; font-weight: var(--fw-regular); color: var(--text-faint); margin-left: 1px; }
-.hour .hp { font-family: var(--font-mono); font-size: 10px; color: var(--text-faint); height: 13px; margin-top: 1px; }
-.hour.cutoff { border-color: var(--danger); box-shadow: 0 0 0 1px var(--danger); }
+.hour .hm { font-family: var(--font-mono); font-size: 12px; color: var(--text); line-height: 1.45; }
+.hour .hm b { font-weight: var(--fw-semibold); }
+.hour .hm small { font-size: 8px; color: var(--text-faint); margin-left: 1px; }
+.hour .hm.wave b { color: var(--accent); }
+.hour .hp { font-family: var(--font-mono); font-size: 9.5px; color: var(--text-faint); height: 13px; margin-top: 1px; }
+.hour.cutoff { border-color: var(--danger); box-shadow: 0 0 0 1.5px var(--danger); }
+.maptabs { display: inline-flex; gap: 4px; }
+.maptabs button { font-size: var(--fs-xs); font-weight: var(--fw-semibold); padding: 4px 11px; min-height: 30px; cursor: pointer;
+  background: var(--surface-sunk); color: var(--text-muted); border: 1px solid var(--border); border-radius: var(--r-pill); }
+.maptabs button:hover { border-color: var(--accent); color: var(--text); }
+.maptabs button.active { background: var(--accent); color: #fff; border-color: transparent; }
 
 /* ---------- Stats ---------- */
 .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(110px, 1fr)); gap: var(--s3); }

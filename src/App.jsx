@@ -6,13 +6,48 @@ const verdictClass = (lvl) => (lvl === "NO-GO" ? "nogo" : lvl === "CAUTION" ? "c
 const fmtHour = (t, withMin) =>
   new Date(t).toLocaleTimeString([], withMin ? { hour: "numeric", minute: "2-digit" } : { hour: "numeric" });
 
-function windyUrl(lat, lon) {
+function windyUrl(lat, lon, overlay = "wind") {
   return (
     `https://embed.windy.com/embed2.html?lat=${lat}&lon=${lon}` +
-    `&detailLat=${lat}&detailLon=${lon}&zoom=9&level=surface&overlay=wind&product=ecmwf` +
+    `&detailLat=${lat}&detailLon=${lon}&zoom=9&level=surface&overlay=${overlay}&product=ecmwf` +
     `&menu=&message=true&marker=true&calendar=now&pressure=&type=map&location=coordinates` +
     `&detail=&metricWind=kt&metricTemp=%C2%B0F&radarRange=-1`
   );
+}
+
+// Compact weather glyph from an NWS shortForecast.
+function wxGlyph(short) {
+  const s = (short || "").toLowerCase();
+  if (/thunder|tstm|waterspout/.test(s)) return "⛈️";
+  if (/snow|flurr|sleet|wintry|ice/.test(s)) return "🌨️";
+  if (/rain|shower|drizzle/.test(s)) return /sunny|partly|mostly sunny|few/.test(s) ? "🌦️" : "🌧️";
+  if (/fog|haze|mist|smoke/.test(s)) return "🌫️";
+  if (/mostly cloudy|overcast|^cloudy|broken/.test(s)) return "☁️";
+  if (/partly|mostly sunny|few clouds|partly cloudy/.test(s)) return "⛅";
+  if (/sunny|clear/.test(s)) return "☀️";
+  return "🌤️";
+}
+
+function dayLabel(d) {
+  const now = new Date();
+  const t0 = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const d0 = new Date(d.getFullYear(), d.getMonth(), d.getDate());
+  const diff = Math.round((d0 - t0) / 86400000);
+  if (diff <= 0) return "Today";
+  if (diff === 1) return "Tomorrow";
+  return d.toLocaleDateString([], { weekday: "short" });
+}
+
+function groupByDay(hours) {
+  const out = [];
+  let cur = null;
+  for (const h of hours) {
+    const d = new Date(h.time);
+    const key = d.toDateString();
+    if (!cur || cur.key !== key) { cur = { key, label: dayLabel(d), hours: [] }; out.push(cur); }
+    cur.hours.push(h);
+  }
+  return out;
 }
 
 // Theme choice: "dark" | "light" | "system" (default DARK).
@@ -53,22 +88,54 @@ function OutlookPill({ outlook }) {
 
 function HourStrip({ hours, headInBy }) {
   if (!hours || !hours.length) return null;
+  const days = groupByDay(hours);
   return (
     <section className="card hourcard">
-      <h2>Hour-by-hour · next {hours.length} hours</h2>
+      <div className="card-head">
+        <h2>Hour-by-hour · next {hours.length} hours</h2>
+        <span className="legend"><i className="lg go" />go <i className="lg caution" />caution <i className="lg nogo" />stay in</span>
+      </div>
       <div className="hours">
-        {hours.map((h) => (
-          <div key={h.time}
-            className={`hour ${h.level === "NO-GO" ? "nogo" : h.level.toLowerCase()} ${headInBy === h.time ? "cutoff" : ""}`}
-            title={h.short}>
-            <div className="ht">{fmtHour(h.time).replace(" ", "")}</div>
-            <div className="hbar" />
-            <div className="hw">{h.windKt ?? "—"}<span>kt</span></div>
-            <div className="hp">{h.precipPct ? `${h.precipPct}%` : ""}</div>
-          </div>
+        {days.map((day) => (
+          <React.Fragment key={day.key}>
+            <div className="day-sep"><span>{day.label}</span></div>
+            {day.hours.map((h) => (
+              <div key={h.time}
+                className={`hour ${h.level === "NO-GO" ? "nogo" : h.level.toLowerCase()} ${headInBy === h.time ? "cutoff" : ""}`}
+                title={h.short}>
+                <div className="ht">{fmtHour(h.time).replace(" ", "")}</div>
+                <div className="hicon" aria-hidden="true">{wxGlyph(h.short)}</div>
+                <div className="hbar" />
+                <div className="hm"><b>{h.windKt ?? "—"}</b><small>kt</small></div>
+                <div className="hm wave"><b>{h.waveFt ?? "—"}</b><small>ft</small></div>
+                <div className="hp">{h.precipPct ? `${h.precipPct}%` : "·"}</div>
+              </div>
+            ))}
+          </React.Fragment>
         ))}
       </div>
-      <div className="hint">Green = go · gold = caution · red = stay in. Red-ringed hour = be in by then. Wind in knots; % = rain chance.</div>
+      <div className="hint">Wind (kt) · wave (ft) · rain chance per hour. Red-ringed hour = be back in by then. Scroll for up to 3 days.</div>
+    </section>
+  );
+}
+
+function MapCard({ spot }) {
+  const [layer, setLayer] = useState("wind");
+  const layers = [["wind", "Wind"], ["waves", "Waves"], ["rain", "Rain"]];
+  return (
+    <section className="card">
+      <div className="card-head">
+        <h2>Weather map</h2>
+        <div className="maptabs">
+          {layers.map(([k, label]) => (
+            <button key={k} className={layer === k ? "active" : ""} onClick={() => setLayer(k)}>{label}</button>
+          ))}
+        </div>
+      </div>
+      <div className="mapwrap">
+        <iframe key={layer} title={`Windy ${layer} map`} src={windyUrl(spot.lat, spot.lon, layer)} loading="lazy" allow="fullscreen" />
+      </div>
+      <div className="hint">{spot.name} · switch layers above; pan & zoom inside the map.</div>
     </section>
   );
 }
@@ -201,13 +268,7 @@ export default function App() {
 
             {/* ── Map + Cams ── */}
             <div className="dash2">
-              <section className="card">
-                <h2>Weather map · {spot.name}</h2>
-                <div className="mapwrap">
-                  <iframe title="Windy weather map" src={windyUrl(spot.lat, spot.lon)} loading="lazy" allow="fullscreen" />
-                </div>
-                <div className="hint">Tap the layer buttons in the map for wind · gusts · waves · rain · radar.</div>
-              </section>
+              <MapCard spot={spot} />
               <Cams lat={spot.lat} lon={spot.lon} spotName={spot.name} />
             </div>
 

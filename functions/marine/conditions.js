@@ -166,7 +166,7 @@ async function fetchForecasts(lat, lon) {
       detailed: p.detailedForecast,
       precipPct: p.probabilityOfPrecipitation?.value ?? null,
     }));
-    const hourly = (hc?.properties?.periods || []).slice(0, 14).map((p) => {
+    const hourly = (hc?.properties?.periods || []).slice(0, 72).map((p) => {
       const mph = parseInt(String(p.windSpeed || "").match(/\d+/)?.[0] || "0", 10);
       return {
         time: p.startTime,
@@ -179,6 +179,30 @@ async function fetchForecasts(lat, lon) {
     return { daily, hourly };
   } catch (e) {
     return { daily: [], hourly: [] };
+  }
+}
+
+// Hourly wave height (ft) keyed by "YYYY-MM-DDTHH" (local) from Open-Meteo's
+// marine model — covers the whole lake incl. the buoy-poor western basin.
+async function fetchMarineHourly(lat, lon) {
+  try {
+    const d = await getJSON(
+      `https://marine-api.open-meteo.com/v1/marine?latitude=${lat}&longitude=${lon}` +
+      `&hourly=wave_height,wave_period&forecast_days=4&timezone=America%2FNew_York`
+    );
+    const times = d?.hourly?.time || [];
+    const wh = d?.hourly?.wave_height || [];
+    const wp = d?.hourly?.wave_period || [];
+    const map = {};
+    for (let i = 0; i < times.length; i++) {
+      map[times[i].slice(0, 13)] = {
+        waveFt: wh[i] == null ? null : round(mToFt(wh[i]), 1),
+        periodSec: wp[i] == null ? null : round(wp[i], 0),
+      };
+    }
+    return map;
+  } catch (e) {
+    return {};
   }
 }
 
@@ -314,34 +338,39 @@ function windRead(dirCompass) {
 // ---- Hourly risk timeline ----
 // Per-hour GO/CAUTION/NO-GO from the NWS hourly forecast (sustained wind +
 // precip chance + thunderstorm wording; hourly has no gust data).
-function hourRisk(windKt, precipPct, short) {
+function hourRisk(windKt, precipPct, short, waveFt) {
   const s = (short || "").toLowerCase();
   const thunder = /thunder|tstm|waterspout/.test(s);
   const pop = precipPct ?? 0;
   if (thunder && pop >= 25) return "NO-GO";        // real storm chance
+  if (waveFt != null && waveFt >= 4) return "NO-GO";
   if (windKt != null && windKt >= 22) return "NO-GO";
   if (thunder) return "CAUTION";                   // slight storm chance
+  if (waveFt != null && waveFt >= 2.5) return "CAUTION";
   if (windKt != null && windKt >= 15) return "CAUTION";
   if (pop >= 55) return "CAUTION";                 // likely rain
   return "GO";
 }
 
 function withRisk(hours) {
-  return (hours || []).map((h) => ({ ...h, level: hourRisk(h.windKt, h.precipPct, h.short) }));
+  return (hours || []).map((h) => ({ ...h, level: hourRisk(h.windKt, h.precipPct, h.short, h.waveFt) }));
 }
 
 // Turn the hourly timeline into an actionable "go now / be in by X" outlook.
 function computeOutlook(hours) {
   if (!hours || !hours.length) return null;
-  const idx = hours.findIndex((h) => h.level === "NO-GO");
-  const out = { nowLevel: hours[0].level, headInBy: null, headInReason: null, goodHours: hours.length };
-  if (idx === 0) { out.headInBy = hours[0].time; out.goodHours = 0; }
+  const win = hours.slice(0, 18); // actionable "today/tonight" window for "be in by"
+  const idx = win.findIndex((h) => h.level === "NO-GO");
+  const out = { nowLevel: hours[0].level, headInBy: null, headInReason: null, goodHours: win.length };
+  if (idx === 0) { out.headInBy = win[0].time; out.goodHours = 0; }
   else if (idx > 0) {
-    out.headInBy = hours[idx].time;
+    const h = win[idx];
+    out.headInBy = h.time;
     out.goodHours = idx;
-    const s = (hours[idx].short || "").toLowerCase();
-    out.headInReason = /thunder|tstm|waterspout/.test(s)
-      ? "thunderstorms" : (hours[idx].windKt >= 22 ? "building wind" : "deteriorating weather");
+    const s = (h.short || "").toLowerCase();
+    out.headInReason = /thunder|tstm|waterspout/.test(s) ? "thunderstorms"
+      : (h.waveFt != null && h.waveFt >= 4 ? "building waves"
+      : (h.windKt >= 22 ? "building wind" : "deteriorating weather"));
   }
   return out;
 }
@@ -441,15 +470,19 @@ export async function onRequest(context) {
 
   // Fetch all sources concurrently; each resolves to null on failure so one
   // bad source never sinks the whole response.
-  const [buoy, fc, marine, alerts, noaaReport] = await Promise.all([
+  const [buoy, fc, marine, alerts, noaaReport, waveMap] = await Promise.all([
     fetchBuoy(spot.buoys),
     fetchForecasts(spot.lat, spot.lon),
     fetchMarineForecast(spot.zone),
     fetchAlerts(spot.zone),
     fetchNSH("CLE"), // Cleveland WFO issues all Lake Erie nearshore zones
+    fetchMarineHourly(spot.lat, spot.lon),
   ]);
   const point = fc.daily;
-  const hourly = withRisk(fc.hourly);
+  // Merge hourly wave height (Open-Meteo) into the NWS hourly rows, then rate risk.
+  const hourly = withRisk(
+    fc.hourly.map((h) => ({ ...h, waveFt: (waveMap[h.time.slice(0, 13)] || {}).waveFt ?? null }))
+  );
   const outlook = computeOutlook(hourly);
 
   // Effective wind: prefer the live buoy, fall back to the NWS forecast so wind
