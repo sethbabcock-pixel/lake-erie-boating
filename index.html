@@ -1,23 +1,35 @@
 <!doctype html>
-<html lang="en">
+<html lang="en" data-theme="light">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
   <title>Should I Boat? — Live Lake Erie boating conditions</title>
-  <meta name="description" content="A clear GO / CAUTION / NO-GO call for boating on Lake Erie — live NOAA wind, waves, marine warnings, a wind-direction read, weather map, and webcams, all in one place." />
+  <meta name="description" content="A clear GO / CAUTION / NO-GO call for boating on Lake Erie — live NOAA wind, waves, an hour-by-hour risk timeline, marine warnings, a weather map, and webcams, all in one place." />
   <link rel="canonical" href="https://shouldiboat.com/" />
-  <meta name="theme-color" content="#0a0f1f" />
+  <meta name="theme-color" content="#0B3663" />
   <meta property="og:type" content="website" />
   <meta property="og:site_name" content="Should I Boat?" />
   <meta property="og:title" content="Should I Boat? — Live Lake Erie boating conditions" />
-  <meta property="og:description" content="A clear GO / CAUTION / NO-GO call for Lake Erie, from live NOAA data — wind, waves, marine warnings, a wind-direction read, map & webcams." />
+  <meta property="og:description" content="A clear GO / CAUTION / NO-GO call for Lake Erie, from live NOAA data — wind, waves, an hourly risk timeline, map & webcams." />
   <meta property="og:url" content="https://shouldiboat.com/" />
   <meta name="twitter:card" content="summary" />
   <meta name="twitter:title" content="Should I Boat? — Live Lake Erie boating conditions" />
   <meta name="twitter:description" content="A clear GO / CAUTION / NO-GO call for Lake Erie, from live NOAA data." />
-  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'><rect width='64' height='64' rx='12' fill='%230a193f'/><text x='32' y='46' text-anchor='middle' font-size='38'>⛵</text></svg>" />
+  <link rel="icon" type="image/png" href="/icon-256.png" />
+  <link rel="apple-touch-icon" href="/icon-256.png" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
-  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400..800&family=JetBrains+Mono:wght@400..600&display=swap" rel="stylesheet" />
+  <script>
+    // Set the theme before first paint to avoid a flash.
+    (function () {
+      try {
+        var t = localStorage.getItem("theme");
+        if (!t) t = matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+        document.documentElement.setAttribute("data-theme", t);
+      } catch (e) { document.documentElement.setAttribute("data-theme", "light"); }
+    })();
+  </script>
 </head>
 <body>
   <div id="root"></div>

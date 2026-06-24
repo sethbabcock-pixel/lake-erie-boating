@@ -13,6 +13,19 @@ function windyUrl(lat, lon) {
   );
 }
 
+// Flips data-theme on <html> and remembers the choice. Initial value comes from
+// the no-flash script in index.html (localStorage or prefers-color-scheme).
+function useTheme() {
+  const [theme, setTheme] = useState(
+    () => document.documentElement.getAttribute("data-theme") || "light"
+  );
+  useEffect(() => {
+    document.documentElement.setAttribute("data-theme", theme);
+    try { localStorage.setItem("theme", theme); } catch (e) { /* ignore */ }
+  }, [theme]);
+  return [theme, () => setTheme((t) => (t === "dark" ? "light" : "dark"))];
+}
+
 const fmtHour = (t, withMin) =>
   new Date(t).toLocaleTimeString([], withMin ? { hour: "numeric", minute: "2-digit" } : { hour: "numeric" });
 
@@ -55,6 +68,7 @@ function HourStrip({ hours, headInBy }) {
 }
 
 export default function App() {
+  const [theme, toggleTheme] = useTheme();
   const [spots, setSpots] = useState([]);
   const [active, setActive] = useState(() => localStorage.getItem("boating.spot") || "sandusky");
   const [data, setData] = useState(null);
@@ -89,11 +103,19 @@ export default function App() {
   return (
     <div className="app">
       <header className="topbar">
-        <div>
-          <h1>⛵ Should I Boat?</h1>
-          <div className="region">Lake Erie · Toledo → Erie, PA</div>
+        <div className="brand">
+          <img className="logo" src={theme === "dark" ? "/boat-mark-white.png" : "/boat-mark.png"} alt="Should I Boat?" />
+          <div>
+            <h1>Should I Boat?</h1>
+            <div className="region">Lake Erie · Toledo → Erie, PA</div>
+          </div>
         </div>
-        <span className="live">live</span>
+        <div className="topbar-actions">
+          <span className="live">live</span>
+          <button className="themebtn" onClick={toggleTheme} aria-label={`Switch to ${theme === "dark" ? "light" : "dark"} theme`} title="Toggle theme">
+            {theme === "dark" ? "☀️" : "🌙"}
+          </button>
+        </div>
       </header>
 
       <nav className="spots">
