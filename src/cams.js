@@ -28,6 +28,8 @@ export const LINK_CAMS = [
 ];
 
 export const camIsImage = (c) => Boolean(c.img);
+export const camKind = (c) => (c.img ? "photo" : "video");
+export const camKindLabel = (c) => (c.img ? "📷 refreshing photo" : "📹 live video");
 
 export const camSrc = (c) =>
   c.angelcam ? `https://v.angelcam.com/iframe?v=${c.angelcam}&autoplay=1`

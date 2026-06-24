@@ -428,6 +428,7 @@ export async function onRequest(context) {
     return json({
       spots: Object.entries(SPOTS).map(([id, s]) => ({
         id, name: s.name, zone: s.zone, lat: s.lat, lon: s.lon,
+        lake: s.lake || "Lake Erie", // each spot carries its lake → grouped picker, scales to all 5
       })),
     });
   }

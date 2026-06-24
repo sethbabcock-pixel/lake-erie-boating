@@ -1,14 +1,13 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { CAMS, LINK_CAMS, camSrc, camLink, camIsImage, nearestCams } from "./cams.js";
+import { LINK_CAMS, camSrc, camLink, camIsImage, camKind, camKindLabel, nearestCams } from "./cams.js";
 
 export default function Cams({ lat, lon, spotName }) {
-  const cams = useMemo(() => nearestCams(lat, lon, 7), [lat, lon]);
+  const cams = useMemo(() => nearestCams(lat, lon, 8), [lat, lon]);
   const [sel, setSel] = useState(0);
   const [loaded, setLoaded] = useState(false);
   const [failed, setFailed] = useState(false);
   const cam = cams[sel] || cams[0];
 
-  // Reset selection + loading when the spot (and therefore the cam list) changes.
   useEffect(() => { setSel(0); }, [lat, lon]);
   useEffect(() => { setLoaded(false); setFailed(false); }, [cam]);
 
@@ -20,56 +19,53 @@ export default function Cams({ lat, lon, spotName }) {
     return () => clearInterval(t);
   }, [cam]);
 
-  // Safety: if a player iframe never fires onLoad, drop the spinner anyway.
+  // Safety: if a player iframe never fires onLoad, drop the spinner after a bit.
   useEffect(() => {
     if (loaded) return;
-    const t = setTimeout(() => setLoaded(true), 6000);
+    const t = setTimeout(() => setLoaded(true), 7000);
     return () => clearTimeout(t);
   }, [cam, loaded]);
 
   return (
     <section className="card">
-      <h2>Live cams · nearest to {spotName}</h2>
-      <div className="camtabs">
-        {cams.map((c, i) => (
-          <button key={c.name} className={i === sel ? "active" : ""} onClick={() => setSel(i)}>
-            {c.name}
-          </button>
-        ))}
+      <div className="card-head">
+        <h2>Live cams</h2>
+        <span className={`cam-kind ${camKind(cam)}`}>{camKindLabel(cam)}</span>
       </div>
+
+      <select className="sel camsel" value={sel} onChange={(e) => setSel(Number(e.target.value))} aria-label="Choose a webcam">
+        {cams.map((c, i) => (
+          <option key={c.name} value={i}>{camIsImage(c) ? "📷 " : "📹 "}{c.name}</option>
+        ))}
+      </select>
 
       <div className="camwrap">
         {!loaded && !failed && <div className="camloading"><span className="spinner" />loading {cam.name}…</div>}
-        {failed && <div className="camloading">Couldn't load this cam. <a href={camLink(cam)} target="_blank" rel="noopener">Open it directly ↗</a></div>}
+        {failed && (
+          <div className="camloading">
+            This cam isn't responding right now.{" "}
+            <a href={camLink(cam)} target="_blank" rel="noopener">Open it directly ↗</a>
+          </div>
+        )}
         {camIsImage(cam) ? (
-          <img
-            key={cam.name}
-            alt={cam.name}
-            src={`${cam.img}?t=${bust}`}
-            onLoad={() => setLoaded(true)}
-            onError={() => setFailed(true)}
-            style={{ opacity: loaded ? 1 : 0 }}
-          />
+          <img key={cam.name} alt={cam.name} src={`${cam.img}?t=${bust}`}
+            onLoad={() => setLoaded(true)} onError={() => setFailed(true)}
+            style={{ opacity: loaded ? 1 : 0 }} />
         ) : (
-          <iframe
-            key={cam.name}
-            title={cam.name}
-            src={camSrc(cam)}
-            loading="eager"
-            allow="autoplay; fullscreen"
-            allowFullScreen
-            onLoad={() => setLoaded(true)}
-            style={{ opacity: loaded ? 1 : 0 }}
-          />
+          <iframe key={cam.name} title={cam.name} src={camSrc(cam)} loading="eager"
+            allow="autoplay; fullscreen" allowFullScreen
+            onLoad={() => setLoaded(true)} style={{ opacity: loaded ? 1 : 0 }} />
         )}
       </div>
 
       <div className="hint">
-        <a href={camLink(cam)} target="_blank" rel="noopener">Open this cam full ↗</a>
-        {!camIsImage(cam) && " · some cams need a tap to start"}
+        <a href={camLink(cam)} target="_blank" rel="noopener">Open this cam ↗</a>
+        {camIsImage(cam)
+          ? " · still image, refreshes every 15s"
+          : " · live video — some players need a tap to start"}
       </div>
       <div className="linkcams">
-        More cams (new tab):{" "}
+        More:{" "}
         {LINK_CAMS.map((c) => (
           <a key={c.name} href={c.url} target="_blank" rel="noopener">{c.name} ↗</a>
         ))}

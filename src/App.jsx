@@ -3,6 +3,8 @@ import Cams from "./Cams.jsx";
 
 const fmt = (v, unit) => (v == null ? "—" : `${v}${unit || ""}`);
 const verdictClass = (lvl) => (lvl === "NO-GO" ? "nogo" : lvl === "CAUTION" ? "caution" : "go");
+const fmtHour = (t, withMin) =>
+  new Date(t).toLocaleTimeString([], withMin ? { hour: "numeric", minute: "2-digit" } : { hour: "numeric" });
 
 function windyUrl(lat, lon) {
   return (
@@ -13,8 +15,7 @@ function windyUrl(lat, lon) {
   );
 }
 
-// Theme choice: "dark" | "light" | "system". Defaults to DARK. Resolves to an
-// effective theme, reflects it on <html data-theme>, and remembers the choice.
+// Theme choice: "dark" | "light" | "system" (default DARK).
 function useTheme() {
   const [choice, setChoice] = useState(() => {
     try { return localStorage.getItem("theme") || "dark"; } catch (e) { return "dark"; }
@@ -41,21 +42,13 @@ function useTheme() {
   return { choice, setChoice, effective };
 }
 
-const fmtHour = (t, withMin) =>
-  new Date(t).toLocaleTimeString([], withMin ? { hour: "numeric", minute: "2-digit" } : { hour: "numeric" });
-
-function OutlookBanner({ outlook }) {
+// The gold "yellow time" — when to head back in.
+function OutlookPill({ outlook }) {
   if (!outlook) return null;
-  if (outlook.goodHours === 0)
-    return <div className="outlook bad">🚫 Not a window right now — conditions are poor at the moment.</div>;
+  if (outlook.goodHours === 0) return <span className="opill bad">⛔ not right now</span>;
   if (outlook.headInBy)
-    return (
-      <div className="outlook warn">
-        🕐 Good to head out now — plan to be back in by <b>{fmtHour(outlook.headInBy, true)}</b>
-        {" "}({outlook.headInReason || "conditions turn"}).
-      </div>
-    );
-  return <div className="outlook good">🕐 Clear window — conditions hold for the next {outlook.goodHours}+ hours.</div>;
+    return <span className="opill warn">🕐 be in by <b>{fmtHour(outlook.headInBy, true)}</b> · {outlook.headInReason || "weather turns"}</span>;
+  return <span className="opill good">🕐 good for {outlook.goodHours}h+</span>;
 }
 
 function HourStrip({ hours, headInBy }) {
@@ -65,11 +58,9 @@ function HourStrip({ hours, headInBy }) {
       <h2>Hour-by-hour · next {hours.length} hours</h2>
       <div className="hours">
         {hours.map((h) => (
-          <div
-            key={h.time}
+          <div key={h.time}
             className={`hour ${h.level === "NO-GO" ? "nogo" : h.level.toLowerCase()} ${headInBy === h.time ? "cutoff" : ""}`}
-            title={h.short}
-          >
+            title={h.short}>
             <div className="ht">{fmtHour(h.time).replace(" ", "")}</div>
             <div className="hbar" />
             <div className="hw">{h.windKt ?? "—"}<span>kt</span></div>
@@ -77,7 +68,7 @@ function HourStrip({ hours, headInBy }) {
           </div>
         ))}
       </div>
-      <div className="hint">Green = go · amber = caution · red = stay in. A red-ringed hour is when to be back in. Wind in knots; % = rain chance.</div>
+      <div className="hint">Green = go · gold = caution · red = stay in. Red-ringed hour = be in by then. Wind in knots; % = rain chance.</div>
     </section>
   );
 }
@@ -114,87 +105,102 @@ export default function App() {
   const wv = data?.waves || {};
   const buoy = data?.buoy;
   const wr = data?.windRead;
-  const spotOptions = spots.length ? spots : (spot ? [spot] : [{ id: active, name: "Loading…" }]);
+
+  // Location options grouped by lake (scales to all five lakes).
+  const spotOptions = spots.length ? spots : (spot ? [{ ...spot, lake: "Lake Erie" }] : [{ id: active, name: "Loading…", lake: "Lake Erie" }]);
+  const byLake = {};
+  spotOptions.forEach((s) => { (byLake[s.lake || "Lake Erie"] ||= []).push(s); });
 
   return (
     <>
       <header className="appheader">
         <div className="appheader-inner">
-          <div className="brand">
-            <img className="logo" src={effective === "dark" ? "/boat-mark-white.png" : "/boat-mark.png"} alt="Should I Boat?" />
-            <div>
-              <h1>Should I Boat?</h1>
-              <div className="region">Lake Erie · Toledo → Erie, PA</div>
-            </div>
-          </div>
+          <a className="brand" href="/" aria-label="Should I Boat — home">
+            <img className="logo" src={effective === "dark" ? "/boat-mark-white.png" : "/boat-mark.png"} alt="" />
+            <span className="wordmark">
+              <span className="wm-name">SHOULDI<b>BOAT</b><span className="wm-dot">.com</span></span>
+              <span className="wm-tag">The navigator for all your nautical decisions</span>
+            </span>
+          </a>
           <div className="controls">
             <select className="sel locsel" value={active} onChange={(e) => setActive(e.target.value)} aria-label="Launch location">
-              {spotOptions.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
+              {Object.entries(byLake).map(([lake, list]) => (
+                <optgroup key={lake} label={lake}>
+                  {list.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
+                </optgroup>
+              ))}
             </select>
             <select className="sel themesel" value={choice} onChange={(e) => setChoice(e.target.value)} aria-label="Theme">
               <option value="dark">Dark</option>
               <option value="light">Light</option>
               <option value="system">Auto</option>
             </select>
-            <span className="live">live</span>
           </div>
         </div>
       </header>
 
       <main className="app">
-        {loading && !data && <div className="loading">Loading live Lake Erie conditions…</div>}
-      {error && <div className="err">Couldn't load conditions: {error}. <button onClick={() => loadSpot(active)}>Retry</button></div>}
+        {loading && !data && <div className="loading">Loading live conditions…</div>}
+        {error && <div className="err">Couldn't load conditions: {error}. <button onClick={() => loadSpot(active)}>Retry</button></div>}
 
-      {data && (
-        <>
-          <section className={`verdict ${verdictClass(rec.level)}`}>
-            <div className="where">{spot.name}</div>
-            <div className="lvl">{rec.level}</div>
-            <div className="sum">{rec.summary}</div>
-            <ul className="reasons">{rec.reasons.map((x, i) => <li key={i}>{x}</li>)}</ul>
-          </section>
-
-          {(data.alerts || []).map((a, i) => (
-            <div className="alert" key={i}>
-              <div className="ev">⚠ {a.event || "Marine alert"}</div>
-              <div className="hl">{a.headline || ""}</div>
-            </div>
-          ))}
-
-          <OutlookBanner outlook={data.outlook} />
-          <HourStrip hours={data.hourly} headInBy={data.outlook?.headInBy} />
-
-          <div className="dash">
-            {/* Left column: the quick read + visuals */}
-            <div className="col">
-              <div className="grid">
-                <div className="stat hero">
-                  <div className="k">Wind</div>
-                  <div className="v">{fmt(wind.speedKt, " kt")}</div>
-                  <div className="sub">
-                    {[wind.dir, wind.gustKt ? `gust ${wind.gustKt} kt` : null, wind.source]
-                      .filter(Boolean).join(" · ") || "—"}
-                  </div>
+        {data && (
+          <>
+            {/* ── The Call ── */}
+            <section className={`call ${verdictClass(rec.level)}`}>
+              <div className="call-badge"><span>{rec.level}</span></div>
+              <div className="call-body">
+                <div className="call-top">
+                  <span className="call-spot">{spot.name}</span>
+                  <OutlookPill outlook={data.outlook} />
                 </div>
-                <div className="stat">
-                  <div className="k">Waves</div>
-                  <div className="v">{fmt(wv.ft, " ft")}</div>
-                  <div className="sub">{wv.periodSec ? `${wv.periodSec}s period` : (wv.source || "—")}</div>
-                </div>
-                <div className="stat">
-                  <div className="k">Water</div>
-                  <div className="v">{fmt(buoy ? buoy.waterTempF : null, "°")}</div>
-                  <div className="sub">{buoy && buoy.airTempF != null ? `air ${buoy.airTempF}°` : ""}</div>
-                </div>
+                <div className="call-sum">{rec.summary}</div>
+                <ul className="reasons">{rec.reasons.map((x, i) => <li key={i}>{x}</li>)}</ul>
               </div>
+            </section>
 
-              {wr && (
-                <section className={`card wr-${wr.tone}`}>
-                  <h2>Wind read · out of the {wr.dir}</h2>
-                  <div className="advice">{wr.advice}</div>
-                </section>
-              )}
+            {(data.alerts || []).map((a, i) => (
+              <div className="alert" key={i}>
+                <div className="ev">⚠ {a.event || "Marine alert"}</div>
+                <div className="hl">{a.headline || ""}</div>
+              </div>
+            ))}
 
+            {/* ── Right now ── */}
+            <div className="grid stats">
+              <div className="stat hero">
+                <div className="k">Wind</div>
+                <div className="v">{fmt(wind.speedKt, "")}<small>kt</small></div>
+                <div className="sub">{[wind.dir, wind.gustKt ? `gust ${wind.gustKt}` : null, wind.source].filter(Boolean).join(" · ") || "—"}</div>
+              </div>
+              <div className="stat">
+                <div className="k">Waves</div>
+                <div className="v">{fmt(wv.ft, "")}<small>ft</small></div>
+                <div className="sub">{wv.periodSec ? `${wv.periodSec}s period` : (wv.source || "—")}</div>
+              </div>
+              <div className="stat">
+                <div className="k">Water</div>
+                <div className="v">{fmt(buoy ? buoy.waterTempF : null, "")}<small>°F</small></div>
+                <div className="sub">{buoy ? "buoy" : "—"}</div>
+              </div>
+              <div className="stat">
+                <div className="k">Air</div>
+                <div className="v">{fmt(buoy && buoy.airTempF != null ? buoy.airTempF : null, "")}<small>°F</small></div>
+                <div className="sub">{buoy && buoy.airTempF != null ? "buoy" : "—"}</div>
+              </div>
+            </div>
+
+            {wr && (
+              <section className={`card wr-${wr.tone} windread`}>
+                <div className="card-head"><h2>Wind read</h2><span className="wr-dir">out of the {wr.dir}</span></div>
+                <div className="advice">{wr.advice}</div>
+              </section>
+            )}
+
+            {/* ── Timeline ── */}
+            <HourStrip hours={data.hourly} headInBy={data.outlook?.headInBy} />
+
+            {/* ── Map + Cams ── */}
+            <div className="dash2">
               <section className="card">
                 <h2>Weather map · {spot.name}</h2>
                 <div className="mapwrap">
@@ -202,24 +208,14 @@ export default function App() {
                 </div>
                 <div className="hint">Tap the layer buttons in the map for wind · gusts · waves · rain · radar.</div>
               </section>
-
               <Cams lat={spot.lat} lon={spot.lon} spotName={spot.name} />
             </div>
 
-            {/* Right column: the detailed forecasts */}
-            <div className="col">
-              {(data.marineForecast || []).length > 0 && (
-                <section className="card">
-                  <h2>Marine zone forecast · {spot.zone}</h2>
-                  {data.marineForecast.map((p, i) => (
-                    <div className="fc" key={i}><div className="nm">{p.name}</div><div className="tx">{p.forecast || ""}</div></div>
-                  ))}
-                </section>
-              )}
-
+            {/* ── Details ── */}
+            <div className="dash2">
               {(data.pointForecast || []).length > 0 && (
                 <section className="card">
-                  <h2>Local weather</h2>
+                  <h2>Local weather · {spot.name}</h2>
                   {data.pointForecast.map((p, i) => (
                     <div className="fc" key={i}>
                       <div className="nm">{p.name} · {fmt(p.tempF, "°")}{p.precipPct ? ` · ${p.precipPct}% precip` : ""}</div>
@@ -228,23 +224,30 @@ export default function App() {
                   ))}
                 </section>
               )}
-
-              {data.noaaReport?.text && (
-                <details className="card">
-                  <summary>📋 Formal NOAA Nearshore Forecast (NSH · {data.noaaReport.office})</summary>
-                  <pre className="nsh">{data.noaaReport.text}</pre>
-                </details>
+              {(data.marineForecast || []).length > 0 && (
+                <section className="card">
+                  <h2>Marine zone forecast · {spot.zone}</h2>
+                  {data.marineForecast.map((p, i) => (
+                    <div className="fc" key={i}><div className="nm">{p.name}</div><div className="tx">{p.forecast || ""}</div></div>
+                  ))}
+                </section>
               )}
             </div>
-          </div>
 
-          <footer className="meta">
-            Source: {buoy ? `Buoy ${buoy.station} · ${buoy.ageMinutes != null ? `${buoy.ageMinutes} min ago` : "latest"}` : "forecast only"}
-            {" · NWS & NDBC (NOAA), Windy. Updated "}{new Date(data.updatedAt).toLocaleTimeString()}
-            <button onClick={() => loadSpot(active)}>↻ Refresh</button>
-          </footer>
-        </>
-      )}
+            {data.noaaReport?.text && (
+              <details className="card">
+                <summary>📋 Formal NOAA Nearshore Forecast (NSH · {data.noaaReport.office})</summary>
+                <pre className="nsh">{data.noaaReport.text}</pre>
+              </details>
+            )}
+
+            <footer className="meta">
+              Source: {buoy ? `Buoy ${buoy.station} · ${buoy.ageMinutes != null ? `${buoy.ageMinutes} min ago` : "latest"}` : "forecast only"}
+              {" · NWS & NDBC (NOAA), Windy. Updated "}{new Date(data.updatedAt).toLocaleTimeString()}
+              <button onClick={() => loadSpot(active)}>↻ Refresh</button>
+            </footer>
+          </>
+        )}
       </main>
     </>
   );
