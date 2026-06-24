@@ -13,6 +13,47 @@ function windyUrl(lat, lon) {
   );
 }
 
+const fmtHour = (t, withMin) =>
+  new Date(t).toLocaleTimeString([], withMin ? { hour: "numeric", minute: "2-digit" } : { hour: "numeric" });
+
+function OutlookBanner({ outlook }) {
+  if (!outlook) return null;
+  if (outlook.goodHours === 0)
+    return <div className="outlook bad">🚫 Not a window right now — conditions are poor at the moment.</div>;
+  if (outlook.headInBy)
+    return (
+      <div className="outlook warn">
+        🕐 Good to head out now — plan to be back in by <b>{fmtHour(outlook.headInBy, true)}</b>
+        {" "}({outlook.headInReason || "conditions turn"}).
+      </div>
+    );
+  return <div className="outlook good">🕐 Clear window — conditions hold for the next {outlook.goodHours}+ hours.</div>;
+}
+
+function HourStrip({ hours, headInBy }) {
+  if (!hours || !hours.length) return null;
+  return (
+    <section className="card hourcard">
+      <h2>Hour-by-hour · next {hours.length} hours</h2>
+      <div className="hours">
+        {hours.map((h) => (
+          <div
+            key={h.time}
+            className={`hour ${h.level === "NO-GO" ? "nogo" : h.level.toLowerCase()} ${headInBy === h.time ? "cutoff" : ""}`}
+            title={h.short}
+          >
+            <div className="ht">{fmtHour(h.time).replace(" ", "")}</div>
+            <div className="hbar" />
+            <div className="hw">{h.windKt ?? "—"}<span>kt</span></div>
+            <div className="hp">{h.precipPct ? `${h.precipPct}%` : ""}</div>
+          </div>
+        ))}
+      </div>
+      <div className="hint">Green = go · amber = caution · red = stay in. A red-ringed hour is when to be back in. Wind in knots; % = rain chance.</div>
+    </section>
+  );
+}
+
 export default function App() {
   const [spots, setSpots] = useState([]);
   const [active, setActive] = useState(() => localStorage.getItem("boating.spot") || "sandusky");
@@ -81,6 +122,9 @@ export default function App() {
               <div className="hl">{a.headline || ""}</div>
             </div>
           ))}
+
+          <OutlookBanner outlook={data.outlook} />
+          <HourStrip hours={data.hourly} headInBy={data.outlook?.headInBy} />
 
           <div className="dash">
             {/* Left column: the quick read + visuals */}

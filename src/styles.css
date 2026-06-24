@@ -42,6 +42,28 @@ a { color: var(--accent); }
 .alert .ev { font-weight: 700; color: #f87171; font-size: 14px; }
 .alert .hl { font-size: 13px; color: var(--text-secondary); margin-top: 3px; }
 
+/* "Go now / be in by X" outlook banner */
+.outlook { border-radius: 12px; padding: 13px 16px; margin-bottom: 14px; font-size: 14.5px; line-height: 1.45; border: 1px solid var(--border); }
+.outlook.good { background: rgba(16,185,129,0.12); border-color: rgba(16,185,129,0.4); color: #6ee7b7; }
+.outlook.warn { background: rgba(245,158,11,0.13); border-color: rgba(245,158,11,0.45); color: #fcd34d; }
+.outlook.bad { background: rgba(239,68,68,0.12); border-color: rgba(239,68,68,0.4); color: #fca5a5; }
+.outlook b { color: var(--text-primary); }
+
+/* Hour-by-hour risk timeline */
+.hourcard { margin-bottom: 16px; }
+.hours { display: flex; gap: 6px; overflow-x: auto; padding-bottom: 6px; }
+.hour { flex: 0 0 auto; width: 52px; text-align: center; border-radius: 9px; padding: 7px 0;
+  background: var(--bg-primary); border: 1px solid var(--border); }
+.hour .ht { font-size: 11px; color: var(--text-muted); }
+.hour .hbar { height: 5px; border-radius: 3px; margin: 7px 8px; }
+.hour.go .hbar { background: #34d399; }
+.hour.caution .hbar { background: #fbbf24; }
+.hour.nogo .hbar { background: #f87171; }
+.hour .hw { font-size: 13px; font-weight: 700; }
+.hour .hw span { font-size: 9px; font-weight: 400; color: var(--text-muted); margin-left: 1px; }
+.hour .hp { font-size: 10px; color: var(--text-muted); height: 13px; margin-top: 1px; }
+.hour.cutoff { border-color: #f87171; box-shadow: 0 0 0 1px #f87171; }
+
 /* Responsive dashboard: two columns on desktop, single column on mobile. */
 .dash { display: grid; grid-template-columns: 1fr; gap: 16px; align-items: start; }
 @media (min-width: 900px) { .dash { grid-template-columns: 1fr 1fr; } }

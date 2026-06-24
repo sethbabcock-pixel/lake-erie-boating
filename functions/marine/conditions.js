@@ -145,13 +145,17 @@ async function fetchBuoy(buoys) {
   return null;
 }
 
-async function fetchPointForecast(lat, lon) {
+// One /points lookup → both the day/night forecast AND the hourly forecast.
+async function fetchForecasts(lat, lon) {
   try {
-    const point = await getJSON(`${NWS}/points/${lat},${lon}`);
-    const forecastUrl = point?.properties?.forecast;
-    if (!forecastUrl) return null;
-    const fc = await getJSON(forecastUrl);
-    const periods = (fc?.properties?.periods || []).slice(0, 4).map((p) => ({
+    const pt = await getJSON(`${NWS}/points/${lat},${lon}`);
+    const fUrl = pt?.properties?.forecast;
+    const hUrl = pt?.properties?.forecastHourly;
+    const [fc, hc] = await Promise.all([
+      fUrl ? getJSON(fUrl).catch(() => null) : null,
+      hUrl ? getJSON(hUrl).catch(() => null) : null,
+    ]);
+    const daily = (fc?.properties?.periods || []).slice(0, 4).map((p) => ({
       name: p.name,
       isDaytime: p.isDaytime,
       tempF: p.temperature,
@@ -162,9 +166,19 @@ async function fetchPointForecast(lat, lon) {
       detailed: p.detailedForecast,
       precipPct: p.probabilityOfPrecipitation?.value ?? null,
     }));
-    return periods;
+    const hourly = (hc?.properties?.periods || []).slice(0, 14).map((p) => {
+      const mph = parseInt(String(p.windSpeed || "").match(/\d+/)?.[0] || "0", 10);
+      return {
+        time: p.startTime,
+        tempF: p.temperature,
+        windKt: round(mphToKt(mph), 0),
+        precipPct: p.probabilityOfPrecipitation?.value ?? 0,
+        short: p.shortForecast || "",
+      };
+    });
+    return { daily, hourly };
   } catch (e) {
-    return null;
+    return { daily: [], hourly: [] };
   }
 }
 
@@ -297,10 +311,45 @@ function windRead(dirCompass) {
   return r ? { dir: dirCompass, ...r } : null;
 }
 
+// ---- Hourly risk timeline ----
+// Per-hour GO/CAUTION/NO-GO from the NWS hourly forecast (sustained wind +
+// precip chance + thunderstorm wording; hourly has no gust data).
+function hourRisk(windKt, precipPct, short) {
+  const s = (short || "").toLowerCase();
+  const thunder = /thunder|tstm|waterspout/.test(s);
+  const pop = precipPct ?? 0;
+  if (thunder && pop >= 25) return "NO-GO";        // real storm chance
+  if (windKt != null && windKt >= 22) return "NO-GO";
+  if (thunder) return "CAUTION";                   // slight storm chance
+  if (windKt != null && windKt >= 15) return "CAUTION";
+  if (pop >= 55) return "CAUTION";                 // likely rain
+  return "GO";
+}
+
+function withRisk(hours) {
+  return (hours || []).map((h) => ({ ...h, level: hourRisk(h.windKt, h.precipPct, h.short) }));
+}
+
+// Turn the hourly timeline into an actionable "go now / be in by X" outlook.
+function computeOutlook(hours) {
+  if (!hours || !hours.length) return null;
+  const idx = hours.findIndex((h) => h.level === "NO-GO");
+  const out = { nowLevel: hours[0].level, headInBy: null, headInReason: null, goodHours: hours.length };
+  if (idx === 0) { out.headInBy = hours[0].time; out.goodHours = 0; }
+  else if (idx > 0) {
+    out.headInBy = hours[idx].time;
+    out.goodHours = idx;
+    const s = (hours[idx].short || "").toLowerCase();
+    out.headInReason = /thunder|tstm|waterspout/.test(s)
+      ? "thunderstorms" : (hours[idx].windKt >= 22 ? "building wind" : "deteriorating weather");
+  }
+  return out;
+}
+
 // ---- Recommendation engine ----
 // Thresholds tuned for small/mid recreational power boats (16-26 ft) on the
 // notoriously short, steep chop of Lake Erie's shallow western/central basin.
-function buildRecommendation({ buoy, alerts, marine, point, wind, waves, read }) {
+function buildRecommendation({ buoy, alerts, wind, waves, read, hours }) {
   const reasons = [];
   let level = "GO"; // GO < CAUTION < NO-GO
   const bump = (to, why) => {
@@ -347,13 +396,17 @@ function buildRecommendation({ buoy, alerts, marine, point, wind, waves, read })
     else if (read.tone === "caution") reasons.push(read.short);
   }
 
-  // Thunderstorm wording in the near-term forecast = hard stop.
-  const fcBlob = [
-    ...(point || []).map((p) => `${p.shortForecast} ${p.detailed}`),
-    ...(marine || []).map((m) => m.forecast),
-  ].join(" ").toLowerCase();
-  if (/thunderstorm|tstm|waterspout|severe/.test(fcBlob)) {
-    bump("NO-GO", "Thunderstorms in the forecast");
+  // IMMINENT hazard only (this hour / next) — storms happening now are a hard
+  // stop, but a storm 6 hours out should NOT make right-now a NO-GO. The hourly
+  // timeline + outlook tell the boater when to head back in.
+  const imminent = (hours || []).slice(0, 2);
+  const badNow = imminent.find((h) => h.level === "NO-GO");
+  if (badNow) {
+    const s = (badNow.short || "").toLowerCase();
+    bump("NO-GO", /thunder|tstm|waterspout/.test(s) ? "Thunderstorms now / imminent" : "Hazardous conditions right now");
+  } else if ((hours || []).some((h) => /thunder|tstm/.test((h.short || "").toLowerCase()))) {
+    // Storms later in the window — note it, but don't sink the current verdict.
+    reasons.push("Thunderstorms later — watch the hourly timeline");
   }
 
   if (reasons.length === 0) reasons.push("Calm conditions reported");
@@ -387,13 +440,16 @@ export async function onRequest(context) {
 
   // Fetch all sources concurrently; each resolves to null on failure so one
   // bad source never sinks the whole response.
-  const [buoy, point, marine, alerts, noaaReport] = await Promise.all([
+  const [buoy, fc, marine, alerts, noaaReport] = await Promise.all([
     fetchBuoy(spot.buoys),
-    fetchPointForecast(spot.lat, spot.lon),
+    fetchForecasts(spot.lat, spot.lon),
     fetchMarineForecast(spot.zone),
     fetchAlerts(spot.zone),
     fetchNSH("CLE"), // Cleveland WFO issues all Lake Erie nearshore zones
   ]);
+  const point = fc.daily;
+  const hourly = withRisk(fc.hourly);
+  const outlook = computeOutlook(hourly);
 
   // Effective wind: prefer the live buoy, fall back to the NWS forecast so wind
   // is present even when no buoy (and no wave data) is available.
@@ -415,7 +471,7 @@ export async function onRequest(context) {
   };
 
   const read = windRead(wind.dir);
-  const recommendation = buildRecommendation({ buoy, alerts, marine, point, wind, waves, read });
+  const recommendation = buildRecommendation({ buoy, alerts, wind, waves, read, hours: hourly });
 
   return json({
     spot: { id: spotId, name: spot.name, zone: spot.zone, lat: spot.lat, lon: spot.lon },
@@ -424,6 +480,8 @@ export async function onRequest(context) {
     wind,
     waves,
     windRead: read,
+    hourly,
+    outlook,
     buoy,
     alerts: alerts || [],
     marineForecast: marine || [],
