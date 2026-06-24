@@ -142,6 +142,13 @@
       { name: "Jet Express · Lake Erie (Port Clinton)", lat: 41.51, lon: -82.94, img: "https://cdn.tegna-media.com/wtol/weather/webcams/jetexpress/snap_c1.jpg", link: "https://www.wtol.com/webcams" },
       { name: "Toledo · Fifth Third Field (WTOL)", lat: 41.65, lon: -83.54, img: "https://cdn.tegna-media.com/wtol/weather/webcams/fifththird/snap_c1.jpg", link: "https://www.wtol.com/webcams" },
       { name: "Toledo · Mercy Health (WTOL)", lat: 41.66, lon: -83.55, img: "https://cdn.tegna-media.com/wtol/weather/webcams/mercy/snap_c1.jpg", link: "https://www.wtol.com/webcams" },
+      // Lake Erie Shores & Islands (Pixelcaster) — central/western basin video.
+      { name: "Catawba Island · Lake Erie", lat: 41.57, lon: -82.86, pixelcaster: "lesi/catawba" },
+      { name: "Miller Ferry · Put-in-Bay", lat: 41.62, lon: -82.83, pixelcaster: "lesi/miller" },
+      { name: "Port Clinton · City Beach", lat: 41.51, lon: -82.93, pixelcaster: "lesi/port-clinton" },
+      { name: "Lakeside · Marblehead", lat: 41.55, lon: -82.75, pixelcaster: "lesi/lakeside" },
+      { name: "Sandusky · State Theatre", lat: 41.45, lon: -82.71, pixelcaster: "lesi/sandusky" },
+      { name: "Old Fish House · Port Clinton", lat: 41.51, lon: -82.94, pixelcaster: "lesi/fishhouse" },
     ];
     // Cams whose sites block embedding — opened in a new tab so they're still here.
     const LINK_CAMS = [
@@ -215,7 +222,9 @@
         `&detailLat=${s.lat}&detailLon=${s.lon}&zoom=9&level=surface&overlay=wind&product=ecmwf` +
         `&menu=&message=true&marker=true&calendar=now&pressure=&type=map&location=coordinates` +
         `&detail=&metricWind=kt&metricTemp=%C2%B0F&radarRange=-1`;
-      const cams = CAMS.slice().sort((a, b) => dist(s.lat, s.lon, a.lat, a.lon) - dist(s.lat, s.lon, b.lat, b.lon));
+      const cams = CAMS.slice()
+        .sort((a, b) => dist(s.lat, s.lon, a.lat, a.lon) - dist(s.lat, s.lon, b.lat, b.lon))
+        .slice(0, 7); // nearest handful — the rest aren't relevant to this spot
       const first = cams[0];
       mediaEl.innerHTML = `
         <div class="card">
