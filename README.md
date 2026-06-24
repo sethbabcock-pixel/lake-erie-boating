@@ -5,7 +5,7 @@ Tap a launch spot and get a clear **GO / CAUTION / NO-GO** call backed by live
 NOAA data, a wind-direction read, a weather map, and live webcams — everything
 you need to decide whether to head out, in one place.
 
-🌐 Live: _(custom domain — connect in Cloudflare Pages)_
+🌐 Live: **https://shouldiboat.com**
 
 ## What it does
 
