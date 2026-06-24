@@ -1,0 +1,438 @@
+// Lake Erie marine conditions aggregator.
+//
+// Pulls live, authoritative NOAA data from the Cloudflare edge (which can reach
+// the NOAA hosts) and folds it into a single GO / CAUTION / NO-GO call for a
+// chosen launch spot between Toledo and Erie, PA.
+//
+// Data sources (all free, no API key):
+//   - NWS API (api.weather.gov): point forecast + active marine alerts
+//   - NWS nearshore marine zone forecast (text periods)
+//   - NDBC realtime buoy observations (waves, wind, water temp)
+//
+// GET /marine/conditions?spot=sandusky
+// GET /marine/conditions?spots  -> list available spots
+
+const UA = "lake-erie-boating (seth.babcock@gmail.com)";
+const NWS = "https://api.weather.gov";
+
+// Curated launch spots. Each maps to the nearest NWS nearshore marine zone and
+// the closest reporting NDBC buoy(s), ordered by preference. Buoys in Lake Erie
+// are seasonal (recovered over winter), so we list fallbacks and degrade
+// gracefully when none are reporting.
+const SPOTS = {
+  toledo: {
+    name: "Toledo / Maumee Bay",
+    lat: 41.694, lon: -83.32, zone: "LEZ142", buoys: ["45005", "THLO1"],
+  },
+  "port-clinton": {
+    name: "Port Clinton / Catawba",
+    lat: 41.512, lon: -82.94, zone: "LEZ143", buoys: ["45005"],
+  },
+  "put-in-bay": {
+    name: "Put-in-Bay / South Bass Island",
+    lat: 41.652, lon: -82.82, zone: "LEZ143", buoys: ["SBIO1", "45005"],
+  },
+  sandusky: {
+    name: "Sandusky / Cedar Point",
+    lat: 41.46, lon: -82.71, zone: "LEZ143", buoys: ["45005"],
+  },
+  vermilion: {
+    name: "Vermilion / Lorain",
+    lat: 41.47, lon: -82.31, zone: "LEZ144", buoys: ["45176", "45164", "45005"],
+  },
+  cleveland: {
+    name: "Cleveland",
+    lat: 41.507, lon: -81.706, zone: "LEZ146", buoys: ["45164", "45176"],
+  },
+  fairport: {
+    name: "Fairport Harbor / Mentor",
+    lat: 41.76, lon: -81.28, zone: "LEZ147", buoys: ["45207", "45164", "45167"],
+  },
+  conneaut: {
+    name: "Conneaut / Ashtabula",
+    lat: 41.96, lon: -80.55, zone: "LEZ148", buoys: ["45207", "45167"],
+  },
+  erie: {
+    name: "Erie, PA / Presque Isle",
+    lat: 42.16, lon: -80.11, zone: "LEZ149", buoys: ["45167"],
+  },
+};
+
+const json = (obj, status = 200) =>
+  new Response(JSON.stringify(obj), {
+    status,
+    headers: { "Content-Type": "application/json", "Cache-Control": "public, max-age=300" },
+  });
+
+async function getJSON(url, timeoutMs = 12000) {
+  const resp = await fetch(url, {
+    headers: { "User-Agent": UA, Accept: "application/geo+json,application/json" },
+    signal: AbortSignal.timeout(timeoutMs),
+  });
+  if (!resp.ok) throw new Error(`${url} -> ${resp.status}`);
+  return resp.json();
+}
+
+async function getText(url, timeoutMs = 12000) {
+  const resp = await fetch(url, {
+    headers: { "User-Agent": UA },
+    signal: AbortSignal.timeout(timeoutMs),
+  });
+  if (!resp.ok) throw new Error(`${url} -> ${resp.status}`);
+  return resp.text();
+}
+
+// ---- unit helpers ----
+const mToFt = (m) => m * 3.28084;
+const msToKt = (ms) => ms * 1.943844;
+const mphToKt = (mph) => mph * 0.868976;
+const cToF = (c) => (c * 9) / 5 + 32;
+const round = (n, d = 1) => (n == null || Number.isNaN(n) ? null : Math.round(n * 10 ** d) / 10 ** d);
+const isMissing = (v) => v == null || v === "MM" || v === "999" || v === "99.0" || v === "999.0";
+
+function degToCompass(deg) {
+  if (deg == null || Number.isNaN(deg)) return null;
+  const dirs = ["N", "NNE", "NE", "ENE", "E", "ESE", "SE", "SSE", "S", "SSW", "SW", "WSW", "W", "WNW", "NW", "NNW"];
+  return dirs[Math.round(deg / 22.5) % 16];
+}
+
+// Parse the most recent observation from an NDBC realtime2 standard met file.
+// Header columns: YY MM DD hh mm WDIR WSPD GST WVHT DPD APD MWD PRES ATMP WTMP DEWP VIS PTDY TIDE
+function parseBuoy(text, station) {
+  const lines = text.split("\n").filter((l) => l.trim() && !l.startsWith("#"));
+  if (!lines.length) return null;
+  const c = lines[0].trim().split(/\s+/);
+  if (c.length < 15) return null;
+  const num = (i) => (isMissing(c[i]) ? null : parseFloat(c[i]));
+
+  const wvhtM = num(8);
+  const wspdMs = num(6);
+  const gstMs = num(7);
+  const wdir = num(5);
+  const wtmpC = num(14);
+  const atmpC = num(13);
+  const dpd = num(9);
+
+  const obsTime = `${c[0]}-${c[1]}-${c[2]}T${c[3]}:${c[4]}:00Z`;
+  return {
+    station,
+    observedAt: obsTime,
+    ageMinutes: Math.round((Date.now() - Date.parse(obsTime)) / 60000),
+    waveHeightFt: round(wvhtM == null ? null : mToFt(wvhtM)),
+    waveHeightM: round(wvhtM, 2),
+    dominantPeriodSec: round(dpd),
+    windKt: round(wspdMs == null ? null : msToKt(wspdMs)),
+    windGustKt: round(gstMs == null ? null : msToKt(gstMs)),
+    windDir: degToCompass(wdir),
+    windDirDeg: wdir,
+    waterTempF: round(wtmpC == null ? null : cToF(wtmpC)),
+    airTempF: round(atmpC == null ? null : cToF(atmpC)),
+  };
+}
+
+async function fetchBuoy(buoys) {
+  for (const station of buoys) {
+    try {
+      const text = await getText(`https://www.ndbc.noaa.gov/data/realtime2/${station}.txt`);
+      const obs = parseBuoy(text, station);
+      // Skip stale (>3h) or empty observations; try the next fallback buoy.
+      if (obs && obs.ageMinutes != null && obs.ageMinutes < 180) return obs;
+      if (obs && obs.ageMinutes == null) return obs;
+    } catch (e) {
+      // try next buoy
+    }
+  }
+  return null;
+}
+
+async function fetchPointForecast(lat, lon) {
+  try {
+    const point = await getJSON(`${NWS}/points/${lat},${lon}`);
+    const forecastUrl = point?.properties?.forecast;
+    if (!forecastUrl) return null;
+    const fc = await getJSON(forecastUrl);
+    const periods = (fc?.properties?.periods || []).slice(0, 4).map((p) => ({
+      name: p.name,
+      isDaytime: p.isDaytime,
+      tempF: p.temperature,
+      wind: `${p.windDirection || ""} ${p.windSpeed || ""}`.trim(),
+      windSpeed: p.windSpeed || null,
+      windDir: p.windDirection || null,
+      shortForecast: p.shortForecast,
+      detailed: p.detailedForecast,
+      precipPct: p.probabilityOfPrecipitation?.value ?? null,
+    }));
+    return periods;
+  } catch (e) {
+    return null;
+  }
+}
+
+async function fetchMarineForecast(zone) {
+  try {
+    const data = await getJSON(`${NWS}/zones/marine/${zone}/forecast`);
+    return (data?.properties?.periods || []).slice(0, 6).map((p) => ({
+      name: p.name,
+      forecast: p.detailedForecast,
+    }));
+  } catch (e) {
+    return null;
+  }
+}
+
+async function fetchAlerts(zone) {
+  try {
+    const data = await getJSON(`${NWS}/alerts/active/zone/${zone}`);
+    return (data?.features || []).map((f) => ({
+      event: f.properties?.event,
+      severity: f.properties?.severity,
+      headline: f.properties?.headline,
+      description: f.properties?.description,
+      ends: f.properties?.ends || f.properties?.expires,
+    }));
+  } catch (e) {
+    return null;
+  }
+}
+
+// Latest official NWS Nearshore Marine Forecast (NSH) text product. This is the
+// formal NOAA report boaters read — full text, all Lake Erie zones.
+async function fetchNSH(office = "CLE") {
+  try {
+    const list = await getJSON(`${NWS}/products/types/NSH/locations/${office}`);
+    const id = (list?.["@graph"] || list?.products || [])[0]?.id;
+    if (!id) return null;
+    const prod = await getJSON(`${NWS}/products/${id}`);
+    if (!prod?.productText) return null;
+    return { text: prod.productText, issued: prod.issuanceTime || null, office };
+  } catch (e) {
+    return null;
+  }
+}
+
+// Pull a wind speed (kt) + direction from an NWS forecast period like
+// "SW 10 to 15 mph" — the fallback when no buoy is reporting wind.
+function parseForecastWind(period) {
+  if (!period) return null;
+  const nums = String(period.windSpeed || "").match(/\d+/g);
+  if (!nums || !nums.length) return null;
+  const mph = Math.max(...nums.map(Number));
+  return { speedKt: round(mphToKt(mph)), dir: period.windDir || null, mph };
+}
+
+// Pull a wave height (ft) from NWS marine/nearshore forecast text like
+// "Waves 2 to 4 feet" or "Waves 1 foot or less" — the fallback when no buoy is
+// reporting waves (common in the buoy-poor western basin).
+function parseForecastWaves(periods) {
+  for (const p of periods || []) {
+    const t = (p.forecast || p.detailed || "").toLowerCase();
+    let m = t.match(/waves?\s+(\d+)\s+to\s+(\d+)\s*f(?:ee|oo)t/);
+    if (m) return Math.max(+m[1], +m[2]);
+    m = t.match(/waves?\s+(?:around |about |up to |near )?(\d+)\s*f(?:ee|oo)t/);
+    if (m) return +m[1];
+    if (/waves?[^.]*(?:foot or less|less than a foot|1 foot or less)/.test(t)) return 1;
+  }
+  return null;
+}
+
+// Expand a UGC zone spec ("LEZ142>144", "LEZ145-146") to its zone numbers.
+function zoneNumbers(spec) {
+  const nums = [];
+  let prev = null, m;
+  const re = /([>-]?)(\d{3})/g;
+  while ((m = re.exec(spec.replace(/^[A-Z]{3}/, "")))) {
+    const n = +m[2];
+    if (m[1] === ">" && prev != null) for (let k = prev + 1; k <= n; k++) nums.push(k);
+    else nums.push(n);
+    prev = n;
+  }
+  return nums;
+}
+
+// Parse the current-period wave height (ft) for a specific zone out of the NSH
+// text product (the reliable wave source for nearshore zones, which the API's
+// zone-forecast endpoint leaves blank).
+function nshWavesForZone(text, zone) {
+  if (!text || !zone) return null;
+  const want = parseInt(String(zone).replace(/\D/g, ""), 10);
+  if (!want) return null;
+  const lines = text.split("\n");
+  for (let i = 0; i < lines.length; i++) {
+    const h = lines[i].match(/^([A-Z]{3}[\d>\-]+?)-\d{6}-\s*$/);
+    if (!h || !zoneNumbers(h[1]).includes(want)) continue;
+    let body = "";
+    for (let j = i + 1; j < lines.length; j++) {
+      if (/^[A-Z]{3}[\d>\-]+?-\d{6}-\s*$/.test(lines[j])) break;
+      body += lines[j] + " ";
+    }
+    return parseForecastWaves([{ forecast: body }]);
+  }
+  return null;
+}
+
+// How a wind DIRECTION plays on Lake Erie's south shore. Open water is to the
+// north (so N'ly = onshore, S'ly = offshore), and the lake's long axis runs
+// WSW–ENE, so those directions have the longest fetch and build the biggest
+// waves. tone drives the verdict; advice is the plain-language explainer.
+const WIND_READS = {
+  N:   { tone: "bad",     short: "N onshore — chop piles on this shore", advice: "North wind blows straight across the lake onto the Ohio shore — choppy right at the launch, usually rougher than the open-water number." },
+  NNE: { tone: "bad",     short: "NNE onshore + long fetch — steep waves", advice: "Out of the NNE: long fetch down the lake plus onshore. Builds steep, closely-spaced waves." },
+  NE:  { tone: "bad",     short: "NE — long fetch, Erie's roughest direction", advice: "NE has the longest fetch down the lake and blows onshore here. Notorious on Erie for steep, dangerous waves — be very cautious." },
+  ENE: { tone: "caution", short: "ENE — long fetch, chop building", advice: "East-northeast with a long fetch down the lake; chop builds through the day." },
+  E:   { tone: "caution", short: "E cross-shore — watch it build", advice: "Easterly cross-shore wind. Moderate chop that can build with a long fetch behind it." },
+  ESE: { tone: "caution", short: "ESE offshore — calm at ramp, rougher out", advice: "Out of the SE (offshore): flat at the launch but it builds offshore and pushes you away from shore." },
+  SE:  { tone: "caution", short: "SE offshore — deceptive at the ramp", advice: "Offshore from the SE. Water looks calm at the dock but gets rougher as you head out, and the wind pushes small boats away from shore." },
+  SSE: { tone: "caution", short: "SSE offshore — deceptive, pushes you out", advice: "Southerly offshore wind: deceptively flat at the launch, rougher offshore, and it pushes you out. Mind the return trip." },
+  S:   { tone: "caution", short: "S offshore — flat at shore, rough offshore", advice: "South wind is offshore here — calm near the beach but it builds offshore and you'll fight it coming back. Easy to underestimate." },
+  SSW: { tone: "caution", short: "SSW — offshore + long fetch to the east", advice: "SSW is offshore at the Ohio shore but runs the lake's long axis — waves build toward the central/eastern basin." },
+  SW:  { tone: "caution", short: "SW — long fetch, waves build down the lake", advice: "Prevailing SW: longest fetch down the lake. Builds through the day, biggest toward Cleveland and east." },
+  WSW: { tone: "caution", short: "WSW — long fetch building waves east", advice: "WSW runs the lake's long axis — waves build through the day, largest toward the eastern basin." },
+  W:   { tone: "ok",      short: "W — cross/offshore, moderate", advice: "Westerly: cross-to-offshore here. Moderate chop, building toward the east end of the lake." },
+  WNW: { tone: "caution", short: "WNW — gusty post-front, chop onshore", advice: "WNW often follows a cold front — gusty and shifting, bringing chop onto the shore." },
+  NW:  { tone: "caution", short: "NW onshore — chop onshore, often gusty", advice: "Northwest is onshore-ish and frequently post-frontal (gusty). Pushes chop onto the shore." },
+  NNW: { tone: "bad",     short: "NNW onshore — chop piles on the shore", advice: "Out of the NNW: onshore, piling chop onto the Ohio shore." },
+};
+function windRead(dirCompass) {
+  const r = dirCompass && WIND_READS[dirCompass];
+  return r ? { dir: dirCompass, ...r } : null;
+}
+
+// ---- Recommendation engine ----
+// Thresholds tuned for small/mid recreational power boats (16-26 ft) on the
+// notoriously short, steep chop of Lake Erie's shallow western/central basin.
+function buildRecommendation({ buoy, alerts, marine, point, wind, waves, read }) {
+  const reasons = [];
+  let level = "GO"; // GO < CAUTION < NO-GO
+  const bump = (to, why) => {
+    const order = { GO: 0, CAUTION: 1, "NO-GO": 2 };
+    if (order[to] > order[level]) level = to;
+    if (why) reasons.push(why);
+  };
+
+  // Active marine warnings dominate.
+  for (const a of alerts || []) {
+    const ev = (a.event || "").toLowerCase();
+    if (ev.includes("gale") || ev.includes("storm") || ev.includes("special marine")) {
+      bump("NO-GO", `Active ${a.event}`);
+    } else if (ev) {
+      bump("CAUTION", `Active ${a.event}`);
+    }
+  }
+
+  // Wave height — observed buoy if available, else NWS forecast, so it's never
+  // blank (the western basin rarely has a reporting wave buoy).
+  const wv = waves?.ft;
+  if (wv != null) {
+    const tag = waves.source === "forecast" ? " (forecast)" : "";
+    if (wv >= 4) bump("NO-GO", `Waves ~${wv} ft${tag} — very rough`);
+    else if (wv >= 3) bump("CAUTION", `Waves ~${wv} ft${tag} — rough for small boats`);
+    else if (wv >= 2) bump("CAUTION", `Waves ~${wv} ft${tag} — choppy`);
+    else reasons.push(`Waves ~${wv} ft${tag} — manageable`);
+  }
+
+  // Wind / gusts — buoy if reporting, otherwise NWS forecast, so wind ALWAYS
+  // factors in (the decisive signal when wave data is missing).
+  const topWind = Math.max(wind?.speedKt ?? 0, wind?.gustKt ?? 0);
+  if (topWind) {
+    const tag = wind?.source === "forecast" ? " (forecast)" : "";
+    if (topWind >= 22) bump("NO-GO", `Wind/gusts ~${round(topWind)} kt${tag}`);
+    else if (topWind >= 17) bump("CAUTION", `Wind ~${round(topWind)} kt${tag}`);
+    else if (topWind >= 12) bump("CAUTION", `Breezy ~${round(topWind)} kt${tag}`);
+    else if (wv == null) reasons.push(`Wind ~${round(topWind)} kt${tag} — light`);
+  }
+
+  // Wind DIRECTION on Erie's fetch — only matters once there's some wind.
+  if (read && topWind >= 10) {
+    if (read.tone === "bad") bump("CAUTION", read.short);
+    else if (read.tone === "caution") reasons.push(read.short);
+  }
+
+  // Thunderstorm wording in the near-term forecast = hard stop.
+  const fcBlob = [
+    ...(point || []).map((p) => `${p.shortForecast} ${p.detailed}`),
+    ...(marine || []).map((m) => m.forecast),
+  ].join(" ").toLowerCase();
+  if (/thunderstorm|tstm|waterspout|severe/.test(fcBlob)) {
+    bump("NO-GO", "Thunderstorms in the forecast");
+  }
+
+  if (reasons.length === 0) reasons.push("Calm conditions reported");
+  if (!buoy) reasons.push("No live buoy here — using NWS forecast; verify before launch");
+
+  const summary = {
+    GO: "Looks good to boat.",
+    CAUTION: "Boatable with caution — small boats take care.",
+    "NO-GO": "Not recommended — stay in.",
+  }[level];
+
+  return { level, summary, reasons };
+}
+
+export async function onRequest(context) {
+  const url = new URL(context.request.url);
+
+  if (url.searchParams.has("spots")) {
+    return json({
+      spots: Object.entries(SPOTS).map(([id, s]) => ({
+        id, name: s.name, zone: s.zone, lat: s.lat, lon: s.lon,
+      })),
+    });
+  }
+
+  const spotId = (url.searchParams.get("spot") || "sandusky").toLowerCase();
+  const spot = SPOTS[spotId];
+  if (!spot) {
+    return json({ error: `Unknown spot '${spotId}'`, spots: Object.keys(SPOTS) }, 400);
+  }
+
+  // Fetch all sources concurrently; each resolves to null on failure so one
+  // bad source never sinks the whole response.
+  const [buoy, point, marine, alerts, noaaReport] = await Promise.all([
+    fetchBuoy(spot.buoys),
+    fetchPointForecast(spot.lat, spot.lon),
+    fetchMarineForecast(spot.zone),
+    fetchAlerts(spot.zone),
+    fetchNSH("CLE"), // Cleveland WFO issues all Lake Erie nearshore zones
+  ]);
+
+  // Effective wind: prefer the live buoy, fall back to the NWS forecast so wind
+  // is present even when no buoy (and no wave data) is available.
+  const forecastWind = parseForecastWind(point?.[0]);
+  const wind = {
+    speedKt: buoy?.windKt ?? forecastWind?.speedKt ?? null,
+    gustKt: buoy?.windGustKt ?? null,
+    dir: buoy?.windDir ?? forecastWind?.dir ?? null,
+    source: buoy?.windKt != null ? "buoy" : forecastWind?.speedKt != null ? "forecast" : null,
+  };
+
+  // Effective waves: live buoy, else parsed from the marine forecast text, so a
+  // wave height is shown even where no buoy reports (the western basin).
+  const forecastWaveFt = parseForecastWaves(marine) ?? nshWavesForZone(noaaReport?.text, spot.zone);
+  const waves = {
+    ft: buoy?.waveHeightFt ?? forecastWaveFt ?? null,
+    periodSec: buoy?.dominantPeriodSec ?? null,
+    source: buoy?.waveHeightFt != null ? "buoy" : forecastWaveFt != null ? "forecast" : null,
+  };
+
+  const read = windRead(wind.dir);
+  const recommendation = buildRecommendation({ buoy, alerts, marine, point, wind, waves, read });
+
+  return json({
+    spot: { id: spotId, name: spot.name, zone: spot.zone, lat: spot.lat, lon: spot.lon },
+    updatedAt: new Date().toISOString(),
+    recommendation,
+    wind,
+    waves,
+    windRead: read,
+    buoy,
+    alerts: alerts || [],
+    marineForecast: marine || [],
+    pointForecast: point || [],
+    noaaReport,
+    sources: {
+      buoy: buoy ? `NDBC ${buoy.station}` : "no live buoy",
+      forecast: "NWS api.weather.gov",
+      marineZone: spot.zone,
+    },
+  });
+}
