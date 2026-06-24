@@ -13,17 +13,32 @@ function windyUrl(lat, lon) {
   );
 }
 
-// Flips data-theme on <html> and remembers the choice. Initial value comes from
-// the no-flash script in index.html (localStorage or prefers-color-scheme).
+// Theme choice: "dark" | "light" | "system". Defaults to DARK. Resolves to an
+// effective theme, reflects it on <html data-theme>, and remembers the choice.
 function useTheme() {
-  const [theme, setTheme] = useState(
-    () => document.documentElement.getAttribute("data-theme") || "light"
+  const [choice, setChoice] = useState(() => {
+    try { return localStorage.getItem("theme") || "dark"; } catch (e) { return "dark"; }
+  });
+  const [effective, setEffective] = useState(
+    () => document.documentElement.getAttribute("data-theme") || "dark"
   );
   useEffect(() => {
-    document.documentElement.setAttribute("data-theme", theme);
-    try { localStorage.setItem("theme", theme); } catch (e) { /* ignore */ }
-  }, [theme]);
-  return [theme, () => setTheme((t) => (t === "dark" ? "light" : "dark"))];
+    const apply = () => {
+      const eff = choice === "system"
+        ? (matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark")
+        : choice;
+      document.documentElement.setAttribute("data-theme", eff);
+      setEffective(eff);
+    };
+    apply();
+    try { localStorage.setItem("theme", choice); } catch (e) { /* ignore */ }
+    if (choice === "system") {
+      const mq = matchMedia("(prefers-color-scheme: light)");
+      mq.addEventListener("change", apply);
+      return () => mq.removeEventListener("change", apply);
+    }
+  }, [choice]);
+  return { choice, setChoice, effective };
 }
 
 const fmtHour = (t, withMin) =>
@@ -68,7 +83,7 @@ function HourStrip({ hours, headInBy }) {
 }
 
 export default function App() {
-  const [theme, toggleTheme] = useTheme();
+  const { choice, setChoice, effective } = useTheme();
   const [spots, setSpots] = useState([]);
   const [active, setActive] = useState(() => localStorage.getItem("boating.spot") || "sandusky");
   const [data, setData] = useState(null);
@@ -99,34 +114,35 @@ export default function App() {
   const wv = data?.waves || {};
   const buoy = data?.buoy;
   const wr = data?.windRead;
+  const spotOptions = spots.length ? spots : (spot ? [spot] : [{ id: active, name: "Loading…" }]);
 
   return (
-    <div className="app">
-      <header className="topbar">
-        <div className="brand">
-          <img className="logo" src={theme === "dark" ? "/boat-mark-white.png" : "/boat-mark.png"} alt="Should I Boat?" />
-          <div>
-            <h1>Should I Boat?</h1>
-            <div className="region">Lake Erie · Toledo → Erie, PA</div>
+    <>
+      <header className="appheader">
+        <div className="appheader-inner">
+          <div className="brand">
+            <img className="logo" src={effective === "dark" ? "/boat-mark-white.png" : "/boat-mark.png"} alt="Should I Boat?" />
+            <div>
+              <h1>Should I Boat?</h1>
+              <div className="region">Lake Erie · Toledo → Erie, PA</div>
+            </div>
           </div>
-        </div>
-        <div className="topbar-actions">
-          <span className="live">live</span>
-          <button className="themebtn" onClick={toggleTheme} aria-label={`Switch to ${theme === "dark" ? "light" : "dark"} theme`} title="Toggle theme">
-            {theme === "dark" ? "☀️" : "🌙"}
-          </button>
+          <div className="controls">
+            <select className="sel locsel" value={active} onChange={(e) => setActive(e.target.value)} aria-label="Launch location">
+              {spotOptions.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
+            </select>
+            <select className="sel themesel" value={choice} onChange={(e) => setChoice(e.target.value)} aria-label="Theme">
+              <option value="dark">Dark</option>
+              <option value="light">Light</option>
+              <option value="system">Auto</option>
+            </select>
+            <span className="live">live</span>
+          </div>
         </div>
       </header>
 
-      <nav className="spots">
-        {spots.map((s) => (
-          <button key={s.id} className={s.id === active ? "active" : ""} onClick={() => setActive(s.id)}>
-            {s.name}
-          </button>
-        ))}
-      </nav>
-
-      {loading && !data && <div className="loading">Loading live Lake Erie conditions…</div>}
+      <main className="app">
+        {loading && !data && <div className="loading">Loading live Lake Erie conditions…</div>}
       {error && <div className="err">Couldn't load conditions: {error}. <button onClick={() => loadSpot(active)}>Retry</button></div>}
 
       {data && (
@@ -229,6 +245,7 @@ export default function App() {
           </footer>
         </>
       )}
-    </div>
+      </main>
+    </>
   );
 }
