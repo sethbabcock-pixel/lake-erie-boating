@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from "react";
 import Cams from "./Cams.jsx";
+import WxIcon from "./WxIcon.jsx";
 
 const fmt = (v, unit) => (v == null ? "—" : `${v}${unit || ""}`);
 const verdictClass = (lvl) => (lvl === "NO-GO" ? "nogo" : lvl === "CAUTION" ? "caution" : "go");
@@ -278,18 +279,29 @@ export default function App() {
                 <section className="card">
                   <h2>Local weather · {spot.name}</h2>
                   {data.pointForecast.map((p, i) => (
-                    <div className="fc" key={i}>
-                      <div className="nm">{p.name} · {fmt(p.tempF, "°")}{p.precipPct ? ` · ${p.precipPct}% precip` : ""}</div>
-                      <div className="tx">{p.shortForecast || ""}. Wind {p.wind || ""}.</div>
+                    <div className="wxrow" key={i}>
+                      <div className="wxicon"><WxIcon short={p.shortForecast} /></div>
+                      <div className="wxmid">
+                        <div className="wxname">{p.name}</div>
+                        <div className="wxshort">{p.shortForecast}</div>
+                        <div className="wxmeta">Wind {p.wind || "—"}{p.precipPct ? ` · ${p.precipPct}% rain` : ""}</div>
+                      </div>
+                      <div className="wxtemp">{fmt(p.tempF, "°")}</div>
                     </div>
                   ))}
                 </section>
               )}
               {(data.marineForecast || []).length > 0 && (
                 <section className="card">
-                  <h2>Marine zone forecast · {spot.zone}</h2>
+                  <h2>Nearshore marine forecast · {spot.zone}</h2>
                   {data.marineForecast.map((p, i) => (
-                    <div className="fc" key={i}><div className="nm">{p.name}</div><div className="tx">{p.forecast || ""}</div></div>
+                    <div className="wxrow" key={i}>
+                      <div className="wxicon"><WxIcon short={p.forecast} /></div>
+                      <div className="wxmid">
+                        <div className="wxname">{p.name}</div>
+                        <div className="wxshort marine">{p.forecast}</div>
+                      </div>
+                    </div>
                   ))}
                 </section>
               )}
@@ -297,7 +309,7 @@ export default function App() {
 
             {data.noaaReport?.text && (
               <details className="card">
-                <summary>📋 Formal NOAA Nearshore Forecast (NSH · {data.noaaReport.office})</summary>
+                <summary>📋 Full NWS nearshore report (NSH · {data.noaaReport.office})</summary>
                 <pre className="nsh">{data.noaaReport.text}</pre>
               </details>
             )}

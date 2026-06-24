@@ -308,6 +308,35 @@ function nshWavesForZone(text, zone) {
   return null;
 }
 
+const titleCase = (s) => s.toLowerCase().replace(/\b\w/g, (c) => c.toUpperCase());
+
+// Parse the named periods (.TODAY... / .TONIGHT... / .THURSDAY...) for a zone
+// out of the NSH text — the real nearshore forecast (the API leaves it blank).
+function nshPeriodsForZone(text, zone) {
+  if (!text || !zone) return [];
+  const want = parseInt(String(zone).replace(/\D/g, ""), 10);
+  if (!want) return [];
+  const lines = text.split("\n");
+  for (let i = 0; i < lines.length; i++) {
+    const h = lines[i].match(/^([A-Z]{3}[\d>\-]+?)-\d{6}-\s*$/);
+    if (!h || !zoneNumbers(h[1]).includes(want)) continue;
+    let body = "";
+    for (let j = i + 1; j < lines.length; j++) {
+      if (/^[A-Z]{3}[\d>\-]+?-\d{6}-\s*$/.test(lines[j])) break;
+      body += lines[j] + " ";
+    }
+    const periods = [];
+    const re = /\.([A-Z][A-Z ]+?)\.\.\.\s*([\s\S]*?)(?=\.[A-Z][A-Z ]+?\.\.\.|$)/g;
+    let m;
+    while ((m = re.exec(body))) {
+      const forecast = m[2].replace(/\s+/g, " ").trim();
+      if (forecast) periods.push({ name: titleCase(m[1].trim()), forecast });
+    }
+    return periods.slice(0, 5);
+  }
+  return [];
+}
+
 // How a wind DIRECTION plays on Lake Erie's south shore. Open water is to the
 // north (so N'ly = onshore, S'ly = offshore), and the lake's long axis runs
 // WSW–ENE, so those directions have the longest fetch and build the biggest
@@ -518,7 +547,7 @@ export async function onRequest(context) {
     outlook,
     buoy,
     alerts: alerts || [],
-    marineForecast: marine || [],
+    marineForecast: (marine && marine.length) ? marine : nshPeriodsForZone(noaaReport?.text, spot.zone),
     pointForecast: point || [],
     noaaReport,
     sources: {

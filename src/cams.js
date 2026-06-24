@@ -4,8 +4,6 @@
 export const CAMS = [
   { name: "Edgewater Beach · Cleveland", lat: 41.49, lon: -81.74, angelcam: "91yx8ek0ro" },
   { name: "Vermilion · Main St Beach", lat: 41.42, lon: -82.36, pixelcaster: "lesi/vermilion/mainstreet" },
-  { name: "Cleveland Water Crib", lat: 41.54, lon: -81.71, ytChannel: "UCzmBlmDzPkaDGV72tSQ0yYw" },
-  { name: "Cranberry Creek · Huron", lat: 41.39, lon: -82.55, yt: "zwlq7jscPc4" },
   // WTOL (Toledo) refreshing snapshots
   { name: "Jet Express · Lake Erie (Port Clinton)", lat: 41.51, lon: -82.94, img: "https://cdn.tegna-media.com/wtol/weather/webcams/jetexpress/snap_c1.jpg", link: "https://www.wtol.com/webcams" },
   { name: "Toledo · Fifth Third Field (WTOL)", lat: 41.65, lon: -83.54, img: "https://cdn.tegna-media.com/wtol/weather/webcams/fifththird/snap_c1.jpg", link: "https://www.wtol.com/webcams" },
