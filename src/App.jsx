@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from "react";
 import Cams from "./Cams.jsx";
 import WxIcon from "./WxIcon.jsx";
 import { useAdsense, useAnalytics, getConsent, AdSlot, GearBlock, ConsentBanner } from "./monetize.jsx";
+import { useAuth, Account } from "./auth.jsx";
 
 const fmt = (v, unit) => (v == null ? "—" : `${v}${unit || ""}`);
 const verdictClass = (lvl) => (lvl === "NO-GO" ? "nogo" : lvl === "CAUTION" ? "caution" : "go");
@@ -136,10 +137,24 @@ function ThemeToggle({ effective, onToggle }) {
 }
 
 // Custom, searchable, lake-grouped location picker (replaces the bland select).
-function LocationPicker({ byLake, active, activeName, onSelect }) {
+function LocationPicker({ byLake, active, activeName, onSelect, favorites = [], onToggleFav }) {
   const [open, setOpen] = useState(false);
   const [q, setQ] = useState("");
   const ref = useRef(null);
+  const favSet = new Set(favorites);
+  const allSpots = Object.values(byLake).flat();
+  const favSpots = favorites.map((id) => allSpots.find((s) => s.id === id)).filter(Boolean);
+  const Row = (s) => (
+    <div key={s.id} className={`locpick-item ${s.id === active ? "active" : ""}`}>
+      <button className="locpick-pick" onClick={() => { onSelect(s.id); setOpen(false); setQ(""); }}>
+        <span>{s.name}</span>{s.id === active && <span className="check">✓</span>}
+      </button>
+      {onToggleFav && (
+        <button className={`favstar ${favSet.has(s.id) ? "on" : ""}`} title="Favorite"
+          onClick={(e) => { e.stopPropagation(); onToggleFav(s.id); }}>★</button>
+      )}
+    </div>
+  );
   useEffect(() => {
     if (!open) return;
     const onDoc = (e) => { if (ref.current && !ref.current.contains(e.target)) setOpen(false); };
@@ -162,18 +177,19 @@ function LocationPicker({ byLake, active, activeName, onSelect }) {
         <div className="locpick-panel" role="listbox">
           <input className="locpick-search" placeholder="Search spots…" value={q} onChange={(e) => setQ(e.target.value)} autoFocus />
           <div className="locpick-list">
+            {onToggleFav && favSpots.length > 0 && !ql && (
+              <div className="locpick-group">
+                <div className="locpick-lake">★ Favorites</div>
+                {favSpots.map((s) => Row(s))}
+              </div>
+            )}
             {Object.entries(byLake).map(([lake, list]) => {
               const items = ql ? list.filter((s) => s.name.toLowerCase().includes(ql) || lake.toLowerCase().includes(ql)) : list;
               if (!items.length) return null;
               return (
                 <div className="locpick-group" key={lake}>
                   <div className="locpick-lake">{lake}</div>
-                  {items.map((s) => (
-                    <button key={s.id} className={`locpick-item ${s.id === active ? "active" : ""}`}
-                      onClick={() => { onSelect(s.id); setOpen(false); setQ(""); }}>
-                      <span>{s.name}</span>{s.id === active && <span className="check">✓</span>}
-                    </button>
-                  ))}
+                  {items.map((s) => Row(s))}
                 </div>
               );
             })}
@@ -249,10 +265,31 @@ function MapCard({ spot }) {
 
 export default function App() {
   const { choice, setChoice, effective } = useTheme();
+  const auth = useAuth();
   const [consent, setConsent] = useState(getConsent());
   const chooseConsent = (c) => { try { if (c) localStorage.setItem("sib.consent", c); else localStorage.removeItem("sib.consent"); } catch (e) {} setConsent(c); };
-  useAdsense(consent === "all");
+  const adFree = !!(auth.user && auth.user.adFree);
+  useAdsense(consent === "all" && !adFree);
   useAnalytics(consent === "all");
+
+  const toggleFav = (id) => {
+    if (!auth.user) return;
+    const f = auth.user.favorites || [];
+    auth.saveFavorites(f.includes(id) ? f.filter((x) => x !== id) : [...f, id]);
+  };
+  // Sync prefs: apply the account's saved spot/theme once on sign-in; save on change.
+  const appliedRef = useRef(false);
+  const authRef = useRef(auth); authRef.current = auth;
+  useEffect(() => {
+    if (auth.user && !appliedRef.current) {
+      appliedRef.current = true;
+      const p = auth.user.prefs || {};
+      if (p.spot) setActive(p.spot);
+      if (p.theme) setChoice(p.theme);
+    } else if (!auth.user) {
+      appliedRef.current = false;
+    }
+  }, [auth.user]);
   const [spots, setSpots] = useState([]);
   const [active, setActive] = useState(() => localStorage.getItem("boating.spot") || "sandusky");
   const [data, setData] = useState(null);
@@ -276,6 +313,12 @@ export default function App() {
   };
 
   useEffect(() => { loadSpot(active); localStorage.setItem("boating.spot", active); }, [active]);
+  // Save spot/theme to the account (debounced) once the signed-in prefs are applied.
+  useEffect(() => {
+    if (!appliedRef.current || !authRef.current.user) return;
+    const t = setTimeout(() => authRef.current.savePrefs({ spot: active, theme: choice }), 800);
+    return () => clearTimeout(t);
+  }, [active, choice]);
 
   const spot = data?.spot;
   const rec = data?.recommendation;
@@ -302,8 +345,10 @@ export default function App() {
             </span>
           </a>
           <div className="controls">
-            <LocationPicker byLake={byLake} active={active} activeName={activeName} onSelect={setActive} />
+            <LocationPicker byLake={byLake} active={active} activeName={activeName} onSelect={setActive}
+              favorites={auth.user ? (auth.user.favorites || []) : []} onToggleFav={auth.user ? toggleFav : undefined} />
             <ThemeToggle effective={effective} onToggle={() => setChoice(effective === "dark" ? "light" : "dark")} />
+            <Account auth={auth} />
           </div>
         </div>
       </header>
@@ -403,7 +448,7 @@ export default function App() {
             )}
 
             <GearBlock waterTempF={buoy ? buoy.waterTempF : null} />
-            <AdSlot />
+            {!adFree && <AdSlot />}
 
             <footer className="meta">
               Source: {buoy ? `Buoy ${buoy.station} · ${buoy.ageMinutes != null ? `${buoy.ageMinutes} min ago` : "latest"}` : "forecast only"}
