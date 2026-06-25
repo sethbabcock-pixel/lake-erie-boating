@@ -315,8 +315,9 @@ details.card[open] > summary { margin-bottom: var(--s3); }
 
 /* Auth modal */
 .modal-backdrop { position: fixed; inset: 0; z-index: 200; background: rgba(7,18,30,0.55); -webkit-backdrop-filter: blur(2px); backdrop-filter: blur(2px);
-  display: flex; align-items: center; justify-content: center; padding: var(--s4); }
-.modal { position: relative; width: min(400px, 100%); background: var(--surface); border: 1px solid var(--border); border-radius: var(--r-lg);
+  display: flex; align-items: flex-start; justify-content: center; padding: var(--s4); overflow-y: auto; -webkit-overflow-scrolling: touch; }
+.modal { position: relative; width: min(400px, 100%); margin: auto; max-height: calc(100dvh - 2 * var(--s4)); overflow-y: auto;
+  background: var(--surface); border: 1px solid var(--border); border-radius: var(--r-lg);
   box-shadow: var(--shadow-lg); padding: var(--s6) var(--s5); }
 .modal-x { position: absolute; top: 10px; right: 12px; background: none; border: none; font-size: 24px; line-height: 1; color: var(--text-faint); cursor: pointer; }
 .modal h2 { margin: 0 0 2px; font-size: var(--fs-2xl); font-weight: var(--fw-extrabold); color: var(--text); letter-spacing: var(--tracking-tight); }
