@@ -69,7 +69,7 @@ const SPOTS = {
   tawas: { name: "Tawas Bay", lat: 44.26, lon: -83.44, zone: "LHZ345", office: "APX", buoys: [], lake: "Lake Huron" },
   alpena: { name: "Alpena / Thunder Bay", lat: 45.06, lon: -83.42, zone: "LHZ348", office: "APX", buoys: ["45003"], lake: "Lake Huron" },
   "harbor-beach": { name: "Harbor Beach", lat: 43.84, lon: -82.64, zone: "LHZ442", office: "DTX", buoys: [], lake: "Lake Huron" },
-  mackinaw: { name: "Mackinaw City", lat: 45.78, lon: -84.72, zone: "LHZ345", office: "APX", buoys: [], lake: "Lake Huron" },
+  mackinaw: { name: "Mackinaw City / Straits", lat: 45.78, lon: -84.72, zone: "LHZ345", office: "APX", buoys: [], lake: "Lake Michigan" },
 
   chicago: { name: "Chicago", lat: 41.89, lon: -87.60, zone: "LMZ741", office: "LOT", buoys: ["45198"], lake: "Lake Michigan" },
   milwaukee: { name: "Milwaukee", lat: 43.03, lon: -87.88, zone: "LMZ645", office: "MKX", buoys: ["45013"], lake: "Lake Michigan" },

@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import Cams from "./Cams.jsx";
 import WxIcon from "./WxIcon.jsx";
 import { useAdsense, useAnalytics, AdSlot, GearBlock, ConsentBanner } from "./monetize.jsx";
@@ -52,6 +52,43 @@ function groupByDay(hours) {
   return out;
 }
 
+// Split a nearshore-forecast sentence into Wind / Waves / Sky facts.
+function parseMarine(text) {
+  const t = (text || "").trim();
+  const windM = t.match(/((?:light and variable|[NSEW][a-z]*(?:\s+to\s+[NSEW][a-z]*)?)\s*winds?[^.]*?(?:knots?|kt)[^.]*?)\./i)
+    || t.match(/((?:light and variable|[NSEW][a-z]*)\s*winds?[^.]*?)\./i);
+  const waveM = t.match(/(waves?[^.]*?(?:feet|foot)[^.]*?)\./i);
+  let sky = t;
+  if (windM) sky = sky.replace(windM[0], " ");
+  if (waveM) sky = sky.replace(waveM[0], " ");
+  sky = sky.replace(/\s+/g, " ").trim().replace(/^[.,\s]+/, "");
+  const wind = windM ? windM[1].replace(/\s*winds?\s*/i, " ").replace(/\s+/g, " ").trim() : null;
+  const waves = waveM ? waveM[1].replace(/^waves?\s+/i, "").replace(/\s+/g, " ").trim() : null;
+  return { wind, waves, sky: sky || null };
+}
+
+function MarineForecast({ periods, zone }) {
+  if (!periods || !periods.length) return null;
+  return (
+    <section className="card">
+      <h2>Nearshore marine forecast{zone ? ` · ${zone}` : ""}</h2>
+      {periods.map((p, i) => {
+        const m = parseMarine(p.forecast);
+        return (
+          <div className="mrow" key={i}>
+            <div className="mrow-head"><WxIcon short={p.forecast} size={26} /><span className="mrow-name">{p.name}</span></div>
+            <div className="mrow-grid">
+              {m.wind && <div className="mfact"><span className="mlabel">Wind</span><span className="mval">{m.wind}</span></div>}
+              {m.waves && <div className="mfact"><span className="mlabel">Waves</span><span className="mval">{m.waves}</span></div>}
+              {m.sky && <div className="mfact wide"><span className="mlabel">Sky</span><span className="mval">{m.sky}</span></div>}
+            </div>
+          </div>
+        );
+      })}
+    </section>
+  );
+}
+
 // Theme choice: "dark" | "light" | "system" (default DARK).
 function useTheme() {
   const [choice, setChoice] = useState(() => {
@@ -77,6 +114,74 @@ function useTheme() {
     }
   }, [choice]);
   return { choice, setChoice, effective };
+}
+
+// Slick sun/moon theme toggle.
+function ThemeToggle({ effective, onToggle }) {
+  const dark = effective === "dark";
+  return (
+    <button className="theme-toggle" onClick={onToggle} aria-label={dark ? "Switch to light mode" : "Switch to dark mode"} title="Toggle theme">
+      {dark ? (
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
+          <circle cx="12" cy="12" r="4.2" />
+          <path d="M12 2.5V4M12 20v1.5M2.5 12H4M20 12h1.5M5.1 5.1l1 1M17.9 17.9l1 1M18.9 5.1l-1 1M6.1 17.9l-1 1" />
+        </svg>
+      ) : (
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" stroke="none">
+          <path d="M20.5 14.5A8.5 8.5 0 0 1 9.5 3.5a7 7 0 1 0 11 11z" />
+        </svg>
+      )}
+    </button>
+  );
+}
+
+// Custom, searchable, lake-grouped location picker (replaces the bland select).
+function LocationPicker({ byLake, active, activeName, onSelect }) {
+  const [open, setOpen] = useState(false);
+  const [q, setQ] = useState("");
+  const ref = useRef(null);
+  useEffect(() => {
+    if (!open) return;
+    const onDoc = (e) => { if (ref.current && !ref.current.contains(e.target)) setOpen(false); };
+    const onKey = (e) => { if (e.key === "Escape") setOpen(false); };
+    document.addEventListener("mousedown", onDoc);
+    document.addEventListener("keydown", onKey);
+    return () => { document.removeEventListener("mousedown", onDoc); document.removeEventListener("keydown", onKey); };
+  }, [open]);
+  const ql = q.trim().toLowerCase();
+  return (
+    <div className="locpick" ref={ref}>
+      <button className="locpick-btn" onClick={() => setOpen((o) => !o)} aria-haspopup="listbox" aria-expanded={open}>
+        <svg className="pin" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M12 21s7-5.7 7-11a7 7 0 1 0-14 0c0 5.3 7 11 7 11z" /><circle cx="12" cy="10" r="2.4" />
+        </svg>
+        <span className="locpick-cur">{activeName || "Choose a spot"}</span>
+        <svg className="chev" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 12 15 18 9" /></svg>
+      </button>
+      {open && (
+        <div className="locpick-panel" role="listbox">
+          <input className="locpick-search" placeholder="Search spots…" value={q} onChange={(e) => setQ(e.target.value)} autoFocus />
+          <div className="locpick-list">
+            {Object.entries(byLake).map(([lake, list]) => {
+              const items = ql ? list.filter((s) => s.name.toLowerCase().includes(ql) || lake.toLowerCase().includes(ql)) : list;
+              if (!items.length) return null;
+              return (
+                <div className="locpick-group" key={lake}>
+                  <div className="locpick-lake">{lake}</div>
+                  {items.map((s) => (
+                    <button key={s.id} className={`locpick-item ${s.id === active ? "active" : ""}`}
+                      onClick={() => { onSelect(s.id); setOpen(false); setQ(""); }}>
+                      <span>{s.name}</span>{s.id === active && <span className="check">✓</span>}
+                    </button>
+                  ))}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+    </div>
+  );
 }
 
 // The gold "yellow time" — when to head back in.
@@ -122,8 +227,8 @@ function HourStrip({ hours, headInBy }) {
 }
 
 function MapCard({ spot }) {
-  const [layer, setLayer] = useState("wind");
-  const layers = [["wind", "Wind"], ["waves", "Waves"], ["rain", "Rain"]];
+  const [layer, setLayer] = useState("waves");
+  const layers = [["waves", "Waves"], ["wind", "Wind"], ["gust", "Gusts"], ["rain", "Rain"], ["temp", "Temp"]];
   return (
     <section className="card">
       <div className="card-head">
@@ -181,6 +286,7 @@ export default function App() {
   const spotOptions = spots.length ? spots : (spot ? [{ ...spot, lake: "Lake Erie" }] : [{ id: active, name: "Loading…", lake: "Lake Erie" }]);
   const byLake = {};
   spotOptions.forEach((s) => { (byLake[s.lake || "Lake Erie"] ||= []).push(s); });
+  const activeName = (spots.find((s) => s.id === active) || data?.spot || {}).name;
 
   return (
     <>
@@ -190,22 +296,12 @@ export default function App() {
             <img className="logo" src={effective === "dark" ? "/boat-mark-white.png" : "/boat-mark.png"} alt="" />
             <span className="wordmark">
               <span className="wm-name">SHOULDI<b>BOAT</b><span className="wm-dot">.com</span></span>
-              <span className="wm-tag">The navigator for all your nautical decisions</span>
+              <span className="wm-tag">Live Great Lakes boating conditions</span>
             </span>
           </a>
           <div className="controls">
-            <select className="sel locsel" value={active} onChange={(e) => setActive(e.target.value)} aria-label="Launch location">
-              {Object.entries(byLake).map(([lake, list]) => (
-                <optgroup key={lake} label={lake}>
-                  {list.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
-                </optgroup>
-              ))}
-            </select>
-            <select className="sel themesel" value={choice} onChange={(e) => setChoice(e.target.value)} aria-label="Theme">
-              <option value="dark">Dark</option>
-              <option value="light">Light</option>
-              <option value="system">Auto</option>
-            </select>
+            <LocationPicker byLake={byLake} active={active} activeName={activeName} onSelect={setActive} />
+            <ThemeToggle effective={effective} onToggle={() => setChoice(effective === "dark" ? "light" : "dark")} />
           </div>
         </div>
       </header>
@@ -294,20 +390,7 @@ export default function App() {
                   ))}
                 </section>
               )}
-              {(data.marineForecast || []).length > 0 && (
-                <section className="card">
-                  <h2>Nearshore marine forecast · {spot.zone}</h2>
-                  {data.marineForecast.map((p, i) => (
-                    <div className="wxrow" key={i}>
-                      <div className="wxicon"><WxIcon short={p.forecast} /></div>
-                      <div className="wxmid">
-                        <div className="wxname">{p.name}</div>
-                        <div className="wxshort marine">{p.forecast}</div>
-                      </div>
-                    </div>
-                  ))}
-                </section>
-              )}
+              <MarineForecast periods={data.marineForecast} zone={spot.zone} />
             </div>
 
             {data.noaaReport?.text && (

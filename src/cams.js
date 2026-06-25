@@ -15,6 +15,10 @@ export const CAMS = [
   { name: "Lakeside · Marblehead", lat: 41.55, lon: -82.75, pixelcaster: "lesi/lakeside" },
   { name: "Sandusky · State Theatre", lat: 41.45, lon: -82.71, pixelcaster: "lesi/sandusky" },
   { name: "Old Fish House · Port Clinton", lat: 41.51, lon: -82.94, pixelcaster: "lesi/fishhouse" },
+  // Northern Lake Michigan (Little Traverse Bay)
+  { name: "Harbor Springs · Steeple", lat: 45.43, lon: -84.99, yt: "iPm4jZcBKPU", lake: "Lake Michigan" },
+  { name: "Petoskey · Bay", lat: 45.37, lon: -84.95, angelcam: "ger25omkrm", lake: "Lake Michigan" },
+  { name: "Petoskey · Bayfront", lat: 45.37, lon: -84.96, wetmet: "8e442be557e9221ea31ed33e75a38071", lake: "Lake Michigan" },
 ];
 
 // Cams whose sites block embedding — opened in a new tab.
@@ -32,15 +36,17 @@ export const camKindLabel = (c) => (c && c.img ? "📷 refreshing photo" : "📹
 export const camSrc = (c) =>
   c.angelcam ? `https://v.angelcam.com/iframe?v=${c.angelcam}&autoplay=1`
     : c.pixelcaster ? `https://pixelcaster.com/live/${c.pixelcaster}/`
-      : c.ytChannel ? `https://www.youtube.com/embed/live_stream?channel=${c.ytChannel}&autoplay=1&mute=1`
-        : `https://www.youtube.com/embed/${c.yt}?autoplay=1&mute=1&rel=0`;
+      : c.wetmet ? `https://api.wetmet.net/widgets/stream/frame.php?uid=${c.wetmet}`
+        : c.ytChannel ? `https://www.youtube.com/embed/live_stream?channel=${c.ytChannel}&autoplay=1&mute=1`
+          : `https://www.youtube.com/embed/${c.yt}?autoplay=1&mute=1&rel=0`;
 
 export const camLink = (c) =>
   c.img ? (c.link || c.img)
     : c.angelcam ? `https://v.angelcam.com/${c.angelcam}`
       : c.pixelcaster ? `https://pixelcaster.com/live/${c.pixelcaster}/`
-        : c.ytChannel ? `https://www.youtube.com/channel/${c.ytChannel}/live`
-          : `https://www.youtube.com/watch?v=${c.yt}`;
+        : c.wetmet ? `https://api.wetmet.net/widgets/stream/frame.php?uid=${c.wetmet}`
+          : c.ytChannel ? `https://www.youtube.com/channel/${c.ytChannel}/live`
+            : `https://www.youtube.com/watch?v=${c.yt}`;
 
 // Rough planar distance for "nearest cam" sorting.
 export const dist = (la, lo, la2, lo2) => {
@@ -48,9 +54,11 @@ export const dist = (la, lo, la2, lo2) => {
   return Math.hypot(dx, la - la2);
 };
 
-// Cams are all Lake Erie for now, so only surface them for Erie spots (other
-// lakes get an empty state instead of a far-away Erie cam).
+// Cams for the spot's own lake (cams without a `lake` default to Lake Erie),
+// nearest first. Lakes with no cams yet get an empty state in the UI.
 export const nearestCams = (lat, lon, lake, n = 8) => {
-  if (lake && lake !== "Lake Erie") return [];
-  return CAMS.slice().sort((a, b) => dist(lat, lon, a.lat, a.lon) - dist(lat, lon, b.lat, b.lon)).slice(0, n);
+  const want = lake || "Lake Erie";
+  return CAMS.filter((c) => (c.lake || "Lake Erie") === want)
+    .sort((a, b) => dist(lat, lon, a.lat, a.lon) - dist(lat, lon, b.lat, b.lon))
+    .slice(0, n);
 };
