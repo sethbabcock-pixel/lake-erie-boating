@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { LINK_CAMS, camSrc, camLink, camIsImage, camKind, camKindLabel, nearestCams } from "./cams.js";
+import { getLinkCams, camSrc, camLink, camIsImage, camKind, camKindLabel, nearestCams } from "./cams.js";
 
 export default function Cams({ lat, lon, spotName, lake }) {
   const cams = useMemo(() => nearestCams(lat, lon, lake, 8), [lat, lon, lake]);
@@ -73,12 +73,14 @@ export default function Cams({ lat, lon, spotName, lake }) {
           ? " · still image, refreshes every 15s"
           : " · live video — some players need a tap to start"}
       </div>
-      <div className="linkcams">
-        More:{" "}
-        {LINK_CAMS.map((c) => (
-          <a key={c.name} href={c.url} target="_blank" rel="noopener">{c.name} ↗</a>
-        ))}
-      </div>
+      {getLinkCams(lake).length > 0 && (
+        <div className="linkcams">
+          More:{" "}
+          {getLinkCams(lake).map((c) => (
+            <a key={c.name} href={c.url} target="_blank" rel="noopener">{c.name} ↗</a>
+          ))}
+        </div>
+      )}
     </section>
   );
 }
