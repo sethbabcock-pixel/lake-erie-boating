@@ -110,7 +110,7 @@ export default function Cams({ lat, lon, spotName, lake }) {
   // Spinner safety for image/non-YT-iframe cams (YouTube manages its own).
   useEffect(() => {
     if (loaded || !cam || cam.yt) return;
-    const t = setTimeout(() => setLoaded(true), 7000);
+    const t = setTimeout(() => setLoaded(true), 4000);
     return () => clearTimeout(t);
   }, [cam, loaded]);
 
@@ -170,7 +170,7 @@ export default function Cams({ lat, lon, spotName, lake }) {
             onLoaded={() => setLoaded(true)} onFail={() => markFailed(cam.name)} />
         ) : (
           <iframe key={cam.name} title={cam.name} src={camSrc(cam)} loading="eager"
-            allow="autoplay; fullscreen" allowFullScreen
+            allow="autoplay; fullscreen; encrypted-media"
             onLoad={() => setLoaded(true)} style={{ opacity: loaded ? 1 : 0 }} />
         )}
       </div>
