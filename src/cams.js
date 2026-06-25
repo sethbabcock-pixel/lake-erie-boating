@@ -25,9 +25,9 @@ export const LINK_CAMS = [
   { name: "Boat-launch cam", url: "http://boat-launch-kbgwjqzpppc.dynamic-m.com:8080/1118e736-acf4-47d7-a21d-80311f39f172.html" },
 ];
 
-export const camIsImage = (c) => Boolean(c.img);
-export const camKind = (c) => (c.img ? "photo" : "video");
-export const camKindLabel = (c) => (c.img ? "📷 refreshing photo" : "📹 live video");
+export const camIsImage = (c) => Boolean(c && c.img);
+export const camKind = (c) => (c && c.img ? "photo" : "video");
+export const camKindLabel = (c) => (c && c.img ? "📷 refreshing photo" : "📹 live video");
 
 export const camSrc = (c) =>
   c.angelcam ? `https://v.angelcam.com/iframe?v=${c.angelcam}&autoplay=1`
