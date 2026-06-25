@@ -1,0 +1,62 @@
+name: Cam health
+
+# Keeps the live-cams in sync: verifies every feed in src/cams.js is still
+# live + embeddable. Runs weekly and on demand. A DEAD cam fails the run and
+# opens (or updates) an issue so a stale/spinning feed gets noticed and swapped.
+
+on:
+  schedule:
+    - cron: "0 13 * * 1" # Mondays 13:00 UTC (~8–9am ET)
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Run cam health check
+        id: check
+        run: |
+          set -o pipefail
+          node scripts/check-cams.mjs | tee cam-report.txt
+      - name: Open/update issue on failure
+        if: failure()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            let report = 'Report unavailable.';
+            try { report = fs.readFileSync('cam-report.txt', 'utf8'); } catch {}
+            const title = 'Cam health: one or more feeds are DEAD';
+            const body = [
+              'The weekly cam health check found a dead or non-embeddable feed.',
+              'Replace the affected entries in `src/cams.js`, then re-run `node scripts/check-cams.mjs`.',
+              '',
+              '```',
+              report.slice(-5000),
+              '```',
+              '',
+              `Run: ${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`,
+            ].join('\n');
+            const existing = await github.rest.issues.listForRepo({
+              owner: context.repo.owner, repo: context.repo.repo,
+              state: 'open', labels: 'cam-health',
+            });
+            if (existing.data.length) {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner, repo: context.repo.repo,
+                issue_number: existing.data[0].number, body,
+              });
+            } else {
+              await github.rest.issues.create({
+                owner: context.repo.owner, repo: context.repo.repo,
+                title, body, labels: ['cam-health'],
+              });
+            }

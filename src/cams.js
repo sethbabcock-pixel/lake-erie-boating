@@ -1,6 +1,8 @@
-// Lake Erie live cams. `kind` decides how each renders:
-//   iframe  → angelcam / pixelcaster / youtube (channel or video)
-//   image   → refreshing JPEG snapshot (WTOL)
+// Great Lakes live cams. The property present decides how each renders:
+//   iframe  → angelcam / pixelcaster / wetmet / ipcamlive / youtube (channel or video)
+//   image   → refreshing JPEG snapshot (WTOL, NOAA GLERL, etc.)
+// All entries are verified live + embeddable (no X-Frame-Options) by
+// scripts/check-cams.mjs, which the cam-health GitHub Action runs weekly.
 export const CAMS = [
   { name: "Edgewater Beach · Cleveland", lat: 41.49, lon: -81.74, angelcam: "91yx8ek0ro" },
   { name: "Vermilion · Main St Beach", lat: 41.42, lon: -82.36, pixelcaster: "lesi/vermilion/mainstreet" },
@@ -15,6 +17,9 @@ export const CAMS = [
   { name: "Lakeside · Marblehead", lat: 41.55, lon: -82.75, pixelcaster: "lesi/lakeside" },
   { name: "Sandusky · State Theatre", lat: 41.45, lon: -82.71, pixelcaster: "lesi/sandusky" },
   { name: "Old Fish House · Port Clinton", lat: 41.51, lon: -82.94, pixelcaster: "lesi/fishhouse" },
+  { name: "Lorain · Black River Landing", lat: 41.47, lon: -82.18, yt: "ZZevIUr2cTk" },
+  { name: "Mentor · Mentor Harbor Yacht Club", lat: 41.73, lon: -81.36, ipcamlive: "mhyc" },
+  { name: "Erie, PA · Bayfront", lat: 42.14, lon: -80.09, wetmet: "388190fe4f8b3159810f66712ba47065" },
   // Northern Lake Michigan (Little Traverse Bay)
   { name: "Harbor Springs · Steeple", lat: 45.43, lon: -84.99, yt: "iPm4jZcBKPU", lake: "Lake Michigan" },
   { name: "Petoskey · Bay", lat: 45.37, lon: -84.95, angelcam: "ger25omkrm", lake: "Lake Michigan" },
@@ -26,6 +31,10 @@ export const CAMS = [
   { name: "Sheboygan · North Beach", lat: 43.75, lon: -87.715, yt: "13j5iZkMpbE", lake: "Lake Michigan" },
   { name: "Traverse City · W Grand Traverse Bay", lat: 44.76, lon: -85.62, yt: "2ETj1sUmEmU", lake: "Lake Michigan" },
   { name: "Mackinaw City · Straits & Bridge", lat: 45.78, lon: -84.72, yt: "Mf_qId_7mlM", lake: "Lake Michigan" },
+  { name: "Charlevoix · Pine River Channel", lat: 45.32, lon: -85.26, yt: "HeZbPbqO-6M", lake: "Lake Michigan" },
+  { name: "Leland · Leelanau Harbor", lat: 45.02, lon: -85.76, yt: "s7sY1waeOf4", lake: "Lake Michigan" },
+  { name: "Muskegon · Harbor (NOAA GLERL)", lat: 43.23, lon: -86.34, img: "https://www.glerl.noaa.gov/metdata/cams/mkg08.jpg", link: "https://www.glerl.noaa.gov/metdata/", lake: "Lake Michigan" },
+  { name: "New Buffalo · Harbor", lat: 41.79, lon: -86.74, ipcamlive: "cnbharbor", lake: "Lake Michigan" },
   // Lake Ontario
   { name: "Rochester · Charlotte-Genesee Light", lat: 43.22, lon: -77.62, yt: "NHDgasBPtRY", lake: "Lake Ontario" },
   { name: "Sodus Bay · Sodus Lighthouse", lat: 43.27, lon: -76.97, yt: "68XVh5TcgBk", lake: "Lake Ontario" },
@@ -34,6 +43,7 @@ export const CAMS = [
   // Lake Huron
   { name: "Port Huron · St. Clair River (BoatNerd)", lat: 42.98, lon: -82.42, yt: "dqrwY6i-Zz4", lake: "Lake Huron" },
   { name: "Port Huron · St. Clair River (StreamTime)", lat: 42.98, lon: -82.42, yt: "AwP_Q6IGwFs", lake: "Lake Huron" },
+  { name: "Alpena · Thunder Bay (NOAA GLERL)", lat: 45.06, lon: -83.42, img: "https://www.glerl.noaa.gov/metdata/cams/apn04.jpg", link: "https://www.glerl.noaa.gov/metdata/", lake: "Lake Huron" },
   // Lake Superior
   { name: "Duluth · Canal Cam", lat: 46.78, lon: -92.08, yt: "HPS48TMmNag", lake: "Lake Superior" },
   { name: "Duluth · Western Harbor", lat: 46.78, lon: -92.08, yt: "mpMdJJjw59E", lake: "Lake Superior" },
@@ -52,6 +62,22 @@ export const LINK_CAMS = {
   ],
   "Lake Michigan": [
     { name: "Petoskey Area cams", url: "https://petoskeyarea.com/planning/live-area-webcams/" },
+    { name: "Grand Haven (EarthCam)", url: "https://www.earthcam.com/usa/michigan/grandhaven/lakemichigan/" },
+    { name: "Great Lakes cam directory", url: "https://lakerart.com/links.htm" },
+  ],
+  "Lake Huron": [
+    { name: "Tawas Bay dock cam", url: "https://www.tawasbayweather.com/dockcamera.htm" },
+    { name: "Goderich sunset cams", url: "https://exploregoderich.ca/sunset-cameras/" },
+    { name: "Great Lakes cam directory", url: "https://lakerart.com/links.htm" },
+  ],
+  "Lake Ontario": [
+    { name: "1000 Islands cams", url: "https://www.1000islandswebcams.com/" },
+    { name: "Great Lakes cam directory", url: "https://lakerart.com/links.htm" },
+  ],
+  "Lake Superior": [
+    { name: "Duluth Harbor Cam hub", url: "https://www.duluthharborcam.com/p/canal-park-cams.html" },
+    { name: "Bayfield Inn live HD", url: "https://www.bayfieldlive.com/" },
+    { name: "Great Lakes cam directory", url: "https://lakerart.com/links.htm" },
   ],
 };
 export const getLinkCams = (lake) => LINK_CAMS[lake] || [];
@@ -64,16 +90,18 @@ export const camSrc = (c) =>
   c.angelcam ? `https://v.angelcam.com/iframe?v=${c.angelcam}&autoplay=1`
     : c.pixelcaster ? `https://pixelcaster.com/live/${c.pixelcaster}/`
       : c.wetmet ? `https://api.wetmet.net/widgets/stream/frame.php?uid=${c.wetmet}`
-        : c.ytChannel ? `https://www.youtube.com/embed/live_stream?channel=${c.ytChannel}&autoplay=1&mute=1`
-          : `https://www.youtube.com/embed/${c.yt}?autoplay=1&mute=1&rel=0`;
+        : c.ipcamlive ? `https://www.ipcamlive.com/player/player.php?alias=${c.ipcamlive}&autoplay=1&disablehd=0`
+          : c.ytChannel ? `https://www.youtube.com/embed/live_stream?channel=${c.ytChannel}&autoplay=1&mute=1`
+            : `https://www.youtube.com/embed/${c.yt}?autoplay=1&mute=1&rel=0`;
 
 export const camLink = (c) =>
   c.img ? (c.link || c.img)
     : c.angelcam ? `https://v.angelcam.com/${c.angelcam}`
       : c.pixelcaster ? `https://pixelcaster.com/live/${c.pixelcaster}/`
         : c.wetmet ? `https://api.wetmet.net/widgets/stream/frame.php?uid=${c.wetmet}`
-          : c.ytChannel ? `https://www.youtube.com/channel/${c.ytChannel}/live`
-            : `https://www.youtube.com/watch?v=${c.yt}`;
+          : c.ipcamlive ? `https://www.ipcamlive.com/${c.ipcamlive}`
+            : c.ytChannel ? `https://www.youtube.com/channel/${c.ytChannel}/live`
+              : `https://www.youtube.com/watch?v=${c.yt}`;
 
 // Rough planar distance for "nearest cam" sorting.
 export const dist = (la, lo, la2, lo2) => {
