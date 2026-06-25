@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from "react";
 import Cams from "./Cams.jsx";
 import WxIcon from "./WxIcon.jsx";
-import { useAdsense, useAnalytics, AdSlot, GearBlock, ConsentBanner } from "./monetize.jsx";
+import { useAdsense, useAnalytics, getConsent, AdSlot, GearBlock, ConsentBanner } from "./monetize.jsx";
 
 const fmt = (v, unit) => (v == null ? "—" : `${v}${unit || ""}`);
 const verdictClass = (lvl) => (lvl === "NO-GO" ? "nogo" : lvl === "CAUTION" ? "caution" : "go");
@@ -249,8 +249,10 @@ function MapCard({ spot }) {
 
 export default function App() {
   const { choice, setChoice, effective } = useTheme();
-  useAdsense();
-  useAnalytics();
+  const [consent, setConsent] = useState(getConsent());
+  const chooseConsent = (c) => { try { if (c) localStorage.setItem("sib.consent", c); else localStorage.removeItem("sib.consent"); } catch (e) {} setConsent(c); };
+  useAdsense(consent === "all");
+  useAnalytics(consent === "all");
   const [spots, setSpots] = useState([]);
   const [active, setActive] = useState(() => localStorage.getItem("boating.spot") || "sandusky");
   const [data, setData] = useState(null);
@@ -409,13 +411,15 @@ export default function App() {
               <button onClick={() => loadSpot(active)}>↻ Refresh</button>
               <div className="footlinks">
                 <a href="/about" target="_blank" rel="noopener">About</a>
-                <a href="/privacy" target="_blank" rel="noopener">Privacy</a>
+                <a href="/legal#terms" target="_blank" rel="noopener">Terms</a>
+                <a href="/legal#privacy" target="_blank" rel="noopener">Privacy</a>
+                <button className="linklike" onClick={() => chooseConsent(null)}>Cookie settings</button>
               </div>
             </footer>
           </>
         )}
       </main>
-      <ConsentBanner />
+      <ConsentBanner consent={consent} onChoose={chooseConsent} />
     </>
   );
 }

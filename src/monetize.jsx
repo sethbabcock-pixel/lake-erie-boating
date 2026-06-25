@@ -14,10 +14,10 @@ export const ADSENSE = {
 export const AMAZON_TAG = ""; // ← your Amazon Associates tag, e.g. "shouldiboat-20"
 export const GA_ID = "";      // ← your GA4 Measurement ID, e.g. "G-XXXXXXXXXX"
 
-// Load Google Analytics (GA4) only when a real Measurement ID is configured.
-export function useAnalytics() {
+// Load Google Analytics (GA4) only when configured AND the user consented.
+export function useAnalytics(enabled) {
   useEffect(() => {
-    if (!/^G-[A-Z0-9]{6,}$/.test(GA_ID) || document.querySelector("script[data-ga]")) return;
+    if (!enabled || !/^G-[A-Z0-9]{6,}$/.test(GA_ID) || document.querySelector("script[data-ga]")) return;
     const s = document.createElement("script");
     s.async = true;
     s.src = `https://www.googletagmanager.com/gtag/js?id=${GA_ID}`;
@@ -27,22 +27,26 @@ export function useAnalytics() {
     function gtag() { window.dataLayer.push(arguments); }
     gtag("js", new Date());
     gtag("config", GA_ID);
-  }, []);
+  }, [enabled]);
 }
 
 export const ADSENSE_ENABLED = /^ca-pub-\d{6,}$/.test(ADSENSE.client) && ADSENSE.client !== "ca-pub-0000000000000000";
 
-// Inject the AdSense library once, only when a real client is configured.
-export function useAdsense() {
+export function getConsent() {
+  try { return localStorage.getItem("sib.consent"); } catch (e) { return null; }
+}
+
+// Inject the AdSense library once — only when configured AND the user consented.
+export function useAdsense(enabled) {
   useEffect(() => {
-    if (!ADSENSE_ENABLED || document.querySelector("script[data-adsbygoogle]")) return;
+    if (!enabled || !ADSENSE_ENABLED || document.querySelector("script[data-adsbygoogle]")) return;
     const s = document.createElement("script");
     s.async = true;
     s.src = `https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=${ADSENSE.client}`;
     s.crossOrigin = "anonymous";
     s.setAttribute("data-adsbygoogle", "1");
     document.head.appendChild(s);
-  }, []);
+  }, [enabled]);
 }
 
 // A single responsive in-content ad unit. Renders nothing until configured.
@@ -93,18 +97,17 @@ export function GearBlock({ waterTempF }) {
 
 // Lightweight cookie/ads notice. (For EEA/UK traffic, also enable Google's
 // certified consent management in your AdSense account.)
-export function ConsentBanner() {
-  const [show, setShow] = useState(() => {
-    try { return !localStorage.getItem("sib.consent"); } catch (e) { return true; }
-  });
-  if (!show) return null;
+// GDPR/CCPA banner: non-essential cookies (analytics + ads) load only on Accept.
+export function ConsentBanner({ consent, onChoose }) {
+  if (consent === "all" || consent === "essential") return null;
   return (
     <div className="consent" role="dialog" aria-label="Cookie notice">
-      <span>We use cookies for analytics and ads to keep Should I Boat free. See our{" "}
-        <a href="/privacy" target="_blank" rel="noopener">privacy policy</a>.</span>
-      <button onClick={() => { try { localStorage.setItem("sib.consent", "1"); } catch (e) {} setShow(false); }}>
-        Got it
-      </button>
+      <span>We use cookies for analytics and ads to keep Should I Boat free. Accept to allow them, or reject non-essential cookies.{" "}
+        <a href="/legal#cookies" target="_blank" rel="noopener">Learn more</a>.</span>
+      <div className="consent-actions">
+        <button className="cbtn ghost" onClick={() => onChoose("essential")}>Reject</button>
+        <button className="cbtn" onClick={() => onChoose("all")}>Accept</button>
+      </div>
     </div>
   );
 }
