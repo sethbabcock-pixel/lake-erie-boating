@@ -1,22 +1,19 @@
 // Great Lakes live cams. The property present decides how each renders:
-//   iframe  → angelcam / pixelcaster / wetmet / ipcamlive / youtube (channel or video)
+//   iframe  → angelcam / wetmet / ipcamlive / ozolio / youtube (channel or video)
 //   image   → refreshing JPEG snapshot (WTOL, NOAA GLERL, etc.)
 // All entries are verified live + embeddable (no X-Frame-Options) by
 // scripts/check-cams.mjs, which the cam-health GitHub Action runs weekly.
 export const CAMS = [
   { name: "Edgewater Beach · Cleveland", lat: 41.49, lon: -81.74, angelcam: "91yx8ek0ro" },
-  { name: "Vermilion · Main St Beach", lat: 41.42, lon: -82.36, pixelcaster: "lesi/vermilion/mainstreet" },
   // WTOL (Toledo) refreshing snapshots
   { name: "Jet Express · Lake Erie (Port Clinton)", lat: 41.51, lon: -82.94, img: "https://cdn.tegna-media.com/wtol/weather/webcams/jetexpress/snap_c1.jpg", link: "https://www.wtol.com/webcams" },
   { name: "Toledo · Fifth Third Field (WTOL)", lat: 41.65, lon: -83.54, img: "https://cdn.tegna-media.com/wtol/weather/webcams/fifththird/snap_c1.jpg", link: "https://www.wtol.com/webcams" },
   { name: "Toledo · Mercy Health (WTOL)", lat: 41.66, lon: -83.55, img: "https://cdn.tegna-media.com/wtol/weather/webcams/mercy/snap_c1.jpg", link: "https://www.wtol.com/webcams" },
-  // Lake Erie Shores & Islands (Pixelcaster) — central/western basin video
-  { name: "Catawba Island · Lake Erie", lat: 41.57, lon: -82.86, pixelcaster: "lesi/catawba" },
-  { name: "Miller Ferry · Put-in-Bay", lat: 41.62, lon: -82.83, pixelcaster: "lesi/miller" },
-  { name: "Port Clinton · City Beach", lat: 41.51, lon: -82.93, pixelcaster: "lesi/port-clinton" },
-  { name: "Lakeside · Marblehead", lat: 41.55, lon: -82.75, pixelcaster: "lesi/lakeside" },
-  { name: "Sandusky · State Theatre", lat: 41.45, lon: -82.71, pixelcaster: "lesi/sandusky" },
-  { name: "Old Fish House · Port Clinton", lat: 41.51, lon: -82.94, pixelcaster: "lesi/fishhouse" },
+  // Western basin — Toledo Harbor Light (NOAA GLERL refreshing snapshot)
+  { name: "Western Basin · Toledo Light (NOAA)", lat: 41.776, lon: -83.326, img: "https://www.glerl.noaa.gov/metdata/tol2/tol2-01.jpg", link: "https://www.glerl.noaa.gov/metdata/" },
+  // Put-in-Bay / South Bass Island (Ozolio — HTTPS, the feeds putinbay.com embeds)
+  { name: "Put-in-Bay · Boardwalk Harbor", lat: 41.653, lon: -82.821, ozolio: "EMB_PSZZ000005DE" },
+  { name: "Put-in-Bay · Perry's Monument (West)", lat: 41.654, lon: -82.812, ozolio: "EMB_ULHE00000B88" },
   { name: "Lorain · Black River Landing", lat: 41.47, lon: -82.18, yt: "ZZevIUr2cTk" },
   { name: "Mentor · Mentor Harbor Yacht Club", lat: 41.73, lon: -81.36, ipcamlive: "mhyc" },
   { name: "Erie, PA · Bayfront", lat: 42.14, lon: -80.09, wetmet: "388190fe4f8b3159810f66712ba47065" },
@@ -88,18 +85,18 @@ export const camKindLabel = (c) => (c && c.img ? "📷 refreshing photo" : "📹
 
 export const camSrc = (c) =>
   c.angelcam ? `https://v.angelcam.com/iframe?v=${c.angelcam}&autoplay=1`
-    : c.pixelcaster ? `https://pixelcaster.com/live/${c.pixelcaster}/`
-      : c.wetmet ? `https://api.wetmet.net/widgets/stream/frame.php?uid=${c.wetmet}`
-        : c.ipcamlive ? `https://www.ipcamlive.com/player/player.php?alias=${c.ipcamlive}&autoplay=1&disablehd=0`
+    : c.wetmet ? `https://api.wetmet.net/widgets/stream/frame.php?uid=${c.wetmet}`
+      : c.ipcamlive ? `https://www.ipcamlive.com/player/player.php?alias=${c.ipcamlive}&autoplay=1&disablehd=0`
+        : c.ozolio ? `https://relay.ozolio.com/pub.api?cmd=embed&oid=${c.ozolio}`
           : c.ytChannel ? `https://www.youtube.com/embed/live_stream?channel=${c.ytChannel}&autoplay=1&mute=1`
             : `https://www.youtube.com/embed/${c.yt}?autoplay=1&mute=1&rel=0`;
 
 export const camLink = (c) =>
   c.img ? (c.link || c.img)
     : c.angelcam ? `https://v.angelcam.com/${c.angelcam}`
-      : c.pixelcaster ? `https://pixelcaster.com/live/${c.pixelcaster}/`
-        : c.wetmet ? `https://api.wetmet.net/widgets/stream/frame.php?uid=${c.wetmet}`
-          : c.ipcamlive ? `https://www.ipcamlive.com/${c.ipcamlive}`
+      : c.wetmet ? `https://api.wetmet.net/widgets/stream/frame.php?uid=${c.wetmet}`
+        : c.ipcamlive ? `https://www.ipcamlive.com/${c.ipcamlive}`
+          : c.ozolio ? `https://relay.ozolio.com/pub.api?cmd=embed&oid=${c.ozolio}`
             : c.ytChannel ? `https://www.youtube.com/channel/${c.ytChannel}/live`
               : `https://www.youtube.com/watch?v=${c.yt}`;
 

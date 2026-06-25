@@ -64,12 +64,18 @@ async function checkIpcamlive(alias) {
   return { status: "OK", detail: "live snapshot ok" };
 }
 
-// Embedded iframe page (wetmet / pixelcaster / angelcam): healthy if it loads
-// and does not block being framed.
+// Embedded iframe page (wetmet / angelcam / ozolio): healthy if it loads, does
+// not block framing, and its media stream is HTTPS. An insecure http / Wowza
+// :1935 stream is mixed-content blocked on our HTTPS site (pixelcaster's flaw).
 async function checkFramePage(url) {
   const res = await fetchT(url);
   if (!res.ok) return { status: "DEAD", detail: `HTTP ${res.status}` };
   if (blocksEmbedding(res)) return { status: "DEAD", detail: "blocks iframe embedding" };
+  const body = await res.text().catch(() => "");
+  const media = body.match(/(?:https?:)?\/\/[^\s"'<>]+?\.(?:m3u8|mp4)\b[^\s"'<>]*/i);
+  if (media && (/:1935\b/.test(media[0]) || /^http:\/\//i.test(media[0]))) {
+    return { status: "DEAD", detail: `insecure stream (mixed-content blocked): ${media[0].slice(0, 60)}` };
+  }
   return { status: "OK", detail: `HTTP ${res.status}` };
 }
 

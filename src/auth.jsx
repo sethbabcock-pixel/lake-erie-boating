@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 
 // Auth state + actions. user: undefined = loading, null = signed out, object = signed in.
 export function useAuth() {
@@ -44,7 +45,10 @@ function AuthModal({ auth, onClose }) {
     try { await (mode === "login" ? auth.login(email, pw) : auth.register(email, pw)); onClose(); }
     catch (ex) { setErr(ex.message); } finally { setBusy(false); }
   };
-  return (
+  // Portal to <body>: the header has a backdrop-filter, which would otherwise
+  // make this position:fixed modal anchor to the header box instead of the
+  // viewport (trapping it under the header).
+  return createPortal(
     <div className="modal-backdrop" onMouseDown={onClose}>
       <div className="modal" onMouseDown={(e) => e.stopPropagation()}>
         <button className="modal-x" onClick={onClose} aria-label="Close">×</button>
@@ -67,7 +71,8 @@ function AuthModal({ auth, onClose }) {
             : <>Have an account? <button onClick={() => { setErr(""); setMode("login"); }}>Sign in</button></>}
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }
 

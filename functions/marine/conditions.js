@@ -548,12 +548,18 @@ async function camLiveness(c) {
       const snap = await camFetch(`${srv.replace(/\/$/, "")}/streams/${sid}/snapshot.jpg`);
       return snap.ok ? "live" : "unknown";
     }
-    // wetmet / pixelcaster / angelcam / ytChannel: can't probe the video itself,
-    // so a loadable, frame-able embed is "live"; only header-level blocking is offline.
+    // wetmet / angelcam / ozolio / ytChannel: a loadable, frame-able embed is
+    // "live". Two definitive negatives: the page blocks framing, or its media
+    // stream is insecure (http / Wowza :1935) — that's mixed-content blocked on
+    // our HTTPS site and spins forever (the pixelcaster failure mode).
     const r = await camFetch(camSrc(c));
     if (!r.ok) return "unknown";
     const xfo = (r.headers.get("x-frame-options") || "").toLowerCase();
-    return (xfo.includes("deny") || xfo.includes("sameorigin")) ? "offline" : "live";
+    if (xfo.includes("deny") || xfo.includes("sameorigin")) return "offline";
+    const b = await r.text();
+    const media = b.match(/(?:https?:)?\/\/[^\s"'<>]+?\.(?:m3u8|mp4)\b[^\s"'<>]*/i);
+    if (media && (/:1935\b/.test(media[0]) || /^http:\/\//i.test(media[0]))) return "offline";
+    return "live";
   } catch {
     return "unknown"; // timeout / network error → don't hide, just can't confirm
   }
