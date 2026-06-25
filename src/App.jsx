@@ -323,7 +323,7 @@ export default function App() {
               Source: {buoy ? `Buoy ${buoy.station} · ${buoy.ageMinutes != null ? `${buoy.ageMinutes} min ago` : "latest"}` : "forecast only"}
               {" · NWS & NDBC (NOAA), Windy. Updated "}{new Date(data.updatedAt).toLocaleTimeString()}
               <button onClick={() => loadSpot(active)}>↻ Refresh</button>
-              <div className="footlinks"><a href="/privacy.html" target="_blank" rel="noopener">Privacy</a></div>
+              <div className="footlinks"><a href="/privacy" target="_blank" rel="noopener">Privacy</a></div>
             </footer>
           </>
         )}

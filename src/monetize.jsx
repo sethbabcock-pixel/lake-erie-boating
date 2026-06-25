@@ -69,7 +69,7 @@ export function GearBlock({ waterTempF }) {
           </a>
         ))}
       </div>
-      <div className="hint">As an Amazon Associate, Should I Boat earns from qualifying purchases.</div>
+      {AMAZON_TAG && <div className="hint">As an Amazon Associate, Should I Boat earns from qualifying purchases.</div>}
     </section>
   );
 }
@@ -84,7 +84,7 @@ export function ConsentBanner() {
   return (
     <div className="consent" role="dialog" aria-label="Cookie notice">
       <span>We use cookies for analytics and ads to keep Should I Boat free. See our{" "}
-        <a href="/privacy.html" target="_blank" rel="noopener">privacy policy</a>.</span>
+        <a href="/privacy" target="_blank" rel="noopener">privacy policy</a>.</span>
       <button onClick={() => { try { localStorage.setItem("sib.consent", "1"); } catch (e) {} setShow(false); }}>
         Got it
       </button>
