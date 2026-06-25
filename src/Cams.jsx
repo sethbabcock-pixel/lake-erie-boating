@@ -1,8 +1,8 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { LINK_CAMS, camSrc, camLink, camIsImage, camKind, camKindLabel, nearestCams } from "./cams.js";
 
-export default function Cams({ lat, lon, spotName }) {
-  const cams = useMemo(() => nearestCams(lat, lon, 8), [lat, lon]);
+export default function Cams({ lat, lon, spotName, lake }) {
+  const cams = useMemo(() => nearestCams(lat, lon, lake, 8), [lat, lon, lake]);
   const [sel, setSel] = useState(0);
   const [loaded, setLoaded] = useState(false);
   const [failed, setFailed] = useState(false);
@@ -25,6 +25,15 @@ export default function Cams({ lat, lon, spotName }) {
     const t = setTimeout(() => setLoaded(true), 7000);
     return () => clearTimeout(t);
   }, [cam, loaded]);
+
+  if (!cams.length) {
+    return (
+      <section className="card">
+        <div className="card-head"><h2>Live cams</h2></div>
+        <div className="camempty">No webcams wired up for this lake yet — they're coming. For now, check your local harbor or DNR cams.</div>
+      </section>
+    );
+  }
 
   return (
     <section className="card">

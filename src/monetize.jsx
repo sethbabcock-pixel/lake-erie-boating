@@ -12,6 +12,23 @@ export const ADSENSE = {
   },
 };
 export const AMAZON_TAG = ""; // ← your Amazon Associates tag, e.g. "shouldiboat-20"
+export const GA_ID = "";      // ← your GA4 Measurement ID, e.g. "G-XXXXXXXXXX"
+
+// Load Google Analytics (GA4) only when a real Measurement ID is configured.
+export function useAnalytics() {
+  useEffect(() => {
+    if (!/^G-[A-Z0-9]{6,}$/.test(GA_ID) || document.querySelector("script[data-ga]")) return;
+    const s = document.createElement("script");
+    s.async = true;
+    s.src = `https://www.googletagmanager.com/gtag/js?id=${GA_ID}`;
+    s.setAttribute("data-ga", "1");
+    document.head.appendChild(s);
+    window.dataLayer = window.dataLayer || [];
+    function gtag() { window.dataLayer.push(arguments); }
+    gtag("js", new Date());
+    gtag("config", GA_ID);
+  }, []);
+}
 
 export const ADSENSE_ENABLED = /^ca-pub-\d{6,}$/.test(ADSENSE.client) && ADSENSE.client !== "ca-pub-0000000000000000";
 

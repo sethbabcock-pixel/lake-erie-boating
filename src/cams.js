@@ -48,5 +48,9 @@ export const dist = (la, lo, la2, lo2) => {
   return Math.hypot(dx, la - la2);
 };
 
-export const nearestCams = (lat, lon, n = 7) =>
-  CAMS.slice().sort((a, b) => dist(lat, lon, a.lat, a.lon) - dist(lat, lon, b.lat, b.lon)).slice(0, n);
+// Cams are all Lake Erie for now, so only surface them for Erie spots (other
+// lakes get an empty state instead of a far-away Erie cam).
+export const nearestCams = (lat, lon, lake, n = 8) => {
+  if (lake && lake !== "Lake Erie") return [];
+  return CAMS.slice().sort((a, b) => dist(lat, lon, a.lat, a.lon) - dist(lat, lon, b.lat, b.lon)).slice(0, n);
+};

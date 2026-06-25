@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from "react";
 import Cams from "./Cams.jsx";
 import WxIcon from "./WxIcon.jsx";
-import { useAdsense, AdSlot, GearBlock, ConsentBanner } from "./monetize.jsx";
+import { useAdsense, useAnalytics, AdSlot, GearBlock, ConsentBanner } from "./monetize.jsx";
 
 const fmt = (v, unit) => (v == null ? "—" : `${v}${unit || ""}`);
 const verdictClass = (lvl) => (lvl === "NO-GO" ? "nogo" : lvl === "CAUTION" ? "caution" : "go");
@@ -145,6 +145,7 @@ function MapCard({ spot }) {
 export default function App() {
   const { choice, setChoice, effective } = useTheme();
   useAdsense();
+  useAnalytics();
   const [spots, setSpots] = useState([]);
   const [active, setActive] = useState(() => localStorage.getItem("boating.spot") || "sandusky");
   const [data, setData] = useState(null);
@@ -272,7 +273,7 @@ export default function App() {
             {/* ── Map + Cams ── */}
             <div className="dash2">
               <MapCard spot={spot} />
-              <Cams lat={spot.lat} lon={spot.lon} spotName={spot.name} />
+              <Cams lat={spot.lat} lon={spot.lon} spotName={spot.name} lake={spot.lake} />
             </div>
 
             {/* ── Details ── */}
@@ -323,7 +324,10 @@ export default function App() {
               Source: {buoy ? `Buoy ${buoy.station} · ${buoy.ageMinutes != null ? `${buoy.ageMinutes} min ago` : "latest"}` : "forecast only"}
               {" · NWS & NDBC (NOAA), Windy. Updated "}{new Date(data.updatedAt).toLocaleTimeString()}
               <button onClick={() => loadSpot(active)}>↻ Refresh</button>
-              <div className="footlinks"><a href="/privacy" target="_blank" rel="noopener">Privacy</a></div>
+              <div className="footlinks">
+                <a href="/about" target="_blank" rel="noopener">About</a>
+                <a href="/privacy" target="_blank" rel="noopener">Privacy</a>
+              </div>
             </footer>
           </>
         )}

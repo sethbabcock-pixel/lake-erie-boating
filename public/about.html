@@ -1,0 +1,77 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>About — Should I Boat?</title>
+  <meta name="description" content="What Should I Boat? is, who it's for, how the GO/CAUTION/NO-GO call is made, and the live data behind it." />
+  <meta name="robots" content="index,follow" />
+  <style>
+    :root { --navy:#004777; --teal:#008BA8; --green:#1B936A; --ink:#10202E; --muted:#50616F; --bg:#F6F8F4; --border:#DCE2DA; }
+    * { box-sizing: border-box; }
+    body { margin:0; background:var(--bg); color:var(--ink); font-family:'Inter',system-ui,-apple-system,'Segoe UI',Roboto,sans-serif; line-height:1.6; }
+    .wrap { max-width:760px; margin:0 auto; padding:40px 20px 80px; }
+    a { color:var(--teal); }
+    h1 { font-size:2rem; color:var(--navy); margin:0 0 4px; letter-spacing:-0.02em; }
+    .tag { color:var(--muted); font-size:1rem; margin-bottom:28px; }
+    h2 { font-size:1.15rem; color:var(--navy); margin:28px 0 8px; }
+    p, li { color:#27323d; }
+    .home { display:inline-block; margin-bottom:24px; color:var(--teal); text-decoration:none; font-weight:600; }
+    .card { background:#fff; border:1px solid var(--border); border-radius:14px; padding:24px 26px; }
+    .pill { display:inline-block; padding:2px 10px; border-radius:999px; font-weight:700; font-size:.85rem; }
+    .go { background:rgba(27,147,106,.14); color:var(--green); }
+    .cau { background:rgba(169,131,28,.16); color:#9a7212; }
+    .nogo { background:rgba(192,57,43,.14); color:#c0392b; }
+    footer { color:var(--muted); font-size:.85rem; margin-top:28px; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <a class="home" href="/">← Back to Should I Boat?</a>
+    <div class="card">
+      <h1>About Should I Boat?</h1>
+      <div class="tag">The navigator for all your nautical decisions.</div>
+
+      <p><strong>Should I Boat?</strong> answers one question fast: is it a good time to go out?
+        Instead of making you piece together five weather sites, it folds live marine data into a
+        single, honest call for launch spots across the Great Lakes.</p>
+
+      <h2>The call</h2>
+      <p>Each spot gets a clear verdict:</p>
+      <p>
+        <span class="pill go">GO</span> conditions look good ·
+        <span class="pill cau">CAUTION</span> boatable, small craft take care ·
+        <span class="pill nogo">NO-GO</span> stay in.
+      </p>
+      <p>The verdict is based on <em>right now</em> — not the whole day — and an hour-by-hour timeline
+        shows you when to head back in. It's tuned for small and mid-size recreational boats on the
+        Great Lakes' short, steep chop, and it always shows the raw numbers so you can judge for yourself.</p>
+
+      <h2>What's behind it</h2>
+      <ul>
+        <li><strong>NOAA / National Weather Service</strong> — point forecasts, hourly forecasts, marine
+          warnings, and the nearshore marine forecast.</li>
+        <li><strong>NDBC buoys</strong> — live wave height, wind, and water temperature where available.</li>
+        <li><strong>Open-Meteo marine model</strong> — hourly wave height across the lakes.</li>
+        <li><strong>Windy</strong> — the interactive wind / wave / rain map.</li>
+        <li><strong>Live webcams</strong> — see the water before you tow the boat.</li>
+      </ul>
+
+      <h2>Who it's for</h2>
+      <p>Anglers, cruisers, sailors, kayakers, and anyone who'd rather not waste a tow to the ramp —
+        or get caught out when the wind turns.</p>
+
+      <h2>Important</h2>
+      <p>Should I Boat? is a planning aid, not an official forecast. Conditions on the water change fast.
+        Always check the official <a href="https://www.weather.gov/marine" target="_blank" rel="noopener">NWS
+        marine forecasts</a>, file a float plan, wear your life jacket, and use your own judgment. You are
+        responsible for your own safety.</p>
+
+      <h2>Contact</h2>
+      <p>Feedback or a webcam to add? Email <a href="mailto:hello@shouldiboat.com">hello@shouldiboat.com</a>.</p>
+
+      <footer><a href="/privacy">Privacy policy</a></footer>
+    </div>
+  </div>
+</body>
+</html>

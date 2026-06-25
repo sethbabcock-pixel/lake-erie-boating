@@ -56,6 +56,34 @@ const SPOTS = {
     name: "Erie, PA / Presque Isle",
     lat: 42.16, lon: -80.11, zone: "LEZ149", buoys: ["45167"],
   },
+
+  // ── Other Great Lakes (US shores). zone/office resolved from NWS; buoys
+  // optional (wind from forecast, waves from Open-Meteo cover spots w/o buoys).
+  rochester: { name: "Rochester", lat: 43.22, lon: -77.62, zone: "LOZ043", office: "BUF", buoys: ["45012"], lake: "Lake Ontario" },
+  "sodus-bay": { name: "Sodus Bay", lat: 43.27, lon: -76.97, zone: "LOZ043", office: "BUF", buoys: ["45012"], lake: "Lake Ontario" },
+  oswego: { name: "Oswego", lat: 43.47, lon: -76.51, zone: "LOZ044", office: "BUF", buoys: ["45012"], lake: "Lake Ontario" },
+  "sackets-harbor": { name: "Sackets Harbor", lat: 43.94, lon: -76.12, zone: "LOZ045", office: "BUF", buoys: [], lake: "Lake Ontario" },
+  olcott: { name: "Olcott / Wilson", lat: 43.34, lon: -78.72, zone: "LOZ042", office: "BUF", buoys: [], lake: "Lake Ontario" },
+
+  "port-huron": { name: "Port Huron", lat: 42.98, lon: -82.42, zone: "LHZ443", office: "DTX", buoys: [], lake: "Lake Huron" },
+  tawas: { name: "Tawas Bay", lat: 44.26, lon: -83.44, zone: "LHZ345", office: "APX", buoys: [], lake: "Lake Huron" },
+  alpena: { name: "Alpena / Thunder Bay", lat: 45.06, lon: -83.42, zone: "LHZ348", office: "APX", buoys: ["45003"], lake: "Lake Huron" },
+  "harbor-beach": { name: "Harbor Beach", lat: 43.84, lon: -82.64, zone: "LHZ442", office: "DTX", buoys: [], lake: "Lake Huron" },
+  mackinaw: { name: "Mackinaw City", lat: 45.78, lon: -84.72, zone: "LHZ345", office: "APX", buoys: [], lake: "Lake Huron" },
+
+  chicago: { name: "Chicago", lat: 41.89, lon: -87.60, zone: "LMZ741", office: "LOT", buoys: ["45198"], lake: "Lake Michigan" },
+  milwaukee: { name: "Milwaukee", lat: 43.03, lon: -87.88, zone: "LMZ645", office: "MKX", buoys: ["45013"], lake: "Lake Michigan" },
+  muskegon: { name: "Muskegon", lat: 43.23, lon: -86.34, zone: "LMZ844", office: "GRR", buoys: ["45161"], lake: "Lake Michigan" },
+  holland: { name: "Holland", lat: 42.77, lon: -86.21, zone: "LMZ846", office: "GRR", buoys: [], lake: "Lake Michigan" },
+  "traverse-city": { name: "Traverse City", lat: 44.76, lon: -85.62, zone: "LMZ323", office: "APX", buoys: [], lake: "Lake Michigan" },
+  sheboygan: { name: "Sheboygan", lat: 43.75, lon: -87.715, zone: "LMZ643", office: "MKX", buoys: [], lake: "Lake Michigan" },
+  "michigan-city": { name: "Michigan City", lat: 41.72, lon: -86.91, zone: "LMZ046", office: "IWX", buoys: ["45198"], lake: "Lake Michigan" },
+
+  duluth: { name: "Duluth", lat: 46.78, lon: -92.08, zone: "LSZ145", office: "DLH", buoys: ["45027"], lake: "Lake Superior" },
+  bayfield: { name: "Bayfield / Apostle Is.", lat: 46.81, lon: -90.82, zone: "LSZ143", office: "DLH", buoys: [], lake: "Lake Superior" },
+  marquette: { name: "Marquette", lat: 46.54, lon: -87.38, zone: "LSZ249", office: "MQT", buoys: ["45004"], lake: "Lake Superior" },
+  houghton: { name: "Houghton / Keweenaw", lat: 47.12, lon: -88.57, zone: "LSZ267", office: "MQT", buoys: [], lake: "Lake Superior" },
+  "grand-marais": { name: "Grand Marais, MN", lat: 47.75, lon: -90.33, zone: "LSZ140", office: "DLH", buoys: [], lake: "Lake Superior" },
 };
 
 const json = (obj, status = 200) =>
@@ -218,9 +246,9 @@ async function fetchMarineForecast(zone) {
   }
 }
 
-async function fetchAlerts(zone) {
+async function fetchAlerts(lat, lon) {
   try {
-    const data = await getJSON(`${NWS}/alerts/active/zone/${zone}`);
+    const data = await getJSON(`${NWS}/alerts/active?point=${lat},${lon}`);
     return (data?.features || []).map((f) => ({
       event: f.properties?.event,
       severity: f.properties?.severity,
@@ -503,8 +531,8 @@ export async function onRequest(context) {
     fetchBuoy(spot.buoys),
     fetchForecasts(spot.lat, spot.lon),
     fetchMarineForecast(spot.zone),
-    fetchAlerts(spot.zone),
-    fetchNSH("CLE"), // Cleveland WFO issues all Lake Erie nearshore zones
+    fetchAlerts(spot.lat, spot.lon),
+    fetchNSH(spot.office || "CLE"), // per-spot WFO (Erie spots default to Cleveland)
     fetchMarineHourly(spot.lat, spot.lon),
   ]);
   const point = fc.daily;
@@ -526,7 +554,9 @@ export async function onRequest(context) {
 
   // Effective waves: live buoy, else parsed from the marine forecast text, so a
   // wave height is shown even where no buoy reports (the western basin).
-  const forecastWaveFt = parseForecastWaves(marine) ?? nshWavesForZone(noaaReport?.text, spot.zone);
+  // Current waves: buoy → NSH/zone text → Open-Meteo's first hour (covers any
+  // spot, incl. lakes with no buoy and no parsed zone).
+  const forecastWaveFt = parseForecastWaves(marine) ?? nshWavesForZone(noaaReport?.text, spot.zone) ?? hourly[0]?.waveFt ?? null;
   const waves = {
     ft: buoy?.waveHeightFt ?? forecastWaveFt ?? null,
     periodSec: buoy?.dominantPeriodSec ?? null,
@@ -537,7 +567,7 @@ export async function onRequest(context) {
   const recommendation = buildRecommendation({ buoy, alerts, wind, waves, read, hours: hourly });
 
   return json({
-    spot: { id: spotId, name: spot.name, zone: spot.zone, lat: spot.lat, lon: spot.lon },
+    spot: { id: spotId, name: spot.name, zone: spot.zone, lat: spot.lat, lon: spot.lon, lake: spot.lake || "Lake Erie" },
     updatedAt: new Date().toISOString(),
     recommendation,
     wind,
