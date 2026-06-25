@@ -78,6 +78,9 @@ const SPOTS = {
   "traverse-city": { name: "Traverse City", lat: 44.76, lon: -85.62, zone: "LMZ323", office: "APX", buoys: [], lake: "Lake Michigan" },
   sheboygan: { name: "Sheboygan", lat: 43.75, lon: -87.715, zone: "LMZ643", office: "MKX", buoys: [], lake: "Lake Michigan" },
   "michigan-city": { name: "Michigan City", lat: 41.72, lon: -86.91, zone: "LMZ046", office: "IWX", buoys: ["45198"], lake: "Lake Michigan" },
+  petoskey: { name: "Petoskey", lat: 45.373, lon: -84.955, zone: "LMZ342", office: "APX", buoys: [], lake: "Lake Michigan" },
+  "harbor-springs": { name: "Harbor Springs", lat: 45.431, lon: -84.992, zone: "LMZ342", office: "APX", buoys: [], lake: "Lake Michigan" },
+  "cross-village": { name: "Cross Village", lat: 45.641, lon: -85.032, zone: "LMZ342", office: "APX", buoys: [], lake: "Lake Michigan" },
 
   duluth: { name: "Duluth", lat: 46.78, lon: -92.08, zone: "LSZ145", office: "DLH", buoys: ["45027"], lake: "Lake Superior" },
   bayfield: { name: "Bayfield / Apostle Is.", lat: 46.81, lon: -90.82, zone: "LSZ143", office: "DLH", buoys: [], lake: "Lake Superior" },
