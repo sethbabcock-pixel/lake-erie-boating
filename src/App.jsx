@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from "react";
 import Cams from "./Cams.jsx";
 import WxIcon from "./WxIcon.jsx";
+import { useAdsense, AdSlot, GearBlock, ConsentBanner } from "./monetize.jsx";
 
 const fmt = (v, unit) => (v == null ? "—" : `${v}${unit || ""}`);
 const verdictClass = (lvl) => (lvl === "NO-GO" ? "nogo" : lvl === "CAUTION" ? "caution" : "go");
@@ -143,6 +144,7 @@ function MapCard({ spot }) {
 
 export default function App() {
   const { choice, setChoice, effective } = useTheme();
+  useAdsense();
   const [spots, setSpots] = useState([]);
   const [active, setActive] = useState(() => localStorage.getItem("boating.spot") || "sandusky");
   const [data, setData] = useState(null);
@@ -314,14 +316,19 @@ export default function App() {
               </details>
             )}
 
+            <GearBlock waterTempF={buoy ? buoy.waterTempF : null} />
+            <AdSlot />
+
             <footer className="meta">
               Source: {buoy ? `Buoy ${buoy.station} · ${buoy.ageMinutes != null ? `${buoy.ageMinutes} min ago` : "latest"}` : "forecast only"}
               {" · NWS & NDBC (NOAA), Windy. Updated "}{new Date(data.updatedAt).toLocaleTimeString()}
               <button onClick={() => loadSpot(active)}>↻ Refresh</button>
+              <div className="footlinks"><a href="/privacy.html" target="_blank" rel="noopener">Privacy</a></div>
             </footer>
           </>
         )}
       </main>
+      <ConsentBanner />
     </>
   );
 }

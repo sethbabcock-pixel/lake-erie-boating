@@ -222,6 +222,24 @@ details.card[open] > summary { margin-bottom: var(--s3); }
 .hint { font-size: var(--fs-xs); color: var(--text-faint); margin-top: var(--s2); line-height: var(--lh-snug); }
 .linkcams { margin-top: var(--s2); display: flex; flex-wrap: wrap; gap: 6px var(--s4); font-size: var(--fs-xs); }
 
+/* ---------- Monetization ---------- */
+.gear { margin-bottom: var(--s4); }
+.gear-grid { display: flex; flex-wrap: wrap; gap: var(--s2); }
+.gear-item { display: inline-flex; align-items: center; gap: 5px; padding: 8px 13px; border-radius: var(--r-pill);
+  background: var(--surface-sunk); border: 1px solid var(--border); color: var(--text); font-size: var(--fs-sm);
+  font-weight: var(--fw-semibold); text-decoration: none; transition: border-color var(--dur-fast); }
+.gear-item:hover { border-color: var(--accent); text-decoration: none; }
+.gear-item span { color: var(--accent); }
+.adwrap { margin-bottom: var(--s4); text-align: center; min-height: 1px; }
+.adlabel { display: block; font-size: 10px; text-transform: uppercase; letter-spacing: var(--tracking-wide); color: var(--text-faint); margin-bottom: 4px; }
+.consent { position: fixed; left: 50%; bottom: var(--s3); transform: translateX(-50%); z-index: 100;
+  width: min(680px, calc(100% - 24px)); display: flex; align-items: center; gap: var(--s4); flex-wrap: wrap;
+  justify-content: space-between; background: var(--surface); border: 1px solid var(--border-strong);
+  border-radius: var(--r-md); box-shadow: var(--shadow-lg); padding: var(--s3) var(--s4); font-size: var(--fs-sm); color: var(--text-muted); }
+.consent button { flex: 0 0 auto; background: var(--brand); color: #fff; border: none; border-radius: var(--r-sm);
+  padding: 8px 16px; font-size: var(--fs-sm); font-weight: var(--fw-semibold); cursor: pointer; }
+.footlinks { margin-top: var(--s2); }
+
 /* ---------- Footer / states ---------- */
 .meta { font-size: var(--fs-xs); color: var(--text-faint); text-align: center; margin-top: var(--s5); }
 .meta button { background: var(--surface); border: 1px solid var(--border); color: var(--text-muted); border-radius: var(--r-sm); padding: 6px 12px; font-size: var(--fs-xs); cursor: pointer; margin-left: var(--s2); }
