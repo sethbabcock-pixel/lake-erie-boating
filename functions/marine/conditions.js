@@ -12,6 +12,8 @@
 // GET /marine/conditions?spot=sandusky
 // GET /marine/conditions?spots  -> list available spots
 
+import { CAMS, camSrc } from "../../src/cams.js";
+
 const UA = "lake-erie-boating (seth.babcock@gmail.com)";
 const NWS = "https://api.weather.gov";
 
@@ -510,8 +512,88 @@ function buildRecommendation({ buoy, alerts, wind, waves, read, hours }) {
   return { level, summary, reasons };
 }
 
+// ── Live-cam health, checked at view time ───────────────────────────────────
+// Third-party feeds die or go offline without notice (a YouTube stream that
+// restarts shows "recording not available"), and an iframe's onLoad fires even
+// then — so the client can't tell. We check each cam server-side and only show
+// the ones that are actually working right now. Cached per-lake to stay cheap.
+const camFetch = (u, opts = {}) =>
+  fetch(u, { redirect: "follow", signal: AbortSignal.timeout(8000), headers: { "User-Agent": UA, ...(opts.headers || {}) }, ...opts });
+
+// Tri-state: "live" | "offline" | "unknown". We only return "offline" on a
+// DEFINITIVE negative (HTTP error, YouTube not-live/un-embeddable, no stream
+// assigned). Timeouts and anything ambiguous are "unknown" so a slow check
+// never hides a cam that's actually fine — the client hides "offline" only.
+async function camLiveness(c) {
+  try {
+    if (c.img) {
+      const r = await camFetch(c.img);
+      if (!r.ok) return "offline";
+      return (r.headers.get("content-type") || "").startsWith("image/") ? "live" : "offline";
+    }
+    if (c.yt) {
+      const r = await camFetch(`https://www.youtube.com/watch?v=${c.yt}`);
+      if (!r.ok) return "unknown";
+      const b = await r.text();
+      if (!b.includes('"playableInEmbed":true')) return "offline"; // embedding disabled / video gone
+      return b.includes('"isLiveNow":true') ? "live" : "offline";  // stream ended / not broadcasting
+    }
+    if (c.ipcamlive) {
+      const r = await camFetch(`https://www.ipcamlive.com/player/player.php?alias=${c.ipcamlive}&autoplay=1`);
+      if (!r.ok) return "unknown";
+      const b = await r.text();
+      const sid = (b.match(/var streamid = '([^']+)'/) || [])[1];
+      const srv = (b.match(/address = '(https?:\/\/s\d+\.ipcamlive\.com\/?)'/) || [])[1];
+      if (!sid || !srv) return "offline"; // camera not assigned a stream → down
+      const snap = await camFetch(`${srv.replace(/\/$/, "")}/streams/${sid}/snapshot.jpg`);
+      return snap.ok ? "live" : "unknown";
+    }
+    // wetmet / pixelcaster / angelcam / ytChannel: can't probe the video itself,
+    // so a loadable, frame-able embed is "live"; only header-level blocking is offline.
+    const r = await camFetch(camSrc(c));
+    if (!r.ok) return "unknown";
+    const xfo = (r.headers.get("x-frame-options") || "").toLowerCase();
+    return (xfo.includes("deny") || xfo.includes("sameorigin")) ? "offline" : "live";
+  } catch {
+    return "unknown"; // timeout / network error → don't hide, just can't confirm
+  }
+}
+
+// Pool the checks so a lake's slow feeds don't starve the rest (and to stay
+// gentle on upstreams). 5 in flight at a time.
+async function camStatusForLake(lake) {
+  const want = lake || "Lake Erie";
+  const cams = CAMS.filter((c) => (c.lake || "Lake Erie") === want);
+  const status = {};
+  let next = 0;
+  const worker = async () => {
+    while (next < cams.length) {
+      const c = cams[next++];
+      status[c.name] = await camLiveness(c);
+    }
+  };
+  await Promise.all(Array.from({ length: Math.min(5, cams.length) }, worker));
+  return status;
+}
+
+async function handleCamStatus(url) {
+  const lake = url.searchParams.get("lake") || "Lake Erie";
+  const cacheKey = new Request(`https://cam-status.local/${encodeURIComponent(lake)}`);
+  const cache = caches.default;
+  const hit = await cache.match(cacheKey);
+  if (hit) return hit;
+  const status = await camStatusForLake(lake);
+  const resp = new Response(JSON.stringify({ lake, status }), {
+    headers: { "Content-Type": "application/json", "Cache-Control": "public, max-age=180" },
+  });
+  await cache.put(cacheKey, resp.clone());
+  return resp;
+}
+
 export async function onRequest(context) {
   const url = new URL(context.request.url);
+
+  if (url.pathname.endsWith("/cams")) return handleCamStatus(url);
 
   if (url.searchParams.has("spots")) {
     return json({
