@@ -177,10 +177,13 @@ button { font-family: inherit; }
 .card-head h2 { margin: 0; }
 .wr-dir { font-size: var(--fs-xs); color: var(--text-muted); font-weight: var(--fw-semibold); text-transform: uppercase; letter-spacing: var(--tracking-wide); }
 .stat .v small { font-size: 0.46em; font-weight: var(--fw-regular); color: var(--text-faint); margin-left: 2px; letter-spacing: 0; }
-.cam-kind { font-size: var(--fs-xs); font-weight: var(--fw-semibold); padding: 2px 9px; border-radius: var(--r-pill); }
+.cam-kind { display: inline-flex; align-items: center; gap: 5px; font-size: var(--fs-xs); font-weight: var(--fw-semibold); padding: 3px 10px; border-radius: var(--r-pill); }
+.cam-kind svg { font-size: 13px; }
 .cam-kind.video { color: var(--accent); background: color-mix(in srgb, var(--accent) 15%, transparent); }
 .cam-kind.photo { color: var(--text-muted); background: var(--surface-sunk); }
-.sel.camsel { width: 100%; margin-bottom: var(--s3); }
+.camsel-wrap { position: relative; margin-bottom: var(--s3); }
+.camsel-wrap .camsel-ic { position: absolute; left: 13px; top: 50%; transform: translateY(-50%); font-size: 16px; color: var(--text-muted); pointer-events: none; }
+.sel.camsel { width: 100%; margin-bottom: 0; padding-left: 38px; }
 details.card { margin-bottom: var(--s4); }
 
 /* ---------- Hour-by-hour strip ---------- */

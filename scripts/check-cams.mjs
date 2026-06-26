@@ -13,13 +13,24 @@ const UA = "Mozilla/5.0 (compatible; ShouldIBoat-CamHealth/1.0)";
 const TIMEOUT_MS = 20000;
 const CONCURRENCY = 6;
 
-async function fetchT(url, opts = {}) {
+async function fetchOnce(url, opts) {
   const ctrl = new AbortController();
   const t = setTimeout(() => ctrl.abort(), TIMEOUT_MS);
   try {
     return await fetch(url, { ...opts, redirect: "follow", signal: ctrl.signal, headers: { "User-Agent": UA, ...(opts.headers || {}) } });
   } finally {
     clearTimeout(t);
+  }
+}
+
+// Retry once on a network-level failure (timeout / connection reset) so a
+// transient blip — or an upstream's brief outage — doesn't false-flag a cam.
+async function fetchT(url, opts = {}) {
+  try {
+    return await fetchOnce(url, opts);
+  } catch {
+    await new Promise((r) => setTimeout(r, 1500));
+    return await fetchOnce(url, opts);
   }
 }
 
@@ -87,7 +98,9 @@ async function checkCam(c) {
     if (c.ipcamlive) return await checkIpcamlive(c.ipcamlive);
     return await checkFramePage(camSrc(c)); // wetmet / pixelcaster / angelcam
   } catch (e) {
-    return { status: "DEAD", detail: e.name === "AbortError" ? "timeout" : (e.message || "error") };
+    // Network-level failure (timeout / connection error / upstream outage) is
+    // not proof a cam is dead — flag it WARN so the run doesn't fail on a blip.
+    return { status: "WARN", detail: `unreachable: ${e.name === "AbortError" ? "timeout" : (e.cause?.code || e.message || "error")}` };
   }
 }
 

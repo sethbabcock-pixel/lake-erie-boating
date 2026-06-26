@@ -81,7 +81,7 @@ export const getLinkCams = (lake) => LINK_CAMS[lake] || [];
 
 export const camIsImage = (c) => Boolean(c && c.img);
 export const camKind = (c) => (c && c.img ? "photo" : "video");
-export const camKindLabel = (c) => (c && c.img ? "📷 refreshing photo" : "📹 live video");
+export const camKindLabel = (c) => (c && c.img ? "Refreshing photo" : "Live video");
 
 export const camSrc = (c) =>
   c.angelcam ? `https://v.angelcam.com/iframe?v=${c.angelcam}&autoplay=1`
@@ -106,11 +106,20 @@ export const dist = (la, lo, la2, lo2) => {
   return Math.hypot(dx, la - la2);
 };
 
-// Cams for the spot's own lake (cams without a `lake` default to Lake Erie),
-// nearest first. Lakes with no cams yet get an empty state in the UI.
-export const nearestCams = (lat, lon, lake, n = 8) => {
+// Cams near the selected spot (same lake; cams without a `lake` default to Lake
+// Erie), nearest first. Scoped to the launch area — the Great Lakes are huge, so
+// showing every cam on a lake is too broad. Prefer cams within ~0.85° (≈60 mi);
+// if none are that close, show just the single nearest within ~1.6° (≈110 mi);
+// beyond that the UI shows an empty state. ~1° ≈ 69 mi.
+const NEAR_DEG = 0.85;
+const MAX_DEG = 1.6;
+export const nearestCams = (lat, lon, lake, n = 6) => {
   const want = lake || "Lake Erie";
-  return CAMS.filter((c) => (c.lake || "Lake Erie") === want)
-    .sort((a, b) => dist(lat, lon, a.lat, a.lon) - dist(lat, lon, b.lat, b.lon))
-    .slice(0, n);
+  const ranked = CAMS
+    .filter((c) => (c.lake || "Lake Erie") === want)
+    .map((c) => [c, dist(lat, lon, c.lat, c.lon)])
+    .sort((a, b) => a[1] - b[1]);
+  const near = ranked.filter(([, d]) => d <= NEAR_DEG);
+  const chosen = near.length ? near : ranked.filter(([, d]) => d <= MAX_DEG).slice(0, 1);
+  return chosen.slice(0, n).map(([c]) => c);
 };

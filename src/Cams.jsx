@@ -1,6 +1,19 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { getLinkCams, camSrc, camLink, camIsImage, camKind, camKindLabel, nearestCams } from "./cams.js";
 
+// Monochrome currentColor icons (Lucide-style), sized in em so they track text.
+const VideoIcon = (p) => (
+  <svg viewBox="0 0 24 24" width="1em" height="1em" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" {...p}>
+    <path d="m22 8-6 4 6 4V8Z" /><rect x="2" y="6" width="14" height="12" rx="2" />
+  </svg>
+);
+const PhotoIcon = (p) => (
+  <svg viewBox="0 0 24 24" width="1em" height="1em" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" {...p}>
+    <rect x="3" y="3" width="18" height="18" rx="2" /><circle cx="9" cy="9" r="2" /><path d="m21 15-3.1-3.1a2 2 0 0 0-2.8 0L6 21" />
+  </svg>
+);
+const CamTypeIcon = ({ cam, ...p }) => (camIsImage(cam) ? <PhotoIcon {...p} /> : <VideoIcon {...p} />);
+
 // Load the YouTube IFrame Player API once. The player reports real errors
 // (ended stream / "recording not available" / embedding disabled) that a plain
 // iframe's onLoad can't — that's how we catch dead YouTube cams client-side,
@@ -144,14 +157,17 @@ export default function Cams({ lat, lon, spotName, lake }) {
     <section className="card">
       <div className="card-head">
         <h2>Live cams</h2>
-        <span className={`cam-kind ${camKind(cam)}`}>{camKindLabel(cam)}</span>
+        <span className={`cam-kind ${camKind(cam)}`}><CamTypeIcon cam={cam} /> {camKindLabel(cam)}</span>
       </div>
 
-      <select className="sel camsel" value={sel} onChange={(e) => setSel(Number(e.target.value))} aria-label="Choose a webcam">
-        {cams.map((c, i) => (
-          <option key={c.name} value={i}>{camIsImage(c) ? "📷 " : "📹 "}{c.name}</option>
-        ))}
-      </select>
+      <div className="camsel-wrap">
+        <CamTypeIcon cam={cam} className="camsel-ic" />
+        <select className="sel camsel" value={sel} onChange={(e) => setSel(Number(e.target.value))} aria-label="Choose a webcam">
+          {cams.map((c, i) => (
+            <option key={c.name} value={i}>{c.name}</option>
+          ))}
+        </select>
+      </div>
 
       <div className="camwrap">
         {!loaded && !iframeFail && <div className="camloading"><span className="spinner" />loading {cam.name}…</div>}
