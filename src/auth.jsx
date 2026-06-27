@@ -24,8 +24,12 @@ export function useAuth() {
     login: async (email, password) => { const d = await post("/auth/login", { email, password }); setUser(d.user); },
     register: async (email, password) => { const d = await post("/auth/register", { email, password }); setUser(d.user); },
     logout: async () => { await post("/auth/logout"); setUser(null); },
-    savePrefs: async (prefs) => {
-      try { const r = await fetch("/api/prefs", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ prefs }) }); const d = await r.json(); if (d.user) setUser(d.user); } catch (e) { /* ignore */ }
+    savePrefs: async (partial) => {
+      try {
+        const merged = { ...(user?.prefs || {}), ...partial }; // merge so one save never wipes others (spot/theme/comfort)
+        const r = await fetch("/api/prefs", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ prefs: merged }) });
+        const d = await r.json(); if (d.user) setUser(d.user);
+      } catch (e) { /* ignore */ }
     },
     saveFavorites: async (favorites) => {
       try { const r = await fetch("/api/favorites", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ favorites }) }); const d = await r.json(); if (d.user) setUser(d.user); } catch (e) { /* ignore */ }
@@ -80,6 +84,18 @@ export function Account({ auth }) {
   const [modal, setModal] = useState(false);
   const [menu, setMenu] = useState(false);
   const ref = useRef(null);
+  // Local copies of the comfort limits; persisted on blur.
+  const prefs = (auth.user && auth.user.prefs) || {};
+  const [wave, setWave] = useState("");
+  const [windkt, setWindkt] = useState("");
+  useEffect(() => {
+    setWave(prefs.maxWaveFt ?? "");
+    setWindkt(prefs.maxWindKt ?? "");
+  }, [auth.user]);
+  const saveComfort = () => auth.savePrefs({
+    maxWaveFt: wave === "" ? null : Number(wave),
+    maxWindKt: windkt === "" ? null : Number(windkt),
+  });
   useEffect(() => {
     if (!menu) return;
     const h = (e) => { if (ref.current && !ref.current.contains(e.target)) setMenu(false); };
@@ -106,6 +122,18 @@ export function Account({ auth }) {
         <div className="acct-menu">
           <div className="acct-email">{auth.user.email}</div>
           <div className="acct-plan">{auth.user.adFree ? "Ad-free ✓" : "Free plan"}</div>
+          <div className="acct-prefs">
+            <div className="acct-prefs-title">Comfort limits</div>
+            <label className="acct-pref">Max waves
+              <span><input type="number" min="0" step="0.5" inputMode="decimal" value={wave}
+                onChange={(e) => setWave(e.target.value)} onBlur={saveComfort} placeholder="any" /> ft</span>
+            </label>
+            <label className="acct-pref">Max wind
+              <span><input type="number" min="0" step="1" inputMode="numeric" value={windkt}
+                onChange={(e) => setWindkt(e.target.value)} onBlur={saveComfort} placeholder="any" /> kt</span>
+            </label>
+            <div className="acct-prefs-hint">We'll flag conditions above these on the call.</div>
+          </div>
           <button className="acct-item" onClick={() => { setMenu(false); auth.logout(); }}>Sign out</button>
         </div>
       )}

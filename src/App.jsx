@@ -9,6 +9,18 @@ const verdictClass = (lvl) => (lvl === "NO-GO" ? "nogo" : lvl === "CAUTION" ? "c
 const fmtHour = (t, withMin) =>
   new Date(t).toLocaleTimeString([], withMin ? { hour: "numeric", minute: "2-digit" } : { hour: "numeric" });
 
+// Compare live conditions against a signed-in boater's comfort limits.
+function comfortCheck(prefs, windKt, waveFt) {
+  if (!prefs) return null;
+  const maxW = prefs.maxWaveFt, maxK = prefs.maxWindKt;
+  if (maxW == null && maxK == null) return null;
+  const over = [];
+  if (maxW != null && waveFt != null && waveFt > maxW) over.push(`waves ${waveFt} ft over your ${maxW} ft`);
+  if (maxK != null && windKt != null && windKt > maxK) over.push(`wind ${windKt} kt over your ${maxK} kt`);
+  const limits = [maxW != null ? `≤${maxW} ft` : null, maxK != null ? `≤${maxK} kt` : null].filter(Boolean).join(" · ");
+  return { ok: over.length === 0, over, limits };
+}
+
 function windyUrl(lat, lon, overlay = "wind") {
   return (
     `https://embed.windy.com/embed2.html?lat=${lat}&lon=${lon}` +
@@ -53,39 +65,57 @@ function groupByDay(hours) {
   return out;
 }
 
-// Split a nearshore-forecast sentence into Wind / Waves / Sky facts.
+// Split a nearshore-forecast period into Wind / Waves / Weather facts. NSH
+// periods read like: "NW winds 10 to 15 kt. Waves 2 to 4 ft. A chance of
+// showers." Sentence-splitting keeps each fact clean instead of one blob.
 function parseMarine(text) {
-  const t = (text || "").trim();
-  const windM = t.match(/((?:light and variable|[NSEW][a-z]*(?:\s+to\s+[NSEW][a-z]*)?)\s*winds?[^.]*?(?:knots?|kt)[^.]*?)\./i)
-    || t.match(/((?:light and variable|[NSEW][a-z]*)\s*winds?[^.]*?)\./i);
-  const waveM = t.match(/(waves?[^.]*?(?:feet|foot)[^.]*?)\./i);
-  let sky = t;
-  if (windM) sky = sky.replace(windM[0], " ");
-  if (waveM) sky = sky.replace(waveM[0], " ");
-  sky = sky.replace(/\s+/g, " ").trim().replace(/^[.,\s]+/, "");
-  const wind = windM ? windM[1].replace(/\s*winds?\s*/i, " ").replace(/\s+/g, " ").trim() : null;
-  const waves = waveM ? waveM[1].replace(/^waves?\s+/i, "").replace(/\s+/g, " ").trim() : null;
-  return { wind, waves, sky: sky || null };
+  const t = (text || "").replace(/\s+/g, " ").trim();
+  if (!t) return { wind: null, waves: null, weather: null };
+  const sentences = t.split(/\.(?:\s+|$)/).map((s) => s.trim()).filter(Boolean);
+  let wind = null, waves = null;
+  const weather = [];
+  for (const s of sentences) {
+    const isWave = /\b(waves?|seas)\b/i.test(s);
+    const isWind = /\b(winds?|gust|variable)\b/i.test(s);
+    if (isWave && !waves) waves = s.replace(/^(combined\s+)?(seas|waves?)\s+/i, "").replace(/\s+/g, " ").trim();
+    else if (isWind && !wind) wind = s.replace(/\s+/g, " ").trim();
+    else weather.push(s);
+  }
+  return { wind, waves, weather: weather.join(". ") || null };
 }
+
+// Small inline icons for the wind / waves chips.
+const WindGlyph = () => (
+  <svg viewBox="0 0 24 24" width="1em" height="1em" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+    <path d="M2 8h12a2.5 2.5 0 1 0-2.5-2.5M2 12h17a2.5 2.5 0 1 1-2.5 2.5M2 16h10a2.5 2.5 0 1 1-2.5 2.5" />
+  </svg>
+);
+const WaveGlyph = () => (
+  <svg viewBox="0 0 24 24" width="1em" height="1em" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+    <path d="M2 7c2 0 2 2 4 2s2-2 4-2 2 2 4 2 2-2 4-2 2 2 4 2M2 13c2 0 2 2 4 2s2-2 4-2 2 2 4 2 2-2 4-2 2 2 4 2M2 19c2 0 2 2 4 2s2-2 4-2 2 2 4 2 2-2 4-2 2 2 4 2" />
+  </svg>
+);
 
 function MarineForecast({ periods, zone }) {
   if (!periods || !periods.length) return null;
   return (
     <section className="card">
       <h2>Nearshore marine forecast{zone ? ` · ${zone}` : ""}</h2>
-      {periods.map((p, i) => {
-        const m = parseMarine(p.forecast);
-        return (
-          <div className="mrow" key={i}>
-            <div className="mrow-head"><WxIcon short={p.forecast} size={26} /><span className="mrow-name">{p.name}</span></div>
-            <div className="mrow-grid">
-              {m.wind && <div className="mfact"><span className="mlabel">Wind</span><span className="mval">{m.wind}</span></div>}
-              {m.waves && <div className="mfact"><span className="mlabel">Waves</span><span className="mval">{m.waves}</span></div>}
-              {m.sky && <div className="mfact wide"><span className="mlabel">Sky</span><span className="mval">{m.sky}</span></div>}
+      <div className="mlist">
+        {periods.map((p, i) => {
+          const m = parseMarine(p.forecast);
+          return (
+            <div className="mrow" key={i}>
+              <div className="mrow-head"><WxIcon short={p.forecast} size={24} /><span className="mrow-name">{p.name}</span></div>
+              <div className="mchips">
+                {m.wind && <span className="mchip wind"><WindGlyph /><span>{m.wind}</span></span>}
+                {m.waves && <span className="mchip wave"><WaveGlyph /><span>{m.waves}</span></span>}
+              </div>
+              {m.weather && <div className="mweather">{m.weather}.</div>}
             </div>
-          </div>
-        );
-      })}
+          );
+        })}
+      </div>
     </section>
   );
 }
@@ -229,22 +259,22 @@ function HourStrip({ hours, headInBy }) {
                 <div className="ht">{fmtHour(h.time).replace(" ", "")}</div>
                 <div className="hicon" aria-hidden="true">{wxGlyph(h.short)}</div>
                 <div className="hbar" />
-                <div className="hm"><b>{h.windKt ?? "—"}</b><small>kt</small></div>
-                <div className="hm wave"><b>{h.waveFt ?? "—"}</b><small>ft</small></div>
+                <div className="hm"><b>{h.windKt ?? "—"}</b><small>kt{h.windDir ? ` ${h.windDir}` : ""}</small></div>
+                <div className="hm wave"><b>{h.waveFt ?? "—"}</b><small>ft{h.periodSec ? ` · ${h.periodSec}s` : ""}</small></div>
                 <div className="hp">{h.precipPct ? `${h.precipPct}%` : "·"}</div>
               </div>
             ))}
           </React.Fragment>
         ))}
       </div>
-      <div className="hint">Wind (kt) · wave (ft) · rain chance per hour. Red-ringed hour = be back in by then. Scroll for up to 3 days.</div>
+      <div className="hint">Wind (kt + direction) · wave height (ft) &amp; period (s) · rain chance, per hour. Red-ringed hour = be back in by then. Scroll for up to 3 days.</div>
     </section>
   );
 }
 
 function MapCard({ spot }) {
   const [layer, setLayer] = useState("waves");
-  const layers = [["waves", "Waves"], ["wind", "Wind"], ["gust", "Gusts"], ["rain", "Rain"], ["temp", "Temp"]];
+  const layers = [["waves", "Waves"], ["wind", "Wind"], ["gust", "Gusts"], ["radar", "Radar"], ["temp", "Temp"]];
   return (
     <section className="card">
       <div className="card-head">
@@ -326,6 +356,7 @@ export default function App() {
   const wv = data?.waves || {};
   const buoy = data?.buoy;
   const wr = data?.windRead;
+  const comfort = data ? comfortCheck(auth.user?.prefs, wind.speedKt, wv.ft) : null;
 
   // Location options grouped by lake (scales to all five lakes).
   const spotOptions = spots.length ? spots : (spot ? [{ ...spot, lake: "Lake Erie" }] : [{ id: active, name: "Loading…", lake: "Lake Erie" }]);
@@ -369,6 +400,12 @@ export default function App() {
                 </div>
                 <div className="call-sum">{rec.summary}</div>
                 <ul className="reasons">{rec.reasons.map((x, i) => <li key={i}>{x}</li>)}</ul>
+                {comfort && (
+                  <div className={`comfort ${comfort.ok ? "ok" : "over"}`}>
+                    <b>Your comfort ({comfort.limits}):</b>{" "}
+                    {comfort.ok ? "today's conditions are within your limits." : `above your limit — ${comfort.over.join("; ")}.`}
+                  </div>
+                )}
               </div>
             </section>
 

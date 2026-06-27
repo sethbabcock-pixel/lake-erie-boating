@@ -205,6 +205,7 @@ async function fetchForecasts(lat, lon) {
         time: p.startTime,
         tempF: p.temperature,
         windKt: round(mphToKt(mph), 0),
+        windDir: p.windDirection || null,
         precipPct: p.probabilityOfPrecipitation?.value ?? 0,
         short: p.shortForecast || "",
       };
@@ -629,7 +630,10 @@ export async function onRequest(context) {
   const point = fc.daily;
   // Merge hourly wave height (Open-Meteo) into the NWS hourly rows, then rate risk.
   const hourly = withRisk(
-    fc.hourly.map((h) => ({ ...h, waveFt: (waveMap[h.time.slice(0, 13)] || {}).waveFt ?? null }))
+    fc.hourly.map((h) => {
+      const m = waveMap[h.time.slice(0, 13)] || {};
+      return { ...h, waveFt: m.waveFt ?? null, periodSec: m.periodSec ?? null };
+    })
   );
   const outlook = computeOutlook(hourly);
 
