@@ -8,6 +8,10 @@
 //   GET  /auth/google/callback
 //   PUT  /api/prefs     {prefs}
 //   PUT  /api/favorites {favorites}
+//   GET  /api/billing-status        -> admin-only Stripe config diagnostics
+//   POST /api/checkout              -> start Stripe Checkout (ad-free)
+//   POST /api/portal                -> Stripe billing portal
+//   POST /stripe/webhook            -> subscription lifecycle -> adFree
 // Email/password needs only the USERS KV namespace. Google sign-in also needs
 // GOOGLE_CLIENT_ID + GOOGLE_CLIENT_SECRET secrets.
 
@@ -229,6 +233,36 @@ export async function handleAuth(request, env, url) {
     }
     if (!session || !session.url) return json({ error: session?.error?.message || "Could not start checkout." }, 502);
     return json({ url: session.url });
+  }
+
+  // ---- Stripe: config diagnostics (admin-only, no secrets leaked) ----
+  if (path === "/api/billing-status" && request.method === "GET") {
+    const u = await userFromRequest(env, request);
+    if (!u) return json({ error: "Not signed in." }, 401);
+    if (env.ADMIN_EMAIL && u.email !== env.ADMIN_EMAIL.trim().toLowerCase()) return json({ error: "Forbidden." }, 403);
+    const sk = env.STRIPE_SECRET_KEY || "";
+    const mode = sk.startsWith("sk_live") ? "live" : sk.startsWith("sk_test") ? "test" : sk ? "unknown" : "none";
+    const priceId = env.STRIPE_PRICE_ID || STRIPE_PRICE;
+    const status = {
+      secretKey: { present: !!sk, mode },
+      webhookSecret: { present: !!env.STRIPE_WEBHOOK_SECRET },
+      priceId,
+      priceOverride: !!env.STRIPE_PRICE_ID,
+    };
+    // If we have a key, resolve the price live so you can confirm it actually
+    // exists in this account/mode — the usual "No such price" cause of failures.
+    if (sk) {
+      const r = await fetch(`https://api.stripe.com/v1/prices/${encodeURIComponent(priceId)}`, {
+        headers: { Authorization: `Bearer ${sk}` },
+      }).then((x) => x.json()).catch(() => null);
+      status.price = r && r.id
+        ? { resolved: true, active: r.active, amount: r.unit_amount, currency: r.currency, interval: r.recurring?.interval || null, livemode: r.livemode }
+        : { resolved: false, error: r?.error?.message || "lookup failed" };
+      status.ready = !!sk && !!env.STRIPE_WEBHOOK_SECRET && status.price.resolved === true && status.price.active === true;
+    } else {
+      status.ready = false;
+    }
+    return json(status);
   }
 
   // ---- Stripe: manage subscription (billing portal) ----

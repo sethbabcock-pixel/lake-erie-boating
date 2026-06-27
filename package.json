@@ -6,6 +6,7 @@
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
+    "test": "node scripts/test-billing.mjs",
     "check:cams": "node scripts/check-cams.mjs"
   },
   "dependencies": {
