@@ -97,6 +97,7 @@ export async function handleAuth(request, env, url) {
   const path = url.pathname;
   if (!env.USERS) return json({ error: "Accounts are not configured yet." }, 503);
 
+  try {
   // ---- register ----
   if (path === "/auth/register" && request.method === "POST") {
     const { email, password } = await request.json().catch(() => ({}));
@@ -200,7 +201,13 @@ export async function handleAuth(request, env, url) {
     };
     if (u.stripeCustomerId) params.customer = u.stripeCustomerId;
     else params.customer_email = u.email;
-    const session = await stripeAPI(env, "checkout/sessions", params);
+    let session = await stripeAPI(env, "checkout/sessions", params);
+    // A stale/invalid customer id (e.g. from another sandbox) → retry by email.
+    if ((!session || !session.url) && params.customer && /customer/i.test(session?.error?.message || "")) {
+      delete params.customer;
+      params.customer_email = u.email;
+      session = await stripeAPI(env, "checkout/sessions", params);
+    }
     if (!session || !session.url) return json({ error: session?.error?.message || "Could not start checkout." }, 502);
     return json({ url: session.url });
   }
@@ -243,4 +250,7 @@ export async function handleAuth(request, env, url) {
   }
 
   return json({ error: "Not found" }, 404);
+  } catch (e) {
+    return json({ error: e && e.message ? e.message : "Server error" }, 500);
+  }
 }
