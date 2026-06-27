@@ -112,29 +112,27 @@ export function AuthModal({ auth, onClose }) {
   );
 }
 
+const IconGear = () => (
+  <svg className="acct-ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+    <circle cx="12" cy="12" r="3" /><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V15z" />
+  </svg>
+);
+const IconSignOut = () => (
+  <svg className="acct-ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+    <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" /><polyline points="16 17 21 12 16 7" /><line x1="21" y1="12" x2="9" y2="12" />
+  </svg>
+);
+
 export function Account({ auth }) {
   const [modal, setModal] = useState(false);
   const [menu, setMenu] = useState(false);
   const ref = useRef(null);
-  // Local copies of the comfort limits; persisted on blur.
-  const prefs = (auth.user && auth.user.prefs) || {};
-  const [wave, setWave] = useState("");
-  const [windkt, setWindkt] = useState("");
   const [busy, setBusy] = useState(false);
   const [billErr, setBillErr] = useState("");
   const doBilling = async (fn) => {
     setBusy(true); setBillErr("");
     try { await fn(); } catch (e) { setBillErr(e.message); setBusy(false); } // success redirects away
   };
-  useEffect(() => {
-    setWave(prefs.maxWaveFt ?? "");
-    setWindkt(prefs.maxWindKt ?? "");
-  }, [auth.user]);
-  const saveComfort = () => auth.savePrefs({
-    comfortMode: "custom", // a hand-tweaked limit is an override of the boat-type recommendation
-    maxWaveFt: wave === "" ? null : Number(wave),
-    maxWindKt: windkt === "" ? null : Number(windkt),
-  });
   useEffect(() => {
     if (!menu) return;
     const h = (e) => { if (ref.current && !ref.current.contains(e.target)) setMenu(false); };
@@ -158,27 +156,21 @@ export function Account({ auth }) {
         <span className="acct-avatar">{initial}</span>
       </button>
       {menu && (
-        <div className="acct-menu">
-          <div className="acct-email">{auth.user.email}</div>
-          <div className="acct-plan">{auth.user.adFree ? "Ad-free ✓" : "Free plan"}</div>
-          {auth.billing && (auth.user.adFree
-            ? <button className="acct-item billing" disabled={busy} onClick={() => doBilling(auth.portal)}>{busy ? "…" : "Manage subscription"}</button>
-            : <button className="upgrade-btn" disabled={busy} onClick={() => doBilling(auth.checkout)}>{busy ? "…" : "Go ad-free — $2.99/mo"}</button>)}
-          {billErr && <div className="modal-err" style={{ margin: "4px 0" }}>{billErr}</div>}
-          <div className="acct-prefs">
-            <div className="acct-prefs-title">Comfort limits</div>
-            <label className="acct-pref">Max waves
-              <span><input type="number" min="0" step="0.5" inputMode="decimal" value={wave}
-                onChange={(e) => setWave(e.target.value)} onBlur={saveComfort} placeholder="any" /> ft</span>
-            </label>
-            <label className="acct-pref">Max wind
-              <span><input type="number" min="0" step="1" inputMode="numeric" value={windkt}
-                onChange={(e) => setWindkt(e.target.value)} onBlur={saveComfort} placeholder="any" /> kt</span>
-            </label>
-            <div className="acct-prefs-hint">We'll flag conditions above these on the call.</div>
+        <div className="acct-menu" role="menu">
+          <div className="acct-menu-head">
+            <span className="acct-avatar lg">{initial}</span>
+            <div className="acct-menu-id">
+              <div className="acct-email">{auth.user.email}</div>
+              <span className={`acct-pill ${auth.user.adFree ? "ok" : ""}`}>{auth.user.adFree ? "Ad-free" : "Free plan"}</span>
+            </div>
           </div>
-          <a className="acct-item" href="/account">Account &amp; boat settings →</a>
-          <button className="acct-item" onClick={() => { setMenu(false); auth.logout(); }}>Sign out</button>
+          {auth.billing && !auth.user.adFree && (
+            <button className="upgrade-btn" disabled={busy} onClick={() => doBilling(auth.checkout)}>{busy ? "…" : "Go ad-free — $2.99/mo"}</button>
+          )}
+          {billErr && <div className="modal-err" style={{ margin: "4px 0" }}>{billErr}</div>}
+          <div className="acct-menu-sep" />
+          <a className="acct-item" href="/account" role="menuitem"><IconGear /> Account &amp; boat settings</a>
+          <button className="acct-item" role="menuitem" onClick={() => { setMenu(false); auth.logout(); }}><IconSignOut /> Sign out</button>
         </div>
       )}
     </div>
