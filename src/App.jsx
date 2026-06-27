@@ -120,6 +120,43 @@ function MarineForecast({ periods, zone }) {
   );
 }
 
+// Format the raw NSH product into readable blocks: each ".PERIOD...text"
+// becomes a titled paragraph (wrapped continuation lines rejoined); the WMO
+// header / zone codes / boilerplate are dimmed as metadata.
+function formatNSH(text) {
+  const lines = (text || "").replace(/\r/g, "").split("\n");
+  const blocks = [];
+  let cur = null;
+  const push = () => { if (cur) { blocks.push(cur); cur = null; } };
+  for (const ln of lines) {
+    const t = ln.trimEnd();
+    if (/^\.[A-Z]/.test(t)) {
+      push();
+      const idx = t.indexOf("...");
+      cur = { type: "period", name: (idx >= 0 ? t.slice(1, idx) : t.slice(1)).trim(), body: (idx >= 0 ? t.slice(idx + 3) : "").trim() };
+    } else if (cur) {
+      if (!t.trim() || t.startsWith("$$")) push();
+      else cur.body += " " + t.trim();
+    } else if (t.trim() && !t.startsWith("$$")) {
+      blocks.push({ type: "meta", text: t.trim() });
+    }
+  }
+  push();
+  return blocks;
+}
+
+function RawNSH({ text }) {
+  const blocks = formatNSH(text);
+  if (!blocks.length) return <pre className="nsh">{text}</pre>;
+  return (
+    <div className="nshfmt">
+      {blocks.map((b, i) => b.type === "period"
+        ? <p className="nsh-period" key={i}><b>{b.name}</b>{b.body ? ` — ${b.body}` : ""}</p>
+        : <div className="nsh-meta" key={i}>{b.text}</div>)}
+    </div>
+  );
+}
+
 // Theme choice: "dark" | "light" | "system" (default DARK).
 function useTheme() {
   const [choice, setChoice] = useState(() => {
@@ -480,7 +517,7 @@ export default function App() {
             {data.noaaReport?.text && (
               <details className="card">
                 <summary>📋 Full NWS nearshore report (NSH · {data.noaaReport.office})</summary>
-                <pre className="nsh">{data.noaaReport.text}</pre>
+                <RawNSH text={data.noaaReport.text} />
               </details>
             )}
 

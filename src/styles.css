@@ -246,6 +246,11 @@ details.card > summary::-webkit-details-marker { display: none; }
 details.card[open] > summary { margin-bottom: var(--s3); }
 .nsh { white-space: pre-wrap; font-family: var(--font-mono); font-size: var(--fs-xs); line-height: 1.5;
   color: var(--text-muted); margin: 0; max-height: 420px; overflow: auto; }
+.nshfmt { max-height: 460px; overflow: auto; padding-right: 4px; }
+.nsh-period { margin: 0 0 11px; font-size: var(--fs-sm); line-height: 1.5; color: var(--text-muted); }
+.nsh-period b { display: block; margin-bottom: 1px; color: var(--accent); font-weight: var(--fw-bold);
+  font-size: var(--fs-xs); text-transform: capitalize; letter-spacing: var(--tracking-wide); }
+.nsh-meta { font-family: var(--font-mono); font-size: 10.5px; color: var(--text-faint); line-height: 1.55; }
 
 /* Icon-led forecast rows (local weather + nearshore marine) */
 .wxrow { display: flex; align-items: center; gap: var(--s3); padding: var(--s3) 0; border-bottom: 1px solid var(--border); }
