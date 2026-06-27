@@ -190,7 +190,8 @@ export async function handleAuth(request, env, url) {
     if (u.adFree) return json({ error: "You're already ad-free." }, 400);
     const params = {
       mode: "subscription",
-      "line_items[0][price]": STRIPE_PRICE,
+      "line_items[0][price]": env.STRIPE_PRICE_ID || STRIPE_PRICE, // env override lets you use a test-mode price
+
       "line_items[0][quantity]": "1",
       success_url: `${url.origin}/?upgraded=1`,
       cancel_url: `${url.origin}/`,
