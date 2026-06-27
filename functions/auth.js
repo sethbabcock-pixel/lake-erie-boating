@@ -93,6 +93,17 @@ async function stripeVerify(rawBody, sigHeader, secret) {
   return timingSafeEqual(bufToHex(sig), v1);
 }
 
+// Google's registered redirect URI uses https. A bare http://shouldiboat.com
+// hit (common on mobile before HSTS is cached) would otherwise make url.origin
+// http:// and trigger redirect_uri_mismatch. Force https — and let an explicit
+// canonical base (e.g. https://shouldiboat.com) override host + scheme entirely.
+function googleRedirectUri(env, url) {
+  const base = env.OAUTH_REDIRECT_BASE
+    ? env.OAUTH_REDIRECT_BASE.replace(/\/+$/, "")
+    : `https://${url.host}`;
+  return `${base}/auth/google/callback`;
+}
+
 export async function handleAuth(request, env, url) {
   const path = url.pathname;
   if (!env.USERS) return json({ error: "Accounts are not configured yet." }, 503);
@@ -151,8 +162,16 @@ export async function handleAuth(request, env, url) {
   // ---- Google OAuth ----
   if (path === "/auth/google" && request.method === "GET") {
     if (!env.GOOGLE_CLIENT_ID) return json({ error: "Google sign-in not configured." }, 503);
+    // The Secure state cookie below only sticks over https; if the flow starts on
+    // http (bare-domain mobile hit) the cookie is dropped and the callback fails
+    // state validation. Upgrade to https first so the whole flow stays secure.
+    if (url.protocol === "http:") {
+      const https = new URL(url.toString());
+      https.protocol = "https:";
+      return new Response(null, { status: 302, headers: { Location: https.toString() } });
+    }
     const state = randHex(16);
-    const redirect = `${url.origin}/auth/google/callback`;
+    const redirect = googleRedirectUri(env, url);
     const g = new URL("https://accounts.google.com/o/oauth2/v2/auth");
     g.searchParams.set("client_id", env.GOOGLE_CLIENT_ID);
     g.searchParams.set("redirect_uri", redirect);
@@ -168,7 +187,7 @@ export async function handleAuth(request, env, url) {
     if (!code || !state || state !== getCookie(request, "sib_oauth")) return new Response("Invalid OAuth state", { status: 400 });
     const tok = await fetch("https://oauth2.googleapis.com/token", {
       method: "POST", headers: { "Content-Type": "application/x-www-form-urlencoded" },
-      body: new URLSearchParams({ code, client_id: env.GOOGLE_CLIENT_ID, client_secret: env.GOOGLE_CLIENT_SECRET, redirect_uri: `${url.origin}/auth/google/callback`, grant_type: "authorization_code" }),
+      body: new URLSearchParams({ code, client_id: env.GOOGLE_CLIENT_ID, client_secret: env.GOOGLE_CLIENT_SECRET, redirect_uri: googleRedirectUri(env, url), grant_type: "authorization_code" }),
     }).then((r) => r.json()).catch(() => null);
     if (!tok || !tok.id_token) return new Response("OAuth exchange failed", { status: 502 });
     const payload = JSON.parse(atob(tok.id_token.split(".")[1].replace(/-/g, "+").replace(/_/g, "/")));
