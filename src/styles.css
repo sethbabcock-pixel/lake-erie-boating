@@ -321,6 +321,11 @@ details.card[open] > summary { margin-bottom: var(--s3); }
 .acct-item { width: 100%; text-align: left; background: none; border: none; padding: 8px 6px; border-radius: var(--r-sm);
   color: var(--text); font: inherit; font-size: var(--fs-sm); cursor: pointer; }
 .acct-item:hover { background: var(--surface-sunk); }
+.upgrade-btn { width: 100%; margin: 2px 0 var(--s2); padding: 9px 10px; border: none; border-radius: var(--r-md); cursor: pointer;
+  background: var(--accent); color: var(--accent-contrast, #04121e); font: inherit; font-size: var(--fs-sm); font-weight: var(--fw-bold); }
+.upgrade-btn:hover { filter: brightness(1.06); }
+.upgrade-btn:disabled { opacity: 0.6; cursor: default; }
+.acct-item.billing { color: var(--text-muted); }
 .acct-prefs { border-top: 1px solid var(--border); margin: var(--s2) 0; padding: var(--s3) 0 var(--s2); }
 .acct-prefs-title { font-size: 10px; text-transform: uppercase; letter-spacing: var(--tracking-wide); color: var(--text-faint); font-weight: var(--fw-semibold); margin-bottom: 6px; }
 .acct-pref { display: flex; align-items: center; justify-content: space-between; font-size: var(--fs-sm); color: var(--text-muted); margin: 4px 0; }

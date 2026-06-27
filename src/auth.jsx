@@ -5,13 +5,28 @@ import { createPortal } from "react-dom";
 export function useAuth() {
   const [user, setUser] = useState(undefined);
   const [available, setAvailable] = useState(false); // accounts backend (KV) configured?
+  const [billing, setBilling] = useState(false); // Stripe configured?
   useEffect(() => {
     fetch("/auth/me").then(async (r) => {
       if (r.status === 503) { setAvailable(false); setUser(null); return; }
       setAvailable(true);
       const d = await r.json().catch(() => ({}));
+      setBilling(!!d.billing);
       setUser(d.user || null);
     }).catch(() => setUser(null));
+  }, []);
+  // After returning from Stripe Checkout, re-poll a couple times so the plan
+  // flips to ad-free as soon as the webhook lands.
+  useEffect(() => {
+    if (!/[?&]upgraded=1/.test(window.location.search)) return;
+    let n = 0;
+    const id = setInterval(async () => {
+      n += 1;
+      const d = await fetch("/auth/me").then((r) => r.json()).catch(() => null);
+      if (d && d.user) setUser(d.user);
+      if (n >= 4 || (d && d.user && d.user.adFree)) clearInterval(id);
+    }, 2500);
+    return () => clearInterval(id);
   }, []);
   const post = async (path, body) => {
     const r = await fetch(path, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body || {}) });
@@ -19,8 +34,16 @@ export function useAuth() {
     if (!r.ok) throw new Error(d.error || "Something went wrong.");
     return d;
   };
+  const go = async (path) => {
+    const r = await fetch(path, { method: "POST" });
+    const d = await r.json().catch(() => ({}));
+    if (d.url) { window.location.href = d.url; return; }
+    throw new Error(d.error || "Something went wrong.");
+  };
   return {
-    user, setUser, available,
+    user, setUser, available, billing,
+    checkout: () => go("/api/checkout"),
+    portal: () => go("/api/portal"),
     login: async (email, password) => { const d = await post("/auth/login", { email, password }); setUser(d.user); },
     register: async (email, password) => { const d = await post("/auth/register", { email, password }); setUser(d.user); },
     logout: async () => { await post("/auth/logout"); setUser(null); },
@@ -88,6 +111,12 @@ export function Account({ auth }) {
   const prefs = (auth.user && auth.user.prefs) || {};
   const [wave, setWave] = useState("");
   const [windkt, setWindkt] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [billErr, setBillErr] = useState("");
+  const doBilling = async (fn) => {
+    setBusy(true); setBillErr("");
+    try { await fn(); } catch (e) { setBillErr(e.message); setBusy(false); } // success redirects away
+  };
   useEffect(() => {
     setWave(prefs.maxWaveFt ?? "");
     setWindkt(prefs.maxWindKt ?? "");
@@ -122,6 +151,10 @@ export function Account({ auth }) {
         <div className="acct-menu">
           <div className="acct-email">{auth.user.email}</div>
           <div className="acct-plan">{auth.user.adFree ? "Ad-free ✓" : "Free plan"}</div>
+          {auth.billing && (auth.user.adFree
+            ? <button className="acct-item billing" disabled={busy} onClick={() => doBilling(auth.portal)}>{busy ? "…" : "Manage subscription"}</button>
+            : <button className="upgrade-btn" disabled={busy} onClick={() => doBilling(auth.checkout)}>{busy ? "…" : "Go ad-free — $2.99/mo"}</button>)}
+          {billErr && <div className="modal-err" style={{ margin: "4px 0" }}>{billErr}</div>}
           <div className="acct-prefs">
             <div className="acct-prefs-title">Comfort limits</div>
             <label className="acct-pref">Max waves

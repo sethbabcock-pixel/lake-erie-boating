@@ -65,6 +65,33 @@ async function userFromRequest(env, request) {
   const u = await env.USERS.get(emailKey(email), "json");
   return u ? { ...u, _token: token } : null;
 }
+async function saveUser(env, u) {
+  const { _token, ...store } = u;
+  await env.USERS.put(emailKey(u.email), JSON.stringify(store));
+}
+
+// ── Stripe (ad-free $2.99/mo) ────────────────────────────────────────────────
+const STRIPE_PRICE = "price_1TmmTRD2Xq09ZtSPFFRrN1jH"; // $2.99/mo recurring
+async function stripeAPI(env, path, params) {
+  const r = await fetch(`https://api.stripe.com/v1/${path}`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${env.STRIPE_SECRET_KEY}`, "Content-Type": "application/x-www-form-urlencoded" },
+    body: new URLSearchParams(params),
+  });
+  return r.json();
+}
+// Verify the Stripe-Signature header (HMAC-SHA256 over `t.payload`).
+async function stripeVerify(rawBody, sigHeader, secret) {
+  if (!sigHeader) return false;
+  const parts = {};
+  for (const kv of sigHeader.split(",")) { const i = kv.indexOf("="); if (i > 0) parts[kv.slice(0, i)] = kv.slice(i + 1); }
+  const t = parts.t, v1 = parts.v1;
+  if (!t || !v1) return false;
+  if (Math.abs(Date.now() / 1000 - Number(t)) > 300) return false; // 5-min replay window
+  const key = await crypto.subtle.importKey("raw", enc.encode(secret), { name: "HMAC", hash: "SHA-256" }, false, ["sign"]);
+  const sig = await crypto.subtle.sign("HMAC", key, enc.encode(`${t}.${rawBody}`));
+  return timingSafeEqual(bufToHex(sig), v1);
+}
 
 export async function handleAuth(request, env, url) {
   const path = url.pathname;
@@ -105,7 +132,7 @@ export async function handleAuth(request, env, url) {
   // ---- me ----
   if (path === "/auth/me" && request.method === "GET") {
     const u = await userFromRequest(env, request);
-    return json({ user: u ? publicUser(u) : null });
+    return json({ user: u ? publicUser(u) : null, billing: !!env.STRIPE_SECRET_KEY });
   }
 
   // ---- save prefs / favorites ----
@@ -153,6 +180,65 @@ export async function handleAuth(request, env, url) {
     }
     const token = await createSession(env, email);
     return new Response(null, { status: 302, headers: { Location: "/", "Set-Cookie": cookie("sib_session", token, SESSION_DAYS * 86400) } });
+  }
+
+  // ---- Stripe: start checkout for ad-free ----
+  if (path === "/api/checkout" && request.method === "POST") {
+    if (!env.STRIPE_SECRET_KEY) return json({ error: "Billing is not configured yet." }, 503);
+    const u = await userFromRequest(env, request);
+    if (!u) return json({ error: "Not signed in." }, 401);
+    if (u.adFree) return json({ error: "You're already ad-free." }, 400);
+    const params = {
+      mode: "subscription",
+      "line_items[0][price]": STRIPE_PRICE,
+      "line_items[0][quantity]": "1",
+      success_url: `${url.origin}/?upgraded=1`,
+      cancel_url: `${url.origin}/`,
+      client_reference_id: u.email,
+      allow_promotion_codes: "true",
+    };
+    if (u.stripeCustomerId) params.customer = u.stripeCustomerId;
+    else params.customer_email = u.email;
+    const session = await stripeAPI(env, "checkout/sessions", params);
+    if (!session || !session.url) return json({ error: session?.error?.message || "Could not start checkout." }, 502);
+    return json({ url: session.url });
+  }
+
+  // ---- Stripe: manage subscription (billing portal) ----
+  if (path === "/api/portal" && request.method === "POST") {
+    if (!env.STRIPE_SECRET_KEY) return json({ error: "Billing is not configured yet." }, 503);
+    const u = await userFromRequest(env, request);
+    if (!u) return json({ error: "Not signed in." }, 401);
+    if (!u.stripeCustomerId) return json({ error: "No subscription found." }, 400);
+    const session = await stripeAPI(env, "billing_portal/sessions", { customer: u.stripeCustomerId, return_url: `${url.origin}/` });
+    if (!session || !session.url) return json({ error: session?.error?.message || "Could not open billing portal." }, 502);
+    return json({ url: session.url });
+  }
+
+  // ---- Stripe: webhook (subscription lifecycle → adFree) ----
+  if (path === "/stripe/webhook" && request.method === "POST") {
+    const raw = await request.text();
+    const ok = await stripeVerify(raw, request.headers.get("Stripe-Signature"), env.STRIPE_WEBHOOK_SECRET || "");
+    if (!ok) return json({ error: "Bad signature" }, 400);
+    let event;
+    try { event = JSON.parse(raw); } catch { return json({ error: "Bad payload" }, 400); }
+    const obj = event?.data?.object || {};
+    const setAdFree = async (email, value, extra = {}) => {
+      if (!email) return;
+      const user = await env.USERS.get(emailKey(email), "json");
+      if (!user) return;
+      await saveUser(env, { ...user, adFree: value, ...extra });
+    };
+    if (event.type === "checkout.session.completed") {
+      const email = (obj.client_reference_id || obj.customer_email || obj.customer_details?.email || "").toLowerCase();
+      if (obj.customer && email) await env.USERS.put(`stripecust:${obj.customer}`, email); // reverse index for later events
+      await setAdFree(email, true, { stripeCustomerId: obj.customer || null, stripeSubId: obj.subscription || null });
+    } else if (event.type === "customer.subscription.updated" || event.type === "customer.subscription.deleted") {
+      const email = await env.USERS.get(`stripecust:${obj.customer}`);
+      const active = event.type !== "customer.subscription.deleted" && ["active", "trialing", "past_due"].includes(obj.status);
+      await setAdFree(email, active);
+    }
+    return json({ received: true });
   }
 
   return json({ error: "Not found" }, 404);

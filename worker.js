@@ -12,7 +12,7 @@ export default {
     const url = new URL(request.url);
     const p = url.pathname;
     if (p.startsWith("/marine/")) return onRequest({ request, env, ctx });
-    if (p.startsWith("/auth/") || p.startsWith("/api/")) return handleAuth(request, env, url);
+    if (p.startsWith("/auth/") || p.startsWith("/api/") || p.startsWith("/stripe/")) return handleAuth(request, env, url);
     // Not an API route and not a static asset that was already served.
     return new Response("Not found", { status: 404 });
   },
