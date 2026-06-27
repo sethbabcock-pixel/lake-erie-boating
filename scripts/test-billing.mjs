@@ -33,6 +33,12 @@ function makeKV(seed = {}) {
 // ── Stripe fetch stub — records calls, returns canned responses ───────────────
 let stripeCalls = [];
 let priceResolves = true;
+let subGetCancelState = false; // what a GET subscription retrieve reports
+const makeSub = (cancelAtPeriodEnd) => ({
+  id: "sub_123", status: "active", cancel_at_period_end: cancelAtPeriodEnd,
+  current_period_end: 1790000000, cancel_at: cancelAtPeriodEnd ? 1790000000 : null,
+  items: { data: [{ price: { unit_amount: 299, currency: "usd", recurring: { interval: "month" } } }] },
+});
 function installFetchStub() {
   globalThis.fetch = async (urlStr, opts = {}) => {
     const u = String(urlStr);
@@ -42,6 +48,11 @@ function installFetchStub() {
       return jsonResp({ id: "cs_test_123", url: "https://checkout.stripe.com/c/pay/cs_test_123" });
     if (u.includes("/v1/billing_portal/sessions"))
       return jsonResp({ id: "bps_123", url: "https://billing.stripe.com/p/session/bps_123" });
+    if (u.includes("/v1/subscriptions/")) {
+      // POST = update (cancel/resume) → mirror the request; GET = retrieve.
+      if ((opts.method || "GET") === "POST") return jsonResp(makeSub(body?.cancel_at_period_end === "true"));
+      return jsonResp(makeSub(subGetCancelState));
+    }
     if (u.includes("/v1/prices/"))
       return priceResolves
         ? jsonResp({ id: "price_x", active: true, unit_amount: 299, currency: "usd", recurring: { interval: "month" }, livemode: false })
@@ -211,6 +222,78 @@ async function run() {
     const r = await call(req("GET", "/api/billing-status", { cookie: admin }), env);
     const txt = JSON.stringify(await r.json());
     check("billing-status: secret values not exposed", !txt.includes("SUPERSECRET"), txt);
+  }
+
+  // 12. GET /api/subscription gating
+  {
+    const env = { USERS: makeKV() };
+    eq("subscription GET: no key → 503", (await call(req("GET", "/api/subscription"), env)).status, 503);
+    const env2 = { USERS: makeKV(), STRIPE_SECRET_KEY: "sk_test_x" };
+    eq("subscription GET: signed out → 401", (await call(req("GET", "/api/subscription"), env2)).status, 401);
+  }
+
+  // 13. GET /api/subscription with no sub on file → { subscription: null }
+  {
+    const env = { USERS: makeKV(), STRIPE_SECRET_KEY: "sk_test_x" };
+    const cookie = await seedUser(env, "free@example.com");
+    const r = await call(req("GET", "/api/subscription", { cookie }), env);
+    eq("subscription GET: no sub → 200", r.status, 200);
+    eq("subscription GET: null when no subId", (await r.json()).subscription, null);
+  }
+
+  // 14. GET /api/subscription returns the live summary
+  {
+    subGetCancelState = false;
+    const env = { USERS: makeKV(), STRIPE_SECRET_KEY: "sk_test_x" };
+    const cookie = await seedUser(env, "vip@example.com", { adFree: true, stripeSubId: "sub_123" });
+    const r = await call(req("GET", "/api/subscription", { cookie }), env);
+    const { subscription } = await r.json();
+    eq("subscription GET: status active", subscription.status, "active");
+    eq("subscription GET: amount", subscription.amount, 299);
+    eq("subscription GET: interval", subscription.interval, "month");
+    eq("subscription GET: not cancelling", subscription.cancelAtPeriodEnd, false);
+    check("subscription GET: has period end", subscription.currentPeriodEnd === 1790000000);
+  }
+
+  // 15. POST cancel → cancel_at_period_end=true sent + reflected
+  {
+    stripeCalls = [];
+    const env = { USERS: makeKV(), STRIPE_SECRET_KEY: "sk_test_x" };
+    const cookie = await seedUser(env, "vip@example.com", { adFree: true, stripeSubId: "sub_123" });
+    const r = await call(req("POST", "/api/subscription", { cookie, body: { action: "cancel" } }), env);
+    eq("subscription cancel: → 200", r.status, 200);
+    eq("subscription cancel: now cancelling", (await r.json()).subscription.cancelAtPeriodEnd, true);
+    const sent = stripeCalls.find((c) => c.url.includes("/subscriptions/") && c.method === "POST");
+    eq("subscription cancel: sent cancel_at_period_end=true", sent?.body?.cancel_at_period_end, "true");
+  }
+
+  // 16. POST resume → cancel_at_period_end=false
+  {
+    stripeCalls = [];
+    const env = { USERS: makeKV(), STRIPE_SECRET_KEY: "sk_test_x" };
+    const cookie = await seedUser(env, "vip@example.com", { adFree: true, stripeSubId: "sub_123" });
+    const r = await call(req("POST", "/api/subscription", { cookie, body: { action: "resume" } }), env);
+    eq("subscription resume: not cancelling", (await r.json()).subscription.cancelAtPeriodEnd, false);
+    const sent = stripeCalls.find((c) => c.url.includes("/subscriptions/") && c.method === "POST");
+    eq("subscription resume: sent cancel_at_period_end=false", sent?.body?.cancel_at_period_end, "false");
+  }
+
+  // 17. POST guards: no subscription, bad action
+  {
+    const env = { USERS: makeKV(), STRIPE_SECRET_KEY: "sk_test_x" };
+    const noSub = await seedUser(env, "nosub@example.com", { adFree: true });
+    eq("subscription POST: no subId → 400", (await call(req("POST", "/api/subscription", { cookie: noSub, body: { action: "cancel" } }), env)).status, 400);
+    const withSub = await seedUser(env, "vip2@example.com", { adFree: true, stripeSubId: "sub_123" });
+    eq("subscription POST: bad action → 400", (await call(req("POST", "/api/subscription", { cookie: withSub, body: { action: "frobnicate" } }), env)).status, 400);
+  }
+
+  // 18. publicUser exposes created + hasSubscription (account page needs these)
+  {
+    const env = { USERS: makeKV(), STRIPE_SECRET_KEY: "sk_test_x" };
+    const cookie = await seedUser(env, "meta@example.com", { stripeSubId: "sub_123", created: "2026-02-02T00:00:00Z" });
+    const me = await (await call(req("GET", "/auth/me", { cookie }), env)).json();
+    eq("auth/me: exposes created", me.user.created, "2026-02-02T00:00:00Z");
+    eq("auth/me: exposes hasSubscription", me.user.hasSubscription, true);
   }
 
   console.log(results.join("\n"));

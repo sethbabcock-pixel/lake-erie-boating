@@ -10,6 +10,8 @@
 //   PUT  /api/favorites {favorites}
 //   GET  /api/billing-status        -> admin-only Stripe config diagnostics
 //   POST /api/checkout              -> start Stripe Checkout (ad-free)
+//   GET  /api/subscription          -> current subscription details
+//   POST /api/subscription {action} -> cancel | resume (at period end)
 //   POST /api/portal                -> Stripe billing portal
 //   POST /stripe/webhook            -> subscription lifecycle -> adFree
 // Email/password needs only the USERS KV namespace. Google sign-in also needs
@@ -54,7 +56,7 @@ function getCookie(request, name) {
   return m ? m[1] : null;
 }
 
-const publicUser = (u) => ({ email: u.email, prefs: u.prefs || {}, favorites: u.favorites || [], adFree: !!u.adFree, via: u.via || "password" });
+const publicUser = (u) => ({ email: u.email, prefs: u.prefs || {}, favorites: u.favorites || [], adFree: !!u.adFree, via: u.via || "password", created: u.created || null, hasSubscription: !!u.stripeSubId });
 
 async function createSession(env, email) {
   const token = randHex(32);
@@ -83,6 +85,27 @@ async function stripeAPI(env, path, params) {
     body: new URLSearchParams(params),
   });
   return r.json();
+}
+async function stripeGET(env, path) {
+  const r = await fetch(`https://api.stripe.com/v1/${path}`, {
+    headers: { Authorization: `Bearer ${env.STRIPE_SECRET_KEY}` },
+  });
+  return r.json();
+}
+// Normalize a Stripe subscription object into the shape the account page needs.
+// current_period_end moved to the item level in recent API versions, so read both.
+function subSummary(s) {
+  const item = s.items?.data?.[0] || {};
+  const price = item.price || {};
+  return {
+    status: s.status,
+    cancelAtPeriodEnd: !!s.cancel_at_period_end,
+    currentPeriodEnd: s.current_period_end || item.current_period_end || null,
+    cancelAt: s.cancel_at || null,
+    amount: price.unit_amount ?? null,
+    currency: price.currency || null,
+    interval: price.recurring?.interval || null,
+  };
 }
 // Verify the Stripe-Signature header (HMAC-SHA256 over `t.payload`).
 async function stripeVerify(rawBody, sigHeader, secret) {
@@ -263,6 +286,34 @@ export async function handleAuth(request, env, url) {
       status.ready = false;
     }
     return json(status);
+  }
+
+  // ---- Stripe: subscription details (for the account page) ----
+  if (path === "/api/subscription" && request.method === "GET") {
+    if (!env.STRIPE_SECRET_KEY) return json({ error: "Billing is not configured yet." }, 503);
+    const u = await userFromRequest(env, request);
+    if (!u) return json({ error: "Not signed in." }, 401);
+    if (!u.stripeSubId) return json({ subscription: null });
+    const s = await stripeGET(env, `subscriptions/${encodeURIComponent(u.stripeSubId)}`);
+    if (!s || s.error) return json({ subscription: null, error: s?.error?.message || "Could not load subscription." });
+    return json({ subscription: subSummary(s) });
+  }
+
+  // ---- Stripe: cancel / resume at period end ----
+  if (path === "/api/subscription" && request.method === "POST") {
+    if (!env.STRIPE_SECRET_KEY) return json({ error: "Billing is not configured yet." }, 503);
+    const u = await userFromRequest(env, request);
+    if (!u) return json({ error: "Not signed in." }, 401);
+    if (!u.stripeSubId) return json({ error: "No active subscription." }, 400);
+    const { action } = await request.json().catch(() => ({}));
+    if (action !== "cancel" && action !== "resume") return json({ error: "Unknown action." }, 400);
+    // cancel_at_period_end keeps ad-free until the paid-through date; the
+    // subscription.updated webhook leaves adFree on until it actually ends.
+    const s = await stripeAPI(env, `subscriptions/${encodeURIComponent(u.stripeSubId)}`, {
+      cancel_at_period_end: action === "cancel" ? "true" : "false",
+    });
+    if (!s || s.error) return json({ error: s?.error?.message || "Could not update subscription." }, 502);
+    return json({ subscription: subSummary(s) });
   }
 
   // ---- Stripe: manage subscription (billing portal) ----

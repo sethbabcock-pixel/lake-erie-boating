@@ -40,10 +40,19 @@ export function useAuth() {
     if (d.url) { window.location.href = d.url; return; }
     throw new Error(d.error || "Something went wrong.");
   };
+  const refresh = async () => {
+    const d = await fetch("/auth/me").then((r) => r.json()).catch(() => null);
+    if (d) setUser(d.user || null);
+  };
   return {
-    user, setUser, available, billing,
+    user, setUser, available, billing, refresh,
     checkout: () => go("/api/checkout"),
     portal: () => go("/api/portal"),
+    subscription: () => fetch("/api/subscription").then((r) => r.json()).catch(() => ({ subscription: null })),
+    updateSubscription: async (action) => {
+      const d = await post("/api/subscription", { action });
+      return d.subscription;
+    },
     login: async (email, password) => { const d = await post("/auth/login", { email, password }); setUser(d.user); },
     register: async (email, password) => { const d = await post("/auth/register", { email, password }); setUser(d.user); },
     logout: async () => { await post("/auth/logout"); setUser(null); },
@@ -60,7 +69,7 @@ export function useAuth() {
   };
 }
 
-function AuthModal({ auth, onClose }) {
+export function AuthModal({ auth, onClose }) {
   const [mode, setMode] = useState("login"); // login | register
   const [email, setEmail] = useState("");
   const [pw, setPw] = useState("");
@@ -122,6 +131,7 @@ export function Account({ auth }) {
     setWindkt(prefs.maxWindKt ?? "");
   }, [auth.user]);
   const saveComfort = () => auth.savePrefs({
+    comfortMode: "custom", // a hand-tweaked limit is an override of the boat-type recommendation
     maxWaveFt: wave === "" ? null : Number(wave),
     maxWindKt: windkt === "" ? null : Number(windkt),
   });
@@ -167,6 +177,7 @@ export function Account({ auth }) {
             </label>
             <div className="acct-prefs-hint">We'll flag conditions above these on the call.</div>
           </div>
+          <a className="acct-item" href="/account">Account &amp; boat settings →</a>
           <button className="acct-item" onClick={() => { setMenu(false); auth.logout(); }}>Sign out</button>
         </div>
       )}

@@ -2,7 +2,7 @@
   "name": "lake-erie-boating",
   "compatibility_date": "2024-11-01",
   "main": "worker.js",
-  "assets": { "directory": "./dist" },
+  "assets": { "directory": "./dist", "binding": "ASSETS" },
   "build": { "command": "npm install && npm run build" },
   "kv_namespaces": [
     { "binding": "USERS", "id": "ab7226cefa2d4f8a805b4ecb1b23775b" }
