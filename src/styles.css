@@ -520,3 +520,12 @@ body.has-takeover .app { background: var(--bg); border-radius: var(--r-lg) var(-
 .admin-upload .field { margin-bottom: 0; }
 .admin-uploadbtn { flex: 0 0 auto; display: inline-flex; align-items: center; min-height: 44px; cursor: pointer; white-space: nowrap; position: relative; }
 .admin-thumb { margin-top: var(--s3); max-height: 120px; max-width: 100%; border-radius: var(--r-md); border: 1px solid var(--border); display: block; object-fit: cover; }
+
+/* Mobile: dropdowns must never overflow the viewport edge.
+   The location panel is anchored to the right of a mid-screen button, so on a
+   narrow screen it ran off the left. Make it a full-width sheet near the top. */
+@media (max-width: 640px) {
+  .locpick-panel { position: fixed; left: 10px; right: 10px; top: 10px; width: auto; max-width: none; max-height: 80vh; z-index: 90; }
+  .locpick-list { max-height: 62vh; }
+  .acct-menu { max-width: calc(100vw - 20px); }
+}
