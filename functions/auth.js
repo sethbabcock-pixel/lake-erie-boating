@@ -10,6 +10,8 @@
 //   PUT  /api/favorites {favorites}
 //   GET  /api/site-config           -> public homepage hero + today's takeover
 //   GET/PUT /api/admin/config       -> admin-only site config (hero, takeovers)
+//   POST /api/admin/upload          -> admin image upload (stored in KV)
+//   GET  /api/asset/<id>            -> serve an uploaded image
 //   GET  /api/billing-status        -> admin-only Stripe config diagnostics
 //   POST /api/checkout              -> start Stripe Checkout (ad-free)
 //   GET  /api/subscription          -> current subscription details
@@ -233,6 +235,33 @@ export async function handleAuth(request, env, url) {
     const cfg = sanitizeSiteConfig(body.config);
     await env.USERS.put("site:config", JSON.stringify({ ...cfg, updatedAt: new Date().toISOString(), updatedBy: u.email }));
     return json({ config: cfg, savedAt: new Date().toISOString() });
+  }
+
+  // ---- serve an admin-uploaded image (public) ----
+  if (path.startsWith("/api/asset/") && request.method === "GET") {
+    const id = path.slice("/api/asset/".length);
+    if (!/^[a-z0-9]+$/i.test(id)) return new Response("Not found", { status: 404 });
+    const buf = await env.USERS.get(`asset:${id}`, "arrayBuffer");
+    if (!buf) return new Response("Not found", { status: 404 });
+    const ct = (await env.USERS.get(`asset:${id}:ct`)) || "image/jpeg";
+    return new Response(buf, { headers: { "Content-Type": ct, "Cache-Control": "public, max-age=31536000, immutable" } });
+  }
+
+  // ---- admin: upload an image (stored in KV, served at /api/asset/<id>) ----
+  if (path === "/api/admin/upload" && request.method === "POST") {
+    const u = await userFromRequest(env, request);
+    if (!u) return json({ error: "Not signed in." }, 401);
+    if (!env.ADMIN_EMAIL) return json({ error: "Set the ADMIN_EMAIL environment variable to enable the admin page." }, 403);
+    if (!isAdmin(env, u)) return json({ error: "Forbidden." }, 403);
+    const ct = request.headers.get("Content-Type") || "";
+    if (!/^image\/(png|jpeg|jpg|webp|gif|svg\+xml)$/i.test(ct)) return json({ error: "Only PNG, JPG, WebP, GIF or SVG images are allowed." }, 400);
+    const buf = await request.arrayBuffer();
+    if (!buf.byteLength) return json({ error: "Empty upload." }, 400);
+    if (buf.byteLength > 4 * 1024 * 1024) return json({ error: "Image too large — max 4 MB." }, 413);
+    const id = randHex(8);
+    await env.USERS.put(`asset:${id}`, buf);
+    await env.USERS.put(`asset:${id}:ct`, ct);
+    return json({ url: `/api/asset/${id}`, bytes: buf.byteLength });
   }
 
   // ---- save prefs / favorites ----

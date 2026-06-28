@@ -18,6 +18,37 @@ function Field({ label, hint, children }) {
   );
 }
 
+// Text URL + an "Upload" button that stores the file and fills in its URL.
+function ImageField({ label, hint, value, onChange }) {
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState("");
+  const onFile = async (e) => {
+    const f = e.target.files && e.target.files[0];
+    e.target.value = "";
+    if (!f) return;
+    setBusy(true); setErr("");
+    try {
+      const r = await fetch("/api/admin/upload", { method: "POST", headers: { "Content-Type": f.type }, body: f });
+      const d = await r.json();
+      if (!r.ok) throw new Error(d.error || "Upload failed.");
+      onChange(d.url);
+    } catch (ex) { setErr(ex.message); } finally { setBusy(false); }
+  };
+  return (
+    <div className="acct-field">
+      <span>{label}{hint && <em> {hint}</em>}</span>
+      <div className="admin-upload">
+        <input className="field" value={value || ""} onChange={(e) => onChange(e.target.value)} placeholder="/path, https://…, or upload →" />
+        <label className="cbtn ghost admin-uploadbtn">{busy ? "Uploading…" : "Upload"}
+          <input type="file" accept="image/*" onChange={onFile} hidden disabled={busy} />
+        </label>
+      </div>
+      {value && <img className="admin-thumb" src={value} alt="" onError={(e) => { e.target.style.display = "none"; }} />}
+      {err && <div className="modal-err" style={{ marginTop: 6 }}>{err}</div>}
+    </div>
+  );
+}
+
 function CampaignCard({ c, onChange, onRemove, idx }) {
   const set = (k, v) => onChange({ ...c, [k]: v });
   const liveNow = c.start && c.start <= todayISO() && todayISO() <= (c.end || c.start);
@@ -40,8 +71,8 @@ function CampaignCard({ c, onChange, onRemove, idx }) {
         <Field label="CTA / click URL"><input className="field" value={c.href} onChange={(e) => set("href", e.target.value)} placeholder="https://…" /></Field>
       </div>
       <div className="acct-field-row">
-        <Field label="Logo URL" hint="(/sponsors/logo.png)"><input className="field" value={c.logo} onChange={(e) => set("logo", e.target.value)} /></Field>
-        <Field label="Hero photo URL" hint="(optional)"><input className="field" value={c.bgImage} onChange={(e) => set("bgImage", e.target.value)} /></Field>
+        <ImageField label="Sponsor logo" hint="(upload or URL)" value={c.logo} onChange={(v) => set("logo", v)} />
+        <ImageField label="Hero photo" hint="(optional)" value={c.bgImage} onChange={(v) => set("bgImage", v)} />
       </div>
       <div className="acct-field-row admin-colors">
         <Field label="Background"><input className="field admin-color" type="color" value={c.bg} onChange={(e) => set("bg", e.target.value)} /></Field>
@@ -132,9 +163,8 @@ export default function AdminPage() {
             <section className="card acct-sec">
               <h2>Homepage hero</h2>
               <p className="acct-note" style={{ marginTop: 0 }}>Shown when no sponsor takeover is running.</p>
-              <Field label="Background image URL" hint="(/hero-sunset.svg, or a hosted photo)">
-                <input className="field" value={cfg.hero.image} onChange={(e) => setHero("image", e.target.value)} />
-              </Field>
+              <ImageField label="Background image" hint="(upload a photo, or /hero-sunset.svg)" value={cfg.hero.image} onChange={(v) => setHero("image", v)} />
+              <p className="acct-note" style={{ marginTop: 0 }}>Tip: a wide landscape photo works best — text sits over a darkened left edge.</p>
               <Field label="Headline" hint="(use {spot} to insert the chosen spot)">
                 <input className="field" value={cfg.hero.headline} onChange={(e) => setHero("headline", e.target.value)} />
               </Field>

@@ -23,8 +23,14 @@ const eq = (name, got, want) => check(name, got === want, `got ${JSON.stringify(
 function makeKV(seed = {}) {
   const m = new Map(Object.entries(seed));
   return {
-    async get(k, type) { const v = m.get(k); if (v === undefined) return null; return type === "json" ? JSON.parse(v) : v; },
-    async put(k, v) { m.set(k, typeof v === "string" ? v : JSON.stringify(v)); },
+    async get(k, type) {
+      const v = m.get(k);
+      if (v === undefined) return null;
+      if (type === "json") return JSON.parse(v);
+      if (type === "arrayBuffer") return v instanceof ArrayBuffer ? v : (ArrayBuffer.isView(v) ? v.buffer : v);
+      return v;
+    },
+    async put(k, v) { m.set(k, v); }, // store as-is (strings stay strings; ArrayBuffers stay binary)
     async delete(k) { m.delete(k); },
     _map: m,
   };
@@ -363,6 +369,34 @@ async function run() {
     const env = { USERS: makeKV(), ADMIN_EMAIL: "admin@example.com" };
     const rando = await seedUser(env, "rando@example.com");
     eq("admin/config PUT: non-admin → 403", (await call(req("PUT", "/api/admin/config", { cookie: rando, body: { config: {} } }), env)).status, 403);
+  }
+
+  // 24. admin upload: gating + round-trip + serve
+  {
+    const env = { USERS: makeKV(), ADMIN_EMAIL: "admin@example.com" };
+    // signed out
+    const pngBytes = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 1, 2, 3, 4]);
+    const upReq = (cookie, ct = "image/png", body = pngBytes) => {
+      const request = new Request(ORIGIN + "/api/admin/upload", { method: "POST", headers: { ...(cookie ? { Cookie: cookie } : {}), "Content-Type": ct }, body });
+      return { request, url: new URL(ORIGIN + "/api/admin/upload") };
+    };
+    eq("upload: signed out → 401", (await call(upReq(null), env)).status, 401);
+    const rando = await seedUser(env, "rando@example.com");
+    eq("upload: non-admin → 403", (await call(upReq(rando), env)).status, 403);
+    const admin = await seedUser(env, "admin@example.com");
+    eq("upload: non-image → 400", (await call(upReq(admin, "text/plain", new TextEncoder().encode("hi")), env)).status, 400);
+    const r = await call(upReq(admin), env);
+    eq("upload: admin image → 200", r.status, 200);
+    const { url } = await r.json();
+    check("upload: returns /api/asset/ url", /^\/api\/asset\/[a-f0-9]+$/.test(url), url);
+    // serve it back (public)
+    const got = await call(req("GET", url), env);
+    eq("asset: served 200", got.status, 200);
+    eq("asset: correct content-type", got.headers.get("Content-Type"), "image/png");
+    const back = new Uint8Array(await got.arrayBuffer());
+    check("asset: bytes round-trip", back.length === pngBytes.length && back[0] === 0x89, `len ${back.length}`);
+    // missing asset → 404
+    eq("asset: missing → 404", (await call(req("GET", "/api/asset/deadbeef"), env)).status, 404);
   }
 
   console.log(results.join("\n"));

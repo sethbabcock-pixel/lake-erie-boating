@@ -514,3 +514,9 @@ body.has-takeover .app { background: var(--bg); border-radius: var(--r-lg) var(-
 .admin-savebar { position: sticky; bottom: 0; display: flex; align-items: center; gap: var(--s3); flex-wrap: wrap;
   margin-top: var(--s5); padding: var(--s4) 0; background: linear-gradient(to top, var(--bg) 70%, transparent); }
 .admin-main code { font-family: var(--font-mono); font-size: 0.9em; background: var(--surface-sunk); padding: 1px 5px; border-radius: var(--r-sm); }
+
+/* Admin image upload */
+.admin-upload { display: flex; gap: var(--s2); align-items: stretch; }
+.admin-upload .field { margin-bottom: 0; }
+.admin-uploadbtn { flex: 0 0 auto; display: inline-flex; align-items: center; min-height: 44px; cursor: pointer; white-space: nowrap; position: relative; }
+.admin-thumb { margin-top: var(--s3); max-height: 120px; max-width: 100%; border-radius: var(--r-md); border: 1px solid var(--border); display: block; object-fit: cover; }
