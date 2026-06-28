@@ -70,7 +70,10 @@ const DEFAULT_SITE_CONFIG = {
   takeovers: [],
   gam: { networkCode: "" },
 };
-const isAdmin = (env, u) => !!(u && env.ADMIN_EMAIL && u.email === env.ADMIN_EMAIL.trim().toLowerCase());
+// Site owner — admin by default so /admin works with no Cloudflare setup.
+// Override (or add more admins) with the ADMIN_EMAIL env var.
+const DEFAULT_ADMIN = "seth.babcock@gmail.com";
+const isAdmin = (env, u) => !!(u && u.email === (env.ADMIN_EMAIL || DEFAULT_ADMIN).trim().toLowerCase());
 function sanitizeSiteConfig(input) {
   const c = input && typeof input === "object" ? input : {};
   const str = (v, n) => (typeof v === "string" ? v.slice(0, n) : "");
@@ -225,8 +228,7 @@ export async function handleAuth(request, env, url) {
   if (path === "/api/admin/config" && (request.method === "GET" || request.method === "PUT")) {
     const u = await userFromRequest(env, request);
     if (!u) return json({ error: "Not signed in." }, 401);
-    if (!env.ADMIN_EMAIL) return json({ error: "Set the ADMIN_EMAIL environment variable to enable the admin page." }, 403);
-    if (!isAdmin(env, u)) return json({ error: "Forbidden." }, 403);
+    if (!isAdmin(env, u)) return json({ error: "Forbidden — not an admin account." }, 403);
     if (request.method === "GET") {
       const stored = (await env.USERS.get("site:config", "json")) || {};
       return json({ config: sanitizeSiteConfig({ ...DEFAULT_SITE_CONFIG, ...stored }), adminEmail: u.email });
@@ -251,8 +253,7 @@ export async function handleAuth(request, env, url) {
   if (path === "/api/admin/upload" && request.method === "POST") {
     const u = await userFromRequest(env, request);
     if (!u) return json({ error: "Not signed in." }, 401);
-    if (!env.ADMIN_EMAIL) return json({ error: "Set the ADMIN_EMAIL environment variable to enable the admin page." }, 403);
-    if (!isAdmin(env, u)) return json({ error: "Forbidden." }, 403);
+    if (!isAdmin(env, u)) return json({ error: "Forbidden — not an admin account." }, 403);
     const ct = request.headers.get("Content-Type") || "";
     if (!/^image\/(png|jpeg|jpg|webp|gif|svg\+xml)$/i.test(ct)) return json({ error: "Only PNG, JPG, WebP, GIF or SVG images are allowed." }, 400);
     const buf = await request.arrayBuffer();
@@ -352,7 +353,7 @@ export async function handleAuth(request, env, url) {
   if (path === "/api/billing-status" && request.method === "GET") {
     const u = await userFromRequest(env, request);
     if (!u) return json({ error: "Not signed in." }, 401);
-    if (env.ADMIN_EMAIL && u.email !== env.ADMIN_EMAIL.trim().toLowerCase()) return json({ error: "Forbidden." }, 403);
+    if (!isAdmin(env, u)) return json({ error: "Forbidden — not an admin account." }, 403);
     const sk = env.STRIPE_SECRET_KEY || "";
     const mode = sk.startsWith("sk_live") ? "live" : sk.startsWith("sk_test") ? "test" : sk ? "unknown" : "none";
     const priceId = env.STRIPE_PRICE_ID || STRIPE_PRICE;

@@ -399,6 +399,21 @@ async function run() {
     eq("asset: missing → 404", (await call(req("GET", "/api/asset/deadbeef"), env)).status, 404);
   }
 
+  // 25. owner default admin: /admin works with no ADMIN_EMAIL set
+  {
+    const env = { USERS: makeKV() }; // no ADMIN_EMAIL
+    const owner = await seedUser(env, "seth.babcock@gmail.com");
+    eq("admin: owner is admin by default", (await call(req("GET", "/api/admin/config", { cookie: owner }), env)).status, 200);
+    const other = await seedUser(env, "notowner@example.com");
+    eq("admin: non-owner still blocked by default", (await call(req("GET", "/api/admin/config", { cookie: other }), env)).status, 403);
+    // ADMIN_EMAIL override wins over the default owner
+    const env2 = { USERS: makeKV(), ADMIN_EMAIL: "ops@example.com" };
+    const ops = await seedUser(env2, "ops@example.com");
+    eq("admin: ADMIN_EMAIL override grants access", (await call(req("GET", "/api/admin/config", { cookie: ops }), env2)).status, 200);
+    const sethBlocked = await seedUser(env2, "seth.babcock@gmail.com");
+    eq("admin: default owner not admin when ADMIN_EMAIL set elsewhere", (await call(req("GET", "/api/admin/config", { cookie: sethBlocked }), env2)).status, 403);
+  }
+
   console.log(results.join("\n"));
   console.log(`\n${passed} passed, ${failed} failed`);
   if (failed) process.exit(1);
