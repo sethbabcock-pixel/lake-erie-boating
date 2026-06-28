@@ -1,0 +1,60 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1600 800" preserveAspectRatio="xMidYMid slice" role="img" aria-label="Bright Great Lakes day with a sailboat">
+  <defs>
+    <linearGradient id="dsky" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#1f6fbf"/>
+      <stop offset="0.5" stop-color="#5fa6df"/>
+      <stop offset="1" stop-color="#cfeaf8"/>
+    </linearGradient>
+    <linearGradient id="dwater" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#7fd6dd"/>
+      <stop offset="0.25" stop-color="#36b0c9"/>
+      <stop offset="0.65" stop-color="#1a78ad"/>
+      <stop offset="1" stop-color="#0c4f80"/>
+    </linearGradient>
+    <radialGradient id="dsun" cx="0.5" cy="0.5" r="0.5">
+      <stop offset="0" stop-color="#ffffff" stop-opacity="0.9"/>
+      <stop offset="1" stop-color="#ffffff" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+
+  <!-- sky -->
+  <rect width="1600" height="470" fill="url(#dsky)"/>
+  <circle cx="1180" cy="150" r="240" fill="url(#dsun)"/>
+  <!-- soft clouds -->
+  <g fill="#ffffff" opacity="0.85">
+    <ellipse cx="360" cy="120" rx="150" ry="30"/>
+    <ellipse cx="470" cy="135" rx="120" ry="26"/>
+    <ellipse cx="250" cy="138" rx="110" ry="24"/>
+  </g>
+  <g fill="#ffffff" opacity="0.7">
+    <ellipse cx="980" cy="230" rx="130" ry="22"/>
+    <ellipse cx="1080" cy="240" rx="100" ry="18"/>
+  </g>
+
+  <!-- water -->
+  <rect y="470" width="1600" height="330" fill="url(#dwater)"/>
+  <!-- sun shimmer + wave highlights -->
+  <g fill="#ffffff">
+    <rect x="1080" y="498" width="200" height="4" rx="2" opacity="0.5"/>
+    <rect x="1050" y="540" width="260" height="5" rx="2.5" opacity="0.4"/>
+    <rect x="120" y="560" width="170" height="4" rx="2" opacity="0.22"/>
+    <rect x="1010" y="600" width="320" height="6" rx="3" opacity="0.32"/>
+    <rect x="300" y="640" width="220" height="5" rx="2.5" opacity="0.2"/>
+    <rect x="940" y="690" width="380" height="7" rx="3.5" opacity="0.26"/>
+  </g>
+
+  <!-- sailboat with bright white sails -->
+  <g transform="translate(560,470)">
+    <!-- hull -->
+    <path d="M-82 6 Q0 34 86 6 L66 32 Q0 46 -64 32 Z" fill="#13283b"/>
+    <!-- mast -->
+    <rect x="-2" y="-128" width="4" height="134" fill="#13283b"/>
+    <!-- mainsail -->
+    <path d="M5 -124 L5 0 L74 0 Z" fill="#ffffff"/>
+    <path d="M5 -124 L5 0 L20 0 Z" fill="#e7eef4"/>
+    <!-- jib -->
+    <path d="M-5 -104 L-5 0 L-60 0 Z" fill="#f2f6fa"/>
+    <!-- reflection -->
+    <path d="M-60 34 L74 34 L60 70 L-46 70 Z" fill="#ffffff" opacity="0.12"/>
+  </g>
+</svg>
