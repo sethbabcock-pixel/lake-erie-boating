@@ -8,6 +8,6 @@ export default defineConfig({
     emptyOutDir: true,
     // Multi-page: / -> index.html (App), /account -> account.html (AccountPage).
     // A real account.html means Cloudflare serves /account as a static asset.
-    rollupOptions: { input: { main: "index.html", account: "account.html" } },
+    rollupOptions: { input: { main: "index.html", account: "account.html", admin: "admin.html" } },
   },
 });

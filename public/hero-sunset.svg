@@ -1,0 +1,63 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1600 800" preserveAspectRatio="xMidYMid slice" role="img" aria-label="Great Lakes sunset with a sailboat">
+  <defs>
+    <linearGradient id="sky" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#101a3a"/>
+      <stop offset="0.32" stop-color="#3a2c61"/>
+      <stop offset="0.55" stop-color="#8c3a68"/>
+      <stop offset="0.78" stop-color="#e06b4c"/>
+      <stop offset="1" stop-color="#ffcf7b"/>
+    </linearGradient>
+    <radialGradient id="glow" cx="0.5" cy="0.5" r="0.5">
+      <stop offset="0" stop-color="#fff6db"/>
+      <stop offset="0.45" stop-color="#ffe096" stop-opacity="0.55"/>
+      <stop offset="1" stop-color="#ffce7a" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="water" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#d9824f"/>
+      <stop offset="0.18" stop-color="#9a5560"/>
+      <stop offset="0.5" stop-color="#3f3a63"/>
+      <stop offset="1" stop-color="#0c1f3a"/>
+    </linearGradient>
+    <linearGradient id="reflect" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#fff0bf" stop-opacity="0.85"/>
+      <stop offset="1" stop-color="#ffce7a" stop-opacity="0"/>
+    </linearGradient>
+  </defs>
+
+  <!-- sky -->
+  <rect width="1600" height="512" fill="url(#sky)"/>
+  <!-- distant clouds -->
+  <g fill="#ffffff" opacity="0.10">
+    <ellipse cx="300" cy="150" rx="230" ry="26"/>
+    <ellipse cx="1280" cy="110" rx="300" ry="22"/>
+    <ellipse cx="760" cy="230" rx="180" ry="18"/>
+  </g>
+  <!-- sun glow + disc -->
+  <circle cx="980" cy="470" r="300" fill="url(#glow)"/>
+  <circle cx="980" cy="476" r="74" fill="#fff2c8"/>
+  <!-- distant shoreline -->
+  <path d="M0 512 L0 486 C 180 480 360 492 560 488 C 760 484 900 476 1040 482 C 1240 490 1420 484 1600 488 L1600 512 Z" fill="#23284f" opacity="0.6"/>
+
+  <!-- water -->
+  <rect y="512" width="1600" height="288" fill="url(#water)"/>
+  <!-- sun glitter reflection -->
+  <path d="M905 514 H1055 L1110 800 H850 Z" fill="url(#reflect)"/>
+  <g fill="#fff0bf" opacity="0.5">
+    <rect x="900" y="540" width="160" height="5" rx="2.5"/>
+    <rect x="888" y="588" width="184" height="6" rx="3"/>
+    <rect x="874" y="648" width="212" height="7" rx="3.5"/>
+    <rect x="858" y="716" width="244" height="8" rx="4"/>
+  </g>
+
+  <!-- sailboat silhouette, set against the golden path -->
+  <g fill="#0a1626" transform="translate(966,512)">
+    <!-- mast -->
+    <rect x="-2" y="-120" width="4" height="128"/>
+    <!-- mainsail -->
+    <path d="M4 -116 L4 0 L70 0 Z"/>
+    <!-- jib -->
+    <path d="M-4 -96 L-4 0 L-58 0 Z"/>
+    <!-- hull -->
+    <path d="M-78 2 Q0 30 84 2 L66 26 Q0 40 -62 26 Z"/>
+  </g>
+</svg>

@@ -479,3 +479,38 @@ body.has-takeover .app { background: var(--bg); border-radius: var(--r-lg) var(-
   .hero-sponsor-link { flex-direction: column; align-items: flex-start; gap: var(--s4); }
   .hero-cta { align-self: stretch; text-align: center; }
 }
+
+/* Hero with photo background (house hero over the sunset) */
+.hero-house.has-photo { background-size: cover; background-position: center 38%; color: #fff; border-bottom: none; }
+.hero-house.has-photo .hero-inner { min-height: 340px; display: flex; flex-direction: column; justify-content: center; }
+.hero-house.has-photo .hero-spot { color: #7fe3ff; }
+.hero-house.has-photo .hv-text { color: rgba(255,255,255,0.88); }
+.hero-house.has-photo .hero-housecta { color: #7fe3ff; }
+.hero-house.has-photo .hero-eyebrow { color: rgba(255,255,255,0.9); }
+.hero-house.has-photo .hero-title, .hero-house.has-photo .hero-subtitle { text-shadow: 0 1px 14px rgba(0,0,0,0.45); }
+
+/* Mobile vs desktop hero treatment */
+@media (max-width: 640px) {
+  .hero-house.has-photo { background-position: center 30%; }
+  .hero-house.has-photo .hero-inner { min-height: 220px; }
+  .hero-inner { padding: var(--s5) var(--s4); }
+  .hero-title { font-size: clamp(var(--fs-xl), 8vw, var(--fs-3xl)); }
+  .hero-house .hero-subtitle { font-size: var(--fs-base); }
+  .hero-sponsor .hero-logo { height: 30px; }
+}
+@media (min-width: 1000px) {
+  .hero-house.has-photo .hero-inner { min-height: 400px; }
+}
+
+/* Admin page */
+.admin-main { max-width: 760px; padding-bottom: 96px; }
+.admin-campaign { border-left: 3px solid var(--accent); }
+.admin-camp-head { display: flex; align-items: center; justify-content: space-between; gap: var(--s3); margin-bottom: var(--s3); }
+.admin-camp-head h3 { margin: 0; font-size: var(--fs-base); display: flex; align-items: center; gap: var(--s2); }
+.admin-colors .acct-field { flex: 0 0 auto; }
+.admin-color { width: 56px; min-height: 40px; padding: 2px; cursor: pointer; }
+.admin-check { display: flex; align-items: center; gap: 8px; font-size: var(--fs-sm); color: var(--text-muted); margin-top: var(--s3); cursor: pointer; }
+.admin-check input { accent-color: var(--accent); width: 16px; height: 16px; }
+.admin-savebar { position: sticky; bottom: 0; display: flex; align-items: center; gap: var(--s3); flex-wrap: wrap;
+  margin-top: var(--s5); padding: var(--s4) 0; background: linear-gradient(to top, var(--bg) 70%, transparent); }
+.admin-main code { font-family: var(--font-mono); font-size: 0.9em; background: var(--surface-sunk); padding: 1px 5px; border-radius: var(--r-sm); }

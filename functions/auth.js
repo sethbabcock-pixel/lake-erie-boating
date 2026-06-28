@@ -8,6 +8,8 @@
 //   GET  /auth/google/callback
 //   PUT  /api/prefs     {prefs}
 //   PUT  /api/favorites {favorites}
+//   GET  /api/site-config           -> public homepage hero + today's takeover
+//   GET/PUT /api/admin/config       -> admin-only site config (hero, takeovers)
 //   GET  /api/billing-status        -> admin-only Stripe config diagnostics
 //   POST /api/checkout              -> start Stripe Checkout (ad-free)
 //   GET  /api/subscription          -> current subscription details
@@ -57,6 +59,40 @@ function getCookie(request, name) {
 }
 
 const publicUser = (u) => ({ email: u.email, prefs: u.prefs || {}, favorites: u.favorites || [], adFree: !!u.adFree, via: u.via || "password", created: u.created || null, hasSubscription: !!u.stripeSubId });
+
+// ── Admin-managed site config (homepage hero + sponsor takeovers) ─────────────
+const isoDay = (d = new Date()) =>
+  `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}-${String(d.getUTCDate()).padStart(2, "0")}`;
+const DEFAULT_SITE_CONFIG = {
+  hero: { image: "/hero-sunset.svg", headline: "Should I boat{spot} today?", sub: "", showVerdict: true },
+  takeovers: [],
+  gam: { networkCode: "" },
+};
+const isAdmin = (env, u) => !!(u && env.ADMIN_EMAIL && u.email === env.ADMIN_EMAIL.trim().toLowerCase());
+function sanitizeSiteConfig(input) {
+  const c = input && typeof input === "object" ? input : {};
+  const str = (v, n) => (typeof v === "string" ? v.slice(0, n) : "");
+  const hero = c.hero && typeof c.hero === "object" ? c.hero : {};
+  const gam = c.gam && typeof c.gam === "object" ? c.gam : {};
+  const takeovers = (Array.isArray(c.takeovers) ? c.takeovers : []).slice(0, 50).map((t) => ({
+    id: str(t.id, 60) || randHex(4),
+    sponsor: str(t.sponsor, 120), start: str(t.start, 10), end: str(t.end, 10),
+    eyebrow: str(t.eyebrow, 120), headline: str(t.headline, 160), sub: str(t.sub, 240),
+    cta: str(t.cta, 40), href: str(t.href, 400), logo: str(t.logo, 400), bgImage: str(t.bgImage, 400),
+    bg: str(t.bg, 40), fg: str(t.fg, 40), accent: str(t.accent, 40), accentFg: str(t.accentFg, 40),
+    hideForAdFree: !!t.hideForAdFree,
+  })).filter((t) => t.sponsor || t.headline);
+  return {
+    hero: {
+      image: str(hero.image, 400) || DEFAULT_SITE_CONFIG.hero.image,
+      headline: str(hero.headline, 160) || DEFAULT_SITE_CONFIG.hero.headline,
+      sub: str(hero.sub, 240),
+      showVerdict: hero.showVerdict !== false,
+    },
+    takeovers,
+    gam: { networkCode: str(gam.networkCode, 30) },
+  };
+}
 
 async function createSession(env, email) {
   const token = randHex(32);
@@ -172,6 +208,31 @@ export async function handleAuth(request, env, url) {
   if (path === "/auth/me" && request.method === "GET") {
     const u = await userFromRequest(env, request);
     return json({ user: u ? publicUser(u) : null, billing: !!env.STRIPE_SECRET_KEY });
+  }
+
+  // ---- public site config (homepage hero + today's takeover) ----
+  if (path === "/api/site-config" && request.method === "GET") {
+    const stored = (await env.USERS.get("site:config", "json")) || {};
+    const cfg = sanitizeSiteConfig({ ...DEFAULT_SITE_CONFIG, ...stored });
+    const today = isoDay();
+    const takeover = cfg.takeovers.find((t) => t.start && t.start <= today && today <= (t.end || t.start)) || null;
+    return json({ hero: cfg.hero, takeover, gam: cfg.gam });
+  }
+
+  // ---- admin: read / write full site config ----
+  if (path === "/api/admin/config" && (request.method === "GET" || request.method === "PUT")) {
+    const u = await userFromRequest(env, request);
+    if (!u) return json({ error: "Not signed in." }, 401);
+    if (!env.ADMIN_EMAIL) return json({ error: "Set the ADMIN_EMAIL environment variable to enable the admin page." }, 403);
+    if (!isAdmin(env, u)) return json({ error: "Forbidden." }, 403);
+    if (request.method === "GET") {
+      const stored = (await env.USERS.get("site:config", "json")) || {};
+      return json({ config: sanitizeSiteConfig({ ...DEFAULT_SITE_CONFIG, ...stored }), adminEmail: u.email });
+    }
+    const body = await request.json().catch(() => ({}));
+    const cfg = sanitizeSiteConfig(body.config);
+    await env.USERS.put("site:config", JSON.stringify({ ...cfg, updatedAt: new Date().toISOString(), updatedBy: u.email }));
+    return json({ config: cfg, savedAt: new Date().toISOString() });
   }
 
   // ---- save prefs / favorites ----

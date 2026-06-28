@@ -296,6 +296,75 @@ async function run() {
     eq("auth/me: exposes hasSubscription", me.user.hasSubscription, true);
   }
 
+  // 19. site-config: public, returns hero defaults + resolves today's takeover
+  {
+    const env = { USERS: makeKV() };
+    const r = await call(req("GET", "/api/site-config"), env);
+    eq("site-config: public 200", r.status, 200);
+    const d = await r.json();
+    eq("site-config: default hero image", d.hero.image, "/hero-sunset.svg");
+    eq("site-config: no takeover by default", d.takeover, null);
+  }
+
+  // 20. site-config: resolves a campaign whose window includes today
+  {
+    const today = new Date().toISOString().slice(0, 10);
+    const env = { USERS: makeKV({ "site:config": JSON.stringify({
+      takeovers: [{ id: "x", sponsor: "Acme", headline: "Hi", start: "2000-01-01", end: "2999-01-01" }],
+    }) }) };
+    const d = await (await call(req("GET", "/api/site-config"), env)).json();
+    check("site-config: active takeover resolved", d.takeover && d.takeover.sponsor === "Acme", JSON.stringify(d.takeover));
+    // a past-only campaign should NOT resolve
+    const env2 = { USERS: makeKV({ "site:config": JSON.stringify({ takeovers: [{ sponsor: "Old", headline: "h", start: "2000-01-01", end: "2000-01-02" }] }) }) };
+    eq("site-config: past campaign not active", (await (await call(req("GET", "/api/site-config"), env2)).json()).takeover, null);
+    void today;
+  }
+
+  // 21. admin/config: gating (signed out, no ADMIN_EMAIL, wrong user, admin)
+  {
+    const base = { USERS: makeKV() };
+    eq("admin/config: signed out → 401", (await call(req("GET", "/api/admin/config"), base)).status, 401);
+    const noAdminEnv = { USERS: makeKV() };
+    const c1 = await seedUser(noAdminEnv, "someone@example.com");
+    eq("admin/config: no ADMIN_EMAIL → 403", (await call(req("GET", "/api/admin/config", { cookie: c1 }), noAdminEnv)).status, 403);
+    const env = { USERS: makeKV(), ADMIN_EMAIL: "admin@example.com" };
+    const nonAdmin = await seedUser(env, "rando@example.com");
+    eq("admin/config: wrong user → 403", (await call(req("GET", "/api/admin/config", { cookie: nonAdmin }), env)).status, 403);
+    const admin = await seedUser(env, "admin@example.com");
+    const r = await call(req("GET", "/api/admin/config", { cookie: admin }), env);
+    eq("admin/config: admin → 200", r.status, 200);
+    eq("admin/config: returns default hero", (await r.json()).config.hero.image, "/hero-sunset.svg");
+  }
+
+  // 22. admin/config: PUT saves, sanitizes, and feeds site-config
+  {
+    const env = { USERS: makeKV(), ADMIN_EMAIL: "admin@example.com" };
+    const admin = await seedUser(env, "admin@example.com");
+    const config = {
+      hero: { image: "/x.jpg", headline: "Boat?", sub: "s", showVerdict: false },
+      takeovers: [{ sponsor: "Acme", headline: "Buy", start: "2000-01-01", end: "2999-01-01", href: "https://acme.test" }],
+      gam: { networkCode: "12345678" },
+      bogusField: "should be dropped",
+    };
+    const r = await call(req("PUT", "/api/admin/config", { cookie: admin, body: { config } }), env);
+    eq("admin/config PUT: → 200", r.status, 200);
+    const saved = (await r.json()).config;
+    eq("admin/config PUT: hero saved", saved.hero.image, "/x.jpg");
+    check("admin/config PUT: strips unknown fields", !("bogusField" in saved), JSON.stringify(saved));
+    check("admin/config PUT: assigns campaign id", !!saved.takeovers[0].id, JSON.stringify(saved.takeovers[0]));
+    // public site-config now reflects it
+    const pub = await (await call(req("GET", "/api/site-config"), env)).json();
+    eq("admin/config PUT: feeds site-config", pub.takeover.sponsor, "Acme");
+    eq("admin/config PUT: gam networkCode public", pub.gam.networkCode, "12345678");
+  }
+
+  // 23. admin/config: non-admin cannot write
+  {
+    const env = { USERS: makeKV(), ADMIN_EMAIL: "admin@example.com" };
+    const rando = await seedUser(env, "rando@example.com");
+    eq("admin/config PUT: non-admin → 403", (await call(req("PUT", "/api/admin/config", { cookie: rando, body: { config: {} } }), env)).status, 403);
+  }
+
   console.log(results.join("\n"));
   console.log(`\n${passed} passed, ${failed} failed`);
   if (failed) process.exit(1);
