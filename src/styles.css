@@ -427,3 +427,55 @@ details.card[open] > summary { margin-bottom: var(--s3); }
 .acct-confirm > span { display: block; font-size: var(--fs-sm); color: var(--text); margin-bottom: var(--s3); }
 .acct-confirm-btns { display: flex; gap: var(--s3); flex-wrap: wrap; }
 .field:disabled { opacity: 0.55; cursor: not-allowed; }
+
+/* ---------- Homepage hero / sponsor takeover ---------- */
+.hero { width: 100%; }
+.hero-inner { max-width: var(--maxw-wide); margin: 0 auto;
+  padding: clamp(var(--s5), 4.5vw, var(--s8)) clamp(var(--s4), 3.5vw, var(--s6)); }
+.hero-eyebrow { font-size: var(--fs-xs); text-transform: uppercase; letter-spacing: var(--tracking-wide);
+  font-weight: var(--fw-bold); opacity: 0.82; margin-bottom: var(--s2); }
+.hero-title { font-size: clamp(var(--fs-2xl), 5vw, var(--fs-4xl)); font-weight: var(--fw-extrabold);
+  line-height: var(--lh-tight); margin: 0; letter-spacing: -0.01em; }
+.hero-subtitle { font-size: var(--fs-lg); opacity: 0.9; margin: var(--s3) 0 0; max-width: 56ch; line-height: var(--lh-snug); }
+
+/* House hero (no sponsor) */
+.hero-house { background: linear-gradient(118deg, color-mix(in srgb, var(--brand) 26%, var(--bg)), var(--bg) 68%);
+  border-bottom: 1px solid var(--border); }
+.hero-house .hero-spot { color: var(--accent); }
+.hero-verdict { display: flex; align-items: center; gap: var(--s3); flex-wrap: wrap; margin-top: var(--s4); }
+.hv-badge { padding: 5px 14px; border-radius: var(--r-pill); font-weight: var(--fw-extrabold);
+  text-transform: uppercase; letter-spacing: var(--tracking-wide); font-size: var(--fs-sm); color: #fff; }
+.hv-badge.go { background: var(--success); } .hv-badge.caution { background: var(--warning); color: #1a1206; }
+.hv-badge.nogo { background: var(--danger); }
+.hv-text { color: var(--text-muted); font-size: var(--fs-sm); }
+.hero-housecta { display: inline-block; margin-top: var(--s4); color: var(--accent); font-weight: var(--fw-semibold);
+  font-size: var(--fs-sm); text-decoration: none; }
+.hero-housecta:hover { text-decoration: underline; }
+
+/* Sponsor hero */
+.hero-sponsor { position: relative; z-index: 1; }
+.hero-sponsor-link { display: flex; align-items: center; justify-content: space-between; gap: var(--s5); text-decoration: none; }
+.hero-sponsor .hero-eyebrow { opacity: 0.78; }
+.hero-sponsor .hero-logo { height: 38px; width: auto; max-width: 220px; object-fit: contain; display: block; margin-bottom: var(--s3); }
+.hero-sponsor .hero-subtitle { opacity: 0.92; }
+.hero-cta { flex: 0 0 auto; padding: 13px 24px; border-radius: var(--r-pill); font-weight: var(--fw-bold);
+  font-size: var(--fs-base); white-space: nowrap; box-shadow: var(--shadow-md); }
+.hero-sponsor-link:hover .hero-cta { filter: brightness(1.05); }
+.hero-adlabel { position: absolute; top: 7px; right: 11px; font-size: 9.5px; text-transform: uppercase;
+  letter-spacing: var(--tracking-wide); opacity: 0.6; }
+
+/* Programmatic (GAM) hero */
+.hero-gam { position: relative; display: flex; justify-content: center; padding: var(--s4);
+  background: var(--surface-sunk); border-bottom: 1px solid var(--border); min-height: 120px; }
+.hero-gam-slot { display: flex; justify-content: center; align-items: center; min-height: 90px; }
+
+/* Full-page sponsor skin in the gutters behind the centered content */
+.takeover-skin { position: fixed; inset: 0; z-index: 0; display: block; cursor: pointer; }
+body.has-takeover .appheader { background: var(--surface); }
+body.has-takeover .hero-sponsor, body.has-takeover .app { position: relative; z-index: 1; }
+body.has-takeover .app { background: var(--bg); border-radius: var(--r-lg) var(--r-lg) 0 0; }
+
+@media (max-width: 720px) {
+  .hero-sponsor-link { flex-direction: column; align-items: flex-start; gap: var(--s4); }
+  .hero-cta { align-self: stretch; text-align: center; }
+}

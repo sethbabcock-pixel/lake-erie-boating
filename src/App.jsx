@@ -3,6 +3,7 @@ import Cams from "./Cams.jsx";
 import WxIcon from "./WxIcon.jsx";
 import { useAdsense, useAnalytics, getConsent, AdSlot, GearBlock, ConsentBanner } from "./monetize.jsx";
 import { useAuth, Account } from "./auth.jsx";
+import Takeover from "./Takeover.jsx";
 
 const fmt = (v, unit) => (v == null ? "—" : `${v}${unit || ""}`);
 const verdictClass = (lvl) => (lvl === "NO-GO" ? "nogo" : lvl === "CAUTION" ? "caution" : "go");
@@ -420,6 +421,9 @@ export default function App() {
           </div>
         </div>
       </header>
+
+      {/* FlightAware-style hero: sponsor takeover when sold, else house hero. */}
+      <Takeover adFree={adFree} spotName={activeName} verdict={rec?.level} />
 
       <main className="app">
         {loading && !data && <div className="loading">Loading live conditions…</div>}
