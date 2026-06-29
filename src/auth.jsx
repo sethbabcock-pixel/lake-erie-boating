@@ -55,6 +55,8 @@ export function useAuth() {
     },
     login: async (email, password) => { const d = await post("/auth/login", { email, password }); setUser(d.user); },
     register: async (email, password) => { const d = await post("/auth/register", { email, password }); setUser(d.user); },
+    forgotPassword: async (email) => { await post("/auth/forgot", { email }); },
+    resetPassword: async (token, password) => { const d = await post("/auth/reset", { token, password }); setUser(d.user); },
     logout: async () => { await post("/auth/logout"); setUser(null); },
     savePrefs: async (partial) => {
       try {
@@ -69,42 +71,76 @@ export function useAuth() {
   };
 }
 
-export function AuthModal({ auth, onClose }) {
-  const [mode, setMode] = useState("login"); // login | register
+const clearResetParam = () => {
+  try { const u = new URL(window.location.href); if (u.searchParams.has("reset")) { u.searchParams.delete("reset"); window.history.replaceState({}, "", u); } } catch (e) {}
+};
+
+export function AuthModal({ auth, onClose, initialMode = "login", resetToken = "" }) {
+  const [mode, setMode] = useState(initialMode); // login | register | forgot | reset
   const [email, setEmail] = useState("");
   const [pw, setPw] = useState("");
   const [err, setErr] = useState("");
   const [busy, setBusy] = useState(false);
+  const [sent, setSent] = useState(false);
+  const close = () => { clearResetParam(); onClose(); };
   const submit = async (e) => {
     e.preventDefault();
     setErr(""); setBusy(true);
-    try { await (mode === "login" ? auth.login(email, pw) : auth.register(email, pw)); onClose(); }
-    catch (ex) { setErr(ex.message); } finally { setBusy(false); }
+    try {
+      if (mode === "login") { await auth.login(email, pw); close(); }
+      else if (mode === "register") { await auth.register(email, pw); close(); }
+      else if (mode === "forgot") { await auth.forgotPassword(email); setSent(true); }
+      else if (mode === "reset") { await auth.resetPassword(resetToken, pw); close(); }
+    } catch (ex) { setErr(ex.message); } finally { setBusy(false); }
   };
+  const title = { login: "Sign in", register: "Create account", forgot: "Reset your password", reset: "Set a new password" }[mode];
+  const social = mode === "login" || mode === "register";
   // Portal to <body>: the header has a backdrop-filter, which would otherwise
-  // make this position:fixed modal anchor to the header box instead of the
-  // viewport (trapping it under the header).
+  // make this position:fixed modal anchor to the header box instead of the viewport.
   return createPortal(
-    <div className="modal-backdrop" onMouseDown={onClose}>
+    <div className="modal-backdrop" onMouseDown={close}>
       <div className="modal" onMouseDown={(e) => e.stopPropagation()}>
-        <button className="modal-x" onClick={onClose} aria-label="Close">×</button>
-        <h2>{mode === "login" ? "Sign in" : "Create account"}</h2>
-        <p className="modal-sub">Save your spots & preferences across devices.</p>
-        <a className="gbtn" href="/auth/google">
-          <svg width="17" height="17" viewBox="0 0 48 48"><path fill="#4285F4" d="M45 24c0-1.6-.1-2.8-.4-4H24v7.6h11.9c-.2 1.9-1.5 4.8-4.4 6.8l6.7 5.2C42.3 36 45 30.6 45 24z"/><path fill="#34A853" d="M24 46c5.9 0 10.9-2 14.5-5.3l-6.7-5.2c-1.8 1.3-4.3 2.2-7.8 2.2-6 0-11-4-12.8-9.5l-7 5.4C7.9 40.9 15.3 46 24 46z"/><path fill="#FBBC05" d="M11.2 28.2C10.8 27 10.5 25.5 10.5 24s.3-3 .7-4.2l-7-5.4C2.8 17.3 2 20.5 2 24s.8 6.7 2.2 9.6l7-5.4z"/><path fill="#EA4335" d="M24 10.5c3.4 0 5.7 1.5 7 2.7l5.9-5.7C33.4 4.1 29.4 2 24 2 15.3 2 7.9 7.1 4.2 14.4l7 5.4C13 14.5 18 10.5 24 10.5z"/></svg>
-          Continue with Google
-        </a>
-        <div className="modal-or"><span>or</span></div>
-        <form onSubmit={submit}>
-          <input className="field" type="email" placeholder="Email" value={email} onChange={(e) => setEmail(e.target.value)} autoComplete="email" required />
-          <input className="field" type="password" placeholder="Password (8+ characters)" value={pw} onChange={(e) => setPw(e.target.value)} autoComplete={mode === "login" ? "current-password" : "new-password"} required />
-          {err && <div className="modal-err">{err}</div>}
-          <button className="cbtn modal-submit" type="submit" disabled={busy}>{busy ? "…" : mode === "login" ? "Sign in" : "Create account"}</button>
-        </form>
+        <button className="modal-x" onClick={close} aria-label="Close">×</button>
+        <h2>{title}</h2>
+        {social && <p className="modal-sub">Save your spots & preferences across devices.</p>}
+        {mode === "forgot" && <p className="modal-sub">Enter your email and we'll send a reset link.</p>}
+        {mode === "reset" && <p className="modal-sub">Choose a new password for your account.</p>}
+
+        {social && (
+          <>
+            <a className="gbtn" href="/auth/google">
+              <svg width="17" height="17" viewBox="0 0 48 48"><path fill="#4285F4" d="M45 24c0-1.6-.1-2.8-.4-4H24v7.6h11.9c-.2 1.9-1.5 4.8-4.4 6.8l6.7 5.2C42.3 36 45 30.6 45 24z"/><path fill="#34A853" d="M24 46c5.9 0 10.9-2 14.5-5.3l-6.7-5.2c-1.8 1.3-4.3 2.2-7.8 2.2-6 0-11-4-12.8-9.5l-7 5.4C7.9 40.9 15.3 46 24 46z"/><path fill="#FBBC05" d="M11.2 28.2C10.8 27 10.5 25.5 10.5 24s.3-3 .7-4.2l-7-5.4C2.8 17.3 2 20.5 2 24s.8 6.7 2.2 9.6l7-5.4z"/><path fill="#EA4335" d="M24 10.5c3.4 0 5.7 1.5 7 2.7l5.9-5.7C33.4 4.1 29.4 2 24 2 15.3 2 7.9 7.1 4.2 14.4l7 5.4C13 14.5 18 10.5 24 10.5z"/></svg>
+              Continue with Google
+            </a>
+            <div className="modal-or"><span>or</span></div>
+          </>
+        )}
+
+        {mode === "forgot" && sent ? (
+          <p className="modal-sub">If an account exists for that email, a reset link is on its way. Check your inbox (and spam).</p>
+        ) : (
+          <form onSubmit={submit}>
+            {mode !== "reset" && (
+              <input className="field" type="email" placeholder="Email" value={email} onChange={(e) => setEmail(e.target.value)} autoComplete="email" required />
+            )}
+            {(mode === "login" || mode === "register" || mode === "reset") && (
+              <input className="field" type="password" placeholder={mode === "login" ? "Password" : "Password (8+ characters)"} value={pw} onChange={(e) => setPw(e.target.value)} autoComplete={mode === "login" ? "current-password" : "new-password"} required />
+            )}
+            {err && <div className="modal-err">{err}</div>}
+            <button className="cbtn modal-submit" type="submit" disabled={busy}>
+              {busy ? "…" : { login: "Sign in", register: "Create account", forgot: "Send reset link", reset: "Set new password" }[mode]}
+            </button>
+          </form>
+        )}
+
         <div className="modal-switch">
-          {mode === "login"
-            ? <>No account? <button onClick={() => { setErr(""); setMode("register"); }}>Create one</button></>
-            : <>Have an account? <button onClick={() => { setErr(""); setMode("login"); }}>Sign in</button></>}
+          {mode === "login" && <>
+            <button onClick={() => { setErr(""); setMode("forgot"); setSent(false); }}>Forgot password?</button>
+            <span style={{ margin: "0 6px", color: "var(--text-faint)" }}>·</span>
+            No account? <button onClick={() => { setErr(""); setMode("register"); }}>Create one</button>
+          </>}
+          {mode === "register" && <>Have an account? <button onClick={() => { setErr(""); setMode("login"); }}>Sign in</button></>}
+          {(mode === "forgot" || mode === "reset") && <button onClick={() => { setErr(""); setSent(false); setMode("login"); }}>Back to sign in</button>}
         </div>
       </div>
     </div>,

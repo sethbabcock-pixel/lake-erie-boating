@@ -3,6 +3,8 @@
 //   POST /auth/register {email,password}
 //   POST /auth/login    {email,password}
 //   POST /auth/logout
+//   POST /auth/forgot {email}        -> email a password-reset link (Resend)
+//   POST /auth/reset  {token,password}-> set a new password, sign in
 //   GET  /auth/me
 //   GET  /auth/google              -> redirect to Google
 //   GET  /auth/google/callback
@@ -10,6 +12,7 @@
 //   PUT  /api/favorites {favorites}
 //   GET  /api/site-config           -> public homepage hero + today's takeover
 //   GET/PUT /api/admin/config       -> admin-only site config (hero, takeovers)
+//   GET  /api/admin/notifications   -> admin-only email/notification log
 //   POST /api/hit                   -> public cookieless visit/visitor beacon
 //   GET  /api/admin/stats           -> admin-only account/traffic stats
 //   GET  /api/admin/users           -> admin-only user search
@@ -190,7 +193,46 @@ function googleRedirectUri(env, url) {
   return `${base}/auth/google/callback`;
 }
 
-export async function handleAuth(request, env, url) {
+// ── Email (Resend) + admin notifications ─────────────────────────────────────
+async function sendEmailViaResend(env, to, subject, htmlBody) {
+  if (!env.RESEND_API_KEY) return { ok: false, error: "RESEND_API_KEY not configured" };
+  try {
+    const resp = await fetch("https://api.resend.com/emails", {
+      method: "POST",
+      headers: { Authorization: `Bearer ${env.RESEND_API_KEY}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ from: "Should I Boat? <noreply@shouldiboat.com>", to: Array.isArray(to) ? to : [to], subject, html: htmlBody }),
+    });
+    return { ok: resp.ok, error: resp.ok ? null : `Resend ${resp.status}` };
+  } catch (e) { return { ok: false, error: String(e) }; }
+}
+async function adminEmails(env) {
+  const stored = await env.USERS.get("admin:emails", "json").catch(() => null);
+  const list = Array.isArray(stored) && stored.length ? stored : [env.ADMIN_EMAIL || DEFAULT_ADMIN];
+  return [...new Set(list.map((e) => String(e).trim().toLowerCase()).filter(Boolean))];
+}
+// Always log a KV notification (success or failure); send the email if given.
+async function notify(env, type, context, mail) {
+  let emailSent = false, emailError = null;
+  if (mail && mail.to && mail.subject && mail.html) {
+    const r = await sendEmailViaResend(env, mail.to, mail.subject, mail.html);
+    emailSent = r.ok; emailError = r.error;
+  }
+  const ts = Date.now();
+  try {
+    await env.USERS.put(`admin:notification:${ts}`,
+      JSON.stringify({ type, ...context, emailSent, emailError, timestamp: new Date(ts).toISOString() }),
+      { expirationTtl: (mail && mail.ttlDays ? mail.ttlDays : 7) * 86400 });
+  } catch (e) { /* ignore */ }
+  return { emailSent, emailError };
+}
+// Fire-and-forget in prod (ctx.waitUntil); await when there's no ctx (tests).
+async function runBg(ctx, promise) {
+  if (ctx && typeof ctx.waitUntil === "function") { ctx.waitUntil(promise.catch(() => {})); return; }
+  try { await promise; } catch (e) { /* ignore */ }
+}
+const siteBase = (env, url) => (env.OAUTH_REDIRECT_BASE ? env.OAUTH_REDIRECT_BASE.replace(/\/+$/, "") : `https://${url.host}`);
+
+export async function handleAuth(request, env, url, ctx) {
   const path = url.pathname;
   if (!env.USERS) return json({ error: "Accounts are not configured yet." }, 503);
 
@@ -205,7 +247,49 @@ export async function handleAuth(request, env, url) {
     const user = { id: randHex(8), email: email.trim().toLowerCase(), salt, pass: await pbkdf2(password, salt), created: new Date().toISOString(), prefs: {}, favorites: [], adFree: false, via: "password" };
     await env.USERS.put(emailKey(user.email), JSON.stringify(user));
     const token = await createSession(env, user.email);
+    await runBg(ctx, notify(env, "signup", { email: user.email, via: "password" }, {
+      to: await adminEmails(env), subject: "New Should I Boat? signup",
+      html: `<div style="font-family:system-ui,sans-serif"><h2>New signup</h2><p><b>${user.email}</b> just created an account (email/password).</p></div>`,
+      ttlDays: 30,
+    }));
     return json({ user: publicUser(user) }, 200, { "Set-Cookie": cookie("sib_session", token, SESSION_DAYS * 86400) });
+  }
+
+  // ---- password reset: request a link ----
+  if (path === "/auth/forgot" && request.method === "POST") {
+    const { email } = await request.json().catch(() => ({}));
+    const e = (email || "").trim().toLowerCase();
+    if (validEmail(e)) {
+      const user = await env.USERS.get(emailKey(e), "json");
+      if (user && user.pass) { // password accounts only; Google users sign in with Google
+        const token = randHex(20);
+        await env.USERS.put(`reset:${token}`, e, { expirationTtl: 3600 });
+        const link = `${siteBase(env, url)}/?reset=${token}`;
+        await runBg(ctx, notify(env, "password_reset_request", { email: e }, {
+          to: e, subject: "Reset your Should I Boat? password",
+          html: `<div style="font-family:system-ui,sans-serif"><h2>Reset your password</h2><p>Click below to set a new password. This link expires in 1 hour.</p><p><a href="${link}" style="display:inline-block;background:#008BA8;color:#fff;padding:10px 18px;border-radius:8px;text-decoration:none">Reset password</a></p><p style="color:#667">If you didn't request this, you can ignore this email.</p></div>`,
+        }));
+      }
+    }
+    // Always the same response — don't reveal whether an account exists.
+    return json({ ok: true });
+  }
+
+  // ---- password reset: set a new password with a token ----
+  if (path === "/auth/reset" && request.method === "POST") {
+    const { token, password } = await request.json().catch(() => ({}));
+    if (!token) return json({ error: "Invalid reset link." }, 400);
+    const email = await env.USERS.get(`reset:${token}`);
+    if (!email) return json({ error: "This reset link is invalid or has expired." }, 400);
+    if (!password || password.length < 8) return json({ error: "Password must be at least 8 characters." }, 400);
+    const user = await env.USERS.get(emailKey(email), "json");
+    if (!user) return json({ error: "Account not found." }, 404);
+    user.salt = randHex(16);
+    user.pass = await pbkdf2(password, user.salt);
+    await env.USERS.put(emailKey(email), JSON.stringify(user));
+    await env.USERS.delete(`reset:${token}`);
+    const sess = await createSession(env, email);
+    return json({ user: publicUser(user) }, 200, { "Set-Cookie": cookie("sib_session", sess, SESSION_DAYS * 86400) });
   }
 
   // ---- login ----
@@ -273,6 +357,19 @@ export async function handleAuth(request, env, url) {
     }
     users.sort((a, b) => (b.created || "").localeCompare(a.created || ""));
     return json({ users, total: list.keys.length, shown: users.length });
+  }
+
+  // ---- admin: email/notification log (newest first) ----
+  if (path === "/api/admin/notifications" && request.method === "GET") {
+    const u = await userFromRequest(env, request);
+    if (!u) return json({ error: "Not signed in." }, 401);
+    if (!isAdmin(env, u)) return json({ error: "Forbidden — not an admin account." }, 403);
+    const list = await env.USERS.list({ prefix: "admin:notification:", limit: 1000 });
+    const recent = list.keys.slice(-150).reverse(); // keys sort ascending by ts → newest last
+    const notifications = [];
+    for (const k of recent) { const n = await env.USERS.get(k.name, "json"); if (n) notifications.push(n); }
+    notifications.sort((a, b) => (b.timestamp || "").localeCompare(a.timestamp || ""));
+    return json({ notifications: notifications.slice(0, 100) });
   }
 
   // ---- first-party hit beacon (public, cookieless): counts visits/visitors ----
@@ -354,9 +451,20 @@ export async function handleAuth(request, env, url) {
     const target = await env.USERS.get(emailKey(email), "json");
     if (!target) return json({ user: null }, 404);
     if (request.method === "GET") return json({ user: adminUserView(target) });
-    // POST: toggle account flags (manual override; does not touch Stripe billing).
+    // POST: either email a password-reset link, or toggle account flags.
     const body = await request.json().catch(() => ({}));
-    if (typeof body.adFree === "boolean") target.adFree = body.adFree;
+    if (body.action === "sendReset") {
+      if (!target.pass) return json({ error: "This user signs in with Google — no password to reset." }, 400);
+      const token = randHex(20);
+      await env.USERS.put(`reset:${token}`, target.email, { expirationTtl: 3600 });
+      const link = `${siteBase(env, url)}/?reset=${token}`;
+      const r = await notify(env, "admin_password_reset", { email: target.email, by: u.email }, {
+        to: target.email, subject: "Reset your Should I Boat? password",
+        html: `<div style="font-family:system-ui,sans-serif"><h2>Reset your password</h2><p>An admin started a password reset for your account. Click below to set a new password (expires in 1 hour).</p><p><a href="${link}" style="display:inline-block;background:#008BA8;color:#fff;padding:10px 18px;border-radius:8px;text-decoration:none">Reset password</a></p></div>`,
+      });
+      return json({ ok: true, emailSent: r.emailSent, emailError: r.emailError });
+    }
+    if (typeof body.adFree === "boolean") target.adFree = body.adFree; // manual override; doesn't touch Stripe
     await env.USERS.put(emailKey(target.email), JSON.stringify(target));
     return json({ user: adminUserView(target) });
   }
@@ -440,6 +548,11 @@ export async function handleAuth(request, env, url) {
     if (!user) {
       user = { id: randHex(8), email, created: new Date().toISOString(), prefs: {}, favorites: [], adFree: false, via: "google" };
       await env.USERS.put(emailKey(email), JSON.stringify(user));
+      await runBg(ctx, notify(env, "signup", { email, via: "google" }, {
+        to: await adminEmails(env), subject: "New Should I Boat? signup",
+        html: `<div style="font-family:system-ui,sans-serif"><h2>New signup</h2><p><b>${email}</b> just created an account (Google).</p></div>`,
+        ttlDays: 30,
+      }));
     }
     const token = await createSession(env, email);
     return new Response(null, { status: 302, headers: { Location: "/", "Set-Cookie": cookie("sib_session", token, SESSION_DAYS * 86400) } });
@@ -487,6 +600,7 @@ export async function handleAuth(request, env, url) {
       webhookSecret: { present: !!env.STRIPE_WEBHOOK_SECRET },
       priceId,
       priceOverride: !!env.STRIPE_PRICE_ID,
+      resend: { present: !!env.RESEND_API_KEY },
     };
     // If we have a key, resolve the price live so you can confirm it actually
     // exists in this account/mode — the usual "No such price" cause of failures.

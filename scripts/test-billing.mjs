@@ -518,6 +518,53 @@ async function run() {
     eq("stats: conversion pct (1 of 2 ad-free)", st.conversionPct, 50);
   }
 
+  // 31. password reset: forgot creates a token (only for real password users); reset consumes it
+  {
+    const env = { USERS: makeKV() };
+    await seedUser(env, "reset.me@example.com", { via: "password", pass: "oldhash", salt: "abcd" });
+    const resetKeys = () => [...env.USERS._map.keys()].filter((k) => k.startsWith("reset:"));
+    eq("forgot: unknown email still 200", (await call(req("POST", "/auth/forgot", { body: { email: "nobody@example.com" } }), env)).status, 200);
+    check("forgot: no token for unknown email", resetKeys().length === 0);
+    await call(req("POST", "/auth/forgot", { body: { email: "reset.me@example.com" } }), env);
+    check("forgot: token created for real user", resetKeys().length === 1, JSON.stringify(resetKeys()));
+    const token = resetKeys()[0].slice("reset:".length);
+    eq("reset: bad token → 400", (await call(req("POST", "/auth/reset", { body: { token: "nope", password: "abcdefgh" } }), env)).status, 400);
+    eq("reset: short password → 400", (await call(req("POST", "/auth/reset", { body: { token, password: "short" } }), env)).status, 400);
+    const ok = await call(req("POST", "/auth/reset", { body: { token, password: "abcdefgh" } }), env);
+    eq("reset: valid → 200", ok.status, 200);
+    check("reset: token consumed", !env.USERS._map.has(`reset:${token}`));
+    check("reset: password changed", (await env.USERS.get("user:reset.me@example.com", "json")).pass !== "oldhash");
+  }
+
+  // 32. signup writes an admin notification (KV fallback even with no email key)
+  {
+    const env = { USERS: makeKV() };
+    await call(req("POST", "/auth/register", { body: { email: "newbie@example.com", password: "abcdefgh" } }), env);
+    const notifs = [...env.USERS._map.keys()].filter((k) => k.startsWith("admin:notification:"));
+    check("register: writes a notification", notifs.length >= 1, JSON.stringify(notifs));
+    const rec = JSON.parse(env.USERS._map.get(notifs[0]));
+    eq("register notif: type=signup", rec.type, "signup");
+    eq("register notif: emailSent false without RESEND key", rec.emailSent, false);
+  }
+
+  // 33. admin notifications endpoint + sendReset action + resend diagnostic
+  {
+    const env = { USERS: makeKV(), ADMIN_EMAIL: "admin@example.com", STRIPE_SECRET_KEY: "sk_test_x", RESEND_API_KEY: "re_x" };
+    const admin = await seedUser(env, "admin@example.com");
+    await env.USERS.put("admin:notification:1700000000000", JSON.stringify({ type: "signup", email: "x@y.com", emailSent: false, timestamp: "2026-01-01T00:00:00Z" }));
+    eq("notifications: signed out → 401", (await call(req("GET", "/api/admin/notifications"), { USERS: env.USERS })).status, 401);
+    const list = await (await call(req("GET", "/api/admin/notifications", { cookie: admin }), env)).json();
+    check("notifications: lists records", list.notifications.length >= 1, JSON.stringify(list));
+    // sendReset for a password user creates a reset token
+    await seedUser(env, "pwuser@example.com", { via: "password", pass: "h", salt: "s" });
+    eq("sendReset: → 200", (await call(req("POST", "/api/admin/user", { cookie: admin, body: { email: "pwuser@example.com", action: "sendReset" } }), env)).status, 200);
+    check("sendReset: token created", [...env.USERS._map.keys()].some((k) => k.startsWith("reset:")));
+    await seedUser(env, "goog@example.com", { via: "google" });
+    eq("sendReset: google user → 400", (await call(req("POST", "/api/admin/user", { cookie: admin, body: { email: "goog@example.com", action: "sendReset" } }), env)).status, 400);
+    // diagnostics surface RESEND presence
+    eq("billing-status: resend present", (await (await call(req("GET", "/api/billing-status", { cookie: admin }), env)).json()).resend.present, true);
+  }
+
   console.log(results.join("\n"));
   console.log(`\n${passed} passed, ${failed} failed`);
   if (failed) process.exit(1);

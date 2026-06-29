@@ -2,7 +2,7 @@ import React, { useEffect, useRef, useState } from "react";
 import Cams from "./Cams.jsx";
 import WxIcon from "./WxIcon.jsx";
 import { useAdsense, useAnalytics, getConsent, AdSlot, GearBlock, ConsentBanner } from "./monetize.jsx";
-import { useAuth, Account } from "./auth.jsx";
+import { useAuth, Account, AuthModal } from "./auth.jsx";
 import Takeover from "./Takeover.jsx";
 import Landing from "./Landing.jsx";
 
@@ -363,6 +363,7 @@ export default function App() {
   const urlSpot = () => new URLSearchParams(window.location.search).get("spot");
   const [active, setActive] = useState(() => urlSpot() || localStorage.getItem("boating.spot") || "sandusky");
   const [landing, setLanding] = useState(() => !urlSpot()); // bare "/" = splash + directory; ?spot=X = detail
+  const [resetToken, setResetToken] = useState(() => new URLSearchParams(window.location.search).get("reset") || ""); // password-reset email link
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -574,6 +575,7 @@ export default function App() {
       </>
       )}
       <ConsentBanner consent={consent} onChoose={chooseConsent} />
+      {resetToken && <AuthModal auth={auth} initialMode="reset" resetToken={resetToken} onClose={() => setResetToken("")} />}
     </>
   );
 }

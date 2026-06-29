@@ -205,6 +205,17 @@ function UsersPanel() {
       setResults((rs) => rs && rs.map((u) => (u.email === d.user.email ? { ...u, adFree: d.user.adFree } : u)));
     } catch (e) { setErr(e.message); } finally { setBusy(false); }
   };
+  const [resetMsg, setResetMsg] = useState("");
+  const sendReset = async () => {
+    if (!sel) return;
+    setBusy(true); setErr(""); setResetMsg("");
+    try {
+      const r = await fetch("/api/admin/user", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ email: sel.email, action: "sendReset" }) });
+      const d = await r.json();
+      if (!r.ok) throw new Error(d.error || "Could not send.");
+      setResetMsg(d.emailSent ? "Reset link emailed ✓" : `Logged, but email not sent (${d.emailError || "RESEND_API_KEY not set"}).`);
+    } catch (e) { setErr(e.message); } finally { setBusy(false); }
+  };
 
   const p = (sel && sel.prefs) || {};
   return (
@@ -249,9 +260,48 @@ function UsersPanel() {
               Ad-free (manual override)
             </label>
             <p className="acct-note" style={{ marginTop: 0 }}>Grants/revokes ad-free directly. This is a manual flag — it doesn't start or cancel Stripe billing.</p>
+            <div className="acct-actions" style={{ marginTop: "var(--s3)" }}>
+              <button className="cbtn ghost" disabled={busy || sel.via === "google"} onClick={sendReset}>Email password reset link</button>
+              {sel.via === "google" && <span className="acct-note">Google account — no password to reset.</span>}
+              {resetMsg && <span className={resetMsg.includes("✓") ? "acct-saved" : "acct-note"}>{resetMsg}</span>}
+            </div>
           </div>
         </div>
       )}
+    </section>
+  );
+}
+
+function NotificationsPanel() {
+  const [items, setItems] = useState(null);
+  const [err, setErr] = useState("");
+  const load = async () => {
+    setErr("");
+    try {
+      const r = await fetch("/api/admin/notifications");
+      const d = await r.json();
+      if (!r.ok) throw new Error(d.error || "Could not load.");
+      setItems(d.notifications);
+    } catch (e) { setErr(e.message); }
+  };
+  useEffect(() => { load(); }, []);
+  return (
+    <section className="card acct-sec">
+      <div className="card-head">
+        <h2>Notifications</h2>
+        {items && <button className="linklike" onClick={load}>↻ refresh</button>}
+      </div>
+      <p className="acct-note" style={{ marginTop: 0 }}>Recent email events (signups, password resets). Logged even if email delivery is off.</p>
+      {err && <div className="modal-err">{err}</div>}
+      {items && items.length === 0 && <p className="acct-note">No notifications yet.</p>}
+      {items && items.map((n, i) => (
+        <div className="acct-kv admin-notif" key={i}>
+          <span><b>{n.type}</b>{n.email ? ` · ${n.email}` : ""}</span>
+          <b className={n.emailSent ? "notif-ok" : "notif-off"}>
+            {n.emailSent ? "sent" : "logged"} · {fmtDate(n.timestamp)}
+          </b>
+        </div>
+      ))}
     </section>
   );
 }
@@ -369,6 +419,8 @@ export default function AdminPage() {
             </section>
 
             <UsersPanel />
+
+            <NotificationsPanel />
 
             <div className="admin-savebar">
               <button className="cbtn" disabled={saving} onClick={save}>{saving ? "Saving…" : "Save changes"}</button>

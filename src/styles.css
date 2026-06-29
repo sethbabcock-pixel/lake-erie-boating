@@ -620,3 +620,5 @@ body.has-takeover .app { background: var(--bg); border-radius: var(--r-lg) var(-
 .stat-chart-x { display: flex; justify-content: space-between; font-size: 10px; color: var(--text-faint); margin-top: 4px; font-family: var(--font-mono); }
 .stat-bar.visitors { background: var(--success); }
 .stat-bar.visitors:hover { filter: brightness(1.1); }
+.admin-notif .notif-ok { color: var(--success); }
+.admin-notif .notif-off { color: var(--text-faint); }
