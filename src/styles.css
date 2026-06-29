@@ -606,3 +606,15 @@ body.has-takeover .app { background: var(--bg); border-radius: var(--r-lg) var(-
 .admin-useremail { font-weight: var(--fw-semibold); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .admin-userdetail .acct-kv:first-of-type { margin-top: var(--s2); }
 .admin-toggles { margin-top: var(--s4); padding-top: var(--s3); border-top: 1px solid var(--border); }
+
+/* Admin stats dashboard */
+.stat-cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(110px, 1fr)); gap: var(--s2); margin-bottom: var(--s4); }
+.stat-card { background: var(--surface-sunk); border: 1px solid var(--border); border-radius: var(--r-md); padding: var(--s3) var(--s4); }
+.stat-card-v { font-family: var(--font-mono); font-size: var(--fs-2xl); font-weight: var(--fw-bold); color: var(--text); line-height: 1.1; }
+.stat-card-k { font-size: var(--fs-xs); color: var(--text-muted); margin-top: 2px; }
+.stat-chart-head { font-size: var(--fs-xs); text-transform: uppercase; letter-spacing: var(--tracking-wide); color: var(--text-muted); font-weight: var(--fw-semibold); margin-bottom: var(--s2); }
+.stat-chart { display: flex; align-items: flex-end; gap: 2px; height: 110px; padding: 4px; background: var(--surface-sunk); border: 1px solid var(--border); border-radius: var(--r-md); }
+.stat-bar-wrap { flex: 1 1 0; height: 100%; display: flex; align-items: flex-end; }
+.stat-bar { width: 100%; min-height: 2px; background: var(--accent); border-radius: 2px 2px 0 0; transition: height var(--dur) var(--ease); }
+.stat-bar:hover { background: var(--brand-hover); }
+.stat-chart-x { display: flex; justify-content: space-between; font-size: 10px; color: var(--text-faint); margin-top: 4px; font-family: var(--font-mono); }

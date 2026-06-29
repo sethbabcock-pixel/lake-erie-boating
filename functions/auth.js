@@ -10,6 +10,7 @@
 //   PUT  /api/favorites {favorites}
 //   GET  /api/site-config           -> public homepage hero + today's takeover
 //   GET/PUT /api/admin/config       -> admin-only site config (hero, takeovers)
+//   GET  /api/admin/stats           -> admin-only account/traffic stats
 //   GET  /api/admin/users           -> admin-only user search
 //   GET/POST /api/admin/user        -> admin-only user detail + flag toggle
 //   POST /api/admin/upload          -> admin image upload (stored in KV)
@@ -271,6 +272,50 @@ export async function handleAuth(request, env, url) {
     }
     users.sort((a, b) => (b.created || "").localeCompare(a.created || ""));
     return json({ users, total: list.keys.length, shown: users.length });
+  }
+
+  // ---- admin: account/traffic stats (cached ~5 min) ----
+  if (path === "/api/admin/stats" && request.method === "GET") {
+    const u = await userFromRequest(env, request);
+    if (!u) return json({ error: "Not signed in." }, 401);
+    if (!isAdmin(env, u)) return json({ error: "Forbidden — not an admin account." }, 403);
+    const cacheKey = new Request("https://sib-admin-stats.local/all");
+    const cache = typeof caches !== "undefined" && caches.default ? caches.default : null;
+    if (cache && url.searchParams.get("fresh") !== "1") {
+      const hit = await cache.match(cacheKey);
+      if (hit) return hit;
+    }
+    const userList = await env.USERS.list({ prefix: "user:", limit: 1000 });
+    const sessList = await env.USERS.list({ prefix: "sess:", limit: 1000 });
+    let total = 0, adFree = 0, google = 0, password = 0, withBoat = 0;
+    const byDay = {};
+    for (const k of userList.keys) {
+      const rec = await env.USERS.get(k.name, "json");
+      if (!rec || !rec.email) continue;
+      total++;
+      if (rec.adFree) adFree++;
+      if (rec.via === "google") google++; else password++;
+      if (rec.prefs && rec.prefs.boatType) withBoat++;
+      if (rec.created) { const d = String(rec.created).slice(0, 10); byDay[d] = (byDay[d] || 0) + 1; }
+    }
+    const DAY = 86400000, now = Date.now();
+    const signupsByDay = [];
+    for (let i = 29; i >= 0; i--) { const d = isoDay(new Date(now - i * DAY)); signupsByDay.push({ date: d, count: byDay[d] || 0 }); }
+    const sum = (arr) => arr.reduce((a, b) => a + b.count, 0);
+    const stats = {
+      totalUsers: total, adFree, freeUsers: total - adFree, via: { google, password }, withBoat,
+      activeSessions: sessList.keys.length,
+      newToday: signupsByDay[signupsByDay.length - 1].count,
+      new7d: sum(signupsByDay.slice(-7)), new30d: sum(signupsByDay),
+      signupsByDay,
+      capped: userList.keys.length >= 1000 || sessList.keys.length >= 1000,
+      generatedAt: new Date().toISOString(),
+    };
+    const resp = new Response(JSON.stringify({ stats }), {
+      headers: { "Content-Type": "application/json", "Cache-Control": "public, max-age=300" },
+    });
+    if (cache) await cache.put(cacheKey, resp.clone());
+    return resp;
   }
 
   // ---- admin: read / update a single user ----

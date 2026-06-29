@@ -93,6 +93,66 @@ function CampaignCard({ c, onChange, onRemove, idx }) {
 
 const fmtDate = (s) => (s ? new Date(s).toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" }) : "—");
 
+function StatsPanel() {
+  const [s, setS] = useState(null);
+  const [err, setErr] = useState("");
+  const load = async (fresh) => {
+    setErr("");
+    try {
+      const r = await fetch(`/api/admin/stats${fresh ? "?fresh=1" : ""}`);
+      const d = await r.json();
+      if (!r.ok) throw new Error(d.error || "Could not load stats.");
+      setS(d.stats);
+    } catch (e) { setErr(e.message); }
+  };
+  useEffect(() => { load(false); }, []);
+
+  const days = (s && s.signupsByDay) || [];
+  const max = Math.max(1, ...days.map((d) => d.count));
+  const cards = s ? [
+    { k: "Total users", v: s.totalUsers },
+    { k: "Ad-free", v: s.adFree },
+    { k: "Active sessions", v: s.activeSessions },
+    { k: "New today", v: s.newToday },
+    { k: "New · 7 days", v: s.new7d },
+    { k: "New · 30 days", v: s.new30d },
+  ] : [];
+
+  return (
+    <section className="card acct-sec">
+      <div className="card-head">
+        <h2>Traffic &amp; accounts</h2>
+        {s && <button className="linklike" onClick={() => load(true)}>↻ refresh</button>}
+      </div>
+      {err && <div className="modal-err">{err}</div>}
+      {!s && !err && <p className="acct-note" style={{ marginTop: 0 }}>Loading stats…</p>}
+      {s && (
+        <>
+          <div className="stat-cards">
+            {cards.map((c) => <div className="stat-card" key={c.k}><div className="stat-card-v">{c.v}</div><div className="stat-card-k">{c.k}</div></div>)}
+          </div>
+          <div className="stat-chart-head">New signups · last 30 days</div>
+          <div className="stat-chart" role="img" aria-label="Signups per day, last 30 days">
+            {days.map((d) => (
+              <div className="stat-bar-wrap" key={d.date} title={`${d.date}: ${d.count}`}>
+                <div className="stat-bar" style={{ height: `${Math.round((d.count / max) * 100)}%` }} />
+              </div>
+            ))}
+          </div>
+          <div className="stat-chart-x"><span>{days[0]?.date.slice(5)}</span><span>today</span></div>
+          <p className="acct-note">
+            Sign-in: <b>{s.via.google} Google</b> · <b>{s.via.password} email</b> · <b>{s.withBoat}</b> with a boat profile.
+            {s.capped ? " (counts capped at 1,000 — paginate for more.)" : ""}
+          </p>
+          <p className="acct-note" style={{ marginTop: 0 }}>
+            These are account stats. For pageviews/visitors, set your <code>GA_ID</code> (Google Analytics) — the tag is already wired in.
+          </p>
+        </>
+      )}
+    </section>
+  );
+}
+
 function UsersPanel() {
   const [q, setQ] = useState("");
   const [results, setResults] = useState(null);
@@ -251,6 +311,8 @@ export default function AdminPage() {
 
         {status === "ok" && cfg && (
           <>
+            <StatsPanel />
+
             {/* Hero */}
             <section className="card acct-sec">
               <h2>Homepage hero</h2>

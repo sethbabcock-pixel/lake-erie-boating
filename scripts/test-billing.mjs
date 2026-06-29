@@ -482,6 +482,26 @@ async function run() {
     eq("auth/me: non-admin admin=false", (await (await call(req("GET", "/auth/me", { cookie: other }), env)).json()).user.admin, false);
   }
 
+  // 29. admin stats: gating + computed totals/sessions/signupsByDay
+  {
+    const env = { USERS: makeKV(), ADMIN_EMAIL: "admin@example.com" };
+    const admin = await seedUser(env, "admin@example.com", { created: "2026-01-01T00:00:00Z" });
+    const today = new Date().toISOString();
+    await seedUser(env, "g1@example.com", { created: today, via: "google", adFree: true, prefs: { boatType: "pontoon" } });
+    await seedUser(env, "p1@example.com", { created: today, via: "password" });
+    eq("admin stats: signed out → 401", (await call(req("GET", "/api/admin/stats"), { USERS: env.USERS })).status, 401);
+    const rando = await seedUser(env, "rando@example.com");
+    eq("admin stats: non-admin → 403", (await call(req("GET", "/api/admin/stats", { cookie: rando }), env)).status, 403);
+    const st = (await (await call(req("GET", "/api/admin/stats?fresh=1", { cookie: admin }), env)).json()).stats;
+    eq("admin stats: counts all users", st.totalUsers, 4);
+    eq("admin stats: ad-free count", st.adFree, 1);
+    eq("admin stats: via breakdown google", st.via.google, 3); // admin + g1 + rando default to google
+    eq("admin stats: withBoat", st.withBoat, 1);
+    eq("admin stats: active sessions = seeded sessions", st.activeSessions, 4);
+    eq("admin stats: 30-day series", st.signupsByDay.length, 30);
+    eq("admin stats: new today counts today's signups", st.newToday, 2);
+  }
+
   console.log(results.join("\n"));
   console.log(`\n${passed} passed, ${failed} failed`);
   if (failed) process.exit(1);
