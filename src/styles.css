@@ -181,7 +181,7 @@ button { font-family: inherit; }
 @media (min-width: 1024px) { .dash2 { grid-template-columns: 1fr 1fr; } }
 .stats { margin-bottom: var(--s4); }
 .windread { margin-bottom: var(--s4); }
-.card-head { display: flex; align-items: baseline; justify-content: space-between; gap: var(--s3); margin-bottom: var(--s3); }
+.card-head { display: flex; align-items: baseline; justify-content: space-between; gap: var(--s2) var(--s3); margin-bottom: var(--s3); flex-wrap: wrap; }
 .card-head h2 { margin: 0; }
 .wr-dir { font-size: var(--fs-xs); color: var(--text-muted); font-weight: var(--fw-semibold); text-transform: uppercase; letter-spacing: var(--tracking-wide); }
 .stat .v small { font-size: 0.46em; font-weight: var(--fw-regular); color: var(--text-faint); margin-left: 2px; letter-spacing: 0; }
@@ -219,7 +219,7 @@ details.card { margin-bottom: var(--s4); }
 .hour .hm.wave b { color: var(--accent); }
 .hour .hp { font-family: var(--font-mono); font-size: 9.5px; color: var(--text-faint); height: 13px; margin-top: 1px; }
 .hour.cutoff { border-color: var(--danger); box-shadow: 0 0 0 1.5px var(--danger); }
-.maptabs { display: inline-flex; gap: 4px; }
+.maptabs { display: flex; flex-wrap: wrap; gap: 4px; }
 .maptabs button { font-size: var(--fs-xs); font-weight: var(--fw-semibold); padding: 4px 11px; min-height: 30px; cursor: pointer;
   background: var(--surface-sunk); color: var(--text-muted); border: 1px solid var(--border); border-radius: var(--r-pill); }
 .maptabs button:hover { border-color: var(--accent); color: var(--text); }
