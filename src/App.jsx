@@ -555,7 +555,7 @@ export default function App() {
             )}
 
             <GearBlock waterTempF={buoy ? buoy.waterTempF : null} />
-            {!adFree && <AdSlot />}
+            {!adFree && consent === "all" && <AdSlot />}
 
             <footer className="meta">
               Source: {buoy ? `Buoy ${buoy.station} · ${buoy.ageMinutes != null ? `${buoy.ageMinutes} min ago` : "latest"}` : "forecast only"}

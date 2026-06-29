@@ -6,7 +6,7 @@ import React, { useEffect, useState } from "react";
    stays clean). Affiliate links work as soon as AMAZON_TAG is set.
    ============================================================================ */
 export const ADSENSE = {
-  client: "ca-pub-0000000000000000", // ← your AdSense publisher ID (after approval)
+  client: "ca-pub-9213366013949616", // AdSense publisher ID
   slots: {
     inContent: "0000000000", // ← an ad-unit slot ID from AdSense
   },
@@ -49,13 +49,15 @@ export function useAdsense(enabled) {
   }, [enabled]);
 }
 
-// A single responsive in-content ad unit. Renders nothing until configured.
+// A single responsive in-content ad unit. Renders nothing until a real ad-unit
+// slot ID is set (an unconfigured placeholder slot would just show a blank box).
 export function AdSlot({ slot = ADSENSE.slots.inContent }) {
+  const ready = ADSENSE_ENABLED && !!slot && slot !== "0000000000";
   useEffect(() => {
-    if (!ADSENSE_ENABLED) return;
+    if (!ready) return;
     try { (window.adsbygoogle = window.adsbygoogle || []).push({}); } catch (e) { /* ignore */ }
-  }, []);
-  if (!ADSENSE_ENABLED) return null;
+  }, [ready]);
+  if (!ready) return null;
   return (
     <div className="adwrap">
       <span className="adlabel">Advertisement</span>

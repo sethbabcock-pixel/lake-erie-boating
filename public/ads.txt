@@ -1,4 +1,2 @@
 # Should I Boat — authorized digital sellers (ads.txt)
-# After AdSense approval, replace pub-0000000000000000 with YOUR publisher
-# number (the digits of your ca-pub-… ID), then redeploy.
-google.com, pub-0000000000000000, DIRECT, f08c47fec0942fa0
+google.com, pub-9213366013949616, DIRECT, f08c47fec0942fa0
