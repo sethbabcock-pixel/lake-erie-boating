@@ -12,7 +12,7 @@ export const ADSENSE = {
   },
 };
 export const AMAZON_TAG = ""; // ← your Amazon Associates tag, e.g. "shouldiboat-20"
-export const GA_ID = "";      // ← your GA4 Measurement ID, e.g. "G-XXXXXXXXXX"
+export const GA_ID = "G-D2199LJV2T"; // GA4 Measurement ID (loads only after cookie consent)
 
 // Load Google Analytics (GA4) only when configured AND the user consented.
 export function useAnalytics(enabled) {
