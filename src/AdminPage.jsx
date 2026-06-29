@@ -108,13 +108,17 @@ function StatsPanel() {
   useEffect(() => { load(false); }, []);
 
   const days = (s && s.signupsByDay) || [];
+  const visitors = (s && s.visitorsByDay) || [];
   const max = Math.max(1, ...days.map((d) => d.count));
+  const vmax = Math.max(1, ...visitors.map((d) => d.count));
   const cards = s ? [
     { k: "Total users", v: s.totalUsers },
     { k: "Ad-free", v: s.adFree },
+    { k: "Conversion", v: `${s.conversionPct ?? 0}%` },
     { k: "Active sessions", v: s.activeSessions },
+    { k: "Visitors today", v: s.visitorsToday ?? 0 },
+    { k: "Visitors · 30d", v: s.visitors30 ?? 0 },
     { k: "New today", v: s.newToday },
-    { k: "New · 7 days", v: s.new7d },
     { k: "New · 30 days", v: s.new30d },
   ] : [];
 
@@ -140,12 +144,24 @@ function StatsPanel() {
             ))}
           </div>
           <div className="stat-chart-x"><span>{days[0]?.date.slice(5)}</span><span>today</span></div>
+
+          <div className="stat-chart-head" style={{ marginTop: "var(--s4)" }}>Daily visitors · last 30 days <span style={{ color: "var(--text-faint)", textTransform: "none", letterSpacing: 0, fontWeight: "var(--fw-regular)" }}>· first-party, {s.visits30 ?? 0} visits/30d</span></div>
+          <div className="stat-chart" role="img" aria-label="Visitors per day, last 30 days">
+            {visitors.map((d) => (
+              <div className="stat-bar-wrap" key={d.date} title={`${d.date}: ${d.count}`}>
+                <div className="stat-bar visitors" style={{ height: `${Math.round((d.count / vmax) * 100)}%` }} />
+              </div>
+            ))}
+          </div>
+          <div className="stat-chart-x"><span>{visitors[0]?.date.slice(5)}</span><span>today</span></div>
+
           <p className="acct-note">
             Sign-in: <b>{s.via.google} Google</b> · <b>{s.via.password} email</b> · <b>{s.withBoat}</b> with a boat profile.
-            {s.capped ? " (counts capped at 1,000 — paginate for more.)" : ""}
+            {s.capped ? " (user counts capped at 1,000 — paginate for more.)" : ""}
           </p>
           <p className="acct-note" style={{ marginTop: 0 }}>
-            These are account stats. For pageviews/visitors, set your <code>GA_ID</code> (Google Analytics) — the tag is already wired in.
+            Visitors are first-party &amp; cookieless (counts everyone, even cookie-decliners). For full traffic breakdowns
+            (sources, geography, pages) see Google Analytics — also wired in.
           </p>
         </>
       )}

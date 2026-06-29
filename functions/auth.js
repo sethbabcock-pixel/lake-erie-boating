@@ -10,6 +10,7 @@
 //   PUT  /api/favorites {favorites}
 //   GET  /api/site-config           -> public homepage hero + today's takeover
 //   GET/PUT /api/admin/config       -> admin-only site config (hero, takeovers)
+//   POST /api/hit                   -> public cookieless visit/visitor beacon
 //   GET  /api/admin/stats           -> admin-only account/traffic stats
 //   GET  /api/admin/users           -> admin-only user search
 //   GET/POST /api/admin/user        -> admin-only user detail + flag toggle
@@ -274,6 +275,20 @@ export async function handleAuth(request, env, url) {
     return json({ users, total: list.keys.length, shown: users.length });
   }
 
+  // ---- first-party hit beacon (public, cookieless): counts visits/visitors ----
+  if (path === "/api/hit" && (request.method === "POST" || request.method === "GET")) {
+    if (env.USERS) {
+      const today = isoDay();
+      const bump = async (key) => {
+        const cur = Number(await env.USERS.get(key)) || 0;
+        await env.USERS.put(key, String(cur + 1), { expirationTtl: 70 * 86400 });
+      };
+      await bump(`pv:${today}`); // a visit (page load)
+      if (url.searchParams.get("v") === "1") await bump(`uv:${today}`); // a new daily visitor
+    }
+    return new Response(null, { status: 204 });
+  }
+
   // ---- admin: account/traffic stats (cached ~5 min) ----
   if (path === "/api/admin/stats" && request.method === "GET") {
     const u = await userFromRequest(env, request);
@@ -299,15 +314,24 @@ export async function handleAuth(request, env, url) {
       if (rec.created) { const d = String(rec.created).slice(0, 10); byDay[d] = (byDay[d] || 0) + 1; }
     }
     const DAY = 86400000, now = Date.now();
-    const signupsByDay = [];
-    for (let i = 29; i >= 0; i--) { const d = isoDay(new Date(now - i * DAY)); signupsByDay.push({ date: d, count: byDay[d] || 0 }); }
+    const signupsByDay = [], visitorsByDay = [], visitsByDay = [];
+    for (let i = 29; i >= 0; i--) {
+      const d = isoDay(new Date(now - i * DAY));
+      signupsByDay.push({ date: d, count: byDay[d] || 0 });
+      visitorsByDay.push({ date: d, count: Number(await env.USERS.get(`uv:${d}`)) || 0 });
+      visitsByDay.push({ date: d, count: Number(await env.USERS.get(`pv:${d}`)) || 0 });
+    }
     const sum = (arr) => arr.reduce((a, b) => a + b.count, 0);
     const stats = {
       totalUsers: total, adFree, freeUsers: total - adFree, via: { google, password }, withBoat,
+      conversionPct: total ? Math.round((adFree / total) * 1000) / 10 : 0,
       activeSessions: sessList.keys.length,
       newToday: signupsByDay[signupsByDay.length - 1].count,
       new7d: sum(signupsByDay.slice(-7)), new30d: sum(signupsByDay),
       signupsByDay,
+      visitorsToday: visitorsByDay[visitorsByDay.length - 1].count,
+      visitors30: sum(visitorsByDay), visits30: sum(visitsByDay),
+      visitorsByDay, visitsByDay,
       capped: userList.keys.length >= 1000 || sessList.keys.length >= 1000,
       generatedAt: new Date().toISOString(),
     };

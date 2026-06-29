@@ -502,6 +502,22 @@ async function run() {
     eq("admin stats: new today counts today's signups", st.newToday, 2);
   }
 
+  // 30. hit beacon increments visits/visitors; stats reflects them + conversion
+  {
+    const env = { USERS: makeKV(), ADMIN_EMAIL: "admin@example.com" };
+    const admin = await seedUser(env, "admin@example.com");
+    await seedUser(env, "paid@example.com", { adFree: true });
+    // 3 visits, 1 a new daily visitor
+    eq("hit: → 204", (await call(req("POST", "/api/hit?v=1"), env)).status, 204);
+    await call(req("POST", "/api/hit"), env);
+    await call(req("POST", "/api/hit"), env);
+    const st = (await (await call(req("GET", "/api/admin/stats?fresh=1", { cookie: admin }), env)).json()).stats;
+    eq("stats: visits counted today", st.visitsByDay[st.visitsByDay.length - 1].count, 3);
+    eq("stats: visitors counted today", st.visitorsToday, 1);
+    eq("stats: visits30 total", st.visits30, 3);
+    eq("stats: conversion pct (1 of 2 ad-free)", st.conversionPct, 50);
+  }
+
   console.log(results.join("\n"));
   console.log(`\n${passed} passed, ${failed} failed`);
   if (failed) process.exit(1);
