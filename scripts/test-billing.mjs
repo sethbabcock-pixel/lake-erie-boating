@@ -414,6 +414,24 @@ async function run() {
     eq("admin: default owner not admin when ADMIN_EMAIL set elsewhere", (await call(req("GET", "/api/admin/config", { cookie: sethBlocked }), env2)).status, 403);
   }
 
+  // 26. video upload: accepted under cap, rejected over cap; hero.video round-trips
+  {
+    const env = { USERS: makeKV(), ADMIN_EMAIL: "admin@example.com" };
+    const admin = await seedUser(env, "admin@example.com");
+    const upReq = (ct, body) => ({ request: new Request(ORIGIN + "/api/admin/upload", { method: "POST", headers: { Cookie: admin, "Content-Type": ct }, body }), url: new URL(ORIGIN + "/api/admin/upload") });
+    const small = new Uint8Array(1024);
+    const r = await call(upReq("video/mp4", small), env);
+    eq("upload: small video → 200", r.status, 200);
+    check("upload: video served from /api/asset/", /^\/api\/asset\//.test((await r.json()).url));
+    const big = new Uint8Array(12 * 1024 * 1024 + 1);
+    eq("upload: oversized video → 413", (await call(upReq("video/mp4", big), env)).status, 413);
+    // hero.video persists through admin config + surfaces in public site-config
+    const cfg = { hero: { image: "/p.jpg", video: "/api/asset/vid1", headline: "x", sub: "", showVerdict: true }, takeovers: [], gam: { networkCode: "" } };
+    await call(req("PUT", "/api/admin/config", { cookie: admin, body: { config: cfg } }), env);
+    const pub = await (await call(req("GET", "/api/site-config"), env)).json();
+    eq("site-config: hero.video round-trips", pub.hero.video, "/api/asset/vid1");
+  }
+
   console.log(results.join("\n"));
   console.log(`\n${passed} passed, ${failed} failed`);
   if (failed) process.exit(1);

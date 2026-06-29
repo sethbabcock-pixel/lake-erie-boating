@@ -597,10 +597,50 @@ async function handleCamStatus(url) {
   return resp;
 }
 
+// Lightweight GO/CAUTION/NO-GO + wind/wave for every spot, for the homepage
+// directory. Two batched Open-Meteo calls (all coords at once) keep it cheap;
+// the whole result is edge-cached ~10 min so the API isn't hammered.
+async function fetchSummary() {
+  const entries = Object.entries(SPOTS);
+  const lats = entries.map(([, s]) => s.lat).join(",");
+  const lons = entries.map(([, s]) => s.lon).join(",");
+  const asArray = (d) => (Array.isArray(d) ? d : d ? [d] : []);
+  const [windRes, waveRes] = await Promise.all([
+    getJSON(`https://api.open-meteo.com/v1/forecast?latitude=${lats}&longitude=${lons}&current=wind_speed_10m,wind_gusts_10m,wind_direction_10m&wind_speed_unit=kn&timezone=auto`).catch(() => null),
+    getJSON(`https://marine-api.open-meteo.com/v1/marine?latitude=${lats}&longitude=${lons}&current=wave_height&timezone=auto`).catch(() => null),
+  ]);
+  const wind = asArray(windRes);
+  const wave = asArray(waveRes);
+  const spots = entries.map(([id, s], i) => {
+    const w = (wind[i] && wind[i].current) || {};
+    const wv = (wave[i] && wave[i].current) || {};
+    const windKt = round(w.wind_speed_10m, 0);
+    const gustKt = round(w.wind_gusts_10m, 0);
+    const dir = w.wind_direction_10m == null ? null : degToCompass(w.wind_direction_10m);
+    const waveFt = wv.wave_height == null ? null : round(mToFt(wv.wave_height), 1);
+    const level = windKt == null && waveFt == null ? null : hourRisk(windKt, 0, "", waveFt);
+    return { id, name: s.name, lake: s.lake || "Lake Erie", level, windKt, gustKt, dir, waveFt };
+  });
+  return { spots, updatedAt: new Date().toISOString() };
+}
+
+async function handleSummary() {
+  const cacheKey = new Request("https://sib-summary.local/all");
+  const cache = caches.default;
+  const hit = await cache.match(cacheKey);
+  if (hit) return hit;
+  const resp = new Response(JSON.stringify(await fetchSummary()), {
+    headers: { "Content-Type": "application/json", "Cache-Control": "public, max-age=600" },
+  });
+  await cache.put(cacheKey, resp.clone());
+  return resp;
+}
+
 export async function onRequest(context) {
   const url = new URL(context.request.url);
 
   if (url.pathname.endsWith("/cams")) return handleCamStatus(url);
+  if (url.searchParams.has("summary")) return handleSummary();
 
   if (url.searchParams.has("spots")) {
     return json({

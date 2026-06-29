@@ -2,7 +2,7 @@ import React, { useEffect, useState } from "react";
 import { activeTakeover, GAM } from "./sponsor.js";
 
 const vclass = (v) => (v === "NO-GO" ? "nogo" : v === "CAUTION" ? "caution" : "go");
-const DEFAULT_HERO = { image: "/hero-sunset.svg", headline: "Should I boat{spot} today?", sub: "", showVerdict: true };
+const DEFAULT_HERO = { image: "/hero-sunset.svg", video: "", headline: "Should I boat{spot} today?", sub: "", showVerdict: true };
 
 // ── Google Ad Manager (GPT) ───────────────────────────────────────────────────
 function useGPT(code) {
@@ -47,13 +47,13 @@ function SponsorSkin({ s }) {
   );
 }
 
-function SponsorHero({ s }) {
+function SponsorHero({ s, splash, children }) {
   const fg = s.fg || "#ffffff";
   const background = s.bgImage
     ? `linear-gradient(90deg, ${s.bg || "#102036"} 12%, color-mix(in srgb, ${s.bg || "#102036"} 40%, transparent) 100%), url(${s.bgImage}) center/cover no-repeat`
     : s.bg;
   return (
-    <section className="hero hero-sponsor" style={{ background, color: fg }}>
+    <section className={`hero hero-sponsor${splash ? " hero-splash" : ""}`} style={{ background, color: fg }}>
       <a className="hero-inner hero-sponsor-link" href={s.href} target="_blank" rel="sponsored noopener" style={{ color: fg }}>
         <div className="hero-text">
           <div className="hero-eyebrow">{s.eyebrow || "Sponsored"}</div>
@@ -67,21 +67,31 @@ function SponsorHero({ s }) {
           </span>
         )}
       </a>
+      {children && <div className="hero-inner hero-splash-slot">{children}</div>}
       <span className="hero-adlabel">Ad</span>
     </section>
   );
 }
 
-// ── House hero (branded band over the Great Lakes sunset photo) ───────────────
-function HouseHero({ hero, spotName, verdict, adFree }) {
+// ── House hero (brand band over the Great Lakes photo or video) ───────────────
+function HouseHero({ hero, spotName, verdict, adFree, splash, children }) {
   const h = { ...DEFAULT_HERO, ...(hero || {}) };
   const photo = h.image;
-  const style = photo
+  const video = h.video;
+  const bgStyle = !video && photo
     ? { backgroundImage: `linear-gradient(90deg, rgba(7,24,43,0.94) 0%, rgba(7,24,43,0.66) 46%, rgba(7,24,43,0.14) 100%), url(${photo})` }
     : undefined;
   const parts = (h.headline || DEFAULT_HERO.headline).split("{spot}");
   return (
-    <section className={`hero hero-house${photo ? " has-photo" : ""}`} style={style}>
+    <section className={`hero hero-house${photo || video ? " has-photo" : ""}${splash ? " hero-splash" : ""}`} style={bgStyle}>
+      {video && (
+        <>
+          <video className="hero-video" autoPlay muted loop playsInline poster={photo || undefined}>
+            <source src={video} />
+          </video>
+          <div className="hero-video-scrim" />
+        </>
+      )}
       <div className="hero-inner">
         <div className="hero-eyebrow">Live Great Lakes boating conditions</div>
         <h1 className="hero-title">
@@ -97,14 +107,15 @@ function HouseHero({ hero, spotName, verdict, adFree }) {
         ) : (
           <p className="hero-subtitle">{h.sub || "A clear GO / CAUTION / NO-GO call from live NOAA wind, waves & weather."}</p>
         )}
-        {!adFree && <a className="hero-housecta" href="/account">Go ad-free — no banners, ever →</a>}
+        {children}
+        {!adFree && !splash && <a className="hero-housecta" href="/account">Go ad-free — no banners, ever →</a>}
       </div>
     </section>
   );
 }
 
 // ── Public entry ──────────────────────────────────────────────────────────────
-export default function Takeover({ adFree, spotName, verdict }) {
+export default function Takeover({ adFree, spotName, verdict, splash = false, children = null }) {
   const [cfg, setCfg] = useState({ hero: DEFAULT_HERO, takeover: null, gam: { networkCode: "" }, loaded: false });
   useEffect(() => {
     let alive = true;
@@ -125,11 +136,11 @@ export default function Takeover({ adFree, spotName, verdict }) {
     return (
       <>
         <SponsorSkin s={sponsor} />
-        <SponsorHero s={sponsor} />
+        <SponsorHero s={sponsor} splash={splash}>{splash ? children : null}</SponsorHero>
       </>
     );
   }
-  if (showGam) {
+  if (showGam && !splash) {
     return (
       <section className="hero hero-gam">
         <span className="hero-adlabel">Advertisement</span>
@@ -137,5 +148,5 @@ export default function Takeover({ adFree, spotName, verdict }) {
       </section>
     );
   }
-  return <HouseHero hero={cfg.hero} spotName={spotName} verdict={verdict} adFree={adFree} />;
+  return <HouseHero hero={cfg.hero} spotName={spotName} verdict={verdict} adFree={adFree} splash={splash}>{splash ? children : null}</HouseHero>;
 }

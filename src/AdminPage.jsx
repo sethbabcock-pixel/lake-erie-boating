@@ -19,9 +19,11 @@ function Field({ label, hint, children }) {
 }
 
 // Text URL + an "Upload" button that stores the file and fills in its URL.
-function ImageField({ label, hint, value, onChange }) {
+// kind: "image" (default) or "video".
+function ImageField({ label, hint, value, onChange, kind = "image" }) {
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
+  const isVideo = kind === "video";
   const onFile = async (e) => {
     const f = e.target.files && e.target.files[0];
     e.target.value = "";
@@ -40,10 +42,11 @@ function ImageField({ label, hint, value, onChange }) {
       <div className="admin-upload">
         <input className="field" value={value || ""} onChange={(e) => onChange(e.target.value)} placeholder="/path, https://…, or upload →" />
         <label className="cbtn ghost admin-uploadbtn">{busy ? "Uploading…" : "Upload"}
-          <input type="file" accept="image/*" onChange={onFile} hidden disabled={busy} />
+          <input type="file" accept={isVideo ? "video/*" : "image/*"} onChange={onFile} hidden disabled={busy} />
         </label>
       </div>
-      {value && <img className="admin-thumb" src={value} alt="" onError={(e) => { e.target.style.display = "none"; }} />}
+      {value && !isVideo && <img className="admin-thumb" src={value} alt="" onError={(e) => { e.target.style.display = "none"; }} />}
+      {value && isVideo && <video className="admin-thumb" src={value} muted loop autoPlay playsInline onError={(e) => { e.target.style.display = "none"; }} />}
       {err && <div className="modal-err" style={{ marginTop: 6 }}>{err}</div>}
     </div>
   );
@@ -165,6 +168,8 @@ export default function AdminPage() {
               <p className="acct-note" style={{ marginTop: 0 }}>Shown when no sponsor takeover is running.</p>
               <ImageField label="Background image" hint="(upload a photo, or /hero-sunset.svg)" value={cfg.hero.image} onChange={(v) => setHero("image", v)} />
               <p className="acct-note" style={{ marginTop: 0 }}>Tip: a wide landscape photo works best — text sits over a darkened left edge.</p>
+              <ImageField label="Background video" hint="(optional — overrides the image; muted loop. ≤12 MB upload, or a Stream/R2/hosted URL)" value={cfg.hero.video} onChange={(v) => setHero("video", v)} kind="video" />
+              <p className="acct-note" style={{ marginTop: 0 }}>The image above is used as the poster/fallback (mobile data-saver & iOS Low Power won't autoplay video).</p>
               <Field label="Headline" hint="(use {spot} to insert the chosen spot)">
                 <input className="field" value={cfg.hero.headline} onChange={(e) => setHero("headline", e.target.value)} />
               </Field>

@@ -4,6 +4,7 @@ import WxIcon from "./WxIcon.jsx";
 import { useAdsense, useAnalytics, getConsent, AdSlot, GearBlock, ConsentBanner } from "./monetize.jsx";
 import { useAuth, Account } from "./auth.jsx";
 import Takeover from "./Takeover.jsx";
+import Landing from "./Landing.jsx";
 
 const fmt = (v, unit) => (v == null ? "—" : `${v}${unit || ""}`);
 const verdictClass = (lvl) => (lvl === "NO-GO" ? "nogo" : lvl === "CAUTION" ? "caution" : "go");
@@ -359,10 +360,34 @@ export default function App() {
     }
   }, [auth.user]);
   const [spots, setSpots] = useState([]);
-  const [active, setActive] = useState(() => localStorage.getItem("boating.spot") || "sandusky");
+  const urlSpot = () => new URLSearchParams(window.location.search).get("spot");
+  const [active, setActive] = useState(() => urlSpot() || localStorage.getItem("boating.spot") || "sandusky");
+  const [landing, setLanding] = useState(() => !urlSpot()); // bare "/" = splash + directory; ?spot=X = detail
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+
+  // Pick a location → navigate to its detail view (?spot=X), without a reload.
+  const selectLocation = (id) => {
+    const u = new URL(window.location.href);
+    u.searchParams.set("spot", id);
+    window.history.pushState({}, "", u);
+    setActive(id);
+    setLanding(false);
+    window.scrollTo(0, 0);
+  };
+  const goLanding = () => {
+    const u = new URL(window.location.href);
+    u.searchParams.delete("spot");
+    window.history.pushState({}, "", u);
+    setLanding(true);
+    window.scrollTo(0, 0);
+  };
+  useEffect(() => {
+    const onPop = () => { const sp = urlSpot(); setLanding(!sp); if (sp) setActive(sp); };
+    window.addEventListener("popstate", onPop);
+    return () => window.removeEventListener("popstate", onPop);
+  }, []);
 
   useEffect(() => {
     fetch("/marine/conditions?spots")
@@ -380,7 +405,7 @@ export default function App() {
       .catch((e) => { setError(e.message); setLoading(false); });
   };
 
-  useEffect(() => { loadSpot(active); localStorage.setItem("boating.spot", active); }, [active]);
+  useEffect(() => { if (!landing) loadSpot(active); localStorage.setItem("boating.spot", active); }, [active, landing]);
   // Save spot/theme to the account (debounced) once the signed-in prefs are applied.
   useEffect(() => {
     if (!appliedRef.current || !authRef.current.user) return;
@@ -406,7 +431,7 @@ export default function App() {
     <>
       <header className="appheader">
         <div className="appheader-inner">
-          <a className="brand" href="/" aria-label="Should I Boat — home">
+          <a className="brand" href="/" aria-label="Should I Boat — home" onClick={(e) => { e.preventDefault(); goLanding(); }}>
             <img className="logo" src={effective === "dark" ? "/boat-mark-white.png" : "/boat-mark.png"} alt="" />
             <span className="wordmark">
               <span className="wm-name">SHOULDI<b>BOAT</b><span className="wm-dot">.com</span></span>
@@ -414,7 +439,7 @@ export default function App() {
             </span>
           </a>
           <div className="controls">
-            <LocationPicker byLake={byLake} active={active} activeName={activeName} onSelect={setActive}
+            <LocationPicker byLake={byLake} active={active} activeName={activeName} onSelect={selectLocation}
               favorites={auth.user ? (auth.user.favorites || []) : []} onToggleFav={auth.user ? toggleFav : undefined} />
             <ThemeToggle effective={effective} onToggle={() => setChoice(effective === "dark" ? "light" : "dark")} />
             <Account auth={auth} />
@@ -422,6 +447,10 @@ export default function App() {
         </div>
       </header>
 
+      {landing ? (
+        <Landing adFree={adFree} onSelect={selectLocation} favorites={auth.user ? (auth.user.favorites || []) : []} />
+      ) : (
+      <>
       {/* FlightAware-style hero: sponsor takeover when sold, else house hero. */}
       <Takeover adFree={adFree} spotName={activeName} verdict={rec?.level} />
 
@@ -542,6 +571,8 @@ export default function App() {
           </>
         )}
       </main>
+      </>
+      )}
       <ConsentBanner consent={consent} onChoose={chooseConsent} />
     </>
   );

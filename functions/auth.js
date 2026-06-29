@@ -66,7 +66,7 @@ const publicUser = (u) => ({ email: u.email, prefs: u.prefs || {}, favorites: u.
 const isoDay = (d = new Date()) =>
   `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}-${String(d.getUTCDate()).padStart(2, "0")}`;
 const DEFAULT_SITE_CONFIG = {
-  hero: { image: "/hero-sunset.svg", headline: "Should I boat{spot} today?", sub: "", showVerdict: true },
+  hero: { image: "/hero-sunset.svg", video: "", headline: "Should I boat{spot} today?", sub: "", showVerdict: true },
   takeovers: [],
   gam: { networkCode: "" },
 };
@@ -90,6 +90,7 @@ function sanitizeSiteConfig(input) {
   return {
     hero: {
       image: str(hero.image, 400) || DEFAULT_SITE_CONFIG.hero.image,
+      video: str(hero.video, 400),
       headline: str(hero.headline, 160) || DEFAULT_SITE_CONFIG.hero.headline,
       sub: str(hero.sub, 240),
       showVerdict: hero.showVerdict !== false,
@@ -255,10 +256,13 @@ export async function handleAuth(request, env, url) {
     if (!u) return json({ error: "Not signed in." }, 401);
     if (!isAdmin(env, u)) return json({ error: "Forbidden — not an admin account." }, 403);
     const ct = request.headers.get("Content-Type") || "";
-    if (!/^image\/(png|jpeg|jpg|webp|gif|svg\+xml)$/i.test(ct)) return json({ error: "Only PNG, JPG, WebP, GIF or SVG images are allowed." }, 400);
+    const isImage = /^image\/(png|jpeg|jpg|webp|gif|svg\+xml)$/i.test(ct);
+    const isVideo = /^video\/(mp4|webm|quicktime)$/i.test(ct);
+    if (!isImage && !isVideo) return json({ error: "Only images (PNG/JPG/WebP/GIF/SVG) or video (MP4/WebM) are allowed." }, 400);
     const buf = await request.arrayBuffer();
     if (!buf.byteLength) return json({ error: "Empty upload." }, 400);
-    if (buf.byteLength > 4 * 1024 * 1024) return json({ error: "Image too large — max 4 MB." }, 413);
+    const cap = isVideo ? 12 * 1024 * 1024 : 4 * 1024 * 1024;
+    if (buf.byteLength > cap) return json({ error: isVideo ? "Video too large — max 12 MB (use a short, compressed loop, or host on Cloudflare Stream)." : "Image too large — max 4 MB." }, 413);
     const id = randHex(8);
     await env.USERS.put(`asset:${id}`, buf);
     await env.USERS.put(`asset:${id}:ct`, ct);
