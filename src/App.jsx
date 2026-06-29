@@ -448,7 +448,7 @@ export default function App() {
       </header>
 
       {landing ? (
-        <Landing adFree={adFree} onSelect={selectLocation} favorites={auth.user ? (auth.user.favorites || []) : []} />
+        <Landing adFree={adFree} onSelect={selectLocation} favorites={auth.user ? (auth.user.favorites || []) : []} onCookieSettings={() => chooseConsent(null)} />
       ) : (
       <>
       {/* FlightAware-style hero: sponsor takeover when sold, else house hero. */}

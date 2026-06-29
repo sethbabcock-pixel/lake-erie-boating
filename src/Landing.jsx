@@ -93,7 +93,7 @@ function RegionDirectory({ summary, q, onSelect }) {
   );
 }
 
-export default function Landing({ adFree, onSelect, favorites }) {
+export default function Landing({ adFree, onSelect, favorites, onCookieSettings }) {
   const [summary, setSummary] = useState(null);
   const [q, setQ] = useState("");
   useEffect(() => {
@@ -111,6 +111,15 @@ export default function Landing({ adFree, onSelect, favorites }) {
       </Takeover>
       <main className="app">
         <RegionDirectory summary={summary} q={q} onSelect={onSelect} />
+        <footer className="meta">
+          Live data from NOAA/NWS, NDBC buoys, Open-Meteo &amp; Windy. A planning aid — not an official forecast or a navigation tool.
+          <div className="footlinks">
+            <a href="/about" target="_blank" rel="noopener">About</a>
+            <a href="/legal#terms" target="_blank" rel="noopener">Terms</a>
+            <a href="/legal#privacy" target="_blank" rel="noopener">Privacy</a>
+            {onCookieSettings && <button className="linklike" onClick={onCookieSettings}>Cookie settings</button>}
+          </div>
+        </footer>
       </main>
     </>
   );
