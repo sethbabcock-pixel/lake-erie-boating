@@ -228,7 +228,7 @@ export async function handleAuth(request, env, url) {
   // ---- me ----
   if (path === "/auth/me" && request.method === "GET") {
     const u = await userFromRequest(env, request);
-    return json({ user: u ? publicUser(u) : null, billing: !!env.STRIPE_SECRET_KEY });
+    return json({ user: u ? { ...publicUser(u), admin: isAdmin(env, u) } : null, billing: !!env.STRIPE_SECRET_KEY });
   }
 
   // ---- public site config (homepage hero + today's takeover) ----

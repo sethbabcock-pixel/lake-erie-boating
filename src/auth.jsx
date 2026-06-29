@@ -169,6 +169,7 @@ export function Account({ auth }) {
           )}
           {billErr && <div className="modal-err" style={{ margin: "4px 0" }}>{billErr}</div>}
           <div className="acct-menu-sep" />
+          {auth.user.admin && <a className="acct-item" href="/admin" role="menuitem"><IconGear /> Site admin</a>}
           <a className="acct-item" href="/account" role="menuitem"><IconGear /> Account &amp; boat settings</a>
           <button className="acct-item" role="menuitem" onClick={() => { setMenu(false); auth.logout(); }}><IconSignOut /> Sign out</button>
         </div>

@@ -473,6 +473,15 @@ async function run() {
     eq("admin user: missing → 404", (await call(req("GET", "/api/admin/user?email=nobody@example.com", { cookie: admin }), env)).status, 404);
   }
 
+  // 28. /auth/me exposes the admin flag (so the account page can link to /admin)
+  {
+    const env = { USERS: makeKV() }; // no ADMIN_EMAIL → owner default applies
+    const owner = await seedUser(env, "seth.babcock@gmail.com");
+    eq("auth/me: owner admin=true", (await (await call(req("GET", "/auth/me", { cookie: owner }), env)).json()).user.admin, true);
+    const other = await seedUser(env, "guest@example.com");
+    eq("auth/me: non-admin admin=false", (await (await call(req("GET", "/auth/me", { cookie: other }), env)).json()).user.admin, false);
+  }
+
   console.log(results.join("\n"));
   console.log(`\n${passed} passed, ${failed} failed`);
   if (failed) process.exit(1);

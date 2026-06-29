@@ -228,7 +228,7 @@ export default function AccountPage() {
       <header className="acctpage-header">
         <a className="acctpage-back" href="/">← Back to conditions</a>
         <a className="acctpage-brand" href="/">
-          <img className="logo" src={dark ? "/boat-mark-white.png" : "/boat-mark.png"} alt="" width="26" height="26" />
+          <img className="logo" src={dark ? "/boat-mark-white.png" : "/boat-mark.png"} alt="" />
           <span>Should I Boat?</span>
         </a>
       </header>
@@ -256,6 +256,14 @@ export default function AccountPage() {
               {created && <div className="acct-kv"><span>Member since</span><b>{created}</b></div>}
               <div className="acct-kv"><span>Sign-in</span><b>{auth.user.via === "google" ? "Google" : "Email & password"}</b></div>
             </section>
+
+            {auth.user.admin && (
+              <section className="card acct-sec">
+                <h2>Admin</h2>
+                <p className="acct-lead">You have admin access to the site.</p>
+                <a className="cbtn" href="/admin">Open site admin →</a>
+              </section>
+            )}
 
             <SubscriptionCard auth={auth} />
             <BoatCard auth={auth} />

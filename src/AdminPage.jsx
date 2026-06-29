@@ -222,7 +222,7 @@ export default function AdminPage() {
     <div className="acctpage">
       <header className="acctpage-header">
         <a className="acctpage-back" href="/">← Back to site</a>
-        <a className="acctpage-brand" href="/"><img className="logo" src="/boat-mark-white.png" alt="" width="26" height="26" /><span>Should I Boat? · Admin</span></a>
+        <a className="acctpage-brand" href="/"><img className="logo" src="/boat-mark-white.png" alt="" /><span>Should I Boat? · Admin</span></a>
       </header>
 
       <main className="acctpage-main admin-main">
