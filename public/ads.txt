@@ -1,2 +1,2 @@
-# Should I Boat — authorized digital sellers (ads.txt)
+# Should I Boat - authorized digital sellers (ads.txt)
 google.com, pub-9213366013949616, DIRECT, f08c47fec0942fa0
