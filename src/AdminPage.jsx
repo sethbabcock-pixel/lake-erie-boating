@@ -418,6 +418,20 @@ export default function AdminPage() {
               </Field>
             </section>
 
+            {/* Notification recipients */}
+            <section className="card acct-sec" style={{ marginTop: "var(--s5)" }}>
+              <h2>Notification recipients</h2>
+              <p className="acct-note" style={{ marginTop: 0 }}>Who gets emailed on new signups and other admin notices. Comma-separated. Leave blank to default to the owner account.</p>
+              <Field label="Recipient emails" hint="(comma-separated)">
+                <input
+                  className="field"
+                  value={(cfg.notifyEmails || []).join(", ")}
+                  onChange={(e) => setCfg((c) => ({ ...c, notifyEmails: e.target.value.split(",").map((s) => s.trim()).filter(Boolean) }))}
+                  placeholder="you@example.com, ops@example.com"
+                />
+              </Field>
+            </section>
+
             <UsersPanel />
 
             <NotificationsPanel />

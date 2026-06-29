@@ -42,6 +42,7 @@ function makeKV(seed = {}) {
 
 // ── Stripe fetch stub — records calls, returns canned responses ───────────────
 let stripeCalls = [];
+let resendCalls = [];
 let priceResolves = true;
 let subGetCancelState = false; // what a GET subscription retrieve reports
 const makeSub = (cancelAtPeriodEnd) => ({
@@ -52,6 +53,10 @@ const makeSub = (cancelAtPeriodEnd) => ({
 function installFetchStub() {
   globalThis.fetch = async (urlStr, opts = {}) => {
     const u = String(urlStr);
+    if (u.includes("api.resend.com")) {
+      resendCalls.push(JSON.parse(opts.body || "{}"));
+      return jsonResp({ id: "email_123" });
+    }
     const body = opts.body ? Object.fromEntries(new URLSearchParams(opts.body)) : null;
     stripeCalls.push({ url: u, method: opts.method || "GET", body });
     if (u.includes("/v1/checkout/sessions"))
@@ -540,10 +545,10 @@ async function run() {
   {
     const env = { USERS: makeKV() };
     await call(req("POST", "/auth/register", { body: { email: "newbie@example.com", password: "abcdefgh" } }), env);
-    const notifs = [...env.USERS._map.keys()].filter((k) => k.startsWith("admin:notification:"));
+    const notifs = [...env.USERS._map.keys()].filter((k) => k.startsWith("admin:notification:")).map((k) => JSON.parse(env.USERS._map.get(k)));
     check("register: writes a notification", notifs.length >= 1, JSON.stringify(notifs));
-    const rec = JSON.parse(env.USERS._map.get(notifs[0]));
-    eq("register notif: type=signup", rec.type, "signup");
+    const rec = notifs.find((n) => n.type === "signup");
+    check("register notif: signup present", !!rec, JSON.stringify(notifs.map((n) => n.type)));
     eq("register notif: emailSent false without RESEND key", rec.emailSent, false);
   }
 
@@ -563,6 +568,47 @@ async function run() {
     eq("sendReset: google user → 400", (await call(req("POST", "/api/admin/user", { cookie: admin, body: { email: "goog@example.com", action: "sendReset" } }), env)).status, 400);
     // diagnostics surface RESEND presence
     eq("billing-status: resend present", (await (await call(req("GET", "/api/billing-status", { cookie: admin }), env)).json()).resend.present, true);
+  }
+
+  // 34. register sends a welcome email + signup notice when RESEND configured
+  {
+    const env = { USERS: makeKV(), RESEND_API_KEY: "re_x" };
+    resendCalls = [];
+    await call(req("POST", "/auth/register", { body: { email: "welcomeme@example.com", password: "abcdefgh" } }), env);
+    const subjects = resendCalls.map((c) => c.subject);
+    check("register: sends welcome email", subjects.some((s) => /welcome/i.test(s)), JSON.stringify(subjects));
+    const notifs = [...env.USERS._map.keys()].filter((k) => k.startsWith("admin:notification:")).map((k) => JSON.parse(env.USERS._map.get(k)));
+    const welcomeNotif = notifs.find((n) => n.type === "welcome");
+    check("register: welcome notification logged", !!welcomeNotif, JSON.stringify(notifs.map((n) => n.type)));
+    eq("register: welcome email marked sent", welcomeNotif.emailSent, true);
+  }
+
+  // 35. checkout.session.completed sends an ad-free-activated email
+  {
+    const env = { USERS: makeKV(), STRIPE_WEBHOOK_SECRET: "whsec_right", RESEND_API_KEY: "re_x" };
+    await seedUser(env, "newpaid@example.com");
+    resendCalls = [];
+    const evt = { type: "checkout.session.completed", data: { object: { client_reference_id: "newpaid@example.com", customer: "cus_9", subscription: "sub_9" } } };
+    await call(stripeWebhookReq(evt, "whsec_right"), env);
+    check("webhook: sends ad-free email", resendCalls.some((c) => /ad-free/i.test(c.subject)), JSON.stringify(resendCalls.map((c) => c.subject)));
+    const notifs = [...env.USERS._map.keys()].filter((k) => k.startsWith("admin:notification:")).map((k) => JSON.parse(env.USERS._map.get(k)));
+    check("webhook: adfree_activated notification logged", notifs.some((n) => n.type === "adfree_activated"), JSON.stringify(notifs.map((n) => n.type)));
+  }
+
+  // 36. notifyEmails in site config drives admin notification recipients
+  {
+    const env = { USERS: makeKV(), ADMIN_EMAIL: "owner@example.com", RESEND_API_KEY: "re_x" };
+    const admin = await seedUser(env, "owner@example.com");
+    // save config with notifyEmails via the admin PUT (also exercises sanitize)
+    const put = await call(req("PUT", "/api/admin/config", { cookie: admin, body: { config: { notifyEmails: ["Ops@Example.com ", "bad-email", "alerts@example.com"] } } }), env);
+    eq("config PUT: → 200", put.status, 200);
+    const saved = await put.json();
+    eq("notifyEmails: sanitized + lowercased", JSON.stringify(saved.config.notifyEmails), JSON.stringify(["ops@example.com", "alerts@example.com"]));
+    // a new signup should email those recipients, not the owner default
+    resendCalls = [];
+    await call(req("POST", "/auth/register", { body: { email: "fresh@example.com", password: "abcdefgh" } }), env);
+    const signup = resendCalls.find((c) => /signup/i.test(c.subject));
+    check("signup email targets configured recipients", JSON.stringify(signup.to) === JSON.stringify(["ops@example.com", "alerts@example.com"]), JSON.stringify(signup && signup.to));
   }
 
   console.log(results.join("\n"));

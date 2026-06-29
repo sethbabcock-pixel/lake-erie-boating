@@ -76,6 +76,7 @@ const DEFAULT_SITE_CONFIG = {
   hero: { image: "/hero-sunset.svg", video: "", headline: "Should I boat{spot} today?", sub: "", showVerdict: true },
   takeovers: [],
   gam: { networkCode: "" },
+  notifyEmails: [], // recipients for admin notices (signups etc.); empty → owner default
 };
 // Site owner — admin by default so /admin works with no Cloudflare setup.
 // Override (or add more admins) with the ADMIN_EMAIL env var.
@@ -117,6 +118,8 @@ function sanitizeSiteConfig(input) {
     },
     takeovers,
     gam: { networkCode: str(gam.networkCode, 30) },
+    notifyEmails: (Array.isArray(c.notifyEmails) ? c.notifyEmails : []).slice(0, 20)
+      .map((e) => str(e, 200).trim().toLowerCase()).filter((e) => /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(e)),
   };
 }
 
@@ -206,10 +209,14 @@ async function sendEmailViaResend(env, to, subject, htmlBody) {
   } catch (e) { return { ok: false, error: String(e) }; }
 }
 async function adminEmails(env) {
-  const stored = await env.USERS.get("admin:emails", "json").catch(() => null);
-  const list = Array.isArray(stored) && stored.length ? stored : [env.ADMIN_EMAIL || DEFAULT_ADMIN];
+  const cfg = await env.USERS.get("site:config", "json").catch(() => null);
+  const fromCfg = cfg && Array.isArray(cfg.notifyEmails) ? cfg.notifyEmails : [];
+  const legacy = await env.USERS.get("admin:emails", "json").catch(() => null);
+  const list = fromCfg.length ? fromCfg : (Array.isArray(legacy) && legacy.length ? legacy : [env.ADMIN_EMAIL || DEFAULT_ADMIN]);
   return [...new Set(list.map((e) => String(e).trim().toLowerCase()).filter(Boolean))];
 }
+const welcomeHtml = () => `<div style="font-family:system-ui,sans-serif"><h2>Welcome aboard! ⚓</h2><p>Thanks for joining <b>Should I Boat?</b> — your quick GO / CAUTION / NO-GO call for Great Lakes boating.</p><ul><li>Save your favorite launch spots</li><li>Set comfort limits tuned to your boat</li><li>Go ad-free anytime for $2.99/mo</li></ul><p><a href="https://shouldiboat.com" style="display:inline-block;background:#008BA8;color:#fff;padding:10px 18px;border-radius:8px;text-decoration:none">Open Should I Boat?</a></p></div>`;
+const adFreeHtml = () => `<div style="font-family:system-ui,sans-serif"><h2>You're ad-free 🎉</h2><p>Thanks for supporting Should I Boat? — your subscription is active and the ads are gone. You can manage or cancel anytime from your <a href="https://shouldiboat.com/account">account</a>.</p></div>`;
 // Always log a KV notification (success or failure); send the email if given.
 async function notify(env, type, context, mail) {
   let emailSent = false, emailError = null;
@@ -219,7 +226,7 @@ async function notify(env, type, context, mail) {
   }
   const ts = Date.now();
   try {
-    await env.USERS.put(`admin:notification:${ts}`,
+    await env.USERS.put(`admin:notification:${ts}:${randHex(3)}`,
       JSON.stringify({ type, ...context, emailSent, emailError, timestamp: new Date(ts).toISOString() }),
       { expirationTtl: (mail && mail.ttlDays ? mail.ttlDays : 7) * 86400 });
   } catch (e) { /* ignore */ }
@@ -247,11 +254,14 @@ export async function handleAuth(request, env, url, ctx) {
     const user = { id: randHex(8), email: email.trim().toLowerCase(), salt, pass: await pbkdf2(password, salt), created: new Date().toISOString(), prefs: {}, favorites: [], adFree: false, via: "password" };
     await env.USERS.put(emailKey(user.email), JSON.stringify(user));
     const token = await createSession(env, user.email);
-    await runBg(ctx, notify(env, "signup", { email: user.email, via: "password" }, {
-      to: await adminEmails(env), subject: "New Should I Boat? signup",
-      html: `<div style="font-family:system-ui,sans-serif"><h2>New signup</h2><p><b>${user.email}</b> just created an account (email/password).</p></div>`,
-      ttlDays: 30,
-    }));
+    await runBg(ctx, Promise.all([
+      notify(env, "signup", { email: user.email, via: "password" }, {
+        to: await adminEmails(env), subject: "New Should I Boat? signup",
+        html: `<div style="font-family:system-ui,sans-serif"><h2>New signup</h2><p><b>${user.email}</b> just created an account (email/password).</p></div>`,
+        ttlDays: 30,
+      }),
+      notify(env, "welcome", { email: user.email }, { to: user.email, subject: "Welcome to Should I Boat?", html: welcomeHtml(), ttlDays: 7 }),
+    ]));
     return json({ user: publicUser(user) }, 200, { "Set-Cookie": cookie("sib_session", token, SESSION_DAYS * 86400) });
   }
 
@@ -548,11 +558,14 @@ export async function handleAuth(request, env, url, ctx) {
     if (!user) {
       user = { id: randHex(8), email, created: new Date().toISOString(), prefs: {}, favorites: [], adFree: false, via: "google" };
       await env.USERS.put(emailKey(email), JSON.stringify(user));
-      await runBg(ctx, notify(env, "signup", { email, via: "google" }, {
-        to: await adminEmails(env), subject: "New Should I Boat? signup",
-        html: `<div style="font-family:system-ui,sans-serif"><h2>New signup</h2><p><b>${email}</b> just created an account (Google).</p></div>`,
-        ttlDays: 30,
-      }));
+      await runBg(ctx, Promise.all([
+        notify(env, "signup", { email, via: "google" }, {
+          to: await adminEmails(env), subject: "New Should I Boat? signup",
+          html: `<div style="font-family:system-ui,sans-serif"><h2>New signup</h2><p><b>${email}</b> just created an account (Google).</p></div>`,
+          ttlDays: 30,
+        }),
+        notify(env, "welcome", { email }, { to: email, subject: "Welcome to Should I Boat?", html: welcomeHtml(), ttlDays: 7 }),
+      ]));
     }
     const token = await createSession(env, email);
     return new Response(null, { status: 302, headers: { Location: "/", "Set-Cookie": cookie("sib_session", token, SESSION_DAYS * 86400) } });
@@ -675,6 +688,7 @@ export async function handleAuth(request, env, url, ctx) {
       const email = (obj.client_reference_id || obj.customer_email || obj.customer_details?.email || "").toLowerCase();
       if (obj.customer && email) await env.USERS.put(`stripecust:${obj.customer}`, email); // reverse index for later events
       await setAdFree(email, true, { stripeCustomerId: obj.customer || null, stripeSubId: obj.subscription || null });
+      if (email) await runBg(ctx, notify(env, "adfree_activated", { email }, { to: email, subject: "You're ad-free on Should I Boat? 🎉", html: adFreeHtml(), ttlDays: 30 }));
     } else if (event.type === "customer.subscription.updated" || event.type === "customer.subscription.deleted") {
       const email = await env.USERS.get(`stripecust:${obj.customer}`);
       const active = event.type !== "customer.subscription.deleted" && ["active", "trialing", "past_due"].includes(obj.status);
