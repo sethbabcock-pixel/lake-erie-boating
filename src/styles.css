@@ -595,3 +595,13 @@ body.has-takeover .app { background: var(--bg); border-radius: var(--r-lg) var(-
   .loc-grid { grid-template-columns: 1fr 1fr; gap: var(--s2); padding: var(--s3); }
   .region-head { flex-direction: column; align-items: flex-start; gap: var(--s2); }
 }
+
+/* Admin user management */
+.admin-userlist { display: flex; flex-direction: column; gap: 6px; }
+.admin-userrow { display: flex; align-items: center; justify-content: space-between; gap: var(--s3); width: 100%;
+  padding: 10px 12px; border: 1px solid var(--border); border-radius: var(--r-md); background: var(--surface-sunk);
+  color: var(--text); font: inherit; font-size: var(--fs-sm); cursor: pointer; text-align: left; }
+.admin-userrow:hover { border-color: var(--accent); }
+.admin-useremail { font-weight: var(--fw-semibold); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.admin-userdetail .acct-kv:first-of-type { margin-top: var(--s2); }
+.admin-toggles { margin-top: var(--s4); padding-top: var(--s3); border-top: 1px solid var(--border); }

@@ -10,6 +10,8 @@
 //   PUT  /api/favorites {favorites}
 //   GET  /api/site-config           -> public homepage hero + today's takeover
 //   GET/PUT /api/admin/config       -> admin-only site config (hero, takeovers)
+//   GET  /api/admin/users           -> admin-only user search
+//   GET/POST /api/admin/user        -> admin-only user detail + flag toggle
 //   POST /api/admin/upload          -> admin image upload (stored in KV)
 //   GET  /api/asset/<id>            -> serve an uploaded image
 //   GET  /api/billing-status        -> admin-only Stripe config diagnostics
@@ -74,6 +76,19 @@ const DEFAULT_SITE_CONFIG = {
 // Override (or add more admins) with the ADMIN_EMAIL env var.
 const DEFAULT_ADMIN = "seth.babcock@gmail.com";
 const isAdmin = (env, u) => !!(u && u.email === (env.ADMIN_EMAIL || DEFAULT_ADMIN).trim().toLowerCase());
+// Admin views of a user — never expose the password hash/salt or tokens.
+const adminUserSummary = (u) => ({
+  email: u.email, created: u.created || null, via: u.via || "password",
+  adFree: !!u.adFree, hasSubscription: !!u.stripeSubId, favorites: (u.favorites || []).length,
+  boatType: (u.prefs && u.prefs.boatType) || null,
+});
+const adminUserView = (u) => ({
+  ...adminUserSummary(u),
+  stripeCustomerId: u.stripeCustomerId || null,
+  hasStripeCustomer: !!u.stripeCustomerId,
+  prefs: u.prefs || {},
+  favoriteSpots: u.favorites || [],
+});
 function sanitizeSiteConfig(input) {
   const c = input && typeof input === "object" ? input : {};
   const str = (v, n) => (typeof v === "string" ? v.slice(0, n) : "");
@@ -238,6 +253,43 @@ export async function handleAuth(request, env, url) {
     const cfg = sanitizeSiteConfig(body.config);
     await env.USERS.put("site:config", JSON.stringify({ ...cfg, updatedAt: new Date().toISOString(), updatedBy: u.email }));
     return json({ config: cfg, savedAt: new Date().toISOString() });
+  }
+
+  // ---- admin: search users ----
+  if (path === "/api/admin/users" && request.method === "GET") {
+    const u = await userFromRequest(env, request);
+    if (!u) return json({ error: "Not signed in." }, 401);
+    if (!isAdmin(env, u)) return json({ error: "Forbidden — not an admin account." }, 403);
+    const q = (url.searchParams.get("q") || "").trim().toLowerCase();
+    const list = await env.USERS.list({ prefix: "user:", limit: 1000 });
+    // Email is in the key, so we can filter without fetching every record.
+    const matches = list.keys.filter((k) => !q || k.name.slice(5).toLowerCase().includes(q)).slice(0, 200);
+    const users = [];
+    for (const k of matches) {
+      const rec = await env.USERS.get(k.name, "json");
+      if (rec && rec.email) users.push(adminUserSummary(rec));
+    }
+    users.sort((a, b) => (b.created || "").localeCompare(a.created || ""));
+    return json({ users, total: list.keys.length, shown: users.length });
+  }
+
+  // ---- admin: read / update a single user ----
+  if (path === "/api/admin/user" && (request.method === "GET" || request.method === "POST")) {
+    const u = await userFromRequest(env, request);
+    if (!u) return json({ error: "Not signed in." }, 401);
+    if (!isAdmin(env, u)) return json({ error: "Forbidden — not an admin account." }, 403);
+    const email = request.method === "GET"
+      ? (url.searchParams.get("email") || "").trim().toLowerCase()
+      : ((await request.clone().json().catch(() => ({}))).email || "").trim().toLowerCase();
+    if (!email) return json({ error: "email required." }, 400);
+    const target = await env.USERS.get(emailKey(email), "json");
+    if (!target) return json({ user: null }, 404);
+    if (request.method === "GET") return json({ user: adminUserView(target) });
+    // POST: toggle account flags (manual override; does not touch Stripe billing).
+    const body = await request.json().catch(() => ({}));
+    if (typeof body.adFree === "boolean") target.adFree = body.adFree;
+    await env.USERS.put(emailKey(target.email), JSON.stringify(target));
+    return json({ user: adminUserView(target) });
   }
 
   // ---- serve an admin-uploaded image (public) ----

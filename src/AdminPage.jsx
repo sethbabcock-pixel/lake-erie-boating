@@ -91,6 +91,95 @@ function CampaignCard({ c, onChange, onRemove, idx }) {
   );
 }
 
+const fmtDate = (s) => (s ? new Date(s).toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" }) : "—");
+
+function UsersPanel() {
+  const [q, setQ] = useState("");
+  const [results, setResults] = useState(null);
+  const [sel, setSel] = useState(null); // detailed user view
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState("");
+
+  const search = async () => {
+    setBusy(true); setErr(""); setSel(null);
+    try {
+      const r = await fetch(`/api/admin/users?q=${encodeURIComponent(q.trim())}`);
+      const d = await r.json();
+      if (!r.ok) throw new Error(d.error || "Search failed.");
+      setResults(d.users);
+    } catch (e) { setErr(e.message); } finally { setBusy(false); }
+  };
+  const open = async (email) => {
+    setBusy(true); setErr("");
+    try {
+      const r = await fetch(`/api/admin/user?email=${encodeURIComponent(email)}`);
+      const d = await r.json();
+      if (!r.ok) throw new Error(d.error || "Could not load user.");
+      setSel(d.user);
+    } catch (e) { setErr(e.message); } finally { setBusy(false); }
+  };
+  const setFlag = async (patch) => {
+    if (!sel) return;
+    setBusy(true); setErr("");
+    try {
+      const r = await fetch("/api/admin/user", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ email: sel.email, ...patch }) });
+      const d = await r.json();
+      if (!r.ok) throw new Error(d.error || "Update failed.");
+      setSel(d.user);
+      setResults((rs) => rs && rs.map((u) => (u.email === d.user.email ? { ...u, adFree: d.user.adFree } : u)));
+    } catch (e) { setErr(e.message); } finally { setBusy(false); }
+  };
+
+  const p = (sel && sel.prefs) || {};
+  return (
+    <section className="card acct-sec">
+      <h2>Users</h2>
+      <div className="admin-upload" style={{ marginBottom: "var(--s3)" }}>
+        <input className="field" value={q} placeholder="Search by email (blank = recent users)"
+          onChange={(e) => setQ(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") search(); }} />
+        <button className="cbtn admin-uploadbtn" disabled={busy} onClick={search}>{busy ? "…" : "Search"}</button>
+      </div>
+      {err && <div className="modal-err">{err}</div>}
+
+      {results && !sel && (
+        results.length === 0 ? <p className="acct-note">No users found.</p> : (
+          <div className="admin-userlist">
+            {results.map((u) => (
+              <button key={u.email} className="admin-userrow" onClick={() => open(u.email)}>
+                <span className="admin-useremail">{u.email}</span>
+                <span className={`acct-pill ${u.adFree ? "ok" : ""}`}>{u.adFree ? "Ad-free" : "Free"}</span>
+              </button>
+            ))}
+          </div>
+        )
+      )}
+
+      {sel && (
+        <div className="admin-userdetail">
+          <button className="linklike" onClick={() => setSel(null)}>← back to results</button>
+          <div className="acct-kv"><span>Email</span><b>{sel.email}</b></div>
+          <div className="acct-kv"><span>Member since</span><b>{fmtDate(sel.created)}</b></div>
+          <div className="acct-kv"><span>Sign-in</span><b>{sel.via === "google" ? "Google" : "Email & password"}</b></div>
+          <div className="acct-kv"><span>Plan</span><b>{sel.adFree ? "Ad-free" : "Free"}</b></div>
+          <div className="acct-kv"><span>Stripe subscription</span><b>{sel.hasSubscription ? "Active sub on file" : "—"}</b></div>
+          <div className="acct-kv"><span>Stripe customer</span><b>{sel.hasStripeCustomer ? "Yes" : "—"}</b></div>
+          <div className="acct-kv"><span>Boat</span><b>{p.boatName || p.boatType || "—"}</b></div>
+          <div className="acct-kv"><span>Comfort limits</span><b>{[p.maxWaveFt != null ? `${p.maxWaveFt} ft` : null, p.maxWindKt != null ? `${p.maxWindKt} kt` : null].filter(Boolean).join(" · ") || "—"}</b></div>
+          <div className="acct-kv"><span>Favorite spots</span><b>{(sel.favoriteSpots || []).length}</b></div>
+
+          <div className="admin-toggles">
+            <label className="admin-check">
+              <input type="checkbox" checked={!!sel.adFree} disabled={busy} onChange={(e) => setFlag({ adFree: e.target.checked })} />
+              Ad-free (manual override)
+            </label>
+            <p className="acct-note" style={{ marginTop: 0 }}>Grants/revokes ad-free directly. This is a manual flag — it doesn't start or cancel Stripe billing.</p>
+          </div>
+        </div>
+      )}
+    </section>
+  );
+}
+
 export default function AdminPage() {
   const auth = useAuth();
   const [cfg, setCfg] = useState(null);
@@ -200,6 +289,8 @@ export default function AdminPage() {
                 <input className="field" value={cfg.gam.networkCode} onChange={(e) => setCfg((c) => ({ ...c, gam: { ...c.gam, networkCode: e.target.value } }))} placeholder="e.g. 23001234567" />
               </Field>
             </section>
+
+            <UsersPanel />
 
             <div className="admin-savebar">
               <button className="cbtn" disabled={saving} onClick={save}>{saving ? "Saving…" : "Save changes"}</button>

@@ -32,6 +32,10 @@ function makeKV(seed = {}) {
     },
     async put(k, v) { m.set(k, v); }, // store as-is (strings stay strings; ArrayBuffers stay binary)
     async delete(k) { m.delete(k); },
+    async list({ prefix = "", limit = 1000 } = {}) {
+      const keys = [...m.keys()].filter((k) => k.startsWith(prefix)).slice(0, limit).map((name) => ({ name }));
+      return { keys, list_complete: true, cursor: "" };
+    },
     _map: m,
   };
 }
@@ -430,6 +434,43 @@ async function run() {
     await call(req("PUT", "/api/admin/config", { cookie: admin, body: { config: cfg } }), env);
     const pub = await (await call(req("GET", "/api/site-config"), env)).json();
     eq("site-config: hero.video round-trips", pub.hero.video, "/api/asset/vid1");
+  }
+
+  // 27. admin user management: search, view, toggle ad-free; gating
+  {
+    const env = { USERS: makeKV(), ADMIN_EMAIL: "admin@example.com" };
+    const admin = await seedUser(env, "admin@example.com");
+    await seedUser(env, "alice@example.com", { created: "2026-03-01T00:00:00Z", via: "google", prefs: { boatType: "pontoon", maxWaveFt: 2 }, favorites: ["sandusky"] });
+    await seedUser(env, "bob@example.com", { adFree: true, stripeSubId: "sub_1", stripeCustomerId: "cus_1" });
+
+    // gating
+    eq("admin users: signed out → 401", (await call(req("GET", "/api/admin/users"), { USERS: env.USERS })).status, 401);
+    const rando = await seedUser(env, "rando@example.com");
+    eq("admin users: non-admin → 403", (await call(req("GET", "/api/admin/users", { cookie: rando }), env)).status, 403);
+
+    // search by email substring (key-based filter, no full scan)
+    const sr = await call(req("GET", "/api/admin/users?q=alice", { cookie: admin }), env);
+    const found = (await sr.json()).users;
+    check("admin users: search finds match", found.length === 1 && found[0].email === "alice@example.com", JSON.stringify(found));
+    eq("admin users: summary has boatType", found[0].boatType, "pontoon");
+
+    // detail view never leaks secrets
+    const dv = await (await call(req("GET", "/api/admin/user?email=bob@example.com", { cookie: admin }), env)).json();
+    eq("admin user: detail plan", dv.user.adFree, true);
+    eq("admin user: detail hasSubscription", dv.user.hasSubscription, true);
+    const dvStr = JSON.stringify(dv);
+    check("admin user: no password hash leaked", !/\"pass\"|\"salt\"/.test(dvStr), dvStr.slice(0, 80));
+
+    // toggle ad-free off, then on; persists to the real record
+    const off = await (await call(req("POST", "/api/admin/user", { cookie: admin, body: { email: "bob@example.com", adFree: false } }), env)).json();
+    eq("admin user: toggle ad-free off", off.user.adFree, false);
+    const stored = await env.USERS.get("user:bob@example.com", "json");
+    eq("admin user: toggle persists to KV", stored.adFree, false);
+    const on = await (await call(req("POST", "/api/admin/user", { cookie: admin, body: { email: "alice@example.com", adFree: true } }), env)).json();
+    eq("admin user: grant ad-free to free user", on.user.adFree, true);
+
+    // missing user → 404
+    eq("admin user: missing → 404", (await call(req("GET", "/api/admin/user?email=nobody@example.com", { cookie: admin }), env)).status, 404);
   }
 
   console.log(results.join("\n"));
