@@ -1,3 +1,5 @@
 # Local dev secrets for `wrangler dev` (Cloudflare Workers). Copy to .dev.vars and fill in.
-# Resend API key for transactional email (password reset, admin notices).
-RESEND_API_KEY=re_xxxxxxxxxxxxxxxxxxxxxxxx
+# MailerSend API token for transactional email (password reset, admin notices).
+MAILERSEND_API_KEY=mlsn.xxxxxxxxxxxxxxxxxxxxxxxx
+# Optional: override the verified from-address (defaults to noreply@shouldiboat.com).
+# EMAIL_FROM=noreply@shouldiboat.com

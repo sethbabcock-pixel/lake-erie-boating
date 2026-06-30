@@ -3,7 +3,7 @@
 //   POST /auth/register {email,password}
 //   POST /auth/login    {email,password}
 //   POST /auth/logout
-//   POST /auth/forgot {email}        -> email a password-reset link (Resend)
+//   POST /auth/forgot {email}        -> email a password-reset link (MailerSend)
 //   POST /auth/reset  {token,password}-> set a new password, sign in
 //   GET  /auth/me
 //   GET  /auth/google              -> redirect to Google
@@ -196,16 +196,28 @@ function googleRedirectUri(env, url) {
   return `${base}/auth/google/callback`;
 }
 
-// ── Email (Resend) + admin notifications ─────────────────────────────────────
-async function sendEmailViaResend(env, to, subject, htmlBody) {
-  if (!env.RESEND_API_KEY) return { ok: false, error: "RESEND_API_KEY not configured" };
+// ── Email (MailerSend) + admin notifications ─────────────────────────────────
+const EMAIL_FROM = "noreply@shouldiboat.com";
+const EMAIL_FROM_NAME = "Should I Boat?";
+async function sendEmail(env, to, subject, htmlBody) {
+  if (!env.MAILERSEND_API_KEY) return { ok: false, error: "MAILERSEND_API_KEY not configured" };
   try {
-    const resp = await fetch("https://api.resend.com/emails", {
+    const recipients = (Array.isArray(to) ? to : [to]).map((e) => ({ email: e }));
+    const resp = await fetch("https://api.mailersend.com/v1/email", {
       method: "POST",
-      headers: { Authorization: `Bearer ${env.RESEND_API_KEY}`, "Content-Type": "application/json" },
-      body: JSON.stringify({ from: "Should I Boat? <noreply@shouldiboat.com>", to: Array.isArray(to) ? to : [to], subject, html: htmlBody }),
+      headers: {
+        Authorization: `Bearer ${env.MAILERSEND_API_KEY}`,
+        "Content-Type": "application/json",
+        "X-Requested-With": "XMLHttpRequest",
+      },
+      body: JSON.stringify({
+        from: { email: env.EMAIL_FROM || EMAIL_FROM, name: EMAIL_FROM_NAME },
+        to: recipients,
+        subject,
+        html: htmlBody,
+      }),
     });
-    return { ok: resp.ok, error: resp.ok ? null : `Resend ${resp.status}` };
+    return { ok: resp.ok, error: resp.ok ? null : `MailerSend ${resp.status}` };
   } catch (e) { return { ok: false, error: String(e) }; }
 }
 async function adminEmails(env) {
@@ -221,7 +233,7 @@ const adFreeHtml = () => `<div style="font-family:system-ui,sans-serif"><h2>You'
 async function notify(env, type, context, mail) {
   let emailSent = false, emailError = null;
   if (mail && mail.to && mail.subject && mail.html) {
-    const r = await sendEmailViaResend(env, mail.to, mail.subject, mail.html);
+    const r = await sendEmail(env, mail.to, mail.subject, mail.html);
     emailSent = r.ok; emailError = r.error;
   }
   const ts = Date.now();
@@ -613,7 +625,7 @@ export async function handleAuth(request, env, url, ctx) {
       webhookSecret: { present: !!env.STRIPE_WEBHOOK_SECRET },
       priceId,
       priceOverride: !!env.STRIPE_PRICE_ID,
-      resend: { present: !!env.RESEND_API_KEY },
+      email: { present: !!env.MAILERSEND_API_KEY, provider: "mailersend" },
     };
     // If we have a key, resolve the price live so you can confirm it actually
     // exists in this account/mode — the usual "No such price" cause of failures.

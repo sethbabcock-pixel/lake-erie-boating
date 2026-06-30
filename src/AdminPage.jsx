@@ -213,7 +213,7 @@ function UsersPanel() {
       const r = await fetch("/api/admin/user", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ email: sel.email, action: "sendReset" }) });
       const d = await r.json();
       if (!r.ok) throw new Error(d.error || "Could not send.");
-      setResetMsg(d.emailSent ? "Reset link emailed ✓" : `Logged, but email not sent (${d.emailError || "RESEND_API_KEY not set"}).`);
+      setResetMsg(d.emailSent ? "Reset link emailed ✓" : `Logged, but email not sent (${d.emailError || "MAILERSEND_API_KEY not set"}).`);
     } catch (e) { setErr(e.message); } finally { setBusy(false); }
   };
 
