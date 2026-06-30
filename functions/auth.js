@@ -67,7 +67,7 @@ function getCookie(request, name) {
   return m ? m[1] : null;
 }
 
-const publicUser = (u) => ({ email: u.email, prefs: u.prefs || {}, favorites: u.favorites || [], adFree: !!u.adFree, via: u.via || "password", created: u.created || null, hasSubscription: !!u.stripeSubId });
+const publicUser = (u) => ({ email: u.email, prefs: u.prefs || {}, favorites: u.favorites || [], adFree: !!u.adFree, via: u.via || "password", created: u.created || null, hasSubscription: !!u.stripeSubId, emailVerified: u.emailVerified !== false });
 
 // ── Admin-managed site config (homepage hero + sponsor takeovers) ─────────────
 const isoDay = (d = new Date()) =>
@@ -229,6 +229,7 @@ async function adminEmails(env) {
 }
 const welcomeHtml = () => `<div style="font-family:system-ui,sans-serif"><h2>Welcome aboard! ⚓</h2><p>Thanks for joining <b>Should I Boat?</b> — your quick GO / CAUTION / NO-GO call for Great Lakes boating.</p><ul><li>Save your favorite launch spots</li><li>Set comfort limits tuned to your boat</li><li>Go ad-free anytime for $2.99/mo</li></ul><p><a href="https://shouldiboat.com" style="display:inline-block;background:#008BA8;color:#fff;padding:10px 18px;border-radius:8px;text-decoration:none">Open Should I Boat?</a></p></div>`;
 const adFreeHtml = () => `<div style="font-family:system-ui,sans-serif"><h2>You're ad-free 🎉</h2><p>Thanks for supporting Should I Boat? — your subscription is active and the ads are gone. You can manage or cancel anytime from your <a href="https://shouldiboat.com/account">account</a>.</p></div>`;
+const verifyHtml = (link) => `<div style="font-family:system-ui,sans-serif"><h2>Confirm your email ⚓</h2><p>Welcome to <b>Should I Boat?</b> Please confirm this email address to activate your account. This link expires in 24 hours.</p><p><a href="${link}" style="display:inline-block;background:#008BA8;color:#fff;padding:10px 18px;border-radius:8px;text-decoration:none">Confirm email</a></p><p style="color:#667">If you didn't create an account, you can ignore this email.</p></div>`;
 // Always log a KV notification (success or failure); send the email if given.
 async function notify(env, type, context, mail) {
   let emailSent = false, emailError = null;
@@ -263,18 +264,17 @@ export async function handleAuth(request, env, url, ctx) {
     if (!password || password.length < 8) return json({ error: "Password must be at least 8 characters." }, 400);
     if (await env.USERS.get(emailKey(email), "json")) return json({ error: "An account with that email already exists." }, 409);
     const salt = randHex(16);
-    const user = { id: randHex(8), email: email.trim().toLowerCase(), salt, pass: await pbkdf2(password, salt), created: new Date().toISOString(), prefs: {}, favorites: [], adFree: false, via: "password" };
+    const user = { id: randHex(8), email: email.trim().toLowerCase(), salt, pass: await pbkdf2(password, salt), created: new Date().toISOString(), prefs: {}, favorites: [], adFree: false, via: "password", emailVerified: false };
     await env.USERS.put(emailKey(user.email), JSON.stringify(user));
-    const token = await createSession(env, user.email);
-    await runBg(ctx, Promise.all([
-      notify(env, "signup", { email: user.email, via: "password" }, {
-        to: await adminEmails(env), subject: "New Should I Boat? signup",
-        html: `<div style="font-family:system-ui,sans-serif"><h2>New signup</h2><p><b>${user.email}</b> just created an account (email/password).</p></div>`,
-        ttlDays: 30,
-      }),
-      notify(env, "welcome", { email: user.email }, { to: user.email, subject: "Welcome to Should I Boat?", html: welcomeHtml(), ttlDays: 7 }),
-    ]));
-    return json({ user: publicUser(user) }, 200, { "Set-Cookie": cookie("sib_session", token, SESSION_DAYS * 86400) });
+    // Hard email verification for password accounts: no session until confirmed.
+    const vtoken = randHex(20);
+    await env.USERS.put(`verify:${vtoken}`, user.email, { expirationTtl: 86400 });
+    const link = `${siteBase(env, url)}/?verify=${vtoken}`;
+    await runBg(ctx, notify(env, "email_verification", { email: user.email }, {
+      to: user.email, subject: "Confirm your email · Should I Boat?",
+      html: verifyHtml(link), ttlDays: 7,
+    }));
+    return json({ pending: true, email: user.email });
   }
 
   // ---- password reset: request a link ----
@@ -314,6 +314,52 @@ export async function handleAuth(request, env, url, ctx) {
     return json({ user: publicUser(user) }, 200, { "Set-Cookie": cookie("sib_session", sess, SESSION_DAYS * 86400) });
   }
 
+  // ---- email verification: confirm with a token ----
+  if (path === "/auth/verify" && request.method === "POST") {
+    const { token } = await request.json().catch(() => ({}));
+    if (!token) return json({ error: "Invalid verification link." }, 400);
+    const email = await env.USERS.get(`verify:${token}`);
+    if (!email) return json({ error: "This verification link is invalid or has expired." }, 400);
+    const user = await env.USERS.get(emailKey(email), "json");
+    if (!user) return json({ error: "Account not found." }, 404);
+    const firstTime = user.emailVerified === false;
+    user.emailVerified = true;
+    await env.USERS.put(emailKey(email), JSON.stringify(user));
+    await env.USERS.delete(`verify:${token}`);
+    // The account is real now → fire the welcome + admin signup notice once.
+    if (firstTime) {
+      await runBg(ctx, Promise.all([
+        notify(env, "signup", { email, via: "password" }, {
+          to: await adminEmails(env), subject: "New Should I Boat? signup",
+          html: `<div style="font-family:system-ui,sans-serif"><h2>New signup</h2><p><b>${email}</b> just created an account (email/password).</p></div>`,
+          ttlDays: 30,
+        }),
+        notify(env, "welcome", { email }, { to: email, subject: "Welcome to Should I Boat?", html: welcomeHtml(), ttlDays: 7 }),
+      ]));
+    }
+    const sess = await createSession(env, email);
+    return json({ user: publicUser(user) }, 200, { "Set-Cookie": cookie("sib_session", sess, SESSION_DAYS * 86400) });
+  }
+
+  // ---- email verification: resend the link ----
+  if (path === "/auth/resend-verification" && request.method === "POST") {
+    const { email } = await request.json().catch(() => ({}));
+    const e = (email || "").trim().toLowerCase();
+    if (validEmail(e)) {
+      const user = await env.USERS.get(emailKey(e), "json");
+      if (user && user.pass && user.emailVerified === false) {
+        const vtoken = randHex(20);
+        await env.USERS.put(`verify:${vtoken}`, e, { expirationTtl: 86400 });
+        const link = `${siteBase(env, url)}/?verify=${vtoken}`;
+        await runBg(ctx, notify(env, "email_verification", { email: e }, {
+          to: e, subject: "Confirm your email · Should I Boat?",
+          html: verifyHtml(link), ttlDays: 7,
+        }));
+      }
+    }
+    return json({ ok: true }); // don't reveal whether the account exists/needs it
+  }
+
   // ---- login ----
   if (path === "/auth/login" && request.method === "POST") {
     const { email, password } = await request.json().catch(() => ({}));
@@ -322,6 +368,8 @@ export async function handleAuth(request, env, url, ctx) {
     if (!user || !user.pass) return json({ error: "Invalid email or password." }, 401);
     const hash = await pbkdf2(password, user.salt);
     if (!timingSafeEqual(hash, user.pass)) return json({ error: "Invalid email or password." }, 401);
+    if (user.emailVerified === false) // explicit false = newer unverified account (old accounts grandfathered)
+      return json({ error: "Please confirm your email first — check your inbox for the verification link.", needsVerification: true, email: user.email }, 403);
     const token = await createSession(env, user.email);
     return json({ user: publicUser(user) }, 200, { "Set-Cookie": cookie("sib_session", token, SESSION_DAYS * 86400) });
   }
@@ -568,7 +616,7 @@ export async function handleAuth(request, env, url, ctx) {
     if (!email) return new Response("No email from Google", { status: 502 });
     let user = await env.USERS.get(emailKey(email), "json");
     if (!user) {
-      user = { id: randHex(8), email, created: new Date().toISOString(), prefs: {}, favorites: [], adFree: false, via: "google" };
+      user = { id: randHex(8), email, created: new Date().toISOString(), prefs: {}, favorites: [], adFree: false, via: "google", emailVerified: true };
       await env.USERS.put(emailKey(email), JSON.stringify(user));
       await runBg(ctx, Promise.all([
         notify(env, "signup", { email, via: "google" }, {

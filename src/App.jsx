@@ -364,6 +364,7 @@ export default function App() {
   const [active, setActive] = useState(() => urlSpot() || localStorage.getItem("boating.spot") || "sandusky");
   const [landing, setLanding] = useState(() => !urlSpot()); // bare "/" = splash + directory; ?spot=X = detail
   const [resetToken, setResetToken] = useState(() => new URLSearchParams(window.location.search).get("reset") || ""); // password-reset email link
+  const [verifyToken, setVerifyToken] = useState(() => new URLSearchParams(window.location.search).get("verify") || ""); // email-confirmation link
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -576,6 +577,7 @@ export default function App() {
       )}
       <ConsentBanner consent={consent} onChoose={chooseConsent} />
       {resetToken && <AuthModal auth={auth} initialMode="reset" resetToken={resetToken} onClose={() => setResetToken("")} />}
+      {!resetToken && verifyToken && <AuthModal auth={auth} initialMode="verify" verifyToken={verifyToken} onClose={() => setVerifyToken("")} />}
     </>
   );
 }

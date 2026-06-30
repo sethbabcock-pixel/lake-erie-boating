@@ -31,7 +31,7 @@ export function useAuth() {
   const post = async (path, body) => {
     const r = await fetch(path, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body || {}) });
     const d = await r.json().catch(() => ({}));
-    if (!r.ok) throw new Error(d.error || "Something went wrong.");
+    if (!r.ok) { const e = new Error(d.error || "Something went wrong."); e.data = d; e.status = r.status; throw e; }
     return d;
   };
   const go = async (path) => {
@@ -54,7 +54,9 @@ export function useAuth() {
       return d.subscription;
     },
     login: async (email, password) => { const d = await post("/auth/login", { email, password }); setUser(d.user); },
-    register: async (email, password) => { const d = await post("/auth/register", { email, password }); setUser(d.user); },
+    register: async (email, password) => await post("/auth/register", { email, password }), // returns {pending} — verify by email first
+    verifyEmail: async (token) => { const d = await post("/auth/verify", { token }); setUser(d.user); return d; },
+    resendVerification: async (email) => { await post("/auth/resend-verification", { email }); },
     forgotPassword: async (email) => { await post("/auth/forgot", { email }); },
     resetPassword: async (token, password) => { const d = await post("/auth/reset", { token, password }); setUser(d.user); },
     logout: async () => { await post("/auth/logout"); setUser(null); },
@@ -71,30 +73,60 @@ export function useAuth() {
   };
 }
 
-const clearResetParam = () => {
-  try { const u = new URL(window.location.href); if (u.searchParams.has("reset")) { u.searchParams.delete("reset"); window.history.replaceState({}, "", u); } } catch (e) {}
+const clearAuthParams = () => {
+  try {
+    const u = new URL(window.location.href);
+    let changed = false;
+    for (const p of ["reset", "verify"]) if (u.searchParams.has(p)) { u.searchParams.delete(p); changed = true; }
+    if (changed) window.history.replaceState({}, "", u);
+  } catch (e) {}
 };
 
-export function AuthModal({ auth, onClose, initialMode = "login", resetToken = "" }) {
-  const [mode, setMode] = useState(initialMode); // login | register | forgot | reset
+export function AuthModal({ auth, onClose, initialMode = "login", resetToken = "", verifyToken = "" }) {
+  const [mode, setMode] = useState(initialMode); // login | register | forgot | reset | verify
   const [email, setEmail] = useState("");
   const [pw, setPw] = useState("");
   const [err, setErr] = useState("");
   const [busy, setBusy] = useState(false);
-  const [sent, setSent] = useState(false);
-  const close = () => { clearResetParam(); onClose(); };
+  const [sent, setSent] = useState(false); // forgot: reset link sent
+  const [registered, setRegistered] = useState(""); // email we just sent a verify link to
+  const [needsVerify, setNeedsVerify] = useState(""); // login blocked: email needing verification
+  const [resent, setResent] = useState(false);
+  const [verifyDone, setVerifyDone] = useState(false); // verify link confirmed
+  const close = () => { clearAuthParams(); onClose(); };
+
+  // Email-verification link (?verify=token): confirm on open.
+  useEffect(() => {
+    if (mode !== "verify" || !verifyToken) return;
+    let cancelled = false;
+    setBusy(true); setErr("");
+    auth.verifyEmail(verifyToken)
+      .then(() => { if (!cancelled) setVerifyDone(true); })
+      .catch((ex) => { if (!cancelled) setErr(ex.message || "Verification failed."); })
+      .finally(() => { if (!cancelled) setBusy(false); });
+    return () => { cancelled = true; };
+  }, [mode, verifyToken]);
+
+  const resend = async () => {
+    setErr("");
+    try { await auth.resendVerification(needsVerify || registered || email); setResent(true); }
+    catch (ex) { setErr(ex.message); }
+  };
   const submit = async (e) => {
     e.preventDefault();
     setErr(""); setBusy(true);
     try {
-      if (mode === "login") { await auth.login(email, pw); close(); }
-      else if (mode === "register") { await auth.register(email, pw); close(); }
+      if (mode === "login") {
+        try { await auth.login(email, pw); close(); }
+        catch (ex) { if (ex.data?.needsVerification) { setNeedsVerify(ex.data.email || email); setResent(false); } else throw ex; }
+      }
+      else if (mode === "register") { const d = await auth.register(email, pw); setRegistered(d.email || email); }
       else if (mode === "forgot") { await auth.forgotPassword(email); setSent(true); }
       else if (mode === "reset") { await auth.resetPassword(resetToken, pw); close(); }
     } catch (ex) { setErr(ex.message); } finally { setBusy(false); }
   };
-  const title = { login: "Sign in", register: "Create account", forgot: "Reset your password", reset: "Set a new password" }[mode];
-  const social = mode === "login" || mode === "register";
+  const title = { login: "Sign in", register: "Create account", forgot: "Reset your password", reset: "Set a new password", verify: "Confirm your email" }[mode];
+  const social = (mode === "login" || mode === "register") && !needsVerify && !registered;
   // Portal to <body>: the header has a backdrop-filter, which would otherwise
   // make this position:fixed modal anchor to the header box instead of the viewport.
   return createPortal(
@@ -103,7 +135,7 @@ export function AuthModal({ auth, onClose, initialMode = "login", resetToken = "
         <button className="modal-x" onClick={close} aria-label="Close">×</button>
         <h2>{title}</h2>
         {social && <p className="modal-sub">Save your spots & preferences across devices.</p>}
-        {mode === "forgot" && <p className="modal-sub">Enter your email and we'll send a reset link.</p>}
+        {mode === "forgot" && !sent && <p className="modal-sub">Enter your email and we'll send a reset link.</p>}
         {mode === "reset" && <p className="modal-sub">Choose a new password for your account.</p>}
 
         {social && (
@@ -116,7 +148,35 @@ export function AuthModal({ auth, onClose, initialMode = "login", resetToken = "
           </>
         )}
 
-        {mode === "forgot" && sent ? (
+        {mode === "verify" ? (
+          verifyDone ? (
+            <>
+              <p className="modal-sub">Your email is confirmed — you're signed in. 🎉</p>
+              <button className="cbtn modal-submit" onClick={close}>Continue</button>
+            </>
+          ) : busy ? (
+            <p className="modal-sub">Confirming your email…</p>
+          ) : (
+            <>
+              {err && <div className="modal-err">{err}</div>}
+              <p className="modal-sub">That link didn't work — it may have expired. Enter your email to get a fresh one.</p>
+              <input className="field" type="email" placeholder="Email" value={email} onChange={(e) => setEmail(e.target.value)} autoComplete="email" />
+              {resent ? <p className="modal-sub">Sent — check your inbox.</p> : <button className="cbtn modal-submit" onClick={resend} disabled={!email}>Resend verification</button>}
+            </>
+          )
+        ) : registered ? (
+          <>
+            <p className="modal-sub">Almost there — we sent a confirmation link to <b>{registered}</b>. Click it to activate your account, then sign in. (Check spam if you don't see it.)</p>
+            {err && <div className="modal-err">{err}</div>}
+            {resent ? <p className="modal-sub">Sent again ✓</p> : <button className="linklike" onClick={resend}>Resend email</button>}
+          </>
+        ) : needsVerify ? (
+          <>
+            <p className="modal-sub">Please confirm your email first. We sent a link to <b>{needsVerify}</b> when you signed up.</p>
+            {err && <div className="modal-err">{err}</div>}
+            {resent ? <p className="modal-sub">A fresh link is on its way ✓</p> : <button className="cbtn modal-submit" onClick={resend}>Resend verification email</button>}
+          </>
+        ) : mode === "forgot" && sent ? (
           <p className="modal-sub">If an account exists for that email, a reset link is on its way. Check your inbox (and spam).</p>
         ) : (
           <form onSubmit={submit}>
@@ -134,12 +194,13 @@ export function AuthModal({ auth, onClose, initialMode = "login", resetToken = "
         )}
 
         <div className="modal-switch">
-          {mode === "login" && <>
+          {mode === "login" && !needsVerify && <>
             <button onClick={() => { setErr(""); setMode("forgot"); setSent(false); }}>Forgot password?</button>
             <span style={{ margin: "0 6px", color: "var(--text-faint)" }}>·</span>
             No account? <button onClick={() => { setErr(""); setMode("register"); }}>Create one</button>
           </>}
-          {mode === "register" && <>Have an account? <button onClick={() => { setErr(""); setMode("login"); }}>Sign in</button></>}
+          {mode === "register" && !registered && <>Have an account? <button onClick={() => { setErr(""); setMode("login"); }}>Sign in</button></>}
+          {(needsVerify || registered) && <button onClick={() => { setErr(""); setResent(false); setNeedsVerify(""); setRegistered(""); setMode("login"); }}>Back to sign in</button>}
           {(mode === "forgot" || mode === "reset") && <button onClick={() => { setErr(""); setSent(false); setMode("login"); }}>Back to sign in</button>}
         </div>
       </div>

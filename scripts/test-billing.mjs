@@ -541,15 +541,20 @@ async function run() {
     check("reset: password changed", (await env.USERS.get("user:reset.me@example.com", "json")).pass !== "oldhash");
   }
 
-  // 32. signup writes an admin notification (KV fallback even with no email key)
+  // 32. register requires email verification: no session, verify token + verification notice, no signup yet
   {
     const env = { USERS: makeKV() };
-    await call(req("POST", "/auth/register", { body: { email: "newbie@example.com", password: "abcdefgh" } }), env);
+    const r = await call(req("POST", "/auth/register", { body: { email: "newbie@example.com", password: "abcdefgh" } }), env);
+    eq("register: pending (no auto-login)", (await r.json()).pending, true);
+    check("register: no session cookie", !(r.headers.get("Set-Cookie") || "").includes("sib_session="), r.headers.get("Set-Cookie"));
+    check("register: verify token created", [...env.USERS._map.keys()].some((k) => k.startsWith("verify:")));
+    const u = await env.USERS.get("user:newbie@example.com", "json");
+    eq("register: account starts unverified", u.emailVerified, false);
     const notifs = [...env.USERS._map.keys()].filter((k) => k.startsWith("admin:notification:")).map((k) => JSON.parse(env.USERS._map.get(k)));
-    check("register: writes a notification", notifs.length >= 1, JSON.stringify(notifs));
-    const rec = notifs.find((n) => n.type === "signup");
-    check("register notif: signup present", !!rec, JSON.stringify(notifs.map((n) => n.type)));
+    const rec = notifs.find((n) => n.type === "email_verification");
+    check("register notif: email_verification present", !!rec, JSON.stringify(notifs.map((n) => n.type)));
     eq("register notif: emailSent false without email key", rec.emailSent, false);
+    check("register: no signup notice until verified", !notifs.some((n) => n.type === "signup"));
   }
 
   // 33. admin notifications endpoint + sendReset action + email diagnostic
@@ -570,17 +575,24 @@ async function run() {
     eq("billing-status: email present", (await (await call(req("GET", "/api/billing-status", { cookie: admin }), env)).json()).email.present, true);
   }
 
-  // 34. register sends a welcome email + signup notice when email is configured
+  // 34. register sends a verification email; verifying it sends welcome + signs in
   {
     const env = { USERS: makeKV(), MAILERSEND_API_KEY: "ms_x" };
     emailCalls = [];
     await call(req("POST", "/auth/register", { body: { email: "welcomeme@example.com", password: "abcdefgh" } }), env);
-    const subjects = emailCalls.map((c) => c.subject);
-    check("register: sends welcome email", subjects.some((s) => /welcome/i.test(s)), JSON.stringify(subjects));
-    const notifs = [...env.USERS._map.keys()].filter((k) => k.startsWith("admin:notification:")).map((k) => JSON.parse(env.USERS._map.get(k)));
-    const welcomeNotif = notifs.find((n) => n.type === "welcome");
-    check("register: welcome notification logged", !!welcomeNotif, JSON.stringify(notifs.map((n) => n.type)));
-    eq("register: welcome email marked sent", welcomeNotif.emailSent, true);
+    check("register: sends verification email", emailCalls.some((c) => /confirm your email/i.test(c.subject)), JSON.stringify(emailCalls.map((c) => c.subject)));
+    check("register: does NOT send welcome yet", !emailCalls.some((c) => /welcome/i.test(c.subject)));
+    const vkey = [...env.USERS._map.keys()].find((k) => k.startsWith("verify:"));
+    const token = vkey.slice("verify:".length);
+    emailCalls = [];
+    const vr = await call(req("POST", "/auth/verify", { body: { token } }), env);
+    eq("verify: → 200", vr.status, 200);
+    eq("verify: returns verified user", (await vr.json()).user.emailVerified, true);
+    check("verify: sets session cookie", (vr.headers.get("Set-Cookie") || "").includes("sib_session="));
+    check("verify: sends welcome email", emailCalls.some((c) => /welcome/i.test(c.subject)), JSON.stringify(emailCalls.map((c) => c.subject)));
+    eq("verify: persists emailVerified", (await env.USERS.get("user:welcomeme@example.com", "json")).emailVerified, true);
+    check("verify: token consumed", !env.USERS._map.has(vkey));
+    eq("verify: bad token → 400", (await call(req("POST", "/auth/verify", { body: { token: "nope" } }), env)).status, 400);
   }
 
   // 35. checkout.session.completed sends an ad-free-activated email
@@ -604,12 +616,50 @@ async function run() {
     eq("config PUT: → 200", put.status, 200);
     const saved = await put.json();
     eq("notifyEmails: sanitized + lowercased", JSON.stringify(saved.config.notifyEmails), JSON.stringify(["ops@example.com", "alerts@example.com"]));
-    // a new signup should email those recipients, not the owner default
-    emailCalls = [];
+    // a verified signup should email the configured recipients, not the owner default
     await call(req("POST", "/auth/register", { body: { email: "fresh@example.com", password: "abcdefgh" } }), env);
+    const token = [...env.USERS._map.keys()].find((k) => k.startsWith("verify:")).slice("verify:".length);
+    emailCalls = [];
+    await call(req("POST", "/auth/verify", { body: { token } }), env);
     const signup = emailCalls.find((c) => /signup/i.test(c.subject));
     const signupTo = (signup.to || []).map((r) => r.email);
     check("signup email targets configured recipients", JSON.stringify(signupTo) === JSON.stringify(["ops@example.com", "alerts@example.com"]), JSON.stringify(signup && signup.to));
+  }
+
+  // 37. login is gated on verification; old accounts (no flag) are grandfathered in
+  {
+    const env = { USERS: makeKV() };
+    await call(req("POST", "/auth/register", { body: { email: "unv@example.com", password: "abcdefgh" } }), env);
+    const blocked = await call(req("POST", "/auth/login", { body: { email: "unv@example.com", password: "abcdefgh" } }), env);
+    eq("login unverified → 403", blocked.status, 403);
+    eq("login unverified: needsVerification flag", (await blocked.json()).needsVerification, true);
+    // verify, then login succeeds
+    const token = [...env.USERS._map.keys()].find((k) => k.startsWith("verify:")).slice("verify:".length);
+    await call(req("POST", "/auth/verify", { body: { token } }), env);
+    eq("login after verify → 200", (await call(req("POST", "/auth/login", { body: { email: "unv@example.com", password: "abcdefgh" } }), env)).status, 200);
+    // grandfather: an account with no emailVerified field logs in fine
+    const old = await env.USERS.get("user:unv@example.com", "json");
+    delete old.emailVerified;
+    await env.USERS.put("user:unv@example.com", JSON.stringify(old));
+    eq("login grandfathered (no flag) → 200", (await call(req("POST", "/auth/login", { body: { email: "unv@example.com", password: "abcdefgh" } }), env)).status, 200);
+  }
+
+  // 38. resend-verification re-issues a token for unverified accounts only (no enumeration)
+  {
+    const env = { USERS: makeKV(), MAILERSEND_API_KEY: "ms_x" };
+    await call(req("POST", "/auth/register", { body: { email: "again@example.com", password: "abcdefgh" } }), env);
+    // consume the original token so we can detect a fresh one
+    for (const k of [...env.USERS._map.keys()].filter((k) => k.startsWith("verify:"))) env.USERS._map.delete(k);
+    emailCalls = [];
+    const rr = await call(req("POST", "/auth/resend-verification", { body: { email: "again@example.com" } }), env);
+    eq("resend: → 200", rr.status, 200);
+    check("resend: issues a fresh token", [...env.USERS._map.keys()].some((k) => k.startsWith("verify:")));
+    check("resend: sends verification email", emailCalls.some((c) => /confirm your email/i.test(c.subject)));
+    // unknown / already-verified address: still 200, but no token, no email
+    emailCalls = [];
+    const rr2 = await call(req("POST", "/auth/resend-verification", { body: { email: "ghost@example.com" } }), env);
+    eq("resend unknown: → 200 (no enumeration)", rr2.status, 200);
+    check("resend unknown: no email sent", emailCalls.length === 0);
   }
 
   console.log(results.join("\n"));
