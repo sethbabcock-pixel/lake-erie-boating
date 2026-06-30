@@ -662,6 +662,47 @@ async function run() {
     check("resend unknown: no email sent", emailCalls.length === 0);
   }
 
+  // 39. unsubscribe: welcome email carries a token; endpoint opts out / resubscribes
+  {
+    const env = { USERS: makeKV(), MAILERSEND_API_KEY: "ms_x" };
+    await call(req("POST", "/auth/register", { body: { email: "unsub@example.com", password: "abcdefgh" } }), env);
+    const vtok = [...env.USERS._map.keys()].find((k) => k.startsWith("verify:")).slice("verify:".length);
+    emailCalls = [];
+    await call(req("POST", "/auth/verify", { body: { token: vtok } }), env);
+    const u = await env.USERS.get("user:unsub@example.com", "json");
+    check("welcome: user has unsub token", !!u.unsubToken);
+    eq("welcome: reverse index resolves to email", await env.USERS.get(`unsub:${u.unsubToken}`), "unsub@example.com");
+    const welcome = emailCalls.find((c) => /welcome/i.test(c.subject));
+    check("welcome email includes unsubscribe link", /\/unsubscribe\?u=/.test(welcome.html), welcome && welcome.html.slice(-160));
+    // GET unsubscribe → opts out + serves an HTML page
+    const us = await call(req("GET", `/unsubscribe?u=${u.unsubToken}`), env);
+    eq("unsubscribe GET → 200", us.status, 200);
+    check("unsubscribe GET → HTML", (us.headers.get("Content-Type") || "").includes("text/html"));
+    eq("unsubscribe sets emailOptOut", (await env.USERS.get("user:unsub@example.com", "json")).emailOptOut, true);
+    // resubscribe
+    await call(req("GET", `/unsubscribe?u=${u.unsubToken}&action=resubscribe`), env);
+    eq("resubscribe clears emailOptOut", (await env.USERS.get("user:unsub@example.com", "json")).emailOptOut, false);
+    // one-click POST (RFC 8058) opts out
+    await call(req("POST", `/unsubscribe?u=${u.unsubToken}`), env);
+    eq("one-click POST opts out", (await env.USERS.get("user:unsub@example.com", "json")).emailOptOut, true);
+    // bad token → still a 200 page, no crash
+    eq("unsubscribe bad token → 200", (await call(req("GET", "/unsubscribe?u=nope"), env)).status, 200);
+  }
+
+  // 40. opted-out users don't get the welcome email (essential mail still flows)
+  {
+    const env = { USERS: makeKV(), MAILERSEND_API_KEY: "ms_x" };
+    await call(req("POST", "/auth/register", { body: { email: "quiet@example.com", password: "abcdefgh" } }), env);
+    // pre-set opt-out before verifying
+    const pre = await env.USERS.get("user:quiet@example.com", "json");
+    pre.emailOptOut = true; await env.USERS.put("user:quiet@example.com", JSON.stringify(pre));
+    const vtok = [...env.USERS._map.keys()].find((k) => k.startsWith("verify:")).slice("verify:".length);
+    emailCalls = [];
+    await call(req("POST", "/auth/verify", { body: { token: vtok } }), env);
+    check("opted-out: no welcome email sent", !emailCalls.some((c) => /welcome/i.test(c.subject)), JSON.stringify(emailCalls.map((c) => c.subject)));
+    check("opted-out: signup notice still sent", emailCalls.some((c) => /signup/i.test(c.subject)));
+  }
+
   console.log(results.join("\n"));
   console.log(`\n${passed} passed, ${failed} failed`);
   if (failed) process.exit(1);

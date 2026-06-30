@@ -12,7 +12,7 @@ export default {
     const url = new URL(request.url);
     const p = url.pathname;
     if (p.startsWith("/marine/")) return onRequest({ request, env, ctx });
-    if (p.startsWith("/auth/") || p.startsWith("/api/") || p.startsWith("/stripe/")) return handleAuth(request, env, url, ctx);
+    if (p.startsWith("/auth/") || p.startsWith("/api/") || p.startsWith("/stripe/") || p === "/unsubscribe") return handleAuth(request, env, url, ctx);
     // SPA fallback: a non-asset, non-API navigation (e.g. /account) should serve
     // the app shell so client-side routing and direct refreshes work, not 404.
     // Real asset 404s (paths with a file extension) still 404.

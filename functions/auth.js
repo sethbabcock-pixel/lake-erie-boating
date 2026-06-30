@@ -67,7 +67,7 @@ function getCookie(request, name) {
   return m ? m[1] : null;
 }
 
-const publicUser = (u) => ({ email: u.email, prefs: u.prefs || {}, favorites: u.favorites || [], adFree: !!u.adFree, via: u.via || "password", created: u.created || null, hasSubscription: !!u.stripeSubId, emailVerified: u.emailVerified !== false });
+const publicUser = (u) => ({ email: u.email, prefs: u.prefs || {}, favorites: u.favorites || [], adFree: !!u.adFree, via: u.via || "password", created: u.created || null, hasSubscription: !!u.stripeSubId, emailVerified: u.emailVerified !== false, emailOptOut: !!u.emailOptOut });
 
 // ── Admin-managed site config (homepage hero + sponsor takeovers) ─────────────
 const isoDay = (d = new Date()) =>
@@ -227,9 +227,29 @@ async function adminEmails(env) {
   const list = fromCfg.length ? fromCfg : (Array.isArray(legacy) && legacy.length ? legacy : [env.ADMIN_EMAIL || DEFAULT_ADMIN]);
   return [...new Set(list.map((e) => String(e).trim().toLowerCase()).filter(Boolean))];
 }
-const welcomeHtml = () => `<div style="font-family:system-ui,sans-serif"><h2>Welcome aboard! ⚓</h2><p>Thanks for joining <b>Should I Boat?</b> — your quick GO / CAUTION / NO-GO call for Great Lakes boating.</p><ul><li>Save your favorite launch spots</li><li>Set comfort limits tuned to your boat</li><li>Go ad-free anytime for $2.99/mo</li></ul><p><a href="https://shouldiboat.com" style="display:inline-block;background:#008BA8;color:#fff;padding:10px 18px;border-radius:8px;text-decoration:none">Open Should I Boat?</a></p></div>`;
+// Footer for non-essential (relationship/marketing) email only — NOT for
+// transactional mail like verification, password reset, or receipts.
+const emailFooter = (unsubUrl) => unsubUrl ? `<p style="color:#99a;font-size:12px;margin-top:24px;font-family:system-ui,sans-serif">You're receiving this because you have a Should I Boat? account. <a href="${unsubUrl}" style="color:#99a">Unsubscribe from non-essential emails</a>.</p>` : "";
+const welcomeHtml = (unsubUrl) => `<div style="font-family:system-ui,sans-serif"><h2>Welcome aboard! ⚓</h2><p>Thanks for joining <b>Should I Boat?</b> — your quick GO / CAUTION / NO-GO call for Great Lakes boating.</p><ul><li>Save your favorite launch spots</li><li>Set comfort limits tuned to your boat</li><li>Go ad-free anytime for $2.99/mo</li></ul><p><a href="https://shouldiboat.com" style="display:inline-block;background:#008BA8;color:#fff;padding:10px 18px;border-radius:8px;text-decoration:none">Open Should I Boat?</a></p></div>${emailFooter(unsubUrl)}`;
 const adFreeHtml = () => `<div style="font-family:system-ui,sans-serif"><h2>You're ad-free 🎉</h2><p>Thanks for supporting Should I Boat? — your subscription is active and the ads are gone. You can manage or cancel anytime from your <a href="https://shouldiboat.com/account">account</a>.</p></div>`;
 const verifyHtml = (link) => `<div style="font-family:system-ui,sans-serif"><h2>Confirm your email ⚓</h2><p>Welcome to <b>Should I Boat?</b> Please confirm this email address to activate your account. This link expires in 24 hours.</p><p><a href="${link}" style="display:inline-block;background:#008BA8;color:#fff;padding:10px 18px;border-radius:8px;text-decoration:none">Confirm email</a></p><p style="color:#667">If you didn't create an account, you can ignore this email.</p></div>`;
+
+// Stable per-user unsubscribe token + reverse index (created lazily, never expires).
+async function ensureUnsubToken(env, user) {
+  if (user.unsubToken) return user.unsubToken;
+  const t = randHex(16);
+  user.unsubToken = t;
+  await env.USERS.put(emailKey(user.email), JSON.stringify(user));
+  await env.USERS.put(`unsub:${t}`, user.email);
+  return t;
+}
+// Send the (non-essential) welcome email, honoring the opt-out flag.
+async function welcomeNotify(env, user, url) {
+  if (user.emailOptOut) return { emailSent: false, emailError: "opted_out" };
+  const t = await ensureUnsubToken(env, user);
+  const unsubUrl = `${siteBase(env, url)}/unsubscribe?u=${t}`;
+  return notify(env, "welcome", { email: user.email }, { to: user.email, subject: "Welcome to Should I Boat?", html: welcomeHtml(unsubUrl), ttlDays: 7 });
+}
 // Always log a KV notification (success or failure); send the email if given.
 async function notify(env, type, context, mail) {
   let emailSent = false, emailError = null;
@@ -334,7 +354,7 @@ export async function handleAuth(request, env, url, ctx) {
           html: `<div style="font-family:system-ui,sans-serif"><h2>New signup</h2><p><b>${email}</b> just created an account (email/password).</p></div>`,
           ttlDays: 30,
         }),
-        notify(env, "welcome", { email }, { to: email, subject: "Welcome to Should I Boat?", html: welcomeHtml(), ttlDays: 7 }),
+        welcomeNotify(env, user, url),
       ]));
     }
     const sess = await createSession(env, email);
@@ -358,6 +378,33 @@ export async function handleAuth(request, env, url, ctx) {
       }
     }
     return json({ ok: true }); // don't reveal whether the account exists/needs it
+  }
+
+  // ---- unsubscribe from non-essential email (token-based, no login) ----
+  if (path === "/unsubscribe" && (request.method === "GET" || request.method === "POST")) {
+    const t = url.searchParams.get("u") || "";
+    const email = t ? await env.USERS.get(`unsub:${t}`) : null;
+    const setOptOut = async (val) => {
+      if (!email) return;
+      const u = await env.USERS.get(emailKey(email), "json");
+      if (u) { u.emailOptOut = val; await env.USERS.put(emailKey(email), JSON.stringify(u)); }
+    };
+    // One-click unsubscribe (RFC 8058): mail clients POST here automatically.
+    if (request.method === "POST") { await setOptOut(true); return new Response("Unsubscribed", { status: 200 }); }
+    // Human visit from the email footer link.
+    const resub = url.searchParams.get("action") === "resubscribe";
+    let inner;
+    if (!email) {
+      inner = `<h1>Link expired</h1><p>This unsubscribe link is no longer valid. You can manage email preferences from your <a href="/account">account</a>.</p>`;
+    } else if (resub) {
+      await setOptOut(false);
+      inner = `<h1>You're resubscribed ⚓</h1><p>You'll receive occasional non-essential emails again. Account &amp; security emails are always sent.</p><p><a class="btn" href="/">Back to Should I Boat?</a></p>`;
+    } else {
+      await setOptOut(true);
+      inner = `<h1>You're unsubscribed</h1><p>We won't send you non-essential emails. Account &amp; security messages (verification, password resets, receipts) are still delivered.</p><p>Changed your mind? <a href="/unsubscribe?u=${t}&amp;action=resubscribe">Resubscribe</a>.</p><p><a class="btn" href="/">Back to Should I Boat?</a></p>`;
+    }
+    const page = `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex"><title>Email preferences · Should I Boat?</title><style>body{font-family:system-ui,-apple-system,sans-serif;background:#0b1d2a;color:#e7eef4;margin:0;display:flex;min-height:100vh;align-items:center;justify-content:center;padding:24px}.card{background:#10293b;border:1px solid #1d3a4f;border-radius:14px;max-width:480px;padding:32px;box-shadow:0 8px 40px rgba(0,0,0,.35)}h1{margin:0 0 12px;font-size:22px}p{line-height:1.55;color:#b9c7d4}a{color:#36b3cf}.btn{display:inline-block;margin-top:16px;background:#008BA8;color:#fff;padding:10px 18px;border-radius:8px;text-decoration:none}</style></head><body><div class="card">${inner}</div></body></html>`;
+    return new Response(page, { status: 200, headers: { "Content-Type": "text/html; charset=utf-8" } });
   }
 
   // ---- login ----
@@ -624,7 +671,7 @@ export async function handleAuth(request, env, url, ctx) {
           html: `<div style="font-family:system-ui,sans-serif"><h2>New signup</h2><p><b>${email}</b> just created an account (Google).</p></div>`,
           ttlDays: 30,
         }),
-        notify(env, "welcome", { email }, { to: email, subject: "Welcome to Should I Boat?", html: welcomeHtml(), ttlDays: 7 }),
+        welcomeNotify(env, user, url),
       ]));
     }
     const token = await createSession(env, email);
