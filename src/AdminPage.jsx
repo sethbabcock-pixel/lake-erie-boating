@@ -272,6 +272,39 @@ function UsersPanel() {
   );
 }
 
+function DiagnosticsPanel() {
+  const [data, setData] = useState(null);
+  const [err, setErr] = useState("");
+  const load = async () => {
+    setErr("");
+    try {
+      const r = await fetch("/api/billing-status");
+      const d = await r.json();
+      if (!r.ok) throw new Error(d.error || "Could not load.");
+      setData(d);
+    } catch (e) { setErr(e.message); }
+  };
+  useEffect(() => { load(); }, []);
+  const Dot = ({ ok }) => <b className={ok ? "notif-ok" : "notif-off"}>{ok ? "✓ configured" : "✕ not set"}</b>;
+  return (
+    <section className="card acct-sec">
+      <div className="card-head">
+        <h2>Diagnostics</h2>
+        {data && <button className="linklike" onClick={load}>↻ refresh</button>}
+      </div>
+      <p className="acct-note" style={{ marginTop: 0 }}>Live check of the secrets this Worker can see. Set them in Cloudflare → Worker → Settings → Variables and Secrets.</p>
+      {err && <div className="modal-err">{err}</div>}
+      {data && (
+        <>
+          <div className="acct-kv"><span>Email ({data.email?.provider || "mailersend"})</span><Dot ok={data.email?.present} /></div>
+          <div className="acct-kv"><span>Stripe secret key{data.secretKey?.present ? ` · ${data.secretKey.mode}` : ""}</span><Dot ok={data.secretKey?.present} /></div>
+          <div className="acct-kv"><span>Stripe webhook secret</span><Dot ok={data.webhookSecret?.present} /></div>
+        </>
+      )}
+    </section>
+  );
+}
+
 function NotificationsPanel() {
   const [items, setItems] = useState(null);
   const [err, setErr] = useState("");
@@ -433,6 +466,8 @@ export default function AdminPage() {
             </section>
 
             <UsersPanel />
+
+            <DiagnosticsPanel />
 
             <NotificationsPanel />
 
