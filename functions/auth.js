@@ -45,16 +45,37 @@ function timingSafeEqual(a, b) {
   return m === 0;
 }
 
-async function pbkdf2(password, saltHex) {
+// PBKDF2 work factor. Raised from the original 100k; existing hashes record
+// their own iteration count (passIter) and are transparently re-hashed to this
+// value on the user's next successful login.
+const PBKDF2_ITERATIONS = 300000;
+const LEGACY_PBKDF2_ITERATIONS = 100000;
+async function pbkdf2(password, saltHex, iterations = PBKDF2_ITERATIONS) {
   const salt = hexToBuf(saltHex);
   const key = await crypto.subtle.importKey("raw", enc.encode(password), "PBKDF2", false, ["deriveBits"]);
-  const bits = await crypto.subtle.deriveBits({ name: "PBKDF2", salt, iterations: 100000, hash: "SHA-256" }, key, 256);
+  const bits = await crypto.subtle.deriveBits({ name: "PBKDF2", salt, iterations, hash: "SHA-256" }, key, 256);
   return bufToHex(bits);
 }
 
+const htmlEscape = (s) => String(s == null ? "" : s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 const emailKey = (email) => `user:${email.trim().toLowerCase()}`;
 const sessKey = (token) => `sess:${token}`;
-const validEmail = (e) => typeof e === "string" && /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(e);
+// Reject control chars, HTML/quote metacharacters, and over-long addresses.
+const validEmail = (e) => typeof e === "string" && e.length <= 254 && /^[^@\s<>"'`]+@[^@\s<>"'`]+\.[^@\s<>"'`]+$/.test(e);
+// Best-effort per-IP rate limit (fixed window in KV). Fails open so a KV hiccup
+// never locks people out of auth. Cloudflare WAF rate-limit rules are the edge
+// backstop; this is defense-in-depth against brute force.
+async function rateLimit(env, request, action, max, windowSec) {
+  try {
+    const ip = request.headers.get("CF-Connecting-IP") || request.headers.get("X-Forwarded-For") || "unknown";
+    const bucket = Math.floor(Date.now() / 1000 / windowSec);
+    const key = `rl:${action}:${ip}:${bucket}`;
+    const n = Number(await env.USERS.get(key)) || 0;
+    if (n >= max) return false;
+    await env.USERS.put(key, String(n + 1), { expirationTtl: windowSec * 2 });
+    return true;
+  } catch (e) { return true; }
+}
 // Password policy: 8+ chars with a letter, a number, and a special character.
 // Returns an error string, or null if the password is acceptable.
 function passwordProblem(pw) {
@@ -317,12 +338,13 @@ export async function handleAuth(request, env, url, ctx) {
   try {
   // ---- register ----
   if (path === "/auth/register" && request.method === "POST") {
+    if (!(await rateLimit(env, request, "register", 12, 600))) return json({ error: "Too many attempts. Please wait a few minutes and try again." }, 429);
     const { email, password } = await request.json().catch(() => ({}));
     if (!validEmail(email)) return json({ error: "Enter a valid email." }, 400);
     { const pwErr = passwordProblem(password); if (pwErr) return json({ error: pwErr }, 400); }
     if (await env.USERS.get(emailKey(email), "json")) return json({ error: "An account with that email already exists." }, 409);
     const salt = randHex(16);
-    const user = { id: randHex(8), email: email.trim().toLowerCase(), salt, pass: await pbkdf2(password, salt), created: new Date().toISOString(), prefs: {}, favorites: [], adFree: false, via: "password", emailVerified: false };
+    const user = { id: randHex(8), email: email.trim().toLowerCase(), salt, pass: await pbkdf2(password, salt), passIter: PBKDF2_ITERATIONS, created: new Date().toISOString(), prefs: {}, favorites: [], adFree: false, via: "password", emailVerified: false };
     await env.USERS.put(emailKey(user.email), JSON.stringify(user));
     // Hard email verification for password accounts: no session until confirmed.
     const vtoken = randHex(20);
@@ -337,6 +359,7 @@ export async function handleAuth(request, env, url, ctx) {
 
   // ---- password reset: request a link ----
   if (path === "/auth/forgot" && request.method === "POST") {
+    if (!(await rateLimit(env, request, "forgot", 10, 600))) return json({ error: "Too many requests. Please wait a few minutes and try again." }, 429);
     const { email } = await request.json().catch(() => ({}));
     const e = (email || "").trim().toLowerCase();
     if (validEmail(e)) {
@@ -357,6 +380,7 @@ export async function handleAuth(request, env, url, ctx) {
 
   // ---- password reset: set a new password with a token ----
   if (path === "/auth/reset" && request.method === "POST") {
+    if (!(await rateLimit(env, request, "reset", 15, 600))) return json({ error: "Too many attempts. Please wait a few minutes and try again." }, 429);
     const { token, password } = await request.json().catch(() => ({}));
     if (!token) return json({ error: "Invalid reset link." }, 400);
     const email = await env.USERS.get(`reset:${token}`);
@@ -366,6 +390,7 @@ export async function handleAuth(request, env, url, ctx) {
     if (!user) return json({ error: "Account not found." }, 404);
     user.salt = randHex(16);
     user.pass = await pbkdf2(password, user.salt);
+    user.passIter = PBKDF2_ITERATIONS;
     await env.USERS.put(emailKey(email), JSON.stringify(user));
     await env.USERS.delete(`reset:${token}`);
     const sess = await createSession(env, email);
@@ -374,6 +399,7 @@ export async function handleAuth(request, env, url, ctx) {
 
   // ---- email verification: confirm with a token ----
   if (path === "/auth/verify" && request.method === "POST") {
+    if (!(await rateLimit(env, request, "verify", 30, 600))) return json({ error: "Too many attempts. Please wait a few minutes and try again." }, 429);
     const { token } = await request.json().catch(() => ({}));
     if (!token) return json({ error: "Invalid verification link." }, 400);
     const email = await env.USERS.get(`verify:${token}`);
@@ -389,7 +415,7 @@ export async function handleAuth(request, env, url, ctx) {
       await runBg(ctx, Promise.all([
         notify(env, "signup", { email, via: "password" }, {
           to: await adminEmails(env), subject: "New Should I Boat? signup",
-          html: `<div style="font-family:system-ui,sans-serif"><h2>New signup</h2><p><b>${email}</b> just created an account (email/password).</p></div>`,
+          html: `<div style="font-family:system-ui,sans-serif"><h2>New signup</h2><p><b>${htmlEscape(email)}</b> just created an account (email/password).</p></div>`,
           ttlDays: 30,
         }),
         welcomeNotify(env, user, url),
@@ -401,6 +427,7 @@ export async function handleAuth(request, env, url, ctx) {
 
   // ---- email verification: resend the link ----
   if (path === "/auth/resend-verification" && request.method === "POST") {
+    if (!(await rateLimit(env, request, "resend", 10, 600))) return json({ error: "Too many requests. Please wait a few minutes and try again." }, 429);
     const { email } = await request.json().catch(() => ({}));
     const e = (email || "").trim().toLowerCase();
     if (validEmail(e)) {
@@ -439,7 +466,7 @@ export async function handleAuth(request, env, url, ctx) {
       inner = `<h1>You're resubscribed ⚓</h1><p>You'll receive occasional non-essential emails again. Account &amp; security emails are always sent.</p><p><a class="btn" href="/">Back to Should I Boat?</a></p>`;
     } else {
       await setOptOut(true);
-      inner = `<h1>You're unsubscribed</h1><p>We won't send you non-essential emails. Account &amp; security messages (verification, password resets, receipts) are still delivered.</p><p>Changed your mind? <a href="/unsubscribe?u=${t}&amp;action=resubscribe">Resubscribe</a>.</p><p><a class="btn" href="/">Back to Should I Boat?</a></p>`;
+      inner = `<h1>You're unsubscribed</h1><p>We won't send you non-essential emails. Account &amp; security messages (verification, password resets, receipts) are still delivered.</p><p>Changed your mind? <a href="/unsubscribe?u=${encodeURIComponent(t)}&amp;action=resubscribe">Resubscribe</a>.</p><p><a class="btn" href="/">Back to Should I Boat?</a></p>`;
     }
     const page = `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex"><title>Email preferences · Should I Boat?</title><style>body{font-family:system-ui,-apple-system,sans-serif;background:#0b1d2a;color:#e7eef4;margin:0;display:flex;min-height:100vh;align-items:center;justify-content:center;padding:24px}.card{background:#10293b;border:1px solid #1d3a4f;border-radius:14px;max-width:480px;padding:32px;box-shadow:0 8px 40px rgba(0,0,0,.35)}h1{margin:0 0 12px;font-size:22px}p{line-height:1.55;color:#b9c7d4}a{color:#36b3cf}.btn{display:inline-block;margin-top:16px;background:#008BA8;color:#fff;padding:10px 18px;border-radius:8px;text-decoration:none}</style></head><body><div class="card">${inner}</div></body></html>`;
     return new Response(page, { status: 200, headers: { "Content-Type": "text/html; charset=utf-8" } });
@@ -447,14 +474,23 @@ export async function handleAuth(request, env, url, ctx) {
 
   // ---- login ----
   if (path === "/auth/login" && request.method === "POST") {
+    if (!(await rateLimit(env, request, "login", 20, 600))) return json({ error: "Too many sign-in attempts. Please wait a few minutes and try again." }, 429);
     const { email, password } = await request.json().catch(() => ({}));
     if (!validEmail(email) || !password) return json({ error: "Email and password required." }, 400);
     const user = await env.USERS.get(emailKey(email), "json");
     if (!user || !user.pass) return json({ error: "Invalid email or password." }, 401);
-    const hash = await pbkdf2(password, user.salt);
+    const iter = user.passIter || LEGACY_PBKDF2_ITERATIONS;
+    const hash = await pbkdf2(password, user.salt, iter);
     if (!timingSafeEqual(hash, user.pass)) return json({ error: "Invalid email or password." }, 401);
     if (user.emailVerified === false) // explicit false = newer unverified account (old accounts grandfathered)
       return json({ error: "Please confirm your email first — check your inbox for the verification link.", needsVerification: true, email: user.email }, 403);
+    // Transparently upgrade the password hash to the current work factor.
+    if (iter < PBKDF2_ITERATIONS) {
+      user.salt = randHex(16);
+      user.pass = await pbkdf2(password, user.salt, PBKDF2_ITERATIONS);
+      user.passIter = PBKDF2_ITERATIONS;
+      await env.USERS.put(emailKey(user.email), JSON.stringify(user));
+    }
     const token = await createSession(env, user.email);
     return json({ user: publicUser(user) }, 200, { "Set-Cookie": cookie("sib_session", token, SESSION_DAYS * 86400) });
   }
@@ -706,7 +742,7 @@ export async function handleAuth(request, env, url, ctx) {
       await runBg(ctx, Promise.all([
         notify(env, "signup", { email, via: "google" }, {
           to: await adminEmails(env), subject: "New Should I Boat? signup",
-          html: `<div style="font-family:system-ui,sans-serif"><h2>New signup</h2><p><b>${email}</b> just created an account (Google).</p></div>`,
+          html: `<div style="font-family:system-ui,sans-serif"><h2>New signup</h2><p><b>${htmlEscape(email)}</b> just created an account (Google).</p></div>`,
           ttlDays: 30,
         }),
         welcomeNotify(env, user, url),
@@ -839,7 +875,7 @@ export async function handleAuth(request, env, url, ctx) {
     }
     await runBg(ctx, notify(env, "account_deleted", { email: u.email }, {
       to: await adminEmails(env), subject: "Account deleted · Should I Boat?",
-      html: `<div style="font-family:system-ui,sans-serif"><p><b>${u.email}</b> deleted their account.</p></div>`, ttlDays: 30,
+      html: `<div style="font-family:system-ui,sans-serif"><p><b>${htmlEscape(u.email)}</b> deleted their account.</p></div>`, ttlDays: 30,
     }));
     return json({ ok: true }, 200, { "Set-Cookie": cookie("sib_session", "", 0) });
   }

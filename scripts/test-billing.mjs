@@ -88,6 +88,15 @@ function req(method, path, { cookie, body } = {}) {
 }
 const call = ({ request, url }, env) => handleAuth(request, env, url);
 
+// Compute a PBKDF2-SHA256 hash the same way auth.js does — used to seed a
+// "legacy" (100k-iteration) password account and prove the login-time upgrade.
+async function pbkdf2Hex(password, saltHex, iterations) {
+  const salt = new Uint8Array(saltHex.match(/.{2}/g).map((h) => parseInt(h, 16)));
+  const key = await crypto.subtle.importKey("raw", new TextEncoder().encode(password), "PBKDF2", false, ["deriveBits"]);
+  const bits = await crypto.subtle.deriveBits({ name: "PBKDF2", salt, iterations, hash: "SHA-256" }, key, 256);
+  return [...new Uint8Array(bits)].map((b) => b.toString(16).padStart(2, "0")).join("");
+}
+
 // Seed a signed-in user directly into KV (mirrors what register/login produce).
 async function seedUser(env, email, extra = {}) {
   const user = { id: "u1", email, created: "2026-01-01T00:00:00Z", prefs: {}, favorites: [], adFree: false, via: "google", ...extra };
@@ -739,6 +748,41 @@ async function run() {
     check("delete: verify token purged", (await env.USERS.get("verify:vtok")) === null);
     const delCall = stripeCalls.find((c) => c.url.includes("/v1/subscriptions/sub_del") && c.method === "DELETE");
     check("delete: cancels stripe subscription immediately", !!delCall, JSON.stringify(stripeCalls.map((c) => c.method + " " + c.url)));
+  }
+
+  // 43. legacy (100k-iteration) password hash is upgraded on next login
+  {
+    const env = { USERS: makeKV() };
+    const salt = "aabbccddeeff00112233445566778899";
+    const legacyHash = await pbkdf2Hex("Legacy1!", salt, 100000);
+    // Pre-passIter account (grandfathered): no passIter field, 100k hash.
+    await seedUser(env, "legacy@example.com", { via: "password", salt, pass: legacyHash, emailVerified: true });
+    const wrong = await call(req("POST", "/auth/login", { body: { email: "legacy@example.com", password: "nope!" } }), env);
+    eq("legacy: wrong password → 401", wrong.status, 401);
+    const ok = await call(req("POST", "/auth/login", { body: { email: "legacy@example.com", password: "Legacy1!" } }), env);
+    eq("legacy: correct password → 200", ok.status, 200);
+    const u = await env.USERS.get("user:legacy@example.com", "json");
+    eq("legacy: work factor upgraded to 300k", u.passIter, 300000);
+    check("legacy: hash re-salted on upgrade", u.salt !== salt);
+    // and the upgraded hash still verifies on the next login
+    eq("legacy: still logs in after upgrade", (await call(req("POST", "/auth/login", { body: { email: "legacy@example.com", password: "Legacy1!" } }), env)).status, 200);
+  }
+
+  // 44. per-IP rate limiting on login
+  {
+    const env = { USERS: makeKV() };
+    let last;
+    for (let i = 0; i < 21; i++) last = await call(req("POST", "/auth/login", { body: { email: "nobody@example.com", password: "x" } }), env);
+    eq("login: 21st attempt → 429", last.status, 429);
+  }
+
+  // 45. tightened email validation rejects injection-y addresses
+  {
+    const env = { USERS: makeKV() };
+    const reg = (email) => call(req("POST", "/auth/register", { body: { email, password: "Abcdef1!" } }), env).then((r) => r.status);
+    eq("email: angle brackets → 400", await reg('a<script>@x.com'), 400);
+    eq("email: quotes → 400", await reg('a"b@x.com'), 400);
+    eq("email: over-long → 400", await reg("a".repeat(250) + "@x.com"), 400);
   }
 
   console.log(results.join("\n"));
