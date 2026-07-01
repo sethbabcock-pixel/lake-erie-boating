@@ -234,7 +234,10 @@ async function sendEmail(env, to, subject, htmlBody) {
         htmlContent: htmlBody,
       }),
     });
-    return { ok: resp.ok, error: resp.ok ? null : `Brevo ${resp.status}` };
+    if (resp.ok) return { ok: true, error: null };
+    let detail = "";
+    try { detail = (await resp.text()).slice(0, 300); } catch (e) { /* ignore */ }
+    return { ok: false, error: `Brevo ${resp.status}${detail ? `: ${detail}` : ""}` };
   } catch (e) { return { ok: false, error: String(e) }; }
 }
 async function adminEmails(env) {

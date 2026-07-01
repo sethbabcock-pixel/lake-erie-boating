@@ -328,11 +328,14 @@ function NotificationsPanel() {
       {err && <div className="modal-err">{err}</div>}
       {items && items.length === 0 && <p className="acct-note">No notifications yet.</p>}
       {items && items.map((n, i) => (
-        <div className="acct-kv admin-notif" key={i}>
-          <span><b>{n.type}</b>{n.email ? ` · ${n.email}` : ""}</span>
-          <b className={n.emailSent ? "notif-ok" : "notif-off"}>
-            {n.emailSent ? "sent" : "logged"} · {fmtDate(n.timestamp)}
-          </b>
+        <div className="admin-notif-row" key={i}>
+          <div className="acct-kv admin-notif">
+            <span><b>{n.type}</b>{n.email ? ` · ${n.email}` : ""}</span>
+            <b className={n.emailSent ? "notif-ok" : "notif-off"}>
+              {n.emailSent ? "sent" : "logged"} · {fmtDate(n.timestamp)}
+            </b>
+          </div>
+          {!n.emailSent && n.emailError && <div className="admin-notif-err">⚠ {n.emailError}</div>}
         </div>
       ))}
     </section>

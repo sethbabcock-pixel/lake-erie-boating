@@ -630,3 +630,4 @@ body.has-takeover .app { background: var(--bg); border-radius: var(--r-lg) var(-
 .stat-bar.visitors:hover { filter: brightness(1.1); }
 .admin-notif .notif-ok { color: var(--success); }
 .admin-notif .notif-off { color: var(--text-faint); }
+.admin-notif-err { font-size: var(--fs-xs); color: var(--danger); margin: 2px 0 6px; word-break: break-word; }
