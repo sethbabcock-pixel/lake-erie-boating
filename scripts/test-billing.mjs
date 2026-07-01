@@ -533,9 +533,9 @@ async function run() {
     await call(req("POST", "/auth/forgot", { body: { email: "reset.me@example.com" } }), env);
     check("forgot: token created for real user", resetKeys().length === 1, JSON.stringify(resetKeys()));
     const token = resetKeys()[0].slice("reset:".length);
-    eq("reset: bad token → 400", (await call(req("POST", "/auth/reset", { body: { token: "nope", password: "abcdefgh" } }), env)).status, 400);
+    eq("reset: bad token → 400", (await call(req("POST", "/auth/reset", { body: { token: "nope", password: "Abcdef1!" } }), env)).status, 400);
     eq("reset: short password → 400", (await call(req("POST", "/auth/reset", { body: { token, password: "short" } }), env)).status, 400);
-    const ok = await call(req("POST", "/auth/reset", { body: { token, password: "abcdefgh" } }), env);
+    const ok = await call(req("POST", "/auth/reset", { body: { token, password: "Abcdef1!" } }), env);
     eq("reset: valid → 200", ok.status, 200);
     check("reset: token consumed", !env.USERS._map.has(`reset:${token}`));
     check("reset: password changed", (await env.USERS.get("user:reset.me@example.com", "json")).pass !== "oldhash");
@@ -544,7 +544,7 @@ async function run() {
   // 32. register requires email verification: no session, verify token + verification notice, no signup yet
   {
     const env = { USERS: makeKV() };
-    const r = await call(req("POST", "/auth/register", { body: { email: "newbie@example.com", password: "abcdefgh" } }), env);
+    const r = await call(req("POST", "/auth/register", { body: { email: "newbie@example.com", password: "Abcdef1!" } }), env);
     eq("register: pending (no auto-login)", (await r.json()).pending, true);
     check("register: no session cookie", !(r.headers.get("Set-Cookie") || "").includes("sib_session="), r.headers.get("Set-Cookie"));
     check("register: verify token created", [...env.USERS._map.keys()].some((k) => k.startsWith("verify:")));
@@ -579,7 +579,7 @@ async function run() {
   {
     const env = { USERS: makeKV(), MAILERSEND_API_KEY: "ms_x" };
     emailCalls = [];
-    await call(req("POST", "/auth/register", { body: { email: "welcomeme@example.com", password: "abcdefgh" } }), env);
+    await call(req("POST", "/auth/register", { body: { email: "welcomeme@example.com", password: "Abcdef1!" } }), env);
     check("register: sends verification email", emailCalls.some((c) => /confirm your email/i.test(c.subject)), JSON.stringify(emailCalls.map((c) => c.subject)));
     check("register: does NOT send welcome yet", !emailCalls.some((c) => /welcome/i.test(c.subject)));
     const vkey = [...env.USERS._map.keys()].find((k) => k.startsWith("verify:"));
@@ -617,7 +617,7 @@ async function run() {
     const saved = await put.json();
     eq("notifyEmails: sanitized + lowercased", JSON.stringify(saved.config.notifyEmails), JSON.stringify(["ops@example.com", "alerts@example.com"]));
     // a verified signup should email the configured recipients, not the owner default
-    await call(req("POST", "/auth/register", { body: { email: "fresh@example.com", password: "abcdefgh" } }), env);
+    await call(req("POST", "/auth/register", { body: { email: "fresh@example.com", password: "Abcdef1!" } }), env);
     const token = [...env.USERS._map.keys()].find((k) => k.startsWith("verify:")).slice("verify:".length);
     emailCalls = [];
     await call(req("POST", "/auth/verify", { body: { token } }), env);
@@ -629,25 +629,25 @@ async function run() {
   // 37. login is gated on verification; old accounts (no flag) are grandfathered in
   {
     const env = { USERS: makeKV() };
-    await call(req("POST", "/auth/register", { body: { email: "unv@example.com", password: "abcdefgh" } }), env);
-    const blocked = await call(req("POST", "/auth/login", { body: { email: "unv@example.com", password: "abcdefgh" } }), env);
+    await call(req("POST", "/auth/register", { body: { email: "unv@example.com", password: "Abcdef1!" } }), env);
+    const blocked = await call(req("POST", "/auth/login", { body: { email: "unv@example.com", password: "Abcdef1!" } }), env);
     eq("login unverified → 403", blocked.status, 403);
     eq("login unverified: needsVerification flag", (await blocked.json()).needsVerification, true);
     // verify, then login succeeds
     const token = [...env.USERS._map.keys()].find((k) => k.startsWith("verify:")).slice("verify:".length);
     await call(req("POST", "/auth/verify", { body: { token } }), env);
-    eq("login after verify → 200", (await call(req("POST", "/auth/login", { body: { email: "unv@example.com", password: "abcdefgh" } }), env)).status, 200);
+    eq("login after verify → 200", (await call(req("POST", "/auth/login", { body: { email: "unv@example.com", password: "Abcdef1!" } }), env)).status, 200);
     // grandfather: an account with no emailVerified field logs in fine
     const old = await env.USERS.get("user:unv@example.com", "json");
     delete old.emailVerified;
     await env.USERS.put("user:unv@example.com", JSON.stringify(old));
-    eq("login grandfathered (no flag) → 200", (await call(req("POST", "/auth/login", { body: { email: "unv@example.com", password: "abcdefgh" } }), env)).status, 200);
+    eq("login grandfathered (no flag) → 200", (await call(req("POST", "/auth/login", { body: { email: "unv@example.com", password: "Abcdef1!" } }), env)).status, 200);
   }
 
   // 38. resend-verification re-issues a token for unverified accounts only (no enumeration)
   {
     const env = { USERS: makeKV(), MAILERSEND_API_KEY: "ms_x" };
-    await call(req("POST", "/auth/register", { body: { email: "again@example.com", password: "abcdefgh" } }), env);
+    await call(req("POST", "/auth/register", { body: { email: "again@example.com", password: "Abcdef1!" } }), env);
     // consume the original token so we can detect a fresh one
     for (const k of [...env.USERS._map.keys()].filter((k) => k.startsWith("verify:"))) env.USERS._map.delete(k);
     emailCalls = [];
@@ -665,7 +665,7 @@ async function run() {
   // 39. unsubscribe: welcome email carries a token; endpoint opts out / resubscribes
   {
     const env = { USERS: makeKV(), MAILERSEND_API_KEY: "ms_x" };
-    await call(req("POST", "/auth/register", { body: { email: "unsub@example.com", password: "abcdefgh" } }), env);
+    await call(req("POST", "/auth/register", { body: { email: "unsub@example.com", password: "Abcdef1!" } }), env);
     const vtok = [...env.USERS._map.keys()].find((k) => k.startsWith("verify:")).slice("verify:".length);
     emailCalls = [];
     await call(req("POST", "/auth/verify", { body: { token: vtok } }), env);
@@ -692,7 +692,7 @@ async function run() {
   // 40. opted-out users don't get the welcome email (essential mail still flows)
   {
     const env = { USERS: makeKV(), MAILERSEND_API_KEY: "ms_x" };
-    await call(req("POST", "/auth/register", { body: { email: "quiet@example.com", password: "abcdefgh" } }), env);
+    await call(req("POST", "/auth/register", { body: { email: "quiet@example.com", password: "Abcdef1!" } }), env);
     // pre-set opt-out before verifying
     const pre = await env.USERS.get("user:quiet@example.com", "json");
     pre.emailOptOut = true; await env.USERS.put("user:quiet@example.com", JSON.stringify(pre));
@@ -701,6 +701,44 @@ async function run() {
     await call(req("POST", "/auth/verify", { body: { token: vtok } }), env);
     check("opted-out: no welcome email sent", !emailCalls.some((c) => /welcome/i.test(c.subject)), JSON.stringify(emailCalls.map((c) => c.subject)));
     check("opted-out: signup notice still sent", emailCalls.some((c) => /signup/i.test(c.subject)));
+  }
+
+  // 41. password policy: register rejects weak passwords, accepts a strong one
+  {
+    const env = { USERS: makeKV() };
+    const status = (pw) => call(req("POST", "/auth/register", { body: { email: "pw@example.com", password: pw } }), env).then((r) => r.status);
+    eq("policy: too short → 400", await status("Ab1!"), 400);
+    eq("policy: no number → 400", await status("Abcdefg!"), 400);
+    eq("policy: no special → 400", await status("Abcdefg1"), 400);
+    eq("policy: no letter → 400", await status("12345678!"), 400);
+    check("policy: weak attempts create no account", (await env.USERS.get("user:pw@example.com", "json")) === null);
+    eq("policy: strong → pending", (await (await call(req("POST", "/auth/register", { body: { email: "pw@example.com", password: "Abcdef1!" } }), env)).json()).pending, true);
+  }
+
+  // 42. account deletion purges data + cancels the subscription immediately
+  {
+    stripeCalls = [];
+    const env = { USERS: makeKV(), STRIPE_SECRET_KEY: "sk_test_x" };
+    const cookie = await seedUser(env, "bye@example.com", { adFree: true, stripeSubId: "sub_del", stripeCustomerId: "cus_del", unsubToken: "unsubtok" });
+    await env.USERS.put("unsub:unsubtok", "bye@example.com");
+    await env.USERS.put("stripecust:cus_del", "bye@example.com");
+    await env.USERS.put("verify:vtok", "bye@example.com");
+    // signed out → 401
+    eq("delete: signed out → 401", (await call(req("POST", "/api/delete-account", { body: { email: "bye@example.com" } }), env)).status, 401);
+    // wrong confirmation email → 400, nothing deleted
+    eq("delete: wrong email → 400", (await call(req("POST", "/api/delete-account", { cookie, body: { email: "nope@example.com" } }), env)).status, 400);
+    check("delete: account intact after failed confirm", !!(await env.USERS.get("user:bye@example.com", "json")));
+    // correct confirmation → purge everything
+    const r = await call(req("POST", "/api/delete-account", { cookie, body: { email: "bye@example.com" } }), env);
+    eq("delete: → 200", r.status, 200);
+    check("delete: clears session cookie", (r.headers.get("Set-Cookie") || "").includes("Max-Age=0"));
+    check("delete: user purged", (await env.USERS.get("user:bye@example.com", "json")) === null);
+    check("delete: session purged", (await env.USERS.get("sess:tok_byeexamplecom")) === null);
+    check("delete: unsub index purged", (await env.USERS.get("unsub:unsubtok")) === null);
+    check("delete: stripecust index purged", (await env.USERS.get("stripecust:cus_del")) === null);
+    check("delete: verify token purged", (await env.USERS.get("verify:vtok")) === null);
+    const delCall = stripeCalls.find((c) => c.url.includes("/v1/subscriptions/sub_del") && c.method === "DELETE");
+    check("delete: cancels stripe subscription immediately", !!delCall, JSON.stringify(stripeCalls.map((c) => c.method + " " + c.url)));
   }
 
   console.log(results.join("\n"));

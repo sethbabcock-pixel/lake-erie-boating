@@ -215,6 +215,52 @@ function BoatCard({ auth }) {
   );
 }
 
+// ── Danger zone: delete account ───────────────────────────────────────────────
+function DangerZone({ auth }) {
+  const [open, setOpen] = useState(false);
+  const [confirmEmail, setConfirmEmail] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState("");
+  const hasSub = auth.user?.adFree && auth.user?.hasSubscription;
+
+  const del = async () => {
+    setBusy(true); setErr("");
+    try {
+      await auth.deleteAccount(confirmEmail.trim());
+      window.location.href = "/";
+    } catch (e) { setErr(e.message); setBusy(false); }
+  };
+
+  return (
+    <section className="card acct-sec acct-danger">
+      <h2>Delete account</h2>
+      <p className="acct-note">Permanently deletes your account, boat profile, and saved spots. This can't be undone.</p>
+      {hasSub && (
+        <p className="acct-note"><b>Heads up:</b> deleting your account cancels your ad-free subscription immediately. As with any cancellation, payments already made aren't refunded.</p>
+      )}
+      {!open ? (
+        <div className="acct-actions">
+          <button className="cbtn danger" onClick={() => { setOpen(true); setErr(""); }}>Delete my account</button>
+        </div>
+      ) : (
+        <div className="acct-confirm-block">
+          <label className="acct-field">
+            <span>Type your email <em>({auth.user.email})</em> to confirm</span>
+            <input className="field" type="email" autoComplete="off" value={confirmEmail} placeholder={auth.user.email} onChange={(e) => setConfirmEmail(e.target.value)} />
+          </label>
+          {err && <div className="modal-err">{err}</div>}
+          <div className="acct-confirm-btns">
+            <button className="cbtn danger" disabled={busy || confirmEmail.trim().toLowerCase() !== auth.user.email} onClick={del}>
+              {busy ? "Deleting…" : "Permanently delete"}
+            </button>
+            <button className="cbtn ghost" disabled={busy} onClick={() => { setOpen(false); setConfirmEmail(""); setErr(""); }}>Cancel</button>
+          </div>
+        </div>
+      )}
+    </section>
+  );
+}
+
 // ── Page shell ────────────────────────────────────────────────────────────────
 export default function AccountPage() {
   const auth = useAuth();
@@ -267,6 +313,7 @@ export default function AccountPage() {
 
             <SubscriptionCard auth={auth} />
             <BoatCard auth={auth} />
+            <DangerZone auth={auth} />
 
             <div className="acct-actions" style={{ marginTop: "var(--s5)" }}>
               <button className="cbtn ghost" onClick={() => auth.logout().then(() => { window.location.href = "/"; })}>Sign out</button>

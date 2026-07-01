@@ -302,6 +302,11 @@ details.card[open] > summary { margin-bottom: var(--s3); }
   padding: 8px 18px; font-size: var(--fs-sm); font-weight: var(--fw-semibold); cursor: pointer; }
 .cbtn.ghost { background: transparent; color: var(--text-muted); border-color: var(--border-strong); }
 .cbtn.ghost:hover { border-color: var(--accent); color: var(--text); }
+.cbtn.danger { background: var(--danger); }
+.cbtn.danger:disabled { opacity: .55; cursor: not-allowed; }
+.acct-danger { border-color: color-mix(in srgb, var(--danger) 45%, var(--border-strong)); }
+.acct-danger h2 { color: var(--danger); }
+.acct-confirm-block { margin-top: var(--s3); display: flex; flex-direction: column; gap: var(--s3); }
 .footlinks { margin-top: var(--s2); display: flex; gap: var(--s4); justify-content: center; flex-wrap: wrap; align-items: center; }
 .linklike { background: none; border: none; color: var(--accent); font: inherit; font-size: var(--fs-xs); cursor: pointer; padding: 0; }
 
@@ -363,6 +368,9 @@ details.card[open] > summary { margin-bottom: var(--s3); }
   border: 1px solid var(--border-strong); border-radius: var(--r-md); font-family: var(--font-sans); font-size: var(--fs-base); }
 .field:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 22%, transparent); }
 .modal-err { color: var(--danger); font-size: var(--fs-sm); margin-bottom: var(--s3); }
+.modal-hint { margin: calc(-1 * var(--s2)) 0 var(--s3); font-size: var(--fs-xs); color: var(--text-muted); }
+.modal-hint-ok { color: var(--success); }
+.modal-hint-bad { color: var(--danger); }
 .modal-submit { width: 100%; min-height: 44px; }
 .modal-switch { margin-top: var(--s4); text-align: center; font-size: var(--fs-sm); color: var(--text-muted); }
 .modal-switch button { background: none; border: none; color: var(--accent); font: inherit; font-weight: var(--fw-semibold); cursor: pointer; }

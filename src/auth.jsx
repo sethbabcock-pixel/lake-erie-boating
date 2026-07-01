@@ -1,6 +1,16 @@
 import React, { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 
+// Password policy (mirrors the server): 8+ chars with a letter, number, and
+// special character. Returns an error string, or "" if acceptable.
+export function passwordProblem(pw) {
+  if (typeof pw !== "string" || pw.length < 8) return "Use at least 8 characters.";
+  if (!/[A-Za-z]/.test(pw)) return "Add a letter.";
+  if (!/[0-9]/.test(pw)) return "Add a number.";
+  if (!/[^A-Za-z0-9]/.test(pw)) return "Add a special character (e.g. ! ? @ # $).";
+  return "";
+}
+
 // Auth state + actions. user: undefined = loading, null = signed out, object = signed in.
 export function useAuth() {
   const [user, setUser] = useState(undefined);
@@ -60,6 +70,7 @@ export function useAuth() {
     forgotPassword: async (email) => { await post("/auth/forgot", { email }); },
     resetPassword: async (token, password) => { const d = await post("/auth/reset", { token, password }); setUser(d.user); },
     logout: async () => { await post("/auth/logout"); setUser(null); },
+    deleteAccount: async (email) => { await post("/api/delete-account", { email }); setUser(null); },
     savePrefs: async (partial) => {
       try {
         const merged = { ...(user?.prefs || {}), ...partial }; // merge so one save never wipes others (spot/theme/comfort)
@@ -86,6 +97,7 @@ export function AuthModal({ auth, onClose, initialMode = "login", resetToken = "
   const [mode, setMode] = useState(initialMode); // login | register | forgot | reset | verify
   const [email, setEmail] = useState("");
   const [pw, setPw] = useState("");
+  const [pw2, setPw2] = useState(""); // confirm password (register + reset)
   const [err, setErr] = useState("");
   const [busy, setBusy] = useState(false);
   const [sent, setSent] = useState(false); // forgot: reset link sent
@@ -114,6 +126,12 @@ export function AuthModal({ auth, onClose, initialMode = "login", resetToken = "
   };
   const submit = async (e) => {
     e.preventDefault();
+    // Client-side password rules for the two flows that set a new password.
+    if (mode === "register" || mode === "reset") {
+      const p = passwordProblem(pw);
+      if (p) { setErr(p); return; }
+      if (pw !== pw2) { setErr("Passwords don't match."); return; }
+    }
     setErr(""); setBusy(true);
     try {
       if (mode === "login") {
@@ -184,7 +202,19 @@ export function AuthModal({ auth, onClose, initialMode = "login", resetToken = "
               <input className="field" type="email" placeholder="Email" value={email} onChange={(e) => setEmail(e.target.value)} autoComplete="email" required />
             )}
             {(mode === "login" || mode === "register" || mode === "reset") && (
-              <input className="field" type="password" placeholder={mode === "login" ? "Password" : "Password (8+ characters)"} value={pw} onChange={(e) => setPw(e.target.value)} autoComplete={mode === "login" ? "current-password" : "new-password"} required />
+              <input className="field" type="password" placeholder={mode === "login" ? "Password" : "Password"} value={pw} onChange={(e) => setPw(e.target.value)} autoComplete={mode === "login" ? "current-password" : "new-password"} required />
+            )}
+            {(mode === "register" || mode === "reset") && (
+              <>
+                <input className="field" type="password" placeholder="Confirm password" value={pw2} onChange={(e) => setPw2(e.target.value)} autoComplete="new-password" required />
+                <p className="modal-hint">
+                  {pw2 && pw !== pw2
+                    ? <span className="modal-hint-bad">Passwords don't match.</span>
+                    : (passwordProblem(pw)
+                        ? <>At least 8 characters, with a letter, a number, and a special character.</>
+                        : <span className="modal-hint-ok">Strong password ✓</span>)}
+                </p>
+              </>
             )}
             {err && <div className="modal-err">{err}</div>}
             <button className="cbtn modal-submit" type="submit" disabled={busy}>

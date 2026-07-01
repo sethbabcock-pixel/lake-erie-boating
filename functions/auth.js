@@ -55,6 +55,16 @@ async function pbkdf2(password, saltHex) {
 const emailKey = (email) => `user:${email.trim().toLowerCase()}`;
 const sessKey = (token) => `sess:${token}`;
 const validEmail = (e) => typeof e === "string" && /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(e);
+// Password policy: 8+ chars with a letter, a number, and a special character.
+// Returns an error string, or null if the password is acceptable.
+function passwordProblem(pw) {
+  if (typeof pw !== "string" || pw.length < 8) return "Password must be at least 8 characters.";
+  if (pw.length > 200) return "Password is too long.";
+  if (!/[A-Za-z]/.test(pw)) return "Password must include a letter.";
+  if (!/[0-9]/.test(pw)) return "Password must include a number.";
+  if (!/[^A-Za-z0-9]/.test(pw)) return "Password must include a special character (e.g. ! ? @ # $).";
+  return null;
+}
 
 function cookie(name, value, maxAgeSec) {
   const parts = [`${name}=${value}`, "Path=/", "HttpOnly", "Secure", "SameSite=Lax"];
@@ -153,6 +163,13 @@ async function stripeAPI(env, path, params) {
 }
 async function stripeGET(env, path) {
   const r = await fetch(`https://api.stripe.com/v1/${path}`, {
+    headers: { Authorization: `Bearer ${env.STRIPE_SECRET_KEY}` },
+  });
+  return r.json();
+}
+async function stripeDELETE(env, path) {
+  const r = await fetch(`https://api.stripe.com/v1/${path}`, {
+    method: "DELETE",
     headers: { Authorization: `Bearer ${env.STRIPE_SECRET_KEY}` },
   });
   return r.json();
@@ -281,7 +298,7 @@ export async function handleAuth(request, env, url, ctx) {
   if (path === "/auth/register" && request.method === "POST") {
     const { email, password } = await request.json().catch(() => ({}));
     if (!validEmail(email)) return json({ error: "Enter a valid email." }, 400);
-    if (!password || password.length < 8) return json({ error: "Password must be at least 8 characters." }, 400);
+    { const pwErr = passwordProblem(password); if (pwErr) return json({ error: pwErr }, 400); }
     if (await env.USERS.get(emailKey(email), "json")) return json({ error: "An account with that email already exists." }, 409);
     const salt = randHex(16);
     const user = { id: randHex(8), email: email.trim().toLowerCase(), salt, pass: await pbkdf2(password, salt), created: new Date().toISOString(), prefs: {}, favorites: [], adFree: false, via: "password", emailVerified: false };
@@ -323,7 +340,7 @@ export async function handleAuth(request, env, url, ctx) {
     if (!token) return json({ error: "Invalid reset link." }, 400);
     const email = await env.USERS.get(`reset:${token}`);
     if (!email) return json({ error: "This reset link is invalid or has expired." }, 400);
-    if (!password || password.length < 8) return json({ error: "Password must be at least 8 characters." }, 400);
+    { const pwErr = passwordProblem(password); if (pwErr) return json({ error: pwErr }, 400); }
     const user = await env.USERS.get(emailKey(email), "json");
     if (!user) return json({ error: "Account not found." }, 404);
     user.salt = randHex(16);
@@ -775,6 +792,35 @@ export async function handleAuth(request, env, url, ctx) {
     const session = await stripeAPI(env, "billing_portal/sessions", { customer: u.stripeCustomerId, return_url: `${url.origin}/` });
     if (!session || !session.url) return json({ error: session?.error?.message || "Could not open billing portal." }, 502);
     return json({ url: session.url });
+  }
+
+  // ---- delete account (irreversible) ----
+  if (path === "/api/delete-account" && request.method === "POST") {
+    const u = await userFromRequest(env, request);
+    if (!u) return json({ error: "Not signed in." }, 401);
+    const { email } = await request.json().catch(() => ({}));
+    if ((email || "").trim().toLowerCase() !== u.email) return json({ error: "Type your email exactly to confirm deletion." }, 400);
+    // Cancel any subscription immediately — stops future billing. No refund is
+    // issued (consistent with our bill-forward, no-refund policy).
+    if (env.STRIPE_SECRET_KEY && u.stripeSubId) {
+      await stripeDELETE(env, `subscriptions/${encodeURIComponent(u.stripeSubId)}`).catch(() => {});
+    }
+    // Purge the account and everything keyed to it.
+    await env.USERS.delete(emailKey(u.email));
+    if (u.unsubToken) await env.USERS.delete(`unsub:${u.unsubToken}`);
+    if (u.stripeCustomerId) await env.USERS.delete(`stripecust:${u.stripeCustomerId}`);
+    for (const prefix of ["sess:", "verify:", "reset:"]) {
+      const list = await env.USERS.list({ prefix, limit: 1000 });
+      for (const k of list.keys) {
+        const v = await env.USERS.get(k.name);
+        if (v === u.email) await env.USERS.delete(k.name);
+      }
+    }
+    await runBg(ctx, notify(env, "account_deleted", { email: u.email }, {
+      to: await adminEmails(env), subject: "Account deleted · Should I Boat?",
+      html: `<div style="font-family:system-ui,sans-serif"><p><b>${u.email}</b> deleted their account.</p></div>`, ttlDays: 30,
+    }));
+    return json({ ok: true }, 200, { "Set-Cookie": cookie("sib_session", "", 0) });
   }
 
   // ---- Stripe: webhook (subscription lifecycle → adFree) ----
