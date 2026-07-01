@@ -213,7 +213,7 @@ function UsersPanel() {
       const r = await fetch("/api/admin/user", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ email: sel.email, action: "sendReset" }) });
       const d = await r.json();
       if (!r.ok) throw new Error(d.error || "Could not send.");
-      setResetMsg(d.emailSent ? "Reset link emailed ✓" : `Logged, but email not sent (${d.emailError || "MAILERSEND_API_KEY not set"}).`);
+      setResetMsg(d.emailSent ? "Reset link emailed ✓" : `Logged, but email not sent (${d.emailError || "BREVO_API_KEY not set"}).`);
     } catch (e) { setErr(e.message); } finally { setBusy(false); }
   };
 
@@ -296,7 +296,7 @@ function DiagnosticsPanel() {
       {err && <div className="modal-err">{err}</div>}
       {data && (
         <>
-          <div className="acct-kv"><span>Email ({data.email?.provider || "mailersend"})</span><Dot ok={data.email?.present} /></div>
+          <div className="acct-kv"><span>Email ({data.email?.provider || "brevo"})</span><Dot ok={data.email?.present} /></div>
           <div className="acct-kv"><span>Stripe secret key{data.secretKey?.present ? ` · ${data.secretKey.mode}` : ""}</span><Dot ok={data.secretKey?.present} /></div>
           <div className="acct-kv"><span>Stripe webhook secret</span><Dot ok={data.webhookSecret?.present} /></div>
         </>

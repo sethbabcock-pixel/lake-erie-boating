@@ -3,7 +3,7 @@
 //   POST /auth/register {email,password}
 //   POST /auth/login    {email,password}
 //   POST /auth/logout
-//   POST /auth/forgot {email}        -> email a password-reset link (MailerSend)
+//   POST /auth/forgot {email}        -> email a password-reset link (Brevo)
 //   POST /auth/reset  {token,password}-> set a new password, sign in
 //   GET  /auth/me
 //   GET  /auth/google              -> redirect to Google
@@ -213,28 +213,28 @@ function googleRedirectUri(env, url) {
   return `${base}/auth/google/callback`;
 }
 
-// ── Email (MailerSend) + admin notifications ─────────────────────────────────
+// ── Email (Brevo) + admin notifications ──────────────────────────────────────
 const EMAIL_FROM = "noreply@shouldiboat.com";
 const EMAIL_FROM_NAME = "Should I Boat?";
 async function sendEmail(env, to, subject, htmlBody) {
-  if (!env.MAILERSEND_API_KEY) return { ok: false, error: "MAILERSEND_API_KEY not configured" };
+  if (!env.BREVO_API_KEY) return { ok: false, error: "BREVO_API_KEY not configured" };
   try {
     const recipients = (Array.isArray(to) ? to : [to]).map((e) => ({ email: e }));
-    const resp = await fetch("https://api.mailersend.com/v1/email", {
+    const resp = await fetch("https://api.brevo.com/v3/smtp/email", {
       method: "POST",
       headers: {
-        Authorization: `Bearer ${env.MAILERSEND_API_KEY}`,
+        "api-key": env.BREVO_API_KEY,
         "Content-Type": "application/json",
-        "X-Requested-With": "XMLHttpRequest",
+        accept: "application/json",
       },
       body: JSON.stringify({
-        from: { email: env.EMAIL_FROM || EMAIL_FROM, name: EMAIL_FROM_NAME },
+        sender: { email: env.EMAIL_FROM || EMAIL_FROM, name: EMAIL_FROM_NAME },
         to: recipients,
         subject,
-        html: htmlBody,
+        htmlContent: htmlBody,
       }),
     });
-    return { ok: resp.ok, error: resp.ok ? null : `MailerSend ${resp.status}` };
+    return { ok: resp.ok, error: resp.ok ? null : `Brevo ${resp.status}` };
   } catch (e) { return { ok: false, error: String(e) }; }
 }
 async function adminEmails(env) {
@@ -737,7 +737,7 @@ export async function handleAuth(request, env, url, ctx) {
       webhookSecret: { present: !!env.STRIPE_WEBHOOK_SECRET },
       priceId,
       priceOverride: !!env.STRIPE_PRICE_ID,
-      email: { present: !!env.MAILERSEND_API_KEY, provider: "mailersend" },
+      email: { present: !!env.BREVO_API_KEY, provider: "brevo" },
     };
     // If we have a key, resolve the price live so you can confirm it actually
     // exists in this account/mode — the usual "No such price" cause of failures.

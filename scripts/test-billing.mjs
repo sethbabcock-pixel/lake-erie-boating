@@ -53,9 +53,9 @@ const makeSub = (cancelAtPeriodEnd) => ({
 function installFetchStub() {
   globalThis.fetch = async (urlStr, opts = {}) => {
     const u = String(urlStr);
-    if (u.includes("api.mailersend.com")) {
+    if (u.includes("api.brevo.com")) {
       emailCalls.push(JSON.parse(opts.body || "{}"));
-      return jsonResp({}, 202);
+      return jsonResp({ messageId: "<msg@brevo>" }, 201);
     }
     const body = opts.body ? Object.fromEntries(new URLSearchParams(opts.body)) : null;
     stripeCalls.push({ url: u, method: opts.method || "GET", body });
@@ -559,7 +559,7 @@ async function run() {
 
   // 33. admin notifications endpoint + sendReset action + email diagnostic
   {
-    const env = { USERS: makeKV(), ADMIN_EMAIL: "admin@example.com", STRIPE_SECRET_KEY: "sk_test_x", MAILERSEND_API_KEY: "ms_x" };
+    const env = { USERS: makeKV(), ADMIN_EMAIL: "admin@example.com", STRIPE_SECRET_KEY: "sk_test_x", BREVO_API_KEY: "brevo_x" };
     const admin = await seedUser(env, "admin@example.com");
     await env.USERS.put("admin:notification:1700000000000", JSON.stringify({ type: "signup", email: "x@y.com", emailSent: false, timestamp: "2026-01-01T00:00:00Z" }));
     eq("notifications: signed out → 401", (await call(req("GET", "/api/admin/notifications"), { USERS: env.USERS })).status, 401);
@@ -577,7 +577,7 @@ async function run() {
 
   // 34. register sends a verification email; verifying it sends welcome + signs in
   {
-    const env = { USERS: makeKV(), MAILERSEND_API_KEY: "ms_x" };
+    const env = { USERS: makeKV(), BREVO_API_KEY: "brevo_x" };
     emailCalls = [];
     await call(req("POST", "/auth/register", { body: { email: "welcomeme@example.com", password: "Abcdef1!" } }), env);
     check("register: sends verification email", emailCalls.some((c) => /confirm your email/i.test(c.subject)), JSON.stringify(emailCalls.map((c) => c.subject)));
@@ -597,7 +597,7 @@ async function run() {
 
   // 35. checkout.session.completed sends an ad-free-activated email
   {
-    const env = { USERS: makeKV(), STRIPE_WEBHOOK_SECRET: "whsec_right", MAILERSEND_API_KEY: "ms_x" };
+    const env = { USERS: makeKV(), STRIPE_WEBHOOK_SECRET: "whsec_right", BREVO_API_KEY: "brevo_x" };
     await seedUser(env, "newpaid@example.com");
     emailCalls = [];
     const evt = { type: "checkout.session.completed", data: { object: { client_reference_id: "newpaid@example.com", customer: "cus_9", subscription: "sub_9" } } };
@@ -609,7 +609,7 @@ async function run() {
 
   // 36. notifyEmails in site config drives admin notification recipients
   {
-    const env = { USERS: makeKV(), ADMIN_EMAIL: "owner@example.com", MAILERSEND_API_KEY: "ms_x" };
+    const env = { USERS: makeKV(), ADMIN_EMAIL: "owner@example.com", BREVO_API_KEY: "brevo_x" };
     const admin = await seedUser(env, "owner@example.com");
     // save config with notifyEmails via the admin PUT (also exercises sanitize)
     const put = await call(req("PUT", "/api/admin/config", { cookie: admin, body: { config: { notifyEmails: ["Ops@Example.com ", "bad-email", "alerts@example.com"] } } }), env);
@@ -646,7 +646,7 @@ async function run() {
 
   // 38. resend-verification re-issues a token for unverified accounts only (no enumeration)
   {
-    const env = { USERS: makeKV(), MAILERSEND_API_KEY: "ms_x" };
+    const env = { USERS: makeKV(), BREVO_API_KEY: "brevo_x" };
     await call(req("POST", "/auth/register", { body: { email: "again@example.com", password: "Abcdef1!" } }), env);
     // consume the original token so we can detect a fresh one
     for (const k of [...env.USERS._map.keys()].filter((k) => k.startsWith("verify:"))) env.USERS._map.delete(k);
@@ -664,7 +664,7 @@ async function run() {
 
   // 39. unsubscribe: welcome email carries a token; endpoint opts out / resubscribes
   {
-    const env = { USERS: makeKV(), MAILERSEND_API_KEY: "ms_x" };
+    const env = { USERS: makeKV(), BREVO_API_KEY: "brevo_x" };
     await call(req("POST", "/auth/register", { body: { email: "unsub@example.com", password: "Abcdef1!" } }), env);
     const vtok = [...env.USERS._map.keys()].find((k) => k.startsWith("verify:")).slice("verify:".length);
     emailCalls = [];
@@ -673,7 +673,7 @@ async function run() {
     check("welcome: user has unsub token", !!u.unsubToken);
     eq("welcome: reverse index resolves to email", await env.USERS.get(`unsub:${u.unsubToken}`), "unsub@example.com");
     const welcome = emailCalls.find((c) => /welcome/i.test(c.subject));
-    check("welcome email includes unsubscribe link", /\/unsubscribe\?u=/.test(welcome.html), welcome && welcome.html.slice(-160));
+    check("welcome email includes unsubscribe link", /\/unsubscribe\?u=/.test(welcome.htmlContent), welcome && welcome.htmlContent.slice(-160));
     // GET unsubscribe → opts out + serves an HTML page
     const us = await call(req("GET", `/unsubscribe?u=${u.unsubToken}`), env);
     eq("unsubscribe GET → 200", us.status, 200);
@@ -691,7 +691,7 @@ async function run() {
 
   // 40. opted-out users don't get the welcome email (essential mail still flows)
   {
-    const env = { USERS: makeKV(), MAILERSEND_API_KEY: "ms_x" };
+    const env = { USERS: makeKV(), BREVO_API_KEY: "brevo_x" };
     await call(req("POST", "/auth/register", { body: { email: "quiet@example.com", password: "Abcdef1!" } }), env);
     // pre-set opt-out before verifying
     const pre = await env.USERS.get("user:quiet@example.com", "json");
