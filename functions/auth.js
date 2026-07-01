@@ -216,6 +216,15 @@ function googleRedirectUri(env, url) {
 // ── Email (Brevo) + admin notifications ──────────────────────────────────────
 const EMAIL_FROM = "noreply@shouldiboat.com";
 const EMAIL_FROM_NAME = "Should I Boat?";
+// Rough plain-text version of an HTML body (spam filters favor multipart mail).
+const textFromHtml = (html) =>
+  String(html || "")
+    .replace(/<style[\s\S]*?<\/style>/gi, "")
+    .replace(/<a[^>]*href="([^"]*)"[^>]*>(.*?)<\/a>/gi, "$2 ($1)")
+    .replace(/<\/(p|div|h\d|li|tr)>/gi, "\n")
+    .replace(/<[^>]+>/g, "")
+    .replace(/&amp;/g, "&").replace(/&nbsp;/g, " ")
+    .replace(/[ \t]+/g, " ").replace(/\n\s*\n\s*\n/g, "\n\n").trim();
 async function sendEmail(env, to, subject, htmlBody) {
   if (!env.BREVO_API_KEY) return { ok: false, error: "BREVO_API_KEY not configured" };
   try {
@@ -232,6 +241,7 @@ async function sendEmail(env, to, subject, htmlBody) {
         to: recipients,
         subject,
         htmlContent: htmlBody,
+        textContent: textFromHtml(htmlBody), // plain-text part improves spam scoring
       }),
     });
     if (resp.ok) return { ok: true, error: null };
@@ -252,7 +262,15 @@ async function adminEmails(env) {
 const emailFooter = (unsubUrl) => unsubUrl ? `<p style="color:#99a;font-size:12px;margin-top:24px;font-family:system-ui,sans-serif">You're receiving this because you have a Should I Boat? account. <a href="${unsubUrl}" style="color:#99a">Unsubscribe from non-essential emails</a>.</p>` : "";
 const welcomeHtml = (unsubUrl) => `<div style="font-family:system-ui,sans-serif"><h2>Welcome aboard! ⚓</h2><p>Thanks for joining <b>Should I Boat?</b> — your quick GO / CAUTION / NO-GO call for Great Lakes boating.</p><ul><li>Save your favorite launch spots</li><li>Set comfort limits tuned to your boat</li><li>Go ad-free anytime for $2.99/mo</li></ul><p><a href="https://shouldiboat.com" style="display:inline-block;background:#008BA8;color:#fff;padding:10px 18px;border-radius:8px;text-decoration:none">Open Should I Boat?</a></p></div>${emailFooter(unsubUrl)}`;
 const adFreeHtml = () => `<div style="font-family:system-ui,sans-serif"><h2>You're ad-free 🎉</h2><p>Thanks for supporting Should I Boat? — your subscription is active and the ads are gone. You can manage or cancel anytime from your <a href="https://shouldiboat.com/account">account</a>.</p></div>`;
-const verifyHtml = (link) => `<div style="font-family:system-ui,sans-serif"><h2>Confirm your email ⚓</h2><p>Welcome to <b>Should I Boat?</b> Please confirm this email address to activate your account. This link expires in 24 hours.</p><p><a href="${link}" style="display:inline-block;background:#008BA8;color:#fff;padding:10px 18px;border-radius:8px;text-decoration:none">Confirm email</a></p><p style="color:#667">If you didn't create an account, you can ignore this email.</p></div>`;
+const verifyHtml = (link) => `<div style="font-family:system-ui,-apple-system,sans-serif;max-width:520px;color:#1a2b38">
+  <h2 style="margin:0 0 10px">Confirm your email address</h2>
+  <p style="line-height:1.55;margin:0 0 14px">Thanks for creating a <b>Should I Boat?</b> account — the quick GO / CAUTION / NO-GO call for boating conditions across the Great Lakes. To finish setting up your account, please confirm this is your email address.</p>
+  <p style="margin:18px 0"><a href="${link}" style="display:inline-block;background:#008BA8;color:#fff;padding:12px 22px;border-radius:8px;text-decoration:none;font-weight:600">Confirm my email</a></p>
+  <p style="line-height:1.5;color:#5b6b78;font-size:14px;margin:0 0 12px">Or paste this link into your browser:<br><a href="${link}" style="color:#008BA8;word-break:break-all">${link}</a></p>
+  <p style="line-height:1.5;color:#5b6b78;font-size:14px;margin:0">This link expires in 24 hours. If you didn't create a Should I Boat? account, you can safely ignore this email — no account is activated without confirmation.</p>
+  <hr style="border:none;border-top:1px solid #e3e9ee;margin:22px 0">
+  <p style="color:#8a99a6;font-size:12px;margin:0">Should I Boat? · Great Lakes boating conditions · <a href="https://shouldiboat.com" style="color:#8a99a6">shouldiboat.com</a></p>
+</div>`;
 
 // Stable per-user unsubscribe token + reverse index (created lazily, never expires).
 async function ensureUnsubToken(env, user) {

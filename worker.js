@@ -10,6 +10,11 @@ import { handleAuth } from "./functions/auth.js";
 export default {
   async fetch(request, env, ctx) {
     const url = new URL(request.url);
+    // Canonical host: send www.* to the bare domain (one host for SEO + sender reputation).
+    if (url.hostname.startsWith("www.")) {
+      url.hostname = url.hostname.slice(4);
+      return Response.redirect(url.toString(), 301);
+    }
     const p = url.pathname;
     if (p.startsWith("/marine/")) return onRequest({ request, env, ctx });
     if (p.startsWith("/auth/") || p.startsWith("/api/") || p.startsWith("/stripe/") || p === "/unsubscribe") return handleAuth(request, env, url, ctx);
