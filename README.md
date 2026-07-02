@@ -1,4 +1,4 @@
-# Lake Erie — Should I Boat?
+# Lake Erie — shouldiboat.com
 
 A go/no-go boating conditions app for **Lake Erie**, from Toledo to Erie, PA.
 Tap a launch spot and get a clear **GO / CAUTION / NO-GO** call backed by live

@@ -1,4 +1,4 @@
-// Accounts backend for Should I Boat? — Cloudflare KV + Web Crypto.
+// Accounts backend for shouldiboat.com — Cloudflare KV + Web Crypto.
 // Routes (handled by worker.js):
 //   POST /auth/register {email,password}
 //   POST /auth/login    {email,password}
@@ -236,7 +236,7 @@ function googleRedirectUri(env, url) {
 
 // ── Email (Brevo) + admin notifications ──────────────────────────────────────
 const EMAIL_FROM = "noreply@shouldiboat.com";
-const EMAIL_FROM_NAME = "Should I Boat?";
+const EMAIL_FROM_NAME = "shouldiboat.com";
 // Rough plain-text version of an HTML body (spam filters favor multipart mail).
 const textFromHtml = (html) =>
   String(html || "")
@@ -280,17 +280,17 @@ async function adminEmails(env) {
 }
 // Footer for non-essential (relationship/marketing) email only — NOT for
 // transactional mail like verification, password reset, or receipts.
-export const emailFooter = (unsubUrl) => unsubUrl ? `<p style="color:#99a;font-size:12px;margin-top:24px;font-family:system-ui,sans-serif">You're receiving this because you have a Should I Boat? account. <a href="${unsubUrl}" style="color:#99a">Unsubscribe from non-essential emails</a>.</p>` : "";
-const welcomeHtml = (unsubUrl) => `<div style="font-family:system-ui,sans-serif"><h2>Welcome aboard! ⚓</h2><p>Thanks for joining <b>Should I Boat?</b> — your quick GO / CAUTION / NO-GO call for Great Lakes boating.</p><ul><li>Save your favorite launch spots</li><li>Set comfort limits tuned to your boat</li><li>Go ad-free anytime for $2.99/mo</li></ul><p><a href="https://shouldiboat.com" style="display:inline-block;background:#008BA8;color:#fff;padding:10px 18px;border-radius:8px;text-decoration:none">Open Should I Boat?</a></p></div>${emailFooter(unsubUrl)}`;
-const adFreeHtml = () => `<div style="font-family:system-ui,sans-serif"><h2>You're ad-free 🎉</h2><p>Thanks for supporting Should I Boat? — your subscription is active and the ads are gone. You can manage or cancel anytime from your <a href="https://shouldiboat.com/account">account</a>.</p></div>`;
+export const emailFooter = (unsubUrl) => unsubUrl ? `<p style="color:#99a;font-size:12px;margin-top:24px;font-family:system-ui,sans-serif">You're receiving this because you have a shouldiboat.com account. <a href="${unsubUrl}" style="color:#99a">Unsubscribe from non-essential emails</a>.</p>` : "";
+const welcomeHtml = (unsubUrl) => `<div style="font-family:system-ui,sans-serif"><h2>Welcome aboard</h2><p>Thanks for joining <b>shouldiboat.com</b> — your quick GO / CAUTION / NO-GO call for Great Lakes boating.</p><ul><li>Save your favorite launch spots</li><li>Set comfort limits tuned to your boat</li><li>Go ad-free anytime for $2.99/mo</li></ul><p><a href="https://shouldiboat.com" style="display:inline-block;background:#008BA8;color:#fff;padding:10px 18px;border-radius:8px;text-decoration:none">Open shouldiboat.com</a></p></div>${emailFooter(unsubUrl)}`;
+const adFreeHtml = () => `<div style="font-family:system-ui,sans-serif"><h2>You're ad-free</h2><p>Thanks for supporting shouldiboat.com — your subscription is active and the ads are gone. You can manage or cancel anytime from your <a href="https://shouldiboat.com/account">account</a>.</p></div>`;
 const verifyHtml = (link) => `<div style="font-family:system-ui,-apple-system,sans-serif;max-width:520px;color:#1a2b38">
   <h2 style="margin:0 0 10px">Confirm your email address</h2>
-  <p style="line-height:1.55;margin:0 0 14px">Thanks for creating a <b>Should I Boat?</b> account — the quick GO / CAUTION / NO-GO call for boating conditions across the Great Lakes. To finish setting up your account, please confirm this is your email address.</p>
+  <p style="line-height:1.55;margin:0 0 14px">Thanks for creating a <b>shouldiboat.com</b> account — the quick GO / CAUTION / NO-GO call for boating conditions across the Great Lakes. To finish setting up your account, please confirm this is your email address.</p>
   <p style="margin:18px 0"><a href="${link}" style="display:inline-block;background:#008BA8;color:#fff;padding:12px 22px;border-radius:8px;text-decoration:none;font-weight:600">Confirm my email</a></p>
   <p style="line-height:1.5;color:#5b6b78;font-size:14px;margin:0 0 12px">Or paste this link into your browser:<br><a href="${link}" style="color:#008BA8;word-break:break-all">${link}</a></p>
-  <p style="line-height:1.5;color:#5b6b78;font-size:14px;margin:0">This link expires in 24 hours. If you didn't create a Should I Boat? account, you can safely ignore this email — no account is activated without confirmation.</p>
+  <p style="line-height:1.5;color:#5b6b78;font-size:14px;margin:0">This link expires in 24 hours. If you didn't create a shouldiboat.com account, you can safely ignore this email — no account is activated without confirmation.</p>
   <hr style="border:none;border-top:1px solid #e3e9ee;margin:22px 0">
-  <p style="color:#8a99a6;font-size:12px;margin:0">Should I Boat? · Great Lakes boating conditions · <a href="https://shouldiboat.com" style="color:#8a99a6">shouldiboat.com</a></p>
+  <p style="color:#8a99a6;font-size:12px;margin:0"><a href="https://shouldiboat.com" style="color:#8a99a6">shouldiboat.com</a> · Great Lakes boating conditions</p>
 </div>`;
 
 // Stable per-user unsubscribe token + reverse index (created lazily, never expires).
@@ -307,7 +307,7 @@ async function welcomeNotify(env, user, url) {
   if (user.emailOptOut) return { emailSent: false, emailError: "opted_out" };
   const t = await ensureUnsubToken(env, user);
   const unsubUrl = `${siteBase(env, url)}/unsubscribe?u=${t}`;
-  return notify(env, "welcome", { email: user.email }, { to: user.email, subject: "Welcome to Should I Boat?", html: welcomeHtml(unsubUrl), ttlDays: 7 });
+  return notify(env, "welcome", { email: user.email }, { to: user.email, subject: "Welcome to shouldiboat.com", html: welcomeHtml(unsubUrl), ttlDays: 7 });
 }
 // Always log a KV notification (success or failure); send the email if given.
 export async function notify(env, type, context, mail) {
@@ -353,7 +353,7 @@ export async function handleAuth(request, env, url, ctx) {
     const backTo = typeof spot === "string" && /^[a-z0-9-]{1,40}$/.test(spot) ? `spot=${spot}&` : "";
     const link = `${siteBase(env, url)}/?${backTo}verify=${vtoken}`;
     await runBg(ctx, notify(env, "email_verification", { email: user.email }, {
-      to: user.email, subject: "Confirm your email · Should I Boat?",
+      to: user.email, subject: "Confirm your email · shouldiboat.com",
       html: verifyHtml(link), ttlDays: 7,
     }));
     return json({ pending: true, email: user.email });
@@ -371,7 +371,7 @@ export async function handleAuth(request, env, url, ctx) {
         await env.USERS.put(`reset:${token}`, e, { expirationTtl: 3600 });
         const link = `${siteBase(env, url)}/?reset=${token}`;
         await runBg(ctx, notify(env, "password_reset_request", { email: e }, {
-          to: e, subject: "Reset your Should I Boat? password",
+          to: e, subject: "Reset your shouldiboat.com password",
           html: `<div style="font-family:system-ui,sans-serif"><h2>Reset your password</h2><p>Click below to set a new password. This link expires in 1 hour.</p><p><a href="${link}" style="display:inline-block;background:#008BA8;color:#fff;padding:10px 18px;border-radius:8px;text-decoration:none">Reset password</a></p><p style="color:#667">If you didn't request this, you can ignore this email.</p></div>`,
         }));
       }
@@ -416,7 +416,7 @@ export async function handleAuth(request, env, url, ctx) {
     if (firstTime) {
       await runBg(ctx, Promise.all([
         notify(env, "signup", { email, via: "password" }, {
-          to: await adminEmails(env), subject: "New Should I Boat? signup",
+          to: await adminEmails(env), subject: "New shouldiboat.com signup",
           html: `<div style="font-family:system-ui,sans-serif"><h2>New signup</h2><p><b>${htmlEscape(email)}</b> just created an account (email/password).</p></div>`,
           ttlDays: 30,
         }),
@@ -439,7 +439,7 @@ export async function handleAuth(request, env, url, ctx) {
         await env.USERS.put(`verify:${vtoken}`, e, { expirationTtl: 86400 });
         const link = `${siteBase(env, url)}/?verify=${vtoken}`;
         await runBg(ctx, notify(env, "email_verification", { email: e }, {
-          to: e, subject: "Confirm your email · Should I Boat?",
+          to: e, subject: "Confirm your email · shouldiboat.com",
           html: verifyHtml(link), ttlDays: 7,
         }));
       }
@@ -465,12 +465,12 @@ export async function handleAuth(request, env, url, ctx) {
       inner = `<h1>Link expired</h1><p>This unsubscribe link is no longer valid. You can manage email preferences from your <a href="/account">account</a>.</p>`;
     } else if (resub) {
       await setOptOut(false);
-      inner = `<h1>You're resubscribed ⚓</h1><p>You'll receive occasional non-essential emails again. Account &amp; security emails are always sent.</p><p><a class="btn" href="/">Back to Should I Boat?</a></p>`;
+      inner = `<h1>You're resubscribed</h1><p>You'll receive occasional non-essential emails again. Account &amp; security emails are always sent.</p><p><a class="btn" href="/">Back to shouldiboat.com</a></p>`;
     } else {
       await setOptOut(true);
-      inner = `<h1>You're unsubscribed</h1><p>We won't send you non-essential emails. Account &amp; security messages (verification, password resets, receipts) are still delivered.</p><p>Changed your mind? <a href="/unsubscribe?u=${encodeURIComponent(t)}&amp;action=resubscribe">Resubscribe</a>.</p><p><a class="btn" href="/">Back to Should I Boat?</a></p>`;
+      inner = `<h1>You're unsubscribed</h1><p>We won't send you non-essential emails. Account &amp; security messages (verification, password resets, receipts) are still delivered.</p><p>Changed your mind? <a href="/unsubscribe?u=${encodeURIComponent(t)}&amp;action=resubscribe">Resubscribe</a>.</p><p><a class="btn" href="/">Back to shouldiboat.com</a></p>`;
     }
-    const page = `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex"><title>Email preferences · Should I Boat?</title><style>body{font-family:system-ui,-apple-system,sans-serif;background:#0b1d2a;color:#e7eef4;margin:0;display:flex;min-height:100vh;align-items:center;justify-content:center;padding:24px}.card{background:#10293b;border:1px solid #1d3a4f;border-radius:14px;max-width:480px;padding:32px;box-shadow:0 8px 40px rgba(0,0,0,.35)}h1{margin:0 0 12px;font-size:22px}p{line-height:1.55;color:#b9c7d4}a{color:#36b3cf}.btn{display:inline-block;margin-top:16px;background:#008BA8;color:#fff;padding:10px 18px;border-radius:8px;text-decoration:none}</style></head><body><div class="card">${inner}</div></body></html>`;
+    const page = `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex"><title>Email preferences · shouldiboat.com</title><style>body{font-family:system-ui,-apple-system,sans-serif;background:#0b1d2a;color:#e7eef4;margin:0;display:flex;min-height:100vh;align-items:center;justify-content:center;padding:24px}.card{background:#10293b;border:1px solid #1d3a4f;border-radius:14px;max-width:480px;padding:32px;box-shadow:0 8px 40px rgba(0,0,0,.35)}h1{margin:0 0 12px;font-size:22px}p{line-height:1.55;color:#b9c7d4}a{color:#36b3cf}.btn{display:inline-block;margin-top:16px;background:#008BA8;color:#fff;padding:10px 18px;border-radius:8px;text-decoration:none}</style></head><body><div class="card">${inner}</div></body></html>`;
     return new Response(page, { status: 200, headers: { "Content-Type": "text/html; charset=utf-8" } });
   }
 
@@ -684,7 +684,7 @@ export async function handleAuth(request, env, url, ctx) {
       await env.USERS.put(`reset:${token}`, target.email, { expirationTtl: 3600 });
       const link = `${siteBase(env, url)}/?reset=${token}`;
       const r = await notify(env, "admin_password_reset", { email: target.email, by: u.email }, {
-        to: target.email, subject: "Reset your Should I Boat? password",
+        to: target.email, subject: "Reset your shouldiboat.com password",
         html: `<div style="font-family:system-ui,sans-serif"><h2>Reset your password</h2><p>An admin started a password reset for your account. Click below to set a new password (expires in 1 hour).</p><p><a href="${link}" style="display:inline-block;background:#008BA8;color:#fff;padding:10px 18px;border-radius:8px;text-decoration:none">Reset password</a></p></div>`,
       });
       return json({ ok: true, emailSent: r.emailSent, emailError: r.emailError });
@@ -786,7 +786,7 @@ export async function handleAuth(request, env, url, ctx) {
       await env.USERS.put(emailKey(email), JSON.stringify(user));
       await runBg(ctx, Promise.all([
         notify(env, "signup", { email, via: "google" }, {
-          to: await adminEmails(env), subject: "New Should I Boat? signup",
+          to: await adminEmails(env), subject: "New shouldiboat.com signup",
           html: `<div style="font-family:system-ui,sans-serif"><h2>New signup</h2><p><b>${htmlEscape(email)}</b> just created an account (Google).</p></div>`,
           ttlDays: 30,
         }),
@@ -919,7 +919,7 @@ export async function handleAuth(request, env, url, ctx) {
       }
     }
     await runBg(ctx, notify(env, "account_deleted", { email: u.email }, {
-      to: await adminEmails(env), subject: "Account deleted · Should I Boat?",
+      to: await adminEmails(env), subject: "Account deleted · shouldiboat.com",
       html: `<div style="font-family:system-ui,sans-serif"><p><b>${htmlEscape(u.email)}</b> deleted their account.</p></div>`, ttlDays: 30,
     }));
     return json({ ok: true }, 200, { "Set-Cookie": cookie("sib_session", "", 0) });
@@ -943,7 +943,7 @@ export async function handleAuth(request, env, url, ctx) {
       const email = (obj.client_reference_id || obj.customer_email || obj.customer_details?.email || "").toLowerCase();
       if (obj.customer && email) await env.USERS.put(`stripecust:${obj.customer}`, email); // reverse index for later events
       await setAdFree(email, true, { stripeCustomerId: obj.customer || null, stripeSubId: obj.subscription || null });
-      if (email) await runBg(ctx, notify(env, "adfree_activated", { email }, { to: email, subject: "You're ad-free on Should I Boat? 🎉", html: adFreeHtml(), ttlDays: 30 }));
+      if (email) await runBg(ctx, notify(env, "adfree_activated", { email }, { to: email, subject: "You're ad-free on shouldiboat.com", html: adFreeHtml(), ttlDays: 30 }));
     } else if (event.type === "customer.subscription.updated" || event.type === "customer.subscription.deleted") {
       const email = await env.USERS.get(`stripecust:${obj.customer}`);
       const active = event.type !== "customer.subscription.deleted" && ["active", "trialing", "past_due"].includes(obj.status);

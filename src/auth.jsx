@@ -170,7 +170,7 @@ export function AuthModal({ auth, onClose, initialMode = "login", resetToken = "
         {mode === "verify" ? (
           verifyDone ? (
             <>
-              <p className="modal-sub">Your email is confirmed — you're signed in. 🎉</p>
+              <p className="modal-sub">Your email is confirmed — you're signed in.</p>
               <button className="cbtn modal-submit" onClick={close}>Continue</button>
             </>
           ) : busy ? (

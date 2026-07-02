@@ -831,7 +831,7 @@ async function run() {
     emailCalls = [];
     const res = await runScheduled(env, 10);
     eq("digest: exactly one digest sent", res.digests, 1);
-    const d = emailCalls.find((c) => /Should I Boat/i.test(c.subject));
+    const d = emailCalls.find((c) => /shouldiboat.com/i.test(c.subject));
     check("digest: goes to the opted-in user", d && d.to[0].email === "digest@example.com", JSON.stringify(emailCalls.map((c) => c.to)));
     check("digest: subject leads with home-port best window", /Best window at Sandusky/i.test(d.subject), d.subject);
     check("digest: rows carry the best window", /best 6am–9pm/.test(d.htmlContent));

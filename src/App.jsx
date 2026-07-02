@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from "react";
 import Cams from "./Cams.jsx";
 import WxIcon from "./WxIcon.jsx";
+import { IconStar, IconCheck, IconClock, IconNoGo, IconAlert, IconSunrise, IconSunset, IconDoc, IconRefresh } from "./icons.jsx";
 import { useAdsense, useAnalytics, getConsent, AdSlot, GearBlock, ConsentBanner } from "./monetize.jsx";
 import { useAuth, Account, AuthModal } from "./auth.jsx";
 import Takeover from "./Takeover.jsx";
@@ -33,19 +34,6 @@ function windyUrl(lat, lon, overlay = "wind") {
     `&menu=&message=true&marker=true&calendar=now&pressure=&type=map&location=coordinates` +
     `&detail=&metricWind=kt&metricTemp=%C2%B0F&radarRange=-1`
   );
-}
-
-// Compact weather glyph from an NWS shortForecast.
-function wxGlyph(short) {
-  const s = (short || "").toLowerCase();
-  if (/thunder|tstm|waterspout/.test(s)) return "⛈️";
-  if (/snow|flurr|sleet|wintry|ice/.test(s)) return "🌨️";
-  if (/rain|shower|drizzle/.test(s)) return /sunny|partly|mostly sunny|few/.test(s) ? "🌦️" : "🌧️";
-  if (/fog|haze|mist|smoke/.test(s)) return "🌫️";
-  if (/mostly cloudy|overcast|^cloudy|broken/.test(s)) return "☁️";
-  if (/partly|mostly sunny|few clouds|partly cloudy/.test(s)) return "⛅";
-  if (/sunny|clear/.test(s)) return "☀️";
-  return "🌤️";
 }
 
 function dayLabel(d) {
@@ -223,11 +211,11 @@ function LocationPicker({ byLake, active, activeName, onSelect, favorites = [], 
   const Row = (s) => (
     <div key={s.id} className={`locpick-item ${s.id === active ? "active" : ""}`}>
       <button className="locpick-pick" onClick={() => { onSelect(s.id); setOpen(false); setQ(""); }}>
-        <span>{s.name}</span>{s.id === active && <span className="check">✓</span>}
+        <span>{s.name}</span>{s.id === active && <span className="check"><IconCheck /></span>}
       </button>
       {onToggleFav && (
         <button className={`favstar ${favSet.has(s.id) ? "on" : ""}`} title="Favorite"
-          onClick={(e) => { e.stopPropagation(); onToggleFav(s.id); }}>★</button>
+          onClick={(e) => { e.stopPropagation(); onToggleFav(s.id); }}><IconStar filled={favSet.has(s.id)} /></button>
       )}
     </div>
   );
@@ -255,7 +243,7 @@ function LocationPicker({ byLake, active, activeName, onSelect, favorites = [], 
           <div className="locpick-list">
             {onToggleFav && favSpots.length > 0 && !ql && (
               <div className="locpick-group">
-                <div className="locpick-lake">★ Favorites</div>
+                <div className="locpick-lake"><IconStar filled /> Favorites</div>
                 {favSpots.map((s) => Row(s))}
               </div>
             )}
@@ -368,12 +356,12 @@ function ShareButton({ spot, rec, wind, wv }) {
     track("event", "share_verdict", { spot: spot.id, level: rec.level });
     const text = `${spot.name}: ${rec.level} right now — wind ${wind.speedKt ?? "–"} kt, waves ${wv.ft ?? "–"} ft.`;
     const url = `https://shouldiboat.com/?spot=${encodeURIComponent(spot.id)}`;
-    if (navigator.share) { try { await navigator.share({ title: "Should I Boat?", text, url }); } catch (e) { /* dismissed */ } return; }
+    if (navigator.share) { try { await navigator.share({ title: "shouldiboat.com", text, url }); } catch (e) { /* dismissed */ } return; }
     try { await navigator.clipboard.writeText(`${text} ${url}`); setCopied(true); setTimeout(() => setCopied(false), 2000); } catch (e) { /* ignore */ }
   };
   return (
     <button className="share-btn" onClick={share} title="Share today's verdict">
-      {copied ? "Copied ✓" : (
+      {copied ? <><IconCheck /> Copied</> : (
         <>
           <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
             <circle cx="18" cy="5" r="3" /><circle cx="6" cy="12" r="3" /><circle cx="18" cy="19" r="3" />
@@ -477,17 +465,17 @@ function EmailNudge({ auth }) {
 // The gold "yellow time" — when to head back in.
 function OutlookPill({ outlook }) {
   if (!outlook) return null;
-  if (outlook.goodHours === 0) return <span className="opill bad">⛔ not right now</span>;
+  if (outlook.goodHours === 0) return <span className="opill bad"><IconNoGo /> not right now</span>;
   if (outlook.headInBy)
-    return <span className="opill warn">🕐 be in by <b>{fmtHour(outlook.headInBy, true)}</b> · {outlook.headInReason || "weather turns"}</span>;
-  return <span className="opill good">🕐 good for {outlook.goodHours}h+</span>;
+    return <span className="opill warn"><IconClock /> be in by <b>{fmtHour(outlook.headInBy, true)}</b> · {outlook.headInReason || "weather turns"}</span>;
+  return <span className="opill good"><IconClock /> good for {outlook.goodHours}h+</span>;
 }
 
 // Today's daylight window — boaters plan around first light and dusk.
 function SunTimes({ sun }) {
   if (!sun || !sun.sunrise) return null;
   const f = (t) => new Date(t).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }).toLowerCase().replace(" ", "");
-  return <span className="suntimes" title="Sunrise · sunset today">☀️ {f(sun.sunrise)} → 🌇 {f(sun.sunset)}</span>;
+  return <span className="suntimes" title="Sunrise · sunset today"><IconSunrise /> {f(sun.sunrise)} → <IconSunset /> {f(sun.sunset)}</span>;
 }
 
 // Windy-style hourly table: labeled metric rows × hour columns, color-coded
@@ -724,8 +712,8 @@ export default function App() {
   useEffect(() => {
     const name = (spots.find((s) => s.id === active) || {}).name;
     document.title = landing || !name
-      ? "Should I Boat? — Live Great Lakes boating conditions"
-      : `${name} boating conditions — Should I Boat?`;
+      ? "shouldiboat.com — Live Great Lakes boating conditions"
+      : `${name} boating conditions — shouldiboat.com`;
   }, [landing, active, spots]);
   // Save spot/theme to the account (debounced) once the signed-in prefs are applied.
   useEffect(() => {
@@ -752,7 +740,7 @@ export default function App() {
     <>
       <header className="appheader">
         <div className="appheader-inner">
-          <a className="brand" href="/" aria-label="Should I Boat — home" onClick={(e) => { e.preventDefault(); goLanding(); }}>
+          <a className="brand" href="/" aria-label="shouldiboat.com — home" onClick={(e) => { e.preventDefault(); goLanding(); }}>
             <img className="logo" src={effective === "dark" ? "/boat-mark-white.png" : "/boat-mark.png"} alt="" />
             <span className="wordmark">
               <span className="wm-name">SHOULDI<b>BOAT</b><span className="wm-dot">.com</span></span>
@@ -797,7 +785,7 @@ export default function App() {
                       <button
                         className={`favstar call-fav ${(auth.user.favorites || []).includes(active) ? "on" : ""}`}
                         title={(auth.user.favorites || []).includes(active) ? "Remove from my ports" : "Add to my ports — front and center on the homepage + morning email"}
-                        onClick={() => toggleFav(active)}>★</button>
+                        onClick={() => toggleFav(active)}><IconStar filled={(auth.user.favorites || []).includes(active)} /></button>
                     )}
                   </span>
                   <OutlookPill outlook={data.outlook} />
@@ -817,7 +805,7 @@ export default function App() {
 
             {(data.alerts || []).map((a, i) => (
               <div className="alert" key={i}>
-                <div className="ev">⚠ {a.event || "Marine alert"}</div>
+                <div className="ev"><IconAlert /> {a.event || "Marine alert"}</div>
                 <div className="hl">{a.headline || ""}</div>
               </div>
             ))}
@@ -913,7 +901,7 @@ export default function App() {
 
                 {data.noaaReport?.text && (
                   <details className="card">
-                    <summary>📋 Full NWS nearshore report (NSH · {data.noaaReport.office})</summary>
+                    <summary><IconDoc /> Full NWS nearshore report (NSH · {data.noaaReport.office})</summary>
                     <RawNSH text={data.noaaReport.text} />
                   </details>
                 )}
@@ -927,7 +915,7 @@ export default function App() {
               Source: {buoy ? `Buoy ${buoy.station} · ${buoy.ageMinutes != null ? `${buoy.ageMinutes} min ago` : "latest"}` : "forecast only"}
               {" · NWS & NDBC (NOAA), Windy. Updated "}{new Date(data.updatedAt).toLocaleTimeString()}
               <span className="buildtag" title="Deployed version">{typeof __BUILD__ !== "undefined" ? ` · v ${__BUILD__}` : ""}</span>
-              <button onClick={() => loadSpot(active)}>↻ Refresh</button>
+              <button onClick={() => loadSpot(active)}><IconRefresh /> Refresh</button>
               <div className="footlinks">
                 <a href="/about" target="_blank" rel="noopener">About</a>
                 <a href="/legal#terms" target="_blank" rel="noopener">Terms</a>

@@ -92,7 +92,7 @@ export function GearBlock({ waterTempF }) {
           </a>
         ))}
       </div>
-      {AMAZON_TAG && <div className="hint">As an Amazon Associate, Should I Boat earns from qualifying purchases.</div>}
+      {AMAZON_TAG && <div className="hint">As an Amazon Associate, shouldiboat.com earns from qualifying purchases.</div>}
     </section>
   );
 }
@@ -104,7 +104,7 @@ export function ConsentBanner({ consent, onChoose }) {
   if (consent === "all" || consent === "essential") return null;
   return (
     <div className="consent" role="dialog" aria-label="Cookie notice">
-      <span>We use cookies for analytics and ads to keep Should I Boat free. Accept to allow them, or reject non-essential cookies.{" "}
+      <span>We use cookies for analytics and ads to keep shouldiboat.com free. Accept to allow them, or reject non-essential cookies.{" "}
         <a href="/legal#cookies" target="_blank" rel="noopener">Learn more</a>.</span>
       <div className="consent-actions">
         <button className="cbtn ghost" onClick={() => onChoose("essential")}>Reject</button>
