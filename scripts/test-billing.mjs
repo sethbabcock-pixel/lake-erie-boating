@@ -785,6 +785,25 @@ async function run() {
     eq("email: over-long → 400", await reg("a".repeat(250) + "@x.com"), 400);
   }
 
+  // 46. CSP report collector stores deduped violations; admin can list them
+  {
+    const env = { USERS: makeKV(), ADMIN_EMAIL: "admin@example.com" };
+    const admin = await seedUser(env, "admin@example.com");
+    const report = { "csp-report": { "effective-directive": "frame-src", "blocked-uri": "https://cam.example.com/live", "document-uri": "https://shouldiboat.com/" } };
+    const r = await call(req("POST", "/api/csp-report", { body: report }), env);
+    eq("csp-report: → 204", r.status, 204);
+    check("csp-report: stored under deduped key", [...env.USERS._map.keys()].some((k) => k.startsWith("csp:frame-src:cam.example.com")));
+    // a second identical report collapses to the same key
+    await call(req("POST", "/api/csp-report", { body: report }), env);
+    eq("csp-report: dedupes by directive+host", [...env.USERS._map.keys()].filter((k) => k.startsWith("csp:")).length, 1);
+    // admin can list
+    eq("csp-reports: signed out → 401", (await call(req("GET", "/api/admin/csp-reports"), { USERS: env.USERS })).status, 401);
+    const list = await (await call(req("GET", "/api/admin/csp-reports", { cookie: admin }), env)).json();
+    check("csp-reports: lists violation", list.reports.some((x) => x.directive === "frame-src" && /cam\.example\.com/.test(x.blocked)));
+    const rando = await seedUser(env, "rando@example.com");
+    eq("csp-reports: non-admin → 403", (await call(req("GET", "/api/admin/csp-reports", { cookie: rando }), env)).status, 403);
+  }
+
   console.log(results.join("\n"));
   console.log(`\n${passed} passed, ${failed} failed`);
   if (failed) process.exit(1);

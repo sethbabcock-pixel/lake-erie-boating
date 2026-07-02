@@ -305,6 +305,38 @@ function DiagnosticsPanel() {
   );
 }
 
+function CspPanel() {
+  const [data, setData] = useState(null);
+  const [err, setErr] = useState("");
+  const load = async () => {
+    setErr("");
+    try {
+      const r = await fetch("/api/admin/csp-reports");
+      const d = await r.json();
+      if (!r.ok) throw new Error(d.error || "Could not load.");
+      setData(d.reports);
+    } catch (e) { setErr(e.message); }
+  };
+  useEffect(() => { load(); }, []);
+  return (
+    <section className="card acct-sec">
+      <div className="card-head">
+        <h2>CSP report-only violations</h2>
+        {data && <button className="linklike" onClick={load}>↻ refresh</button>}
+      </div>
+      <p className="acct-note" style={{ marginTop: 0 }}>What a stricter Content-Security-Policy <em>would</em> block (nothing is blocked yet). Use this to tighten the allowlist before enforcing.</p>
+      {err && <div className="modal-err">{err}</div>}
+      {data && data.length === 0 && <p className="acct-note">No violations reported. 🎉</p>}
+      {data && data.map((r, i) => (
+        <div className="acct-kv admin-notif" key={i}>
+          <span><b>{r.directive}</b> · {r.blocked || "inline"}</span>
+          <b className="notif-off">{fmtDate(r.timestamp)}</b>
+        </div>
+      ))}
+    </section>
+  );
+}
+
 function NotificationsPanel() {
   const [items, setItems] = useState(null);
   const [err, setErr] = useState("");
@@ -471,6 +503,8 @@ export default function AdminPage() {
             <UsersPanel />
 
             <DiagnosticsPanel />
+
+            <CspPanel />
 
             <NotificationsPanel />
 

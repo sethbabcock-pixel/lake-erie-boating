@@ -11,6 +11,23 @@ import { handleAuth } from "./functions/auth.js";
 // conservative: no script/style CSP directives, so the Google Ads/Analytics/
 // Stripe stack keeps working, while still hardening clickjacking, MIME sniffing,
 // referrer leakage, transport security, and base-tag/plugin injection.
+// Report-only CSP: browsers report violations to /api/csp-report but nothing is
+// blocked, so it can't break the ads/analytics/Stripe stack. We watch the
+// reports, tighten the allowlist, then promote this to an enforced policy.
+const CSP_REPORT_ONLY = [
+  "default-src 'self'",
+  "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://pagead2.googlesyndication.com https://*.googlesyndication.com https://www.googletagmanager.com https://www.google-analytics.com https://*.google-analytics.com https://securepubads.g.doubleclick.net https://*.doubleclick.net https://www.googletagservices.com https://js.stripe.com https://adservice.google.com https://fundingchoicesmessages.google.com https://static.cloudflareinsights.com",
+  "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
+  "img-src 'self' data: https:",
+  "font-src 'self' data: https://fonts.gstatic.com",
+  "connect-src 'self' https://*.google-analytics.com https://*.analytics.google.com https://*.doubleclick.net https://pagead2.googlesyndication.com https://*.googlesyndication.com https://api.stripe.com https://region1.google-analytics.com",
+  "frame-src 'self' https://googleads.g.doubleclick.net https://tpc.googlesyndication.com https://*.doubleclick.net https://*.googlesyndication.com https://js.stripe.com https://*.stripe.com https://www.google.com https://fundingchoicesmessages.google.com",
+  "frame-ancestors 'self'",
+  "base-uri 'self'",
+  "object-src 'none'",
+  "report-uri /api/csp-report",
+].join("; ");
+
 function withSecurityHeaders(resp) {
   const h = new Headers(resp.headers);
   h.set("Strict-Transport-Security", "max-age=31536000; includeSubDomains");
@@ -19,6 +36,7 @@ function withSecurityHeaders(resp) {
   h.set("Referrer-Policy", "strict-origin-when-cross-origin");
   h.set("Permissions-Policy", "geolocation=(), microphone=(), camera=()");
   h.set("Content-Security-Policy", "frame-ancestors 'self'; base-uri 'self'; object-src 'none'");
+  h.set("Content-Security-Policy-Report-Only", CSP_REPORT_ONLY);
   return new Response(resp.body, { status: resp.status, statusText: resp.statusText, headers: h });
 }
 

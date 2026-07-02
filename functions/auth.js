@@ -472,6 +472,38 @@ export async function handleAuth(request, env, url, ctx) {
     return new Response(page, { status: 200, headers: { "Content-Type": "text/html; charset=utf-8" } });
   }
 
+  // ---- CSP violation collector (public; from the report-only policy) ----
+  if (path === "/api/csp-report" && request.method === "POST") {
+    // Rate-limit so a hostile page can't flood KV via the public endpoint.
+    if (!(await rateLimit(env, request, "csp", 40, 60))) return new Response(null, { status: 204 });
+    try {
+      const raw = await request.json().catch(() => null);
+      // Accept both the classic {"csp-report":{...}} and Reporting-API [{...}] shapes.
+      const r = raw && (raw["csp-report"] || (Array.isArray(raw) ? raw[0]?.body : raw.body) || raw) || {};
+      const directive = String(r["effective-directive"] || r["violated-directive"] || r.effectiveDirective || "unknown").split(" ")[0].slice(0, 40);
+      const blocked = String(r["blocked-uri"] || r.blockedURL || r.blockedURI || "").slice(0, 300);
+      let host = "inline";
+      try { if (blocked && blocked.startsWith("http")) host = new URL(blocked).host; else if (blocked) host = blocked.split(":")[0]; } catch (e) { /* keep */ }
+      // Dedupe by (directive, host) so distinct violations collapse to few keys.
+      await env.USERS.put(`csp:${directive}:${host}`.slice(0, 380),
+        JSON.stringify({ directive, blocked, documentUri: String(r["document-uri"] || r.documentURL || "").slice(0, 300), timestamp: new Date().toISOString() }),
+        { expirationTtl: 7 * 86400 });
+    } catch (e) { /* ignore malformed reports */ }
+    return new Response(null, { status: 204 });
+  }
+
+  // ---- admin: list recent CSP report-only violations ----
+  if (path === "/api/admin/csp-reports" && request.method === "GET") {
+    const u = await userFromRequest(env, request);
+    if (!u) return json({ error: "Not signed in." }, 401);
+    if (!isAdmin(env, u)) return json({ error: "Forbidden — not an admin account." }, 403);
+    const list = await env.USERS.list({ prefix: "csp:", limit: 200 });
+    const reports = [];
+    for (const k of list.keys) { const v = await env.USERS.get(k.name, "json"); if (v) reports.push(v); }
+    reports.sort((a, b) => (b.timestamp || "").localeCompare(a.timestamp || ""));
+    return json({ reports: reports.slice(0, 100) });
+  }
+
   // ---- login ----
   if (path === "/auth/login" && request.method === "POST") {
     if (!(await rateLimit(env, request, "login", 20, 600))) return json({ error: "Too many sign-in attempts. Please wait a few minutes and try again." }, 429);
