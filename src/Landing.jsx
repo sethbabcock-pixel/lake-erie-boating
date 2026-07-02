@@ -91,12 +91,23 @@ function RegionDirectory({ summary, q, onSelect, deepLake }) {
           <details className="region" key={lake} id={`lake-${lake.toLowerCase().replace(/\s+/g, "-")}`}
             open={deepLake ? lake === deepLake : (lake === "Lake Erie" || !!ql)}>
             <summary className="region-head">
-              <span className="region-name">{lake}</span>
-              <span className="region-tally">
-                {c.GO ? <em className="go">{c.GO} GO</em> : null}
-                {c.CAUTION ? <em className="caution">{c.CAUTION} caution</em> : null}
-                {c["NO-GO"] ? <em className="nogo">{c["NO-GO"]} no-go</em> : null}
-                <span className="region-count">{list.length} spots</span>
+              <span className="region-title">
+                <span className="region-name">{lake}</span>
+                <span className="region-sub">State of the lake · {list.length} ports</span>
+              </span>
+              <span className="region-side">
+                <span className="region-tally">
+                  {c.GO ? <em className="go">{c.GO} GO</em> : null}
+                  {c.CAUTION ? <em className="caution">{c.CAUTION} caution</em> : null}
+                  {c["NO-GO"] ? <em className="nogo">{c["NO-GO"]} no-go</em> : null}
+                </span>
+                {(c.GO + c.CAUTION + c["NO-GO"]) > 0 && (
+                  <span className="region-bar" aria-hidden="true">
+                    {c.GO ? <i className="go" style={{ flexGrow: c.GO }} /> : null}
+                    {c.CAUTION ? <i className="caution" style={{ flexGrow: c.CAUTION }} /> : null}
+                    {c["NO-GO"] ? <i className="nogo" style={{ flexGrow: c["NO-GO"] }} /> : null}
+                  </span>
+                )}
               </span>
             </summary>
             <div className="loc-grid">
@@ -109,7 +120,21 @@ function RegionDirectory({ summary, q, onSelect, deepLake }) {
   );
 }
 
-export default function Landing({ adFree, onSelect, favorites, onCookieSettings, onJoin }) {
+// Signed-in boaters with starred ports get their shoreline first, side-by-side.
+function MyPorts({ summary, favorites, onSelect }) {
+  const mine = (favorites || []).map((id) => (summary || []).find((s) => s.id === id)).filter(Boolean);
+  if (!mine.length) return null;
+  return (
+    <section className="directory myports">
+      <h2 className="directory-title">★ My ports</h2>
+      <div className="loc-grid">
+        {mine.map((s) => <LocCard key={s.id} s={s} onSelect={onSelect} />)}
+      </div>
+    </section>
+  );
+}
+
+export default function Landing({ adFree, onSelect, favorites, onCookieSettings, onJoin, signedIn, nudge }) {
   const [summary, setSummary] = useState(null);
   const [q, setQ] = useState("");
   const deepLake = lakeParam();
@@ -123,7 +148,7 @@ export default function Landing({ adFree, onSelect, favorites, onCookieSettings,
   }, []);
   return (
     <>
-      <Takeover splash adFree={adFree}>
+      <Takeover splash adFree={adFree} signedIn={signedIn} onJoin={onJoin}>
         <SplashSelector q={q} setQ={setQ} summary={summary} onSelect={onSelect} favorites={favorites} />
       </Takeover>
       <main className="app">
@@ -133,6 +158,13 @@ export default function Landing({ adFree, onSelect, favorites, onCookieSettings,
             <button className="cbtn" onClick={onJoin}>Create free account</button>
           </div>
         )}
+        {signedIn && (favorites || []).length === 0 && (
+          <div className="joinstrip fav-nudge">
+            <span><b>⭐ Star your home port</b> and it'll be front and center here — and in your morning verdict email. Tap any port below, then hit the star.</span>
+          </div>
+        )}
+        {nudge}
+        {signedIn && <MyPorts summary={summary} favorites={favorites} onSelect={onSelect} />}
         <RegionDirectory summary={summary} q={q} onSelect={onSelect} deepLake={deepLake} />
         <footer className="meta">
           Live data from NOAA/NWS, NDBC buoys, Open-Meteo &amp; Windy. A planning aid — not an official forecast or a navigation tool.

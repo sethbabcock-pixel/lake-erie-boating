@@ -665,3 +665,61 @@ body.has-takeover .app { background: var(--bg); border-radius: var(--r-lg) var(-
 .joinstrip b { color: var(--text); }
 .joinstrip .cbtn { flex: 0 0 auto; white-space: nowrap; }
 @media (max-width: 640px) { .joinstrip { flex-direction: column; align-items: stretch; text-align: center; } }
+
+/* ── Week-ahead strip ──────────────────────────────────────────────────────── */
+.week { display: flex; gap: var(--s2); overflow-x: auto; padding-bottom: 2px; }
+.wday { flex: 1 0 76px; min-width: 76px; text-align: center; padding: var(--s2) var(--s2) var(--s3);
+  background: var(--surface-sunk); border: 1px solid var(--border); border-radius: var(--r-md); position: relative; }
+.wday.weekend { border-color: color-mix(in srgb, var(--gold) 55%, var(--border)); }
+.wd-name { font-size: var(--fs-xs); font-weight: var(--fw-semibold); color: var(--text-muted); }
+.wd-star { color: var(--gold); margin-left: 3px; }
+.wd-level { margin: 6px auto 7px; font-size: 11px; font-weight: var(--fw-bold); border-radius: var(--r-pill);
+  padding: 2px 0; width: 58px; color: #fff; letter-spacing: .02em; }
+.wd-level.go { background: var(--success); }
+.wd-level.caution { background: var(--warning); }
+.wd-level.nogo { background: var(--danger); }
+.wd-m { font-family: var(--font-mono); font-size: var(--fs-sm); color: var(--text); }
+.wd-m small { color: var(--text-faint); margin-left: 2px; }
+.wd-m.wave b { color: var(--accent); }
+.wd-p { font-size: var(--fs-xs); color: var(--text-faint); margin-top: 2px; }
+
+/* Sunrise / sunset chip on the call row */
+.suntimes { font-size: var(--fs-xs); color: var(--text-muted); white-space: nowrap; }
+
+/* Star-a-port button on the verdict card */
+.call-fav { margin-left: var(--s2); vertical-align: 2px; }
+.favstar { background: none; border: none; cursor: pointer; font-size: 19px; line-height: 1;
+  color: var(--text-faint); padding: 2px 4px; transition: color var(--dur-fast), transform var(--dur-fast); }
+.favstar:hover { color: var(--gold); transform: scale(1.15); }
+.favstar.on { color: var(--gold); }
+
+/* My ports section + email nudge */
+.myports { padding-top: var(--s5); }
+.myports .loc-grid { padding: 0; }
+.email-nudge, .fav-nudge { margin-bottom: var(--s4); }
+.nudge-btns { display: flex; gap: var(--s2); flex: 0 0 auto; }
+
+/* State-of-the-lake region banners */
+.region-head { display: flex; align-items: center; justify-content: space-between; gap: var(--s4); }
+.region-title { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.region-sub { font-size: var(--fs-xs); color: var(--text-faint); text-transform: uppercase; letter-spacing: var(--tracking-wide); }
+.region-side { display: flex; flex-direction: column; align-items: flex-end; gap: 5px; flex: 0 1 320px; min-width: 130px; }
+.region-bar { display: flex; width: 100%; max-width: 300px; height: 5px; border-radius: var(--r-pill); overflow: hidden; background: var(--surface-sunk); }
+.region-bar i { display: block; min-width: 4px; }
+.region-bar .go { background: var(--success); }
+.region-bar .caution { background: var(--warning); }
+.region-bar .nogo { background: var(--danger); }
+
+/* Gate list with line icons */
+.gate-list li { display: flex; align-items: flex-start; gap: var(--s2); }
+.gate-ico { flex: 0 0 auto; margin-top: 2px; color: var(--accent); }
+
+/* Account email toggles */
+.acct-toggle { display: flex; align-items: flex-start; gap: var(--s3); padding: var(--s3) 0;
+  border-bottom: 1px solid var(--border); font-size: var(--fs-sm); color: var(--text-muted); cursor: pointer; }
+.acct-toggle:last-of-type { border-bottom: none; }
+.acct-toggle input { margin-top: 3px; width: 17px; height: 17px; accent-color: var(--accent); flex: 0 0 auto; }
+.acct-toggle b { color: var(--text); }
+
+/* Hero CTA as a button (signed-out signup) */
+.hero-housecta.linkbtn { background: none; border: none; cursor: pointer; font: inherit; font-weight: var(--fw-semibold); padding: 0; }

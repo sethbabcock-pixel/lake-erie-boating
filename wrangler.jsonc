@@ -6,5 +6,8 @@
   "build": { "command": "npm install && npm run build" },
   "kv_namespaces": [
     { "binding": "USERS", "id": "ab7226cefa2d4f8a805b4ecb1b23775b" }
-  ]
+  ],
+  // Hourly: NO-GO alert emails each run (daytime ET only); the 10:00 UTC run
+  // (6am ET) also sends the daily "your ports" verdict digest.
+  "triggers": { "crons": ["0 * * * *"] }
 }

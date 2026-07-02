@@ -246,7 +246,7 @@ const textFromHtml = (html) =>
     .replace(/<[^>]+>/g, "")
     .replace(/&amp;/g, "&").replace(/&nbsp;/g, " ")
     .replace(/[ \t]+/g, " ").replace(/\n\s*\n\s*\n/g, "\n\n").trim();
-async function sendEmail(env, to, subject, htmlBody) {
+export async function sendEmail(env, to, subject, htmlBody) {
   if (!env.BREVO_API_KEY) return { ok: false, error: "BREVO_API_KEY not configured" };
   try {
     const recipients = (Array.isArray(to) ? to : [to]).map((e) => ({ email: e }));
@@ -280,7 +280,7 @@ async function adminEmails(env) {
 }
 // Footer for non-essential (relationship/marketing) email only — NOT for
 // transactional mail like verification, password reset, or receipts.
-const emailFooter = (unsubUrl) => unsubUrl ? `<p style="color:#99a;font-size:12px;margin-top:24px;font-family:system-ui,sans-serif">You're receiving this because you have a Should I Boat? account. <a href="${unsubUrl}" style="color:#99a">Unsubscribe from non-essential emails</a>.</p>` : "";
+export const emailFooter = (unsubUrl) => unsubUrl ? `<p style="color:#99a;font-size:12px;margin-top:24px;font-family:system-ui,sans-serif">You're receiving this because you have a Should I Boat? account. <a href="${unsubUrl}" style="color:#99a">Unsubscribe from non-essential emails</a>.</p>` : "";
 const welcomeHtml = (unsubUrl) => `<div style="font-family:system-ui,sans-serif"><h2>Welcome aboard! ⚓</h2><p>Thanks for joining <b>Should I Boat?</b> — your quick GO / CAUTION / NO-GO call for Great Lakes boating.</p><ul><li>Save your favorite launch spots</li><li>Set comfort limits tuned to your boat</li><li>Go ad-free anytime for $2.99/mo</li></ul><p><a href="https://shouldiboat.com" style="display:inline-block;background:#008BA8;color:#fff;padding:10px 18px;border-radius:8px;text-decoration:none">Open Should I Boat?</a></p></div>${emailFooter(unsubUrl)}`;
 const adFreeHtml = () => `<div style="font-family:system-ui,sans-serif"><h2>You're ad-free 🎉</h2><p>Thanks for supporting Should I Boat? — your subscription is active and the ads are gone. You can manage or cancel anytime from your <a href="https://shouldiboat.com/account">account</a>.</p></div>`;
 const verifyHtml = (link) => `<div style="font-family:system-ui,-apple-system,sans-serif;max-width:520px;color:#1a2b38">
@@ -294,7 +294,7 @@ const verifyHtml = (link) => `<div style="font-family:system-ui,-apple-system,sa
 </div>`;
 
 // Stable per-user unsubscribe token + reverse index (created lazily, never expires).
-async function ensureUnsubToken(env, user) {
+export async function ensureUnsubToken(env, user) {
   if (user.unsubToken) return user.unsubToken;
   const t = randHex(16);
   user.unsubToken = t;
@@ -310,7 +310,7 @@ async function welcomeNotify(env, user, url) {
   return notify(env, "welcome", { email: user.email }, { to: user.email, subject: "Welcome to Should I Boat?", html: welcomeHtml(unsubUrl), ttlDays: 7 });
 }
 // Always log a KV notification (success or failure); send the email if given.
-async function notify(env, type, context, mail) {
+export async function notify(env, type, context, mail) {
   let emailSent = false, emailError = null;
   if (mail && mail.to && mail.subject && mail.html) {
     const r = await sendEmail(env, mail.to, mail.subject, mail.html);
@@ -339,7 +339,7 @@ export async function handleAuth(request, env, url, ctx) {
   // ---- register ----
   if (path === "/auth/register" && request.method === "POST") {
     if (!(await rateLimit(env, request, "register", 12, 600))) return json({ error: "Too many attempts. Please wait a few minutes and try again." }, 429);
-    const { email, password } = await request.json().catch(() => ({}));
+    const { email, password, spot } = await request.json().catch(() => ({}));
     if (!validEmail(email)) return json({ error: "Enter a valid email." }, 400);
     { const pwErr = passwordProblem(password); if (pwErr) return json({ error: pwErr }, 400); }
     if (await env.USERS.get(emailKey(email), "json")) return json({ error: "An account with that email already exists." }, 409);
@@ -349,7 +349,9 @@ export async function handleAuth(request, env, url, ctx) {
     // Hard email verification for password accounts: no session until confirmed.
     const vtoken = randHex(20);
     await env.USERS.put(`verify:${vtoken}`, user.email, { expirationTtl: 86400 });
-    const link = `${siteBase(env, url)}/?verify=${vtoken}`;
+    // If they signed up from a spot page, the confirm link drops them back there.
+    const backTo = typeof spot === "string" && /^[a-z0-9-]{1,40}$/.test(spot) ? `spot=${spot}&` : "";
+    const link = `${siteBase(env, url)}/?${backTo}verify=${vtoken}`;
     await runBg(ctx, notify(env, "email_verification", { email: user.email }, {
       to: user.email, subject: "Confirm your email · Should I Boat?",
       html: verifyHtml(link), ttlDays: 7,
@@ -728,6 +730,17 @@ export async function handleAuth(request, env, url, ctx) {
     const body = await request.json().catch(() => ({}));
     if (path === "/api/prefs" && body.prefs && typeof body.prefs === "object") u.prefs = body.prefs;
     if (path === "/api/favorites" && Array.isArray(body.favorites)) u.favorites = body.favorites.slice(0, 50);
+    const { _token, ...store } = u;
+    await env.USERS.put(emailKey(u.email), JSON.stringify(store));
+    return json({ user: publicUser(u) });
+  }
+
+  // ---- email opt-out toggle (signed-in; complements the token /unsubscribe) ----
+  if (path === "/api/email-optout" && request.method === "POST") {
+    const u = await userFromRequest(env, request);
+    if (!u) return json({ error: "Not signed in." }, 401);
+    const body = await request.json().catch(() => ({}));
+    u.emailOptOut = !!body.optOut;
     const { _token, ...store } = u;
     await env.USERS.put(emailKey(u.email), JSON.stringify(store));
     return json({ user: publicUser(u) });

@@ -240,6 +240,38 @@ async function fetchMarineHourly(lat, lon) {
   }
 }
 
+// 7-day planning outlook (+ today's sunrise/sunset): daily max wind/gust/wave
+// from Open-Meteo. Powers the "week ahead / weekend" strip — a per-day verdict
+// so a boater can pick Saturday on Wednesday.
+async function fetchDailyOutlook(lat, lon) {
+  try {
+    const [wx, mar] = await Promise.all([
+      getJSON(
+        `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}` +
+        `&daily=wind_speed_10m_max,wind_gusts_10m_max,precipitation_probability_max,sunrise,sunset` +
+        `&wind_speed_unit=kn&forecast_days=7&timezone=auto`
+      ),
+      getJSON(
+        `https://marine-api.open-meteo.com/v1/marine?latitude=${lat}&longitude=${lon}` +
+        `&daily=wave_height_max&forecast_days=7&timezone=auto`
+      ).catch(() => null),
+    ]);
+    const d = wx?.daily || {};
+    const waves = mar?.daily?.wave_height_max || [];
+    const week = (d.time || []).map((date, i) => {
+      const windKt = round(d.wind_speed_10m_max?.[i], 0);
+      const gustKt = round(d.wind_gusts_10m_max?.[i], 0);
+      const precipPct = d.precipitation_probability_max?.[i] ?? null;
+      const waveFt = waves[i] == null ? null : round(mToFt(waves[i]), 1);
+      return { date, windKt, gustKt, precipPct, waveFt, level: hourRisk(windKt, precipPct ?? 0, "", waveFt) };
+    });
+    const sun = d.sunrise?.[0] ? { sunrise: d.sunrise[0], sunset: d.sunset[0] } : null;
+    return { week, sun };
+  } catch (e) {
+    return { week: [], sun: null };
+  }
+}
+
 async function fetchMarineForecast(zone) {
   try {
     const data = await getJSON(`${NWS}/zones/marine/${zone}/forecast`);
@@ -398,6 +430,48 @@ function windRead(dirCompass) {
   return r ? { dir: dirCompass, ...r } : null;
 }
 
+// ── Port-aware wind read for the other lakes ─────────────────────────────────
+// The curated WIND_READS above are written for Lake Erie's Ohio/PA shore.
+// Elsewhere we derive onshore / offshore / cross-shore from geometry: the
+// bearing from the port toward the middle of its lake is "lakeward" — wind
+// blowing FROM lakeward is onshore (chop stacks at the launch), FROM the
+// opposite is offshore (deceptively flat at the ramp), the rest is cross-shore.
+const LAKE_CENTERS = {
+  "Lake Ontario": { lat: 43.7, lon: -77.9 },
+  "Lake Huron": { lat: 44.8, lon: -82.4 },
+  "Lake Michigan": { lat: 43.8, lon: -87.0 },
+  "Lake Superior": { lat: 47.7, lon: -87.5 },
+};
+const COMPASS_16 = ["N","NNE","NE","ENE","E","ESE","SE","SSE","S","SSW","SW","WSW","W","WNW","NW","NNW"];
+const compassToDeg = (c) => { const i = COMPASS_16.indexOf(c); return i < 0 ? null : i * 22.5; };
+function bearingDeg(lat1, lon1, lat2, lon2) {
+  const toRad = (d) => (d * Math.PI) / 180;
+  const dLon = toRad(lon2 - lon1);
+  const y = Math.sin(dLon) * Math.cos(toRad(lat2));
+  const x = Math.cos(toRad(lat1)) * Math.sin(toRad(lat2)) - Math.sin(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.cos(dLon);
+  return ((Math.atan2(y, x) * 180) / Math.PI + 360) % 360;
+}
+function windReadFor(spot, dirCompass) {
+  const lake = spot.lake || "Lake Erie";
+  if (lake === "Lake Erie") return windRead(dirCompass); // curated south-shore reads
+  const center = LAKE_CENTERS[lake];
+  const windDeg = compassToDeg(dirCompass);
+  if (!center || windDeg == null) return null;
+  const lakeward = bearingDeg(spot.lat, spot.lon, center.lat, center.lon); // wind FROM here = onshore
+  let diff = Math.abs(windDeg - lakeward);
+  if (diff > 180) diff = 360 - diff;
+  if (diff <= 56.25) {
+    return { dir: dirCompass, tone: "caution", short: `${dirCompass} onshore — chop stacks up at the launch`,
+      advice: `${dirCompass} wind blows in off ${lake} — waves pile onto this shore, and it's usually rougher at the ramp than the open-water number.` };
+  }
+  if (diff >= 123.75) {
+    return { dir: dirCompass, tone: "caution", short: `${dirCompass} offshore — deceptively calm at the ramp`,
+      advice: `${dirCompass} blows from shore out over ${lake} — flat at the dock, but it builds as you head out and pushes you away from shore. Mind the trip back.` };
+  }
+  return { dir: dirCompass, tone: "ok", short: `${dirCompass} cross-shore — moderate`,
+    advice: `${dirCompass} runs along the shoreline here — moderate chop; watch whether it trends onshore through the day.` };
+}
+
 // ---- Hourly risk timeline ----
 // Per-hour GO/CAUTION/NO-GO from the NWS hourly forecast (sustained wind +
 // precip chance + thunderstorm wording; hourly has no gust data).
@@ -482,10 +556,24 @@ function buildRecommendation({ buoy, alerts, wind, waves, read, hours }) {
     else if (wv == null) reasons.push(`Wind ~${round(topWind)} kt${tag} — light`);
   }
 
-  // Wind DIRECTION on Erie's fetch — only matters once there's some wind.
+  // Wind DIRECTION on the lake's fetch — only matters once there's some wind.
   if (read && topWind >= 10) {
     if (read.tone === "bad") bump("CAUTION", read.short);
     else if (read.tone === "caution") reasons.push(read.short);
+  }
+
+  // Wave STEEPNESS — period matters as much as height. Short-period chop is
+  // the Great Lakes' signature misery; long-period rollers ride far easier.
+  const periodSec = waves?.periodSec ?? hours?.[0]?.periodSec ?? null;
+  if (wv != null && wv >= 2 && periodSec) {
+    if (periodSec <= wv * 2) reasons.push(`Short-period chop — ${wv} ft at ${periodSec}s feels rougher than the number`);
+    else if (periodSec >= wv * 3) reasons.push(`Longer-period waves (${periodSec}s) — smoother ride than ${wv} ft suggests`);
+  }
+
+  // Cold water is a safety fact regardless of the verdict: under ~60°F,
+  // unexpected immersion is dangerous (cold-shock). Flag, don't bump.
+  if (buoy?.waterTempF != null && buoy.waterTempF < 60) {
+    reasons.push(`Water ${round(buoy.waterTempF, 0)}°F — cold-shock risk if you go in; dress for immersion`);
   }
 
   // IMMINENT hazard only (this hour / next) — storms happening now are a hard
@@ -600,7 +688,7 @@ async function handleCamStatus(url) {
 // Lightweight GO/CAUTION/NO-GO + wind/wave for every spot, for the homepage
 // directory. Two batched Open-Meteo calls (all coords at once) keep it cheap;
 // the whole result is edge-cached ~10 min so the API isn't hammered.
-async function fetchSummary() {
+export async function fetchSummary() {
   const entries = Object.entries(SPOTS);
   const lats = entries.map(([, s]) => s.lat).join(",");
   const lons = entries.map(([, s]) => s.lon).join(",");
@@ -659,13 +747,14 @@ export async function onRequest(context) {
 
   // Fetch all sources concurrently; each resolves to null on failure so one
   // bad source never sinks the whole response.
-  const [buoy, fc, marine, alerts, noaaReport, waveMap] = await Promise.all([
+  const [buoy, fc, marine, alerts, noaaReport, waveMap, dailyOutlook] = await Promise.all([
     fetchBuoy(spot.buoys),
     fetchForecasts(spot.lat, spot.lon),
     fetchMarineForecast(spot.zone),
     fetchAlerts(spot.lat, spot.lon),
     fetchNSH(spot.office || "CLE"), // per-spot WFO (Erie spots default to Cleveland)
     fetchMarineHourly(spot.lat, spot.lon),
+    fetchDailyOutlook(spot.lat, spot.lon),
   ]);
   const point = fc.daily;
   // Merge hourly wave height (Open-Meteo) into the NWS hourly rows, then rate risk.
@@ -698,7 +787,7 @@ export async function onRequest(context) {
     source: buoy?.waveHeightFt != null ? "buoy" : forecastWaveFt != null ? "forecast" : null,
   };
 
-  const read = windRead(wind.dir);
+  const read = windReadFor(spot, wind.dir);
   const recommendation = buildRecommendation({ buoy, alerts, wind, waves, read, hours: hourly });
 
   return json({
@@ -710,6 +799,8 @@ export async function onRequest(context) {
     windRead: read,
     hourly,
     outlook,
+    week: dailyOutlook.week,
+    sun: dailyOutlook.sun,
     buoy,
     alerts: alerts || [],
     marineForecast: (marine && marine.length) ? marine : nshPeriodsForZone(noaaReport?.text, spot.zone),

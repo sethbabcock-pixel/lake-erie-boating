@@ -271,6 +271,57 @@ function LocationPicker({ byLake, active, activeName, onSelect, favorites = [], 
   );
 }
 
+// 7-day planning strip — per-day verdict, weekend highlighted. This is the
+// "pick Saturday on Wednesday" view.
+function WeekStrip({ week }) {
+  if (!week || week.length < 2) return null;
+  const fmtDay = (iso) => {
+    const d = new Date(`${iso}T12:00:00`);
+    return { wd: d.toLocaleDateString([], { weekday: "short" }), md: d.toLocaleDateString([], { month: "numeric", day: "numeric" }), weekend: d.getDay() === 0 || d.getDay() === 6 };
+  };
+  return (
+    <section className="card">
+      <div className="card-head">
+        <h2>Week ahead</h2>
+        <span className="legend">daily outlook — plan the weekend early</span>
+      </div>
+      <div className="week">
+        {week.map((d, i) => {
+          const f = fmtDay(d.date);
+          return (
+            <div key={d.date} className={`wday ${verdictClass(d.level)} ${f.weekend ? "weekend" : ""}`} title={`${f.wd} ${f.md}`}>
+              <div className="wd-name">{i === 0 ? "Today" : f.wd}{f.weekend && <span className="wd-star">•</span>}</div>
+              <div className={`wd-level ${verdictClass(d.level)}`}>{d.level === "NO-GO" ? "NO" : d.level}</div>
+              <div className="wd-m"><b>{d.windKt ?? "—"}</b><small>kt</small></div>
+              <div className="wd-m wave"><b>{d.waveFt ?? "—"}</b><small>ft</small></div>
+              {d.precipPct != null && d.precipPct >= 30 ? <div className="wd-p">{d.precipPct}%</div> : <div className="wd-p">·</div>}
+            </div>
+          );
+        })}
+      </div>
+      <div className="hint">Daily max wind &amp; waves. Dot = weekend. Forecast confidence drops past ~3 days — recheck as it gets close.</div>
+    </section>
+  );
+}
+
+// One-time nudge for signed-in boaters who haven't chosen email delivery yet.
+function EmailNudge({ auth }) {
+  const [gone, setGone] = useState(false);
+  const u = auth.user;
+  if (gone || !u || !(u.favorites || []).length) return null;
+  if (u.prefs?.dailyEmail !== undefined || u.emailOptOut) return null;
+  const choose = (on) => { auth.savePrefs({ dailyEmail: on, alertEmails: on }); setGone(true); };
+  return (
+    <div className="joinstrip email-nudge">
+      <span><b>Want your ports' verdict with your coffee?</b> A daily 6am email + a heads-up when a starred port turns NO-GO.</span>
+      <span className="nudge-btns">
+        <button className="cbtn" onClick={() => choose(true)}>Yes, email me</button>
+        <button className="cbtn ghost" onClick={() => choose(false)}>No thanks</button>
+      </span>
+    </div>
+  );
+}
+
 // The gold "yellow time" — when to head back in.
 function OutlookPill({ outlook }) {
   if (!outlook) return null;
@@ -278,6 +329,13 @@ function OutlookPill({ outlook }) {
   if (outlook.headInBy)
     return <span className="opill warn">🕐 be in by <b>{fmtHour(outlook.headInBy, true)}</b> · {outlook.headInReason || "weather turns"}</span>;
   return <span className="opill good">🕐 good for {outlook.goodHours}h+</span>;
+}
+
+// Today's daylight window — boaters plan around first light and dusk.
+function SunTimes({ sun }) {
+  if (!sun || !sun.sunrise) return null;
+  const f = (t) => new Date(t).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }).toLowerCase().replace(" ", "");
+  return <span className="suntimes" title="Sunrise · sunset today">☀️ {f(sun.sunrise)} → 🌇 {f(sun.sunset)}</span>;
 }
 
 function HourStrip({ hours, headInBy }) {
@@ -338,6 +396,16 @@ function MapCard({ spot }) {
 // free; the full toolkit (hour-by-hour, cams, maps, forecasts) needs a free
 // account. The skeleton behind the card is decorative — gated data is simply
 // not rendered, so nothing leaks into the DOM.
+const GateIcon = ({ children }) => (
+  <svg className="gate-ico" viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">{children}</svg>
+);
+const IcoClock = () => <GateIcon><circle cx="12" cy="12" r="9" /><path d="M12 7v5l3.5 2" /></GateIcon>;
+const IcoBack = () => <GateIcon><path d="M3 12a9 9 0 1 0 3-6.7" /><path d="M3 4v4h4" /><path d="M12 8v4l2.5 1.5" /></GateIcon>;
+const IcoCam = () => <GateIcon><rect x="3" y="7" width="13" height="11" rx="2" /><path d="M16 11l5-3v9l-5-3" /></GateIcon>;
+const IcoDoc = () => <GateIcon><rect x="5" y="3" width="14" height="18" rx="2" /><path d="M9 8h6M9 12h6M9 16h4" /></GateIcon>;
+const IcoBoat = () => <GateIcon><path d="M4 17h16l-2 4H6l-2-4z" /><path d="M12 3v14M12 4l7 9H12" /></GateIcon>;
+const IcoCal = () => <GateIcon><rect x="4" y="5" width="16" height="16" rx="2" /><path d="M4 10h16M9 3v4M15 3v4" /><path d="M15 15l2 2 3-4" /></GateIcon>;
+
 function SignupGate({ spotName, onSignup, onSignin }) {
   useEffect(() => { track("event", "signup_gate_view", { spot: spotName }); }, [spotName]);
   return (
@@ -356,11 +424,12 @@ function SignupGate({ spotName, onSignup, onSignin }) {
       <div className="gate-card">
         <h2>See the full picture{spotName ? ` for ${spotName}` : ""} — free</h2>
         <ul className="gate-list">
-          <li>⏱️ <b>Hour-by-hour</b> wind, waves &amp; rain — up to 3 days out</li>
-          <li>🕐 <b>“Be back in by”</b> — the hour the weather turns</li>
-          <li>📷 <b>Live harbor cams</b> + wave / wind / radar maps</li>
-          <li>📋 The <b>full NWS nearshore forecast</b> for your zone</li>
-          <li>⛵ Comfort limits tuned to <b>your boat</b> + favorite ports</li>
+          <li><IcoClock /> <span><b>Hour-by-hour</b> wind, waves &amp; rain — up to 3 days out</span></li>
+          <li><IcoBack /> <span><b>“Be back in by”</b> — the hour the weather turns</span></li>
+          <li><IcoCal /> <span><b>Week-ahead outlook</b> — pick Saturday on Wednesday</span></li>
+          <li><IcoCam /> <span><b>Live harbor cams</b> + wave / wind / radar maps</span></li>
+          <li><IcoDoc /> <span>The <b>full NWS nearshore forecast</b> for your zone</span></li>
+          <li><IcoBoat /> <span>A <b>morning verdict email</b> + NO-GO alerts for your ports</span></li>
         </ul>
         <div className="gate-actions">
           <button className="cbtn gate-cta" onClick={() => { track("event", "signup_gate_click", { spot: spotName, action: "register" }); onSignup(); }}>Create free account</button>
@@ -453,6 +522,13 @@ export default function App() {
   };
 
   useEffect(() => { if (!landing) loadSpot(active); localStorage.setItem("boating.spot", active); }, [active, landing]);
+  // Per-view titles → share cards, tabs, and search results name the port.
+  useEffect(() => {
+    const name = (spots.find((s) => s.id === active) || {}).name;
+    document.title = landing || !name
+      ? "Should I Boat? — Live Great Lakes boating conditions"
+      : `${name} boating conditions — Should I Boat?`;
+  }, [landing, active, spots]);
   // Save spot/theme to the account (debounced) once the signed-in prefs are applied.
   useEffect(() => {
     if (!appliedRef.current || !authRef.current.user) return;
@@ -497,13 +573,16 @@ export default function App() {
       {landing ? (
         <Landing adFree={adFree} onSelect={selectLocation} favorites={auth.user ? (auth.user.favorites || []) : []}
           onCookieSettings={() => chooseConsent(null)}
+          signedIn={!!auth.user}
+          nudge={auth.user ? <EmailNudge auth={auth} /> : null}
           onJoin={gated ? () => { track("event", "signup_gate_click", { spot: "landing", action: "register" }); setGateAuth("register"); } : null} />
       ) : (
       <>
       {/* FlightAware-style hero: sponsor takeover when sold, else house hero. */}
-      <Takeover adFree={adFree} spotName={activeName} verdict={rec?.level} />
+      <Takeover adFree={adFree} spotName={activeName} verdict={rec?.level} signedIn={!gated} onJoin={() => setGateAuth("register")} />
 
       <main className="app">
+        {auth.user && <EmailNudge auth={auth} />}
         {loading && !data && <div className="loading">Loading live conditions…</div>}
         {error && <div className="err">Couldn't load conditions: {error}. <button onClick={() => loadSpot(active)}>Retry</button></div>}
 
@@ -514,8 +593,17 @@ export default function App() {
               <div className="call-badge"><span>{rec.level}</span></div>
               <div className="call-body">
                 <div className="call-top">
-                  <span className="call-spot">{spot.name}</span>
+                  <span className="call-spot">
+                    {spot.name}
+                    {auth.user && (
+                      <button
+                        className={`favstar call-fav ${(auth.user.favorites || []).includes(active) ? "on" : ""}`}
+                        title={(auth.user.favorites || []).includes(active) ? "Remove from my ports" : "Add to my ports — front and center on the homepage + morning email"}
+                        onClick={() => toggleFav(active)}>★</button>
+                    )}
+                  </span>
                   <OutlookPill outlook={data.outlook} />
+                  <SunTimes sun={data.sun} />
                 </div>
                 <div className="call-sum">{rec.summary}</div>
                 <ul className="reasons">{rec.reasons.map((x, i) => <li key={i}>{x}</li>)}</ul>
@@ -577,6 +665,9 @@ export default function App() {
                 {/* ── Timeline ── */}
                 <HourStrip hours={data.hourly} headInBy={data.outlook?.headInBy} />
 
+                {/* ── Week ahead / weekend planning ── */}
+                <WeekStrip week={data.week} />
+
                 {/* ── Map + Cams ── */}
                 <div className="dash2">
                   <MapCard spot={spot} />
@@ -635,7 +726,7 @@ export default function App() {
       <ConsentBanner consent={consent} onChoose={chooseConsent} />
       {resetToken && <AuthModal auth={auth} initialMode="reset" resetToken={resetToken} onClose={() => setResetToken("")} />}
       {!resetToken && verifyToken && <AuthModal auth={auth} initialMode="verify" verifyToken={verifyToken} onClose={() => setVerifyToken("")} />}
-      {!resetToken && !verifyToken && gateAuth && <AuthModal auth={auth} initialMode={gateAuth} onClose={() => setGateAuth(null)} />}
+      {!resetToken && !verifyToken && gateAuth && <AuthModal auth={auth} initialMode={gateAuth} spotId={!landing ? active : ""} onClose={() => setGateAuth(null)} />}
     </>
   );
 }

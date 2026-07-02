@@ -74,7 +74,7 @@ function SponsorHero({ s, splash, children }) {
 }
 
 // ── House hero (brand band over the Great Lakes photo or video) ───────────────
-function HouseHero({ hero, spotName, verdict, adFree, splash, children }) {
+function HouseHero({ hero, spotName, verdict, adFree, splash, children, signedIn, onJoin }) {
   const h = { ...DEFAULT_HERO, ...(hero || {}) };
   const photo = h.image;
   const video = h.video;
@@ -108,14 +108,18 @@ function HouseHero({ hero, spotName, verdict, adFree, splash, children }) {
           <p className="hero-subtitle">{h.sub || "A clear GO / CAUTION / NO-GO call from live NOAA wind, waves & weather."}</p>
         )}
         {children}
-        {!adFree && !splash && <a className="hero-housecta" href="/account">Go ad-free — no banners, ever →</a>}
+        {/* One goal per audience: signed-out → sign up; signed-in free → ad-free upsell. */}
+        {!splash && !signedIn && onJoin && (
+          <button className="hero-housecta linkbtn" onClick={onJoin}>Create a free account — hour-by-hour, cams &amp; alerts →</button>
+        )}
+        {!splash && signedIn && !adFree && <a className="hero-housecta" href="/account">Go ad-free — no banners, ever →</a>}
       </div>
     </section>
   );
 }
 
 // ── Public entry ──────────────────────────────────────────────────────────────
-export default function Takeover({ adFree, spotName, verdict, splash = false, children = null }) {
+export default function Takeover({ adFree, spotName, verdict, splash = false, children = null, signedIn = true, onJoin = null }) {
   const [cfg, setCfg] = useState({ hero: DEFAULT_HERO, takeover: null, gam: { networkCode: "" }, loaded: false });
   useEffect(() => {
     let alive = true;
@@ -148,5 +152,5 @@ export default function Takeover({ adFree, spotName, verdict, splash = false, ch
       </section>
     );
   }
-  return <HouseHero hero={cfg.hero} spotName={spotName} verdict={verdict} adFree={adFree} splash={splash}>{splash ? children : null}</HouseHero>;
+  return <HouseHero hero={cfg.hero} spotName={spotName} verdict={verdict} adFree={adFree} splash={splash} signedIn={signedIn} onJoin={onJoin}>{splash ? children : null}</HouseHero>;
 }

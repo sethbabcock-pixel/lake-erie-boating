@@ -64,7 +64,8 @@ export function useAuth() {
       return d.subscription;
     },
     login: async (email, password) => { const d = await post("/auth/login", { email, password }); setUser(d.user); },
-    register: async (email, password) => await post("/auth/register", { email, password }), // returns {pending} — verify by email first
+    register: async (email, password, spot) => await post("/auth/register", { email, password, spot }), // returns {pending}; verify link returns to `spot`
+    setEmailOptOut: async (optOut) => { const d = await post("/api/email-optout", { optOut }); setUser(d.user); },
     verifyEmail: async (token) => { const d = await post("/auth/verify", { token }); setUser(d.user); return d; },
     resendVerification: async (email) => { await post("/auth/resend-verification", { email }); },
     forgotPassword: async (email) => { await post("/auth/forgot", { email }); },
@@ -93,7 +94,7 @@ const clearAuthParams = () => {
   } catch (e) {}
 };
 
-export function AuthModal({ auth, onClose, initialMode = "login", resetToken = "", verifyToken = "" }) {
+export function AuthModal({ auth, onClose, initialMode = "login", resetToken = "", verifyToken = "", spotId = "" }) {
   const [mode, setMode] = useState(initialMode); // login | register | forgot | reset | verify
   const [email, setEmail] = useState("");
   const [pw, setPw] = useState("");
@@ -138,7 +139,7 @@ export function AuthModal({ auth, onClose, initialMode = "login", resetToken = "
         try { await auth.login(email, pw); close(); }
         catch (ex) { if (ex.data?.needsVerification) { setNeedsVerify(ex.data.email || email); setResent(false); } else throw ex; }
       }
-      else if (mode === "register") { const d = await auth.register(email, pw); setRegistered(d.email || email); }
+      else if (mode === "register") { const d = await auth.register(email, pw, spotId || undefined); setRegistered(d.email || email); }
       else if (mode === "forgot") { await auth.forgotPassword(email); setSent(true); }
       else if (mode === "reset") { await auth.resetPassword(resetToken, pw); close(); }
     } catch (ex) { setErr(ex.message); } finally { setBusy(false); }
@@ -269,10 +270,11 @@ export function Account({ auth }) {
 
   if (!auth.available || auth.user === undefined) return null; // accounts off or still loading
   if (!auth.user) {
+    // The business goal is the signup — lead with it; sign-in lives inside the modal.
     return (
       <>
-        <button className="signin-btn" onClick={() => setModal(true)}>Sign in</button>
-        {modal && <AuthModal auth={auth} onClose={() => setModal(false)} />}
+        <button className="signin-btn" onClick={() => setModal(true)}>Sign up free</button>
+        {modal && <AuthModal auth={auth} initialMode="register" onClose={() => setModal(false)} />}
       </>
     );
   }

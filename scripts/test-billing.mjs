@@ -9,6 +9,7 @@
 //
 import { createHmac } from "node:crypto";
 import { handleAuth } from "../functions/auth.js";
+import { runScheduled } from "../functions/digest.js";
 
 // ── tiny test harness ────────────────────────────────────────────────────────
 let passed = 0, failed = 0;
@@ -44,6 +45,7 @@ function makeKV(seed = {}) {
 let stripeCalls = [];
 let emailCalls = [];
 let priceResolves = true;
+let stormMode = false; // Open-Meteo stub: every spot NO-GO (true) vs calm GO (false)
 let subGetCancelState = false; // what a GET subscription retrieve reports
 const makeSub = (cancelAtPeriodEnd) => ({
   id: "sub_123", status: "active", cancel_at_period_end: cancelAtPeriodEnd,
@@ -56,6 +58,15 @@ function installFetchStub() {
     if (u.includes("api.brevo.com")) {
       emailCalls.push(JSON.parse(opts.body || "{}"));
       return jsonResp({ messageId: "<msg@brevo>" }, 201);
+    }
+    // Open-Meteo batched summary (used by the email digest engine).
+    if (u.includes("api.open-meteo.com/v1/forecast")) {
+      const n = (u.match(/latitude=([^&]*)/)?.[1] || "").split(",").length;
+      return jsonResp(Array.from({ length: n }, () => ({ current: { wind_speed_10m: stormMode ? 28 : 8, wind_gusts_10m: stormMode ? 35 : 12, wind_direction_10m: 220 } })));
+    }
+    if (u.includes("marine-api.open-meteo.com")) {
+      const n = (u.match(/latitude=([^&]*)/)?.[1] || "").split(",").length;
+      return jsonResp(Array.from({ length: n }, () => ({ current: { wave_height: stormMode ? 1.8 : 0.2 } })));
     }
     const body = opts.body ? Object.fromEntries(new URLSearchParams(opts.body)) : null;
     stripeCalls.push({ url: u, method: opts.method || "GET", body });
@@ -802,6 +813,39 @@ async function run() {
     check("csp-reports: lists violation", list.reports.some((x) => x.directive === "frame-src" && /cam\.example\.com/.test(x.blocked)));
     const rando = await seedUser(env, "rando@example.com");
     eq("csp-reports: non-admin → 403", (await call(req("GET", "/api/admin/csp-reports", { cookie: rando }), env)).status, 403);
+  }
+
+  // 47. daily digest: opted-in users with favorites get one morning email
+  {
+    const env = { USERS: makeKV(), BREVO_API_KEY: "brevo_x" };
+    await seedUser(env, "digest@example.com", { favorites: ["sandusky", "cleveland"], prefs: { dailyEmail: true } });
+    await seedUser(env, "nopref@example.com", { favorites: ["sandusky"] });
+    await seedUser(env, "optout@example.com", { favorites: ["sandusky"], prefs: { dailyEmail: true }, emailOptOut: true });
+    emailCalls = [];
+    const res = await runScheduled(env, 10);
+    eq("digest: exactly one digest sent", res.digests, 1);
+    const d = emailCalls.find((c) => /ports/i.test(c.subject));
+    check("digest: goes to the opted-in user", d && d.to[0].email === "digest@example.com", JSON.stringify(emailCalls.map((c) => c.to)));
+    check("digest: includes both favorite ports", /Sandusky/.test(d.htmlContent) && /Cleveland/.test(d.htmlContent));
+    check("digest: carries unsubscribe link", /\/unsubscribe\?u=/.test(d.htmlContent));
+    check("digest: run logged for admin", [...env.USERS._map.keys()].some((k) => k.startsWith("admin:notification:")));
+    // outside both windows → no work
+    eq("digest: 3am UTC run skipped", (await runScheduled(env, 3)).skipped, "outside windows");
+  }
+
+  // 48. NO-GO alerts: sent in the daytime window, deduped per port per day
+  {
+    stormMode = true;
+    const env = { USERS: makeKV(), BREVO_API_KEY: "brevo_x" };
+    await seedUser(env, "alerts@example.com", { favorites: ["sandusky"], prefs: { alertEmails: true } });
+    await seedUser(env, "quiet@example.com", { favorites: ["sandusky"] }); // no pref → no alert
+    emailCalls = [];
+    const r1 = await runScheduled(env, 15);
+    eq("alerts: one alert sent", r1.alerts, 1);
+    check("alerts: subject flags NO-GO", /NO-GO/.test(emailCalls[0].subject), emailCalls[0] && emailCalls[0].subject);
+    const r2 = await runScheduled(env, 16);
+    eq("alerts: deduped for the rest of the day", r2.alerts, 0);
+    stormMode = false;
   }
 
   console.log(results.join("\n"));

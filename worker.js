@@ -6,6 +6,7 @@
 // works as a Pages Function.
 import { onRequest } from "./functions/marine/conditions.js";
 import { handleAuth } from "./functions/auth.js";
+import { runScheduled } from "./functions/digest.js";
 
 // Baseline security headers applied to every response. These are intentionally
 // conservative: no script/style CSP directives, so the Google Ads/Analytics/
@@ -65,5 +66,9 @@ async function route(request, env, ctx) {
 export default {
   async fetch(request, env, ctx) {
     return withSecurityHeaders(await route(request, env, ctx));
+  },
+  // Hourly cron (wrangler.jsonc triggers): daily digest + NO-GO alert emails.
+  async scheduled(event, env, ctx) {
+    ctx.waitUntil(runScheduled(env, new Date(event.scheduledTime).getUTCHours()).catch(() => {}));
   },
 };

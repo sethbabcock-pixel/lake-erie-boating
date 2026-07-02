@@ -102,6 +102,44 @@ function SubscriptionCard({ auth }) {
   );
 }
 
+// ── Email preferences ─────────────────────────────────────────────────────────
+function EmailCard({ auth }) {
+  const u = auth.user;
+  const prefs = u?.prefs || {};
+  const [busy, setBusy] = useState(false);
+  const favCount = (u?.favorites || []).length;
+  const setPref = async (k, v) => { setBusy(true); try { await auth.savePrefs({ [k]: v }); } finally { setBusy(false); } };
+  return (
+    <section className="card acct-sec">
+      <h2>Email</h2>
+      {u.emailOptOut ? (
+        <>
+          <p className="acct-note">You've unsubscribed from non-essential email, so the daily verdict and alerts are paused. (Account &amp; security emails are always delivered.)</p>
+          <button className="cbtn" disabled={busy} onClick={async () => { setBusy(true); try { await auth.setEmailOptOut(false); } finally { setBusy(false); } }}>
+            {busy ? "…" : "Resubscribe"}
+          </button>
+        </>
+      ) : (
+        <>
+          <label className="acct-toggle">
+            <input type="checkbox" checked={!!prefs.dailyEmail} disabled={busy} onChange={(e) => setPref("dailyEmail", e.target.checked)} />
+            <span><b>Daily verdict email</b> — every starred port's GO / CAUTION / NO-GO, 6am ET.</span>
+          </label>
+          <label className="acct-toggle">
+            <input type="checkbox" checked={!!prefs.alertEmails} disabled={busy} onChange={(e) => setPref("alertEmails", e.target.checked)} />
+            <span><b>NO-GO alerts</b> — a heads-up when a starred port turns rough. One per port per day, daytime only.</span>
+          </label>
+          <p className="acct-note">
+            {favCount
+              ? `Covers your ${favCount} starred port${favCount > 1 ? "s" : ""}.`
+              : "Star a port first (★ on any port page) — these emails cover your starred ports."}
+          </p>
+        </>
+      )}
+    </section>
+  );
+}
+
 // ── Boat + comfort card ───────────────────────────────────────────────────────
 function BoatCard({ auth }) {
   const prefs = auth.user?.prefs || {};
@@ -312,6 +350,7 @@ export default function AccountPage() {
             )}
 
             <SubscriptionCard auth={auth} />
+            <EmailCard auth={auth} />
             <BoatCard auth={auth} />
             <DangerZone auth={auth} />
 
