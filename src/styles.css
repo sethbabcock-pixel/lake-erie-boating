@@ -723,3 +723,67 @@ body.has-takeover .app { background: var(--bg); border-radius: var(--r-lg) var(-
 
 /* Hero CTA as a button (signed-out signup) */
 .hero-housecta.linkbtn { background: none; border: none; cursor: pointer; font: inherit; font-weight: var(--fw-semibold); padding: 0; }
+
+/* ── Detail-page spacing polish ────────────────────────────────────────────── */
+/* Themed, subtle scrollbar on the hour strip (the default track read as a
+   stray divider line). */
+.hours::-webkit-scrollbar { height: 8px; }
+.hours::-webkit-scrollbar-track { background: var(--surface-sunk); border-radius: 4px; }
+.hours::-webkit-scrollbar-thumb { background: var(--border-strong); border-radius: 4px; }
+.hours::-webkit-scrollbar-thumb:hover { background: var(--accent); }
+.hours { scrollbar-color: var(--border-strong) transparent; }
+/* Day separators: quiet pills instead of bare rotated text jammed on tiles. */
+.day-sep { padding: 0 4px; }
+.day-sep span { background: var(--surface-sunk); border: 1px solid var(--border); border-radius: var(--r-pill);
+  padding: 10px 3px; color: var(--accent); letter-spacing: 0.1em; }
+/* Map + cams: equal heights so the row reads as one unit. */
+@media (min-width: 1024px) {
+  .dash2 { align-items: stretch; }
+  .dash2 > .card, .dash2 > div > .card { height: 100%; }
+  .dash2 > .card { display: flex; flex-direction: column; }
+  .dash2 .mapwrap { flex: 1 1 auto; height: auto; min-height: 320px; }
+}
+/* Week cards: cap width so 7 cards don't stretch into empty slabs. Centering
+   uses auto margins (not justify-content) so the strip stays scrollable from
+   the first card when it overflows on small screens. */
+.wday { max-width: 148px; }
+.wday:first-child { margin-left: auto; }
+.wday:last-child { margin-right: auto; }
+
+/* ── Today at a glance (best-window band) ──────────────────────────────────── */
+.glance-label { font-size: var(--fs-sm); color: var(--text-muted); }
+.glance-label b { color: var(--gold); font-family: var(--font-mono); }
+.glance-band { display: flex; gap: 3px; height: 18px; }
+.glance-band .gb { flex: 1 1 0; border-radius: 4px; opacity: .48; }
+.glance-band .gb.go { background: var(--success); }
+.glance-band .gb.caution { background: var(--warning); }
+.glance-band .gb.nogo { background: var(--danger); }
+.glance-band .gb.best { opacity: 1; box-shadow: inset 0 0 0 1px color-mix(in srgb, #fff 35%, transparent); }
+.glance-x { display: flex; justify-content: space-between; margin-top: 6px; font-size: var(--fs-xs);
+  color: var(--text-faint); font-family: var(--font-mono); }
+
+/* ── Trend arrows on Right-now stats ───────────────────────────────────────── */
+.trend { font-size: var(--fs-xs); font-weight: var(--fw-semibold); font-family: var(--font-sans);
+  vertical-align: 6px; margin-left: 4px; white-space: nowrap; }
+.trend.up { color: var(--warning); }
+.trend.down { color: var(--success); }
+
+/* ── Nearby ports strip ────────────────────────────────────────────────────── */
+.nearby-row { display: flex; gap: var(--s2); flex-wrap: wrap; }
+.nearby-chip { display: inline-flex; align-items: center; gap: 7px; padding: 8px 13px; cursor: pointer;
+  background: var(--surface-sunk); border: 1px solid var(--border); border-radius: var(--r-pill);
+  color: var(--text); font-family: var(--font-sans); font-size: var(--fs-sm); font-weight: var(--fw-medium);
+  transition: border-color var(--dur-fast); }
+.nearby-chip:hover { border-color: var(--accent); }
+.nearby-chip small { color: var(--text-faint); font-family: var(--font-mono); font-size: var(--fs-xs); }
+.ndot { width: 9px; height: 9px; border-radius: 50%; flex: 0 0 auto; }
+.ndot.go { background: var(--success); }
+.ndot.caution { background: var(--warning); }
+.ndot.nogo { background: var(--danger); }
+
+/* ── Share button on the verdict card ──────────────────────────────────────── */
+.share-btn { display: inline-flex; align-items: center; gap: 5px; margin-left: auto; padding: 5px 12px;
+  background: transparent; border: 1px solid var(--border-strong); border-radius: var(--r-pill);
+  color: var(--text-muted); font-family: var(--font-sans); font-size: var(--fs-xs); font-weight: var(--fw-semibold);
+  cursor: pointer; transition: border-color var(--dur-fast), color var(--dur-fast); }
+.share-btn:hover { border-color: var(--accent); color: var(--accent); }

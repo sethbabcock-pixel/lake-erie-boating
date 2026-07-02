@@ -271,6 +271,104 @@ function LocationPicker({ byLake, active, activeName, onSelect, favorites = [], 
   );
 }
 
+// "Today at a glance" — the next 18 hours as one color band, with the best
+// contiguous GO window called out. The answer to "when do I go?" in one look.
+function GlanceBand({ hours }) {
+  if (!hours || hours.length < 6) return null;
+  const win = hours.slice(0, 18);
+  const runs = [];
+  let start = 0;
+  for (let i = 1; i <= win.length; i++) {
+    if (i === win.length || win[i].level !== win[start].level) { runs.push({ level: win[start].level, from: start, to: i - 1 }); start = i; }
+  }
+  const best = runs.filter((r) => r.level === "GO").sort((a, b) => (b.to - b.from) - (a.to - a.from))[0] || null;
+  const label = best
+    ? <>Best window: <b>{best.from === 0 ? "now" : fmtHour(win[best.from].time)} – {fmtHour(win[Math.min(best.to + 1, win.length - 1)].time)}</b> ({best.to - best.from + 1}h)</>
+    : <>No clean GO window in the next 18h — check the week ahead</>;
+  return (
+    <section className="card glance">
+      <div className="card-head"><h2>Today at a glance</h2><span className="glance-label">{label}</span></div>
+      <div className="glance-band">
+        {win.map((h, i) => (
+          <span key={h.time} className={`gb ${verdictClass(h.level)} ${best && i >= best.from && i <= best.to ? "best" : ""}`} title={`${fmtHour(h.time)} · ${h.level}`} />
+        ))}
+      </div>
+      <div className="glance-x">
+        <span>{fmtHour(win[0].time)}</span>
+        <span>{fmtHour(win[Math.floor(win.length / 2)].time)}</span>
+        <span>{fmtHour(win[win.length - 1].time)}</span>
+      </div>
+    </section>
+  );
+}
+
+// Rising / steady / easing over the next ~3 hours, from the hourly forecast.
+function trendOf(nowV, laterV) {
+  if (nowV == null || laterV == null) return null;
+  const d = laterV - nowV;
+  if (Math.abs(d) < Math.max(1, Math.abs(nowV) * 0.15)) return null; // steady → say nothing
+  return d > 0 ? { glyph: "↗", cls: "up", word: "building" } : { glyph: "↘", cls: "down", word: "easing" };
+}
+const Trend = ({ t }) => (t ? <span className={`trend ${t.cls}`}>{t.glyph} {t.word}</span> : null);
+
+// Same-lake pivot: every other port on this lake with its live verdict.
+// "This launch is rough — where's it calmer?" answered without leaving the page.
+function NearbyPorts({ lake, current, onSelect }) {
+  const [sum, setSum] = useState(null);
+  useEffect(() => {
+    let ok = true;
+    fetch("/marine/conditions?summary")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => { if (ok) setSum((d && d.spots) || []); })
+      .catch(() => { if (ok) setSum([]); });
+    return () => { ok = false; };
+  }, []);
+  const order = { GO: 0, CAUTION: 1, "NO-GO": 2 };
+  const near = (sum || [])
+    .filter((s) => (s.lake || "Lake Erie") === lake && s.id !== current)
+    .sort((a, b) => (order[a.level] ?? 3) - (order[b.level] ?? 3));
+  if (!near.length) return null;
+  return (
+    <section className="card nearby">
+      <div className="card-head"><h2>Nearby on {lake}</h2><span className="legend">calmer launch? tap to switch</span></div>
+      <div className="nearby-row">
+        {near.map((s) => (
+          <button key={s.id} className="nearby-chip" onClick={() => onSelect(s.id)}>
+            <span className={`ndot ${verdictClass(s.level)}`} />
+            <span className="nname">{s.name}</span>
+            <small>{s.windKt != null ? `${s.windKt}kt` : "—"}{s.waveFt != null ? ` · ${s.waveFt}ft` : ""}</small>
+          </button>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+// Share today's verdict — native share sheet on mobile, clipboard elsewhere.
+function ShareButton({ spot, rec, wind, wv }) {
+  const [copied, setCopied] = useState(false);
+  const share = async () => {
+    track("event", "share_verdict", { spot: spot.id, level: rec.level });
+    const text = `${spot.name}: ${rec.level} right now — wind ${wind.speedKt ?? "–"} kt, waves ${wv.ft ?? "–"} ft.`;
+    const url = `https://shouldiboat.com/?spot=${encodeURIComponent(spot.id)}`;
+    if (navigator.share) { try { await navigator.share({ title: "Should I Boat?", text, url }); } catch (e) { /* dismissed */ } return; }
+    try { await navigator.clipboard.writeText(`${text} ${url}`); setCopied(true); setTimeout(() => setCopied(false), 2000); } catch (e) { /* ignore */ }
+  };
+  return (
+    <button className="share-btn" onClick={share} title="Share today's verdict">
+      {copied ? "Copied ✓" : (
+        <>
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+            <circle cx="18" cy="5" r="3" /><circle cx="6" cy="12" r="3" /><circle cx="18" cy="19" r="3" />
+            <path d="M8.6 13.5l6.8 4M15.4 6.5l-6.8 4" />
+          </svg>
+          Share
+        </>
+      )}
+    </button>
+  );
+}
+
 // 7-day planning strip — per-day verdict, weekend highlighted. This is the
 // "pick Saturday on Wednesday" view.
 function WeekStrip({ week }) {
@@ -294,7 +392,11 @@ function WeekStrip({ week }) {
               <div className={`wd-level ${verdictClass(d.level)}`}>{d.level === "NO-GO" ? "NO" : d.level}</div>
               <div className="wd-m"><b>{d.windKt ?? "—"}</b><small>kt</small></div>
               <div className="wd-m wave"><b>{d.waveFt ?? "—"}</b><small>ft</small></div>
-              {d.precipPct != null && d.precipPct >= 30 ? <div className="wd-p">{d.precipPct}%</div> : <div className="wd-p">·</div>}
+              <div className="wd-p">
+                {d.precipPct != null && d.precipPct >= 30
+                  ? `${d.precipPct}% rain`
+                  : (d.gustKt != null && d.windKt != null && d.gustKt - d.windKt >= 5 ? `gusts ${d.gustKt}` : "")}
+              </div>
             </div>
           );
         })}
@@ -360,7 +462,7 @@ function HourStrip({ hours, headInBy }) {
                 <div className="hbar" />
                 <div className="hm"><b>{h.windKt ?? "—"}</b><small>kt{h.windDir ? ` ${h.windDir}` : ""}</small></div>
                 <div className="hm wave"><b>{h.waveFt ?? "—"}</b><small>ft{h.periodSec ? ` · ${h.periodSec}s` : ""}</small></div>
-                <div className="hp">{h.precipPct ? `${h.precipPct}%` : "·"}</div>
+                <div className="hp">{h.precipPct >= 15 ? `${h.precipPct}%` : ""}</div>
               </div>
             ))}
           </React.Fragment>
@@ -604,6 +706,7 @@ export default function App() {
                   </span>
                   <OutlookPill outlook={data.outlook} />
                   <SunTimes sun={data.sun} />
+                  <ShareButton spot={spot} rec={rec} wind={wind} wv={wv} />
                 </div>
                 <div className="call-sum">{rec.summary}</div>
                 <ul className="reasons">{rec.reasons.map((x, i) => <li key={i}>{x}</li>)}</ul>
@@ -627,12 +730,12 @@ export default function App() {
             <div className="grid stats">
               <div className="stat hero">
                 <div className="k">Wind</div>
-                <div className="v">{fmt(wind.speedKt, "")}<small>kt</small></div>
+                <div className="v">{fmt(wind.speedKt, "")}<small>kt</small> <Trend t={trendOf(data.hourly?.[0]?.windKt, data.hourly?.[3]?.windKt)} /></div>
                 <div className="sub">{[wind.dir, wind.gustKt ? `gust ${wind.gustKt}` : null, wind.source].filter(Boolean).join(" · ") || "—"}</div>
               </div>
               <div className="stat">
                 <div className="k">Waves</div>
-                <div className="v">{fmt(wv.ft, "")}<small>ft</small></div>
+                <div className="v">{fmt(wv.ft, "")}<small>ft</small> <Trend t={trendOf(data.hourly?.[0]?.waveFt, data.hourly?.[3]?.waveFt)} /></div>
                 <div className="sub">{wv.periodSec ? `${wv.periodSec}s period` : (wv.source || "—")}</div>
               </div>
               <div className="stat">
@@ -655,6 +758,9 @@ export default function App() {
             )}
             {!gated && !authPending && (
               <>
+                {/* ── When do I go? — one-look answer ── */}
+                <GlanceBand hours={data.hourly} />
+
                 {wr && (
                   <section className={`card wr-${wr.tone} windread`}>
                     <div className="card-head"><h2>Wind read</h2><span className="wr-dir">out of the {wr.dir}</span></div>
@@ -673,6 +779,9 @@ export default function App() {
                   <MapCard spot={spot} />
                   <Cams lat={spot.lat} lon={spot.lon} spotName={spot.name} lake={spot.lake} />
                 </div>
+
+                {/* ── Same-lake pivot ── */}
+                <NearbyPorts lake={spot.lake || "Lake Erie"} current={active} onSelect={selectLocation} />
 
                 {/* ── Details ── */}
                 <div className="dash2">
