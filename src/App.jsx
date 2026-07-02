@@ -880,6 +880,7 @@ export default function App() {
             <footer className="meta">
               Source: {buoy ? `Buoy ${buoy.station} · ${buoy.ageMinutes != null ? `${buoy.ageMinutes} min ago` : "latest"}` : "forecast only"}
               {" · NWS & NDBC (NOAA), Windy. Updated "}{new Date(data.updatedAt).toLocaleTimeString()}
+              <span className="buildtag" title="Deployed version">{typeof __BUILD__ !== "undefined" ? ` · v ${__BUILD__}` : ""}</span>
               <button onClick={() => loadSpot(active)}>↻ Refresh</button>
               <div className="footlinks">
                 <a href="/about" target="_blank" rel="noopener">About</a>
