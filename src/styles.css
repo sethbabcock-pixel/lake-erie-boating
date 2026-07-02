@@ -877,3 +877,12 @@ body.has-takeover .app { background: var(--bg); border-radius: var(--r-lg) var(-
   .hx-c { min-height: 27px; font-size: var(--fs-xs); }
   .hx-l { padding-right: 8px; font-size: 10.5px; }
 }
+
+/* ── One vertical rhythm between page sections ─────────────────────────────
+   Sections used to set their own bottom margins; each new card kept missing
+   one and sat flush against its neighbor (glance→wind read, week→map row).
+   The container now owns the spacing — uniform, and impossible to forget. */
+.app { display: flex; flex-direction: column; gap: var(--s4); }
+.app > * { margin-top: 0; margin-bottom: 0; }
+.app > footer.meta { margin-top: var(--s3); }
+@media (max-width: 640px) { .app { gap: var(--s3); } }
