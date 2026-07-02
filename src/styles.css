@@ -631,3 +631,37 @@ body.has-takeover .app { background: var(--bg); border-radius: var(--r-lg) var(-
 .admin-notif .notif-ok { color: var(--success); }
 .admin-notif .notif-off { color: var(--text-faint); }
 .admin-notif-err { font-size: var(--fs-xs); color: var(--danger); margin: 2px 0 6px; word-break: break-word; }
+
+/* ── Signup gate (detail page, signed-out) ─────────────────────────────────── */
+.gate { position: relative; margin: var(--s5) 0; }
+.gate-preview { filter: blur(7px) saturate(.7); opacity: .55; pointer-events: none; user-select: none; }
+.gate-sk-row { display: flex; gap: var(--s2); padding: var(--s4); background: var(--surface); border: 1px solid var(--border); border-radius: var(--r-lg); overflow: hidden; }
+.gate-sk-hour { flex: 1 1 0; min-width: 0; height: 84px; display: flex; align-items: flex-end; justify-content: center; background: var(--surface-sunk); border-radius: var(--r-sm); padding: 6px; }
+.gate-sk-bar { display: block; width: 60%; border-radius: 3px 3px 0 0; background: color-mix(in srgb, var(--accent) 55%, var(--surface-sunk)); }
+.gate-sk-wide { height: 56px; margin-top: var(--s3); background: var(--surface); border: 1px solid var(--border); border-radius: var(--r-lg); }
+.gate-sk-grid { display: grid; grid-template-columns: 1fr 1fr; gap: var(--s3); margin-top: var(--s3); }
+.gate-sk-card { height: 150px; background: var(--surface); border: 1px solid var(--border); border-radius: var(--r-lg); }
+.gate-card { position: absolute; inset: 0; margin: auto; height: fit-content; max-width: 480px;
+  background: var(--surface); border: 1px solid var(--border-strong); border-radius: var(--r-lg);
+  box-shadow: var(--shadow-lg); padding: var(--s5) var(--s6); text-align: left; }
+.gate-card h2 { margin: 0 0 var(--s3); font-size: var(--fs-lg); }
+.gate-list { list-style: none; margin: 0 0 var(--s4); padding: 0; display: flex; flex-direction: column; gap: var(--s2);
+  font-size: var(--fs-sm); color: var(--text-muted); }
+.gate-list b { color: var(--text); }
+.gate-actions { display: flex; gap: var(--s3); flex-wrap: wrap; }
+.gate-cta { min-height: 42px; }
+.gate-note { margin: var(--s3) 0 0; font-size: var(--fs-xs); color: var(--text-faint); }
+@media (max-width: 640px) {
+  .gate-card { position: static; max-width: none; margin-top: calc(-1 * var(--s6)); }
+  .gate-preview { max-height: 130px; overflow: hidden; }
+  .gate-sk-grid, .gate-sk-wide { display: none; }
+}
+
+/* ── Landing join strip (signed-out) ───────────────────────────────────────── */
+.joinstrip { display: flex; align-items: center; justify-content: space-between; gap: var(--s4);
+  margin-top: var(--s5); padding: var(--s4) var(--s5);
+  background: linear-gradient(135deg, color-mix(in srgb, var(--accent) 12%, var(--surface)), var(--surface));
+  border: 1px solid var(--border-strong); border-radius: var(--r-lg); font-size: var(--fs-sm); color: var(--text-muted); }
+.joinstrip b { color: var(--text); }
+.joinstrip .cbtn { flex: 0 0 auto; white-space: nowrap; }
+@media (max-width: 640px) { .joinstrip { flex-direction: column; align-items: stretch; text-align: center; } }

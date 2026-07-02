@@ -8,6 +8,8 @@ import Landing from "./Landing.jsx";
 
 const fmt = (v, unit) => (v == null ? "—" : `${v}${unit || ""}`);
 const verdictClass = (lvl) => (lvl === "NO-GO" ? "nogo" : lvl === "CAUTION" ? "caution" : "go");
+// GA4 event, if analytics is loaded (mirrors the gtag() arguments pattern).
+function track() { try { if (window.dataLayer) window.dataLayer.push(arguments); } catch (e) { /* ignore */ } }
 const fmtHour = (t, withMin) =>
   new Date(t).toLocaleTimeString([], withMin ? { hour: "numeric", minute: "2-digit" } : { hour: "numeric" });
 
@@ -332,6 +334,44 @@ function MapCard({ spot }) {
   );
 }
 
+// Conversion gate: signed-out visitors get the verdict + current conditions
+// free; the full toolkit (hour-by-hour, cams, maps, forecasts) needs a free
+// account. The skeleton behind the card is decorative — gated data is simply
+// not rendered, so nothing leaks into the DOM.
+function SignupGate({ spotName, onSignup, onSignin }) {
+  useEffect(() => { track("event", "signup_gate_view", { spot: spotName }); }, [spotName]);
+  return (
+    <section className="gate">
+      <div className="gate-preview" aria-hidden="true">
+        <div className="gate-sk-row">
+          {Array.from({ length: 9 }, (_, i) => (
+            <div className="gate-sk-hour" key={i}>
+              <span className="gate-sk-bar" style={{ height: `${22 + ((i * 13) % 34)}px` }} />
+            </div>
+          ))}
+        </div>
+        <div className="gate-sk-wide" />
+        <div className="gate-sk-grid"><div className="gate-sk-card" /><div className="gate-sk-card" /></div>
+      </div>
+      <div className="gate-card">
+        <h2>See the full picture{spotName ? ` for ${spotName}` : ""} — free</h2>
+        <ul className="gate-list">
+          <li>⏱️ <b>Hour-by-hour</b> wind, waves &amp; rain — up to 3 days out</li>
+          <li>🕐 <b>“Be back in by”</b> — the hour the weather turns</li>
+          <li>📷 <b>Live harbor cams</b> + wave / wind / radar maps</li>
+          <li>📋 The <b>full NWS nearshore forecast</b> for your zone</li>
+          <li>⛵ Comfort limits tuned to <b>your boat</b> + favorite ports</li>
+        </ul>
+        <div className="gate-actions">
+          <button className="cbtn gate-cta" onClick={() => { track("event", "signup_gate_click", { spot: spotName, action: "register" }); onSignup(); }}>Create free account</button>
+          <button className="cbtn ghost" onClick={() => { track("event", "signup_gate_click", { spot: spotName, action: "login" }); onSignin(); }}>Sign in</button>
+        </div>
+        <p className="gate-note">Free forever · no card required · unsubscribe anytime</p>
+      </div>
+    </section>
+  );
+}
+
 export default function App() {
   const { choice, setChoice, effective } = useTheme();
   const auth = useAuth();
@@ -365,6 +405,11 @@ export default function App() {
   const [landing, setLanding] = useState(() => !urlSpot()); // bare "/" = splash + directory; ?spot=X = detail
   const [resetToken, setResetToken] = useState(() => new URLSearchParams(window.location.search).get("reset") || ""); // password-reset email link
   const [verifyToken, setVerifyToken] = useState(() => new URLSearchParams(window.location.search).get("verify") || ""); // email-confirmation link
+  const [gateAuth, setGateAuth] = useState(null); // signup-gate modal: "register" | "login" | null
+  // Gate the deep detail for signed-out visitors (only when accounts are live).
+  // auth.user === undefined means still checking — render neither, no flash.
+  const gated = auth.available && auth.user === null;
+  const authPending = auth.available && auth.user === undefined;
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -450,7 +495,9 @@ export default function App() {
       </header>
 
       {landing ? (
-        <Landing adFree={adFree} onSelect={selectLocation} favorites={auth.user ? (auth.user.favorites || []) : []} onCookieSettings={() => chooseConsent(null)} />
+        <Landing adFree={adFree} onSelect={selectLocation} favorites={auth.user ? (auth.user.favorites || []) : []}
+          onCookieSettings={() => chooseConsent(null)}
+          onJoin={gated ? () => { track("event", "signup_gate_click", { spot: "landing", action: "register" }); setGateAuth("register"); } : null} />
       ) : (
       <>
       {/* FlightAware-style hero: sponsor takeover when sold, else house hero. */}
@@ -512,48 +559,58 @@ export default function App() {
               </div>
             </div>
 
-            {wr && (
-              <section className={`card wr-${wr.tone} windread`}>
-                <div className="card-head"><h2>Wind read</h2><span className="wr-dir">out of the {wr.dir}</span></div>
-                <div className="advice">{wr.advice}</div>
-              </section>
+            {/* ── Full detail: free accounts only. The verdict + current
+                   conditions above stay public (that's what social posts
+                   link to); everything deeper drives the signup. ── */}
+            {gated && (
+              <SignupGate spotName={spot.name} onSignup={() => setGateAuth("register")} onSignin={() => setGateAuth("login")} />
             )}
+            {!gated && !authPending && (
+              <>
+                {wr && (
+                  <section className={`card wr-${wr.tone} windread`}>
+                    <div className="card-head"><h2>Wind read</h2><span className="wr-dir">out of the {wr.dir}</span></div>
+                    <div className="advice">{wr.advice}</div>
+                  </section>
+                )}
 
-            {/* ── Timeline ── */}
-            <HourStrip hours={data.hourly} headInBy={data.outlook?.headInBy} />
+                {/* ── Timeline ── */}
+                <HourStrip hours={data.hourly} headInBy={data.outlook?.headInBy} />
 
-            {/* ── Map + Cams ── */}
-            <div className="dash2">
-              <MapCard spot={spot} />
-              <Cams lat={spot.lat} lon={spot.lon} spotName={spot.name} lake={spot.lake} />
-            </div>
+                {/* ── Map + Cams ── */}
+                <div className="dash2">
+                  <MapCard spot={spot} />
+                  <Cams lat={spot.lat} lon={spot.lon} spotName={spot.name} lake={spot.lake} />
+                </div>
 
-            {/* ── Details ── */}
-            <div className="dash2">
-              {(data.pointForecast || []).length > 0 && (
-                <section className="card">
-                  <h2>Local weather · {spot.name}</h2>
-                  {data.pointForecast.map((p, i) => (
-                    <div className="wxrow" key={i}>
-                      <div className="wxicon"><WxIcon short={p.shortForecast} /></div>
-                      <div className="wxmid">
-                        <div className="wxname">{p.name}</div>
-                        <div className="wxshort">{p.shortForecast}</div>
-                        <div className="wxmeta">Wind {p.wind || "—"}{p.precipPct ? ` · ${p.precipPct}% rain` : ""}</div>
-                      </div>
-                      <div className="wxtemp">{fmt(p.tempF, "°")}</div>
-                    </div>
-                  ))}
-                </section>
-              )}
-              <MarineForecast periods={data.marineForecast} zone={spot.zone} />
-            </div>
+                {/* ── Details ── */}
+                <div className="dash2">
+                  {(data.pointForecast || []).length > 0 && (
+                    <section className="card">
+                      <h2>Local weather · {spot.name}</h2>
+                      {data.pointForecast.map((p, i) => (
+                        <div className="wxrow" key={i}>
+                          <div className="wxicon"><WxIcon short={p.shortForecast} /></div>
+                          <div className="wxmid">
+                            <div className="wxname">{p.name}</div>
+                            <div className="wxshort">{p.shortForecast}</div>
+                            <div className="wxmeta">Wind {p.wind || "—"}{p.precipPct ? ` · ${p.precipPct}% rain` : ""}</div>
+                          </div>
+                          <div className="wxtemp">{fmt(p.tempF, "°")}</div>
+                        </div>
+                      ))}
+                    </section>
+                  )}
+                  <MarineForecast periods={data.marineForecast} zone={spot.zone} />
+                </div>
 
-            {data.noaaReport?.text && (
-              <details className="card">
-                <summary>📋 Full NWS nearshore report (NSH · {data.noaaReport.office})</summary>
-                <RawNSH text={data.noaaReport.text} />
-              </details>
+                {data.noaaReport?.text && (
+                  <details className="card">
+                    <summary>📋 Full NWS nearshore report (NSH · {data.noaaReport.office})</summary>
+                    <RawNSH text={data.noaaReport.text} />
+                  </details>
+                )}
+              </>
             )}
 
             <GearBlock waterTempF={buoy ? buoy.waterTempF : null} />
@@ -578,6 +635,7 @@ export default function App() {
       <ConsentBanner consent={consent} onChoose={chooseConsent} />
       {resetToken && <AuthModal auth={auth} initialMode="reset" resetToken={resetToken} onClose={() => setResetToken("")} />}
       {!resetToken && verifyToken && <AuthModal auth={auth} initialMode="verify" verifyToken={verifyToken} onClose={() => setVerifyToken("")} />}
+      {!resetToken && !verifyToken && gateAuth && <AuthModal auth={auth} initialMode={gateAuth} onClose={() => setGateAuth(null)} />}
     </>
   );
 }

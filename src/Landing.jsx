@@ -48,7 +48,16 @@ function SplashSelector({ q, setQ, summary, onSelect, favorites }) {
   );
 }
 
-function RegionDirectory({ summary, q, onSelect }) {
+// Deep link (?lake=erie or ?lake=Lake%20Erie): which region to open + scroll to.
+function lakeParam() {
+  try {
+    const v = (new URLSearchParams(window.location.search).get("lake") || "").trim().toLowerCase();
+    if (!v) return null;
+    return LAKE_ORDER.find((l) => l.toLowerCase() === v || l.toLowerCase().replace(/^lake\s+/, "") === v) || null;
+  } catch (e) { return null; }
+}
+
+function RegionDirectory({ summary, q, onSelect, deepLake }) {
   const ql = q.trim().toLowerCase();
   const byLake = {};
   (summary || []).forEach((s) => {
@@ -59,6 +68,12 @@ function RegionDirectory({ summary, q, onSelect }) {
     const ia = LAKE_ORDER.indexOf(a), ib = LAKE_ORDER.indexOf(b);
     return (ia < 0 ? 99 : ia) - (ib < 0 ? 99 : ib);
   });
+  // Deep-linked lake: scroll its section into view once conditions render.
+  useEffect(() => {
+    if (!deepLake || summary == null) return;
+    const el = document.getElementById(`lake-${deepLake.toLowerCase().replace(/\s+/g, "-")}`);
+    if (el) setTimeout(() => el.scrollIntoView({ behavior: "smooth", block: "start" }), 150);
+  }, [deepLake, summary == null]);
   const tally = (list) => {
     const c = { GO: 0, CAUTION: 0, "NO-GO": 0 };
     list.forEach((s) => { if (s.level) c[s.level] = (c[s.level] || 0) + 1; });
@@ -73,7 +88,8 @@ function RegionDirectory({ summary, q, onSelect }) {
         const list = byLake[lake];
         const c = tally(list);
         return (
-          <details className="region" key={lake} open={lake === "Lake Erie" || !!ql}>
+          <details className="region" key={lake} id={`lake-${lake.toLowerCase().replace(/\s+/g, "-")}`}
+            open={deepLake ? lake === deepLake : (lake === "Lake Erie" || !!ql)}>
             <summary className="region-head">
               <span className="region-name">{lake}</span>
               <span className="region-tally">
@@ -93,9 +109,10 @@ function RegionDirectory({ summary, q, onSelect }) {
   );
 }
 
-export default function Landing({ adFree, onSelect, favorites, onCookieSettings }) {
+export default function Landing({ adFree, onSelect, favorites, onCookieSettings, onJoin }) {
   const [summary, setSummary] = useState(null);
   const [q, setQ] = useState("");
+  const deepLake = lakeParam();
   useEffect(() => {
     let alive = true;
     fetch("/marine/conditions?summary")
@@ -110,7 +127,13 @@ export default function Landing({ adFree, onSelect, favorites, onCookieSettings 
         <SplashSelector q={q} setQ={setQ} summary={summary} onSelect={onSelect} favorites={favorites} />
       </Takeover>
       <main className="app">
-        <RegionDirectory summary={summary} q={q} onSelect={onSelect} />
+        {onJoin && (
+          <div className="joinstrip">
+            <span><b>Every port's verdict is below — free.</b> Create an account for the hour-by-hour picture, live cams &amp; “be back in by” times.</span>
+            <button className="cbtn" onClick={onJoin}>Create free account</button>
+          </div>
+        )}
+        <RegionDirectory summary={summary} q={q} onSelect={onSelect} deepLake={deepLake} />
         <footer className="meta">
           Live data from NOAA/NWS, NDBC buoys, Open-Meteo &amp; Windy. A planning aid — not an official forecast or a navigation tool.
           <div className="footlinks">
