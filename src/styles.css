@@ -668,7 +668,7 @@ body.has-takeover .app { background: var(--bg); border-radius: var(--r-lg) var(-
 
 /* ── Week-ahead strip ──────────────────────────────────────────────────────── */
 .week { display: flex; gap: var(--s2); overflow-x: auto; padding-bottom: 2px; }
-.wday { flex: 1 0 76px; min-width: 76px; text-align: center; padding: var(--s2) var(--s2) var(--s3);
+.wday { flex: 1 0 76px; min-width: 76px; text-align: center; padding: var(--s3) var(--s2) var(--s4);
   background: var(--surface-sunk); border: 1px solid var(--border); border-radius: var(--r-md); position: relative; }
 .wday.weekend { border-color: color-mix(in srgb, var(--gold) 55%, var(--border)); }
 .wd-name { font-size: var(--fs-xs); font-weight: var(--fw-semibold); color: var(--text-muted); }
@@ -681,7 +681,7 @@ body.has-takeover .app { background: var(--bg); border-radius: var(--r-lg) var(-
 .wd-m { font-family: var(--font-mono); font-size: var(--fs-sm); color: var(--text); }
 .wd-m small { color: var(--text-faint); margin-left: 2px; }
 .wd-m.wave b { color: var(--accent); }
-.wd-p { font-size: var(--fs-xs); color: var(--text-faint); margin-top: 2px; }
+.wd-p { font-size: var(--fs-xs); color: var(--text-faint); margin-top: 6px; min-height: 15px; }
 
 /* Sunrise / sunset chip on the call row */
 .suntimes { font-size: var(--fs-xs); color: var(--text-muted); white-space: nowrap; }
