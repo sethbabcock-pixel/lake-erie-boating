@@ -5,7 +5,7 @@ import { useAdsense, useAnalytics, getConsent, AdSlot, GearBlock, ConsentBanner 
 import { useAuth, Account, AuthModal } from "./auth.jsx";
 import Takeover from "./Takeover.jsx";
 import Landing from "./Landing.jsx";
-import { fmtWaves, waveFeel } from "./units.js";
+import { fmtWaves, waveFeel, compassToDeg } from "./units.js";
 
 const fmt = (v, unit) => (v == null ? "—" : `${v}${unit || ""}`);
 const verdictClass = (lvl) => (lvl === "NO-GO" ? "nogo" : lvl === "CAUTION" ? "caution" : "go");
@@ -292,7 +292,7 @@ function GlanceBand({ hours }) {
     : <>No clean GO window in the next 18h — check the week ahead</>;
   // Tap an hour → jump the hour-by-hour strip to it (and pulse the tile).
   const jumpTo = (time) => {
-    const tile = document.querySelector(`.hour[data-t="${time}"]`);
+    const tile = document.querySelector(`[data-t="${time}"]`);
     if (!tile) return;
     tile.scrollIntoView({ behavior: "smooth", inline: "center", block: "nearest" });
     tile.classList.add("pulse");
@@ -490,35 +490,81 @@ function SunTimes({ sun }) {
   return <span className="suntimes" title="Sunrise · sunset today">☀️ {f(sun.sunrise)} → 🌇 {f(sun.sunset)}</span>;
 }
 
+// Windy-style hourly table: labeled metric rows × hour columns, color-coded
+// cells, wind-direction arrows, day bands — with our verdict strip on top.
+const windTint = (kt) => (kt == null ? "" : kt >= 22 ? "bad" : kt >= 15 ? "warn" : kt >= 12 ? "mild" : "ok");
+const waveTint = (ft) => (ft == null ? "" : ft >= 4 ? "bad" : ft >= 2.5 ? "warn" : ft >= 2 ? "mild" : "ok");
+const rainTint = (p) => (p == null || p < 30 ? "" : p >= 55 ? "wet" : "damp");
+
+function WindArrow({ dir }) {
+  const deg = compassToDeg(dir);
+  if (deg == null) return null;
+  // "↓" points where a north wind blows (south); rotate by the FROM bearing.
+  return (
+    <svg className="hx-arrow" width="11" height="11" viewBox="0 0 24 24" style={{ transform: `rotate(${deg}deg)` }}
+      fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M12 3v18M6 15l6 6 6-6" />
+    </svg>
+  );
+}
+
 function HourStrip({ hours, headInBy }) {
   if (!hours || !hours.length) return null;
   const days = groupByDay(hours);
+  const dayStarts = new Set(days.map((d) => d.hours[0].time));
+  const cls = (h, extra = "") => `hx-c ${dayStarts.has(h.time) ? "hx-ds" : ""} ${extra}`;
+  const cols = { gridTemplateColumns: `minmax(96px, auto) repeat(${hours.length}, minmax(52px, 1fr))` };
+  const Label = ({ children, unit }) => <div className="hx-l">{children}{unit && <small> {unit}</small>}</div>;
   return (
     <section className="card hourcard">
       <div className="card-head">
         <h2>Hour-by-hour · next {hours.length} hours</h2>
         <span className="legend"><i className="lg go" />go <i className="lg caution" />caution <i className="lg nogo" />stay in</span>
       </div>
-      <div className="hours">
-        {days.map((day) => (
-          <React.Fragment key={day.key}>
-            <div className="day-sep"><span>{day.label}</span></div>
-            {day.hours.map((h) => (
-              <div key={h.time} data-t={h.time}
-                className={`hour ${h.level === "NO-GO" ? "nogo" : h.level.toLowerCase()} ${headInBy === h.time ? "cutoff" : ""}`}
-                title={h.short}>
-                <div className="ht">{fmtHour(h.time).replace(" ", "")}</div>
-                <div className="hicon" aria-hidden="true">{wxGlyph(h.short)}</div>
-                <div className="hbar" />
-                <div className="hm"><b>{h.windKt ?? "—"}</b><small>kt{h.windDir ? ` ${h.windDir}` : ""}</small></div>
-                <div className="hm wave"><b>{h.waveFt ?? "—"}</b><small>ft{h.periodSec ? ` @${h.periodSec}s` : ""}</small></div>
-                <div className="hp">{h.precipPct >= 15 ? `${h.precipPct}%` : ""}</div>
-              </div>
-            ))}
-          </React.Fragment>
-        ))}
+      <div className="hx-scroll">
+        <div className="hx" style={cols}>
+          {/* day bands */}
+          <div className="hx-l hx-dayl" />
+          {days.map((d) => (
+            <div className="hx-day" key={d.key} style={{ gridColumn: `span ${d.hours.length}` }}>
+              {d.label} <small>{new Date(d.hours[0].time).toLocaleDateString([], { month: "short", day: "numeric" })}</small>
+            </div>
+          ))}
+          {/* hours */}
+          <Label>&nbsp;</Label>
+          {hours.map((h) => (
+            <div key={h.time} data-t={h.time} className={cls(h, `hx-hour ${headInBy === h.time ? "cutoff" : ""}`)}>
+              {fmtHour(h.time).replace(" ", "").toLowerCase()}
+            </div>
+          ))}
+          {/* sky */}
+          <Label>&nbsp;</Label>
+          {hours.map((h) => <div key={h.time} className={cls(h, "hx-ico")} title={h.short}><WxIcon short={h.short} size={18} /></div>)}
+          {/* verdict strip */}
+          <Label>Verdict</Label>
+          {hours.map((h) => <div key={h.time} className={cls(h, "hx-vwrap")} title={`${fmtHour(h.time)} · ${h.level}`}><i className={`hx-v ${verdictClass(h.level)}`} /></div>)}
+          {/* temp */}
+          <Label unit="°F">Temp</Label>
+          {hours.map((h) => <div key={h.time} className={cls(h)}>{h.tempF ?? "—"}</div>)}
+          {/* wind */}
+          <Label unit="kt">Wind</Label>
+          {hours.map((h) => (
+            <div key={h.time} className={cls(h, `hx-tint-${windTint(h.windKt)}`)} title={h.windDir ? `out of the ${h.windDir}` : undefined}>
+              <WindArrow dir={h.windDir} /><b>{h.windKt ?? "—"}</b>
+            </div>
+          ))}
+          {/* waves */}
+          <Label unit="ft">Waves</Label>
+          {hours.map((h) => <div key={h.time} className={cls(h, `hx-tint-${waveTint(h.waveFt)}`)}><b>{h.waveFt ?? "—"}</b></div>)}
+          {/* period */}
+          <Label unit="s">Between waves</Label>
+          {hours.map((h) => <div key={h.time} className={cls(h, "hx-dim")}>{h.periodSec ?? "—"}</div>)}
+          {/* rain */}
+          <Label unit="%">Rain</Label>
+          {hours.map((h) => <div key={h.time} className={cls(h, `hx-rain-${rainTint(h.precipPct)}`)}>{h.precipPct ? h.precipPct : "·"}</div>)}
+        </div>
       </div>
-      <div className="hint">Wind (kt + direction) · wave height (ft) &amp; period (s) · rain chance, per hour. Red-ringed hour = be back in by then. Scroll for up to 3 days.</div>
+      <div className="hint">Arrows show where the wind is blowing to. Red-ringed hour = be back in by then. Scroll for up to 3 days.</div>
     </section>
   );
 }

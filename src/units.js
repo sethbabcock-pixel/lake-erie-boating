@@ -2,6 +2,10 @@
 // travel together, everywhere waves appear: "2.5 ft @ 4s".
 export const fmtWaves = (ft, sec) => (ft == null ? "—" : `${ft} ft${sec ? ` @ ${sec}s` : ""}`);
 
+// 16-point compass → degrees (direction the wind comes FROM).
+const COMPASS_16 = ["N","NNE","NE","ENE","E","ESE","SE","SSE","S","SSW","SW","WSW","W","WNW","NW","NNW"];
+export const compassToDeg = (c) => { const i = COMPASS_16.indexOf(c); return i < 0 ? null : i * 22.5; };
+
 // Qualitative ride feel from height : period. Great Lakes rule of thumb:
 // period (s) ≤ 2× height (ft) = steep, punishing chop; ≥ 3× = easy rollers.
 export function waveFeel(ft, sec) {
