@@ -5,6 +5,7 @@ import { useAdsense, useAnalytics, getConsent, AdSlot, GearBlock, ConsentBanner 
 import { useAuth, Account, AuthModal } from "./auth.jsx";
 import Takeover from "./Takeover.jsx";
 import Landing from "./Landing.jsx";
+import { fmtWaves, waveFeel } from "./units.js";
 
 const fmt = (v, unit) => (v == null ? "—" : `${v}${unit || ""}`);
 const verdictClass = (lvl) => (lvl === "NO-GO" ? "nogo" : lvl === "CAUTION" ? "caution" : "go");
@@ -100,25 +101,29 @@ const WaveGlyph = () => (
   </svg>
 );
 
+// One NWS nearshore period as icon + wind/wave chips + weather sentence.
+// Shared by the full forecast card and the week-ahead day panel.
+function MarinePeriodRow({ p }) {
+  const m = parseMarine(p.forecast);
+  return (
+    <div className="mrow">
+      <div className="mrow-head"><WxIcon short={p.forecast} size={24} /><span className="mrow-name">{p.name}</span></div>
+      <div className="mchips">
+        {m.wind && <span className="mchip wind"><WindGlyph /><span>{m.wind}</span></span>}
+        {m.waves && <span className="mchip wave"><WaveGlyph /><span>{m.waves}</span></span>}
+      </div>
+      {m.weather && <div className="mweather">{m.weather}.</div>}
+    </div>
+  );
+}
+
 function MarineForecast({ periods, zone }) {
   if (!periods || !periods.length) return null;
   return (
     <section className="card">
       <h2>Nearshore marine forecast{zone ? ` · ${zone}` : ""}</h2>
       <div className="mlist">
-        {periods.map((p, i) => {
-          const m = parseMarine(p.forecast);
-          return (
-            <div className="mrow" key={i}>
-              <div className="mrow-head"><WxIcon short={p.forecast} size={24} /><span className="mrow-name">{p.name}</span></div>
-              <div className="mchips">
-                {m.wind && <span className="mchip wind"><WindGlyph /><span>{m.wind}</span></span>}
-                {m.waves && <span className="mchip wave"><WaveGlyph /><span>{m.waves}</span></span>}
-              </div>
-              {m.weather && <div className="mweather">{m.weather}.</div>}
-            </div>
-          );
-        })}
+        {periods.map((p, i) => <MarinePeriodRow p={p} key={i} />)}
       </div>
     </section>
   );
@@ -348,7 +353,7 @@ function NearbyPorts({ lake, current, onSelect }) {
           <button key={s.id} className="nearby-chip" onClick={() => onSelect(s.id)}>
             <span className={`ndot ${verdictClass(s.level)}`} />
             <span className="nname">{s.name}</span>
-            <small>{s.windKt != null ? `${s.windKt}kt` : "—"}{s.waveFt != null ? ` · ${s.waveFt}ft` : ""}</small>
+            <small>{s.windKt != null ? `${s.windKt}kt` : "—"}{s.waveFt != null ? ` · ${s.waveFt}ft${s.periodSec ? `@${s.periodSec}s` : ""}` : ""}</small>
           </button>
         ))}
       </div>
@@ -381,39 +386,72 @@ function ShareButton({ spot, rec, wind, wv }) {
   );
 }
 
-// 7-day planning strip — per-day verdict, weekend highlighted. This is the
-// "pick Saturday on Wednesday" view.
-function WeekStrip({ week }) {
+// Which NWS nearshore periods belong to a given date. Period names read like
+// "TODAY", "TONIGHT", "THURSDAY", "THURSDAY NIGHT" — the zone forecast only
+// reaches ~2–3 days, so weekday names can't collide with next week.
+function periodsForDate(periods, dateISO, isToday) {
+  const wd = new Date(`${dateISO}T12:00:00`).toLocaleDateString("en-US", { weekday: "long" }).toUpperCase();
+  return (periods || []).filter((p) => {
+    const n = (p.name || "").toUpperCase();
+    if (n.startsWith(wd)) return true;
+    if (isToday) return /^(TODAY|THIS\b|TONIGHT|OVERNIGHT|REST OF)/.test(n);
+    return false;
+  });
+}
+
+// 7-day planning strip — per-day verdict, weekend highlighted. Tap a day to
+// read that day's official nearshore forecast. "Pick Saturday on Wednesday."
+function WeekStrip({ week, marineForecast }) {
+  const [sel, setSel] = useState(null);
   if (!week || week.length < 2) return null;
   const fmtDay = (iso) => {
     const d = new Date(`${iso}T12:00:00`);
-    return { wd: d.toLocaleDateString([], { weekday: "short" }), md: d.toLocaleDateString([], { month: "numeric", day: "numeric" }), weekend: d.getDay() === 0 || d.getDay() === 6 };
+    return { wd: d.toLocaleDateString([], { weekday: "short" }), md: d.toLocaleDateString([], { month: "numeric", day: "numeric" }), long: d.toLocaleDateString([], { weekday: "long", month: "long", day: "numeric" }), weekend: d.getDay() === 0 || d.getDay() === 6 };
   };
+  const selDay = sel != null ? week[sel] : null;
+  const selPeriods = selDay ? periodsForDate(marineForecast, selDay.date, sel === 0) : [];
   return (
     <section className="card">
       <div className="card-head">
         <h2>Week ahead</h2>
-        <span className="legend">daily outlook — plan the weekend early</span>
+        <span className="legend">tap a day for its nearshore forecast</span>
       </div>
       <div className="week">
         {week.map((d, i) => {
           const f = fmtDay(d.date);
           return (
-            <div key={d.date} className={`wday ${verdictClass(d.level)} ${f.weekend ? "weekend" : ""}`} title={`${f.wd} ${f.md}`}>
+            <button key={d.date} onClick={() => setSel(sel === i ? null : i)} aria-expanded={sel === i}
+              className={`wday ${verdictClass(d.level)} ${f.weekend ? "weekend" : ""} ${sel === i ? "sel" : ""}`} title={`${f.wd} ${f.md} — tap for the day's forecast`}>
               <div className="wd-name">{i === 0 ? "Today" : f.wd}{f.weekend && <span className="wd-star">•</span>}</div>
               <div className={`wd-level ${verdictClass(d.level)}`}>{d.level === "NO-GO" ? "NO" : d.level}</div>
               <div className="wd-m"><b>{d.windKt ?? "—"}</b><small>kt</small></div>
-              <div className="wd-m wave"><b>{d.waveFt ?? "—"}</b><small>ft</small></div>
+              <div className="wd-m wave"><b>{d.waveFt ?? "—"}</b><small>ft{d.periodSec ? ` @${d.periodSec}s` : ""}</small></div>
               <div className="wd-p">
                 {d.precipPct != null && d.precipPct >= 30
                   ? `${d.precipPct}% rain`
                   : (d.gustKt != null && d.windKt != null && d.gustKt - d.windKt >= 5 ? `gusts ${d.gustKt}` : "")}
               </div>
-            </div>
+            </button>
           );
         })}
       </div>
-      <div className="hint">Daily max wind &amp; waves. Dot = weekend. Forecast confidence drops past ~3 days — recheck as it gets close.</div>
+      {selDay && (
+        <div className="wpanel">
+          <div className="wpanel-head">
+            <b>{fmtDay(selDay.date).long}</b>
+            <span className="wpanel-stats">
+              wind to <b>{selDay.windKt ?? "—"} kt</b>{selDay.gustKt && selDay.gustKt - (selDay.windKt || 0) >= 3 ? ` (gusts ${selDay.gustKt})` : ""} · waves to <b>{fmtWaves(selDay.waveFt, selDay.periodSec)}</b>{selDay.precipPct != null && selDay.precipPct >= 20 ? ` · ${selDay.precipPct}% rain` : ""}
+            </span>
+            <button className="linklike wpanel-close" onClick={() => setSel(null)}>close ×</button>
+          </div>
+          {selPeriods.length > 0 ? (
+            <div className="mlist">{selPeriods.map((p, i) => <MarinePeriodRow p={p} key={i} />)}</div>
+          ) : (
+            <p className="acct-note wpanel-note">The official NWS nearshore text only reaches ~2–3 days out, so there's no written forecast for this day yet — the numbers above are the model outlook. Check back as it gets closer.</p>
+          )}
+        </div>
+      )}
+      <div className="hint">Daily max wind &amp; waves (height @ seconds between waves). Dot = weekend. Confidence drops past ~3 days.</div>
     </section>
   );
 }
@@ -473,7 +511,7 @@ function HourStrip({ hours, headInBy }) {
                 <div className="hicon" aria-hidden="true">{wxGlyph(h.short)}</div>
                 <div className="hbar" />
                 <div className="hm"><b>{h.windKt ?? "—"}</b><small>kt{h.windDir ? ` ${h.windDir}` : ""}</small></div>
-                <div className="hm wave"><b>{h.waveFt ?? "—"}</b><small>ft{h.periodSec ? ` · ${h.periodSec}s` : ""}</small></div>
+                <div className="hm wave"><b>{h.waveFt ?? "—"}</b><small>ft{h.periodSec ? ` @${h.periodSec}s` : ""}</small></div>
                 <div className="hp">{h.precipPct >= 15 ? `${h.precipPct}%` : ""}</div>
               </div>
             ))}
@@ -748,7 +786,18 @@ export default function App() {
               <div className="stat">
                 <div className="k">Waves</div>
                 <div className="v">{fmt(wv.ft, "")}<small>ft</small> <Trend t={trendOf(data.hourly?.[0]?.waveFt, data.hourly?.[3]?.waveFt)} /></div>
-                <div className="sub">{wv.periodSec ? `${wv.periodSec}s period` : (wv.source || "—")}</div>
+                <div className="sub">
+                  {(() => {
+                    const sec = wv.periodSec ?? data.hourly?.[0]?.periodSec ?? null;
+                    const feel = waveFeel(wv.ft, sec);
+                    return (
+                      <>
+                        {sec ? `@ ${sec}s between waves` : (wv.source || "—")}
+                        {feel && <> · <span className={`feel ${feel.cls}`}>{feel.word}</span></>}
+                      </>
+                    );
+                  })()}
+                </div>
               </div>
               <div className="stat">
                 <div className="k">Water</div>
@@ -784,7 +833,7 @@ export default function App() {
                 <HourStrip hours={data.hourly} headInBy={data.outlook?.headInBy} />
 
                 {/* ── Week ahead / weekend planning ── */}
-                <WeekStrip week={data.week} />
+                <WeekStrip week={data.week} marineForecast={data.marineForecast} />
 
                 {/* ── Map + Cams ── */}
                 <div className="dash2">

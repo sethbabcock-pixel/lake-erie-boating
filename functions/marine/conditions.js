@@ -253,17 +253,19 @@ async function fetchDailyOutlook(lat, lon) {
       ),
       getJSON(
         `https://marine-api.open-meteo.com/v1/marine?latitude=${lat}&longitude=${lon}` +
-        `&daily=wave_height_max&forecast_days=7&timezone=auto`
+        `&daily=wave_height_max,wave_period_max&forecast_days=7&timezone=auto`
       ).catch(() => null),
     ]);
     const d = wx?.daily || {};
     const waves = mar?.daily?.wave_height_max || [];
+    const periods = mar?.daily?.wave_period_max || [];
     const week = (d.time || []).map((date, i) => {
       const windKt = round(d.wind_speed_10m_max?.[i], 0);
       const gustKt = round(d.wind_gusts_10m_max?.[i], 0);
       const precipPct = d.precipitation_probability_max?.[i] ?? null;
       const waveFt = waves[i] == null ? null : round(mToFt(waves[i]), 1);
-      return { date, windKt, gustKt, precipPct, waveFt, level: hourRisk(windKt, precipPct ?? 0, "", waveFt) };
+      const periodSec = periods[i] == null ? null : round(periods[i], 0);
+      return { date, windKt, gustKt, precipPct, waveFt, periodSec, level: hourRisk(windKt, precipPct ?? 0, "", waveFt) };
     });
     const sun = d.sunrise?.[0] ? { sunrise: d.sunrise[0], sunset: d.sunset[0] } : null;
     return { week, sun };
@@ -695,7 +697,7 @@ export async function fetchSummary() {
   const asArray = (d) => (Array.isArray(d) ? d : d ? [d] : []);
   const [windRes, waveRes] = await Promise.all([
     getJSON(`https://api.open-meteo.com/v1/forecast?latitude=${lats}&longitude=${lons}&current=wind_speed_10m,wind_gusts_10m,wind_direction_10m&wind_speed_unit=kn&timezone=auto`).catch(() => null),
-    getJSON(`https://marine-api.open-meteo.com/v1/marine?latitude=${lats}&longitude=${lons}&current=wave_height&timezone=auto`).catch(() => null),
+    getJSON(`https://marine-api.open-meteo.com/v1/marine?latitude=${lats}&longitude=${lons}&current=wave_height,wave_period&timezone=auto`).catch(() => null),
   ]);
   const wind = asArray(windRes);
   const wave = asArray(waveRes);
@@ -706,8 +708,9 @@ export async function fetchSummary() {
     const gustKt = round(w.wind_gusts_10m, 0);
     const dir = w.wind_direction_10m == null ? null : degToCompass(w.wind_direction_10m);
     const waveFt = wv.wave_height == null ? null : round(mToFt(wv.wave_height), 1);
+    const periodSec = wv.wave_period == null ? null : round(wv.wave_period, 0);
     const level = windKt == null && waveFt == null ? null : hourRisk(windKt, 0, "", waveFt);
-    return { id, name: s.name, lake: s.lake || "Lake Erie", level, windKt, gustKt, dir, waveFt };
+    return { id, name: s.name, lake: s.lake || "Lake Erie", level, windKt, gustKt, dir, waveFt, periodSec };
   });
   return { spots, updatedAt: new Date().toISOString() };
 }

@@ -71,7 +71,7 @@ function installFetchStub() {
     if (u.includes("marine-api.open-meteo.com")) {
       const n = (u.match(/latitude=([^&]*)/)?.[1] || "").split(",").length;
       return jsonResp(Array.from({ length: n }, () => ({
-        current: { wave_height: stormMode ? 1.8 : 0.2 },
+        current: { wave_height: stormMode ? 1.8 : 0.2, wave_period: stormMode ? 3 : 5 },
         hourly: { time: omTimes, wave_height: omTimes.map(() => (stormMode ? 1.8 : 0.2)) },
       })));
     }
@@ -835,6 +835,7 @@ async function run() {
     check("digest: goes to the opted-in user", d && d.to[0].email === "digest@example.com", JSON.stringify(emailCalls.map((c) => c.to)));
     check("digest: subject leads with home-port best window", /Best window at Sandusky/i.test(d.subject), d.subject);
     check("digest: rows carry the best window", /best 6am–9pm/.test(d.htmlContent));
+    check("digest: waves shown as height @ period", /ft @ 5s/.test(d.htmlContent), d.htmlContent.match(/[\d.]+ ft[^<·]*/)?.[0]);
     check("digest: includes both favorite ports", /Sandusky/.test(d.htmlContent) && /Cleveland/.test(d.htmlContent));
     check("digest: carries unsubscribe link", /\/unsubscribe\?u=/.test(d.htmlContent));
     check("digest: run logged for admin", [...env.USERS._map.keys()].some((k) => k.startsWith("admin:notification:")));

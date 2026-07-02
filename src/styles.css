@@ -793,3 +793,44 @@ body.has-takeover .app { background: var(--bg); border-radius: var(--r-lg) var(-
 .glance-band .gb:hover { opacity: 1; transform: scaleY(1.25); }
 .hour.pulse { outline: 2px solid var(--accent); outline-offset: 2px; animation: hourpulse 1.6s var(--ease); }
 @keyframes hourpulse { 0%, 60% { outline-color: var(--accent); } 100% { outline-color: transparent; } }
+
+/* ── Wave feel + consistent height@period ──────────────────────────────────── */
+.feel { font-weight: var(--fw-semibold); }
+.feel.rough { color: var(--warning); }
+.feel.easy { color: var(--success); }
+.feel.mid { color: var(--text-muted); }
+
+/* ── Week-ahead: day cards are buttons; tap opens the day panel ────────────── */
+.wday { border: 1px solid var(--border); font-family: var(--font-sans); cursor: pointer;
+  transition: border-color var(--dur-fast), transform var(--dur-fast); color: var(--text); }
+.wday:hover { border-color: var(--accent); }
+.wday.sel { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
+.wday.weekend.sel { border-color: var(--accent); }
+.wpanel { margin-top: var(--s4); padding: var(--s4); background: var(--surface-sunk);
+  border: 1px solid var(--border); border-radius: var(--r-md); }
+.wpanel-head { display: flex; align-items: baseline; gap: var(--s2) var(--s4); flex-wrap: wrap; margin-bottom: var(--s2); }
+.wpanel-head > b { font-size: var(--fs-base); color: var(--text); }
+.wpanel-stats { font-size: var(--fs-sm); color: var(--text-muted); }
+.wpanel-stats b { color: var(--text); font-family: var(--font-mono); font-weight: var(--fw-semibold); }
+.wpanel-close { margin-left: auto; }
+.wpanel-note { margin: var(--s2) 0 0; }
+.wpanel .mrow:last-child { border-bottom: none; padding-bottom: 0; }
+
+/* ── Mobile spacing pass ───────────────────────────────────────────────────── */
+@media (max-width: 640px) {
+  /* Stats: 2×2 instead of 3+1 with an orphaned AIR card. */
+  .grid { grid-template-columns: 1fr 1fr; gap: var(--s2); }
+  .stat { padding: var(--s3); }
+  /* Cards breathe a consistent amount on small screens. */
+  .card { padding: var(--s4); }
+  .call-body { padding: var(--s3) var(--s4); }
+  .call-badge { padding: var(--s3) var(--s4); }
+  /* Strips: uniform tight gaps. */
+  .hours { gap: 4px; }
+  .week { gap: var(--s2); }
+  .wday { min-width: 92px; }
+  .dash2 { gap: var(--s3); }
+  .gate-card { padding: var(--s4); }
+  .wpanel-head { margin-bottom: var(--s3); }
+  .wpanel-close { flex-basis: 100%; text-align: right; }
+}

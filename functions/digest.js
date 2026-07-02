@@ -26,7 +26,7 @@ const portRow = (s) => `
     <td style="padding:8px 10px 8px 0">${chip(s.level)}</td>
     <td style="padding:8px 0;font-family:system-ui,sans-serif">
       <a href="${SITE}/?spot=${encodeURIComponent(s.id)}" style="color:#008BA8;font-weight:600;text-decoration:none">${s.name}</a>
-      <span style="color:#5b6b78;font-size:13px"> · ${s.windKt != null ? `${s.windKt} kt${s.dir ? ` ${s.dir}` : ""}` : "—"} · ${s.waveFt != null ? `${s.waveFt} ft` : "—"}${s.win ? ` · <b style="color:#1B936A">best ${s.win.from}–${s.win.to}</b>` : ""}</span>
+      <span style="color:#5b6b78;font-size:13px"> · ${s.windKt != null ? `${s.windKt} kt${s.dir ? ` ${s.dir}` : ""}` : "—"} · ${s.waveFt != null ? `${s.waveFt} ft${s.periodSec ? ` @ ${s.periodSec}s` : ""}` : "—"}${s.win ? ` · <b style="color:#1B936A">best ${s.win.from}–${s.win.to}</b>` : ""}</span>
     </td>
   </tr>`;
 

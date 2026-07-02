@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from "react";
 import Takeover from "./Takeover.jsx";
+import { fmtWaves } from "./units.js";
 
 const vclass = (v) => (v === "NO-GO" ? "nogo" : v === "CAUTION" ? "caution" : v === "GO" ? "go" : "unknown");
 const LAKE_ORDER = ["Lake Erie", "Lake Ontario", "Lake Huron", "Lake Michigan", "Lake Superior"];
@@ -16,7 +17,7 @@ function LocCard({ s, onSelect }) {
         <StatusChip level={s.level} />
       </div>
       <div className="loc-card-meta">
-        {s.windKt != null ? <>{s.windKt} kt{s.dir ? ` ${s.dir}` : ""}</> : "—"} · {s.waveFt != null ? `${s.waveFt} ft` : "—"}
+        {s.windKt != null ? <>{s.windKt} kt{s.dir ? ` ${s.dir}` : ""}</> : "—"} · {fmtWaves(s.waveFt, s.periodSec)}
       </div>
     </button>
   );
