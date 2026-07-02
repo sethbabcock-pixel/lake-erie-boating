@@ -712,6 +712,42 @@ export async function fetchSummary() {
   return { spots, updatedAt: new Date().toISOString() };
 }
 
+// Today's best GO window for every port (for the daily digest email): two
+// batched Open-Meteo hourly calls, then the longest contiguous GO run between
+// 6am and 8pm local. Returns { spotId: {from, to, hours} | null }.
+const fmtH12 = (h) => `${h % 12 || 12}${h < 12 ? "am" : "pm"}`;
+export async function fetchTodayWindows() {
+  const entries = Object.entries(SPOTS);
+  const lats = entries.map(([, s]) => s.lat).join(",");
+  const lons = entries.map(([, s]) => s.lon).join(",");
+  const asArray = (d) => (Array.isArray(d) ? d : d ? [d] : []);
+  const [windRes, waveRes] = await Promise.all([
+    getJSON(`https://api.open-meteo.com/v1/forecast?latitude=${lats}&longitude=${lons}&hourly=wind_speed_10m&wind_speed_unit=kn&forecast_days=1&timezone=auto`).catch(() => null),
+    getJSON(`https://marine-api.open-meteo.com/v1/marine?latitude=${lats}&longitude=${lons}&hourly=wave_height&forecast_days=1&timezone=auto`).catch(() => null),
+  ]);
+  const wind = asArray(windRes);
+  const wave = asArray(waveRes);
+  const out = {};
+  entries.forEach(([id], i) => {
+    const times = wind[i]?.hourly?.time || [];
+    const kts = wind[i]?.hourly?.wind_speed_10m || [];
+    const waves = wave[i]?.hourly?.wave_height || [];
+    let best = null, run = null;
+    for (let j = 0; j < times.length; j++) {
+      const h = parseInt(times[j].slice(11, 13), 10);
+      if (h < 6 || h > 20) { run = null; continue; }
+      const windKt = round(kts[j], 0);
+      const waveFt = waves[j] == null ? null : round(mToFt(waves[j]), 1);
+      const ok = windKt != null && hourRisk(windKt, 0, "", waveFt) === "GO";
+      if (!ok) { run = null; continue; }
+      if (!run) { run = { fromH: h, toH: h }; } else run.toH = h;
+      if (!best || (run.toH - run.fromH) > (best.toH - best.fromH)) best = { ...run };
+    }
+    out[id] = best ? { from: fmtH12(best.fromH), to: fmtH12(best.toH + 1), hours: best.toH - best.fromH + 1 } : null;
+  });
+  return out;
+}
+
 async function handleSummary() {
   const cacheKey = new Request("https://sib-summary.local/all");
   const cache = caches.default;

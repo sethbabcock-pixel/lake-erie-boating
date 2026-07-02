@@ -59,14 +59,21 @@ function installFetchStub() {
       emailCalls.push(JSON.parse(opts.body || "{}"));
       return jsonResp({ messageId: "<msg@brevo>" }, 201);
     }
-    // Open-Meteo batched summary (used by the email digest engine).
+    // Open-Meteo batched summary + today-hourly (used by the email digest engine).
+    const omTimes = Array.from({ length: 24 }, (_, h) => `2026-07-02T${String(h).padStart(2, "0")}:00`);
     if (u.includes("api.open-meteo.com/v1/forecast")) {
       const n = (u.match(/latitude=([^&]*)/)?.[1] || "").split(",").length;
-      return jsonResp(Array.from({ length: n }, () => ({ current: { wind_speed_10m: stormMode ? 28 : 8, wind_gusts_10m: stormMode ? 35 : 12, wind_direction_10m: 220 } })));
+      return jsonResp(Array.from({ length: n }, () => ({
+        current: { wind_speed_10m: stormMode ? 28 : 8, wind_gusts_10m: stormMode ? 35 : 12, wind_direction_10m: 220 },
+        hourly: { time: omTimes, wind_speed_10m: omTimes.map(() => (stormMode ? 28 : 8)) },
+      })));
     }
     if (u.includes("marine-api.open-meteo.com")) {
       const n = (u.match(/latitude=([^&]*)/)?.[1] || "").split(",").length;
-      return jsonResp(Array.from({ length: n }, () => ({ current: { wave_height: stormMode ? 1.8 : 0.2 } })));
+      return jsonResp(Array.from({ length: n }, () => ({
+        current: { wave_height: stormMode ? 1.8 : 0.2 },
+        hourly: { time: omTimes, wave_height: omTimes.map(() => (stormMode ? 1.8 : 0.2)) },
+      })));
     }
     const body = opts.body ? Object.fromEntries(new URLSearchParams(opts.body)) : null;
     stripeCalls.push({ url: u, method: opts.method || "GET", body });
@@ -824,8 +831,10 @@ async function run() {
     emailCalls = [];
     const res = await runScheduled(env, 10);
     eq("digest: exactly one digest sent", res.digests, 1);
-    const d = emailCalls.find((c) => /ports/i.test(c.subject));
+    const d = emailCalls.find((c) => /Should I Boat/i.test(c.subject));
     check("digest: goes to the opted-in user", d && d.to[0].email === "digest@example.com", JSON.stringify(emailCalls.map((c) => c.to)));
+    check("digest: subject leads with home-port best window", /Best window at Sandusky/i.test(d.subject), d.subject);
+    check("digest: rows carry the best window", /best 6am–9pm/.test(d.htmlContent));
     check("digest: includes both favorite ports", /Sandusky/.test(d.htmlContent) && /Cleveland/.test(d.htmlContent));
     check("digest: carries unsubscribe link", /\/unsubscribe\?u=/.test(d.htmlContent));
     check("digest: run logged for admin", [...env.USERS._map.keys()].some((k) => k.startsWith("admin:notification:")));

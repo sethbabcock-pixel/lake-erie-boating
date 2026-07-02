@@ -285,12 +285,23 @@ function GlanceBand({ hours }) {
   const label = best
     ? <>Best window: <b>{best.from === 0 ? "now" : fmtHour(win[best.from].time)} – {fmtHour(win[Math.min(best.to + 1, win.length - 1)].time)}</b> ({best.to - best.from + 1}h)</>
     : <>No clean GO window in the next 18h — check the week ahead</>;
+  // Tap an hour → jump the hour-by-hour strip to it (and pulse the tile).
+  const jumpTo = (time) => {
+    const tile = document.querySelector(`.hour[data-t="${time}"]`);
+    if (!tile) return;
+    tile.scrollIntoView({ behavior: "smooth", inline: "center", block: "nearest" });
+    tile.classList.add("pulse");
+    setTimeout(() => tile.classList.remove("pulse"), 1600);
+  };
   return (
     <section className="card glance">
       <div className="card-head"><h2>Today at a glance</h2><span className="glance-label">{label}</span></div>
       <div className="glance-band">
         {win.map((h, i) => (
-          <span key={h.time} className={`gb ${verdictClass(h.level)} ${best && i >= best.from && i <= best.to ? "best" : ""}`} title={`${fmtHour(h.time)} · ${h.level}`} />
+          <button key={h.time} onClick={() => jumpTo(h.time)}
+            className={`gb ${verdictClass(h.level)} ${best && i >= best.from && i <= best.to ? "best" : ""}`}
+            title={`${fmtHour(h.time)} · ${h.level} — see the detail`}
+            aria-label={`${fmtHour(h.time)}: ${h.level}. Jump to hour detail.`} />
         ))}
       </div>
       <div className="glance-x">
@@ -298,6 +309,7 @@ function GlanceBand({ hours }) {
         <span>{fmtHour(win[Math.floor(win.length / 2)].time)}</span>
         <span>{fmtHour(win[win.length - 1].time)}</span>
       </div>
+      <div className="hint">Tap an hour to jump to its detail below.</div>
     </section>
   );
 }
@@ -454,7 +466,7 @@ function HourStrip({ hours, headInBy }) {
           <React.Fragment key={day.key}>
             <div className="day-sep"><span>{day.label}</span></div>
             {day.hours.map((h) => (
-              <div key={h.time}
+              <div key={h.time} data-t={h.time}
                 className={`hour ${h.level === "NO-GO" ? "nogo" : h.level.toLowerCase()} ${headInBy === h.time ? "cutoff" : ""}`}
                 title={h.short}>
                 <div className="ht">{fmtHour(h.time).replace(" ", "")}</div>

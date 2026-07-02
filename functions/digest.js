@@ -11,7 +11,7 @@
 // the same summary data the homepage directory shows (two batched Open-Meteo
 // calls for all ports — cheap enough to run hourly).
 import { sendEmail, ensureUnsubToken, notify, emailFooter } from "./auth.js";
-import { fetchSummary } from "./marine/conditions.js";
+import { fetchSummary, fetchTodayWindows } from "./marine/conditions.js";
 
 const SITE = "https://shouldiboat.com";
 export const DIGEST_UTC_HOUR = 10; // 6am ET / 5am CT
@@ -26,7 +26,7 @@ const portRow = (s) => `
     <td style="padding:8px 10px 8px 0">${chip(s.level)}</td>
     <td style="padding:8px 0;font-family:system-ui,sans-serif">
       <a href="${SITE}/?spot=${encodeURIComponent(s.id)}" style="color:#008BA8;font-weight:600;text-decoration:none">${s.name}</a>
-      <span style="color:#5b6b78;font-size:13px"> · ${s.windKt != null ? `${s.windKt} kt${s.dir ? ` ${s.dir}` : ""}` : "—"} · ${s.waveFt != null ? `${s.waveFt} ft` : "—"}</span>
+      <span style="color:#5b6b78;font-size:13px"> · ${s.windKt != null ? `${s.windKt} kt${s.dir ? ` ${s.dir}` : ""}` : "—"} · ${s.waveFt != null ? `${s.waveFt} ft` : "—"}${s.win ? ` · <b style="color:#1B936A">best ${s.win.from}–${s.win.to}</b>` : ""}</span>
     </td>
   </tr>`;
 
@@ -75,6 +75,8 @@ export async function runScheduled(env, utcHour) {
 
   const summary = await fetchSummary();
   const byId = Object.fromEntries((summary.spots || []).map((s) => [s.id, s]));
+  // Today's best GO window per port — digest runs only (2 extra batched calls).
+  const windows = isDigestRun ? await fetchTodayWindows().catch(() => ({})) : {};
   const today = new Date().toISOString().slice(0, 10);
 
   let digests = 0, alerts = 0, failures = 0;
@@ -88,9 +90,14 @@ export async function runScheduled(env, utcHour) {
 
       if (isDigestRun && prefs.dailyEmail) {
         const unsub = `${SITE}/unsubscribe?u=${await ensureUnsubToken(env, u)}`;
+        const withWin = favSpots.map((s) => ({ ...s, win: windows[s.id] || null }));
+        // Subject leads with the home port's (first favorite's) best window.
+        const home = withWin[0];
         const c = favSpots.filter((s) => s.level === "GO").length;
-        const subject = `⚓ ${c ? `${c} of ${favSpots.length} ports are GO` : `Your ports this morning`} · Should I Boat?`;
-        const r = await sendEmail(env, u.email, subject, digestHtml(favSpots, unsub));
+        const subject = home?.win
+          ? `⚓ Best window at ${home.name}: ${home.win.from}–${home.win.to} · Should I Boat?`
+          : `⚓ ${c ? `${c} of ${favSpots.length} ports are GO` : `Your ports this morning`} · Should I Boat?`;
+        const r = await sendEmail(env, u.email, subject, digestHtml(withWin, unsub));
         r.ok ? digests++ : failures++;
       }
 

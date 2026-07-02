@@ -787,3 +787,9 @@ body.has-takeover .app { background: var(--bg); border-radius: var(--r-lg) var(-
   color: var(--text-muted); font-family: var(--font-sans); font-size: var(--fs-xs); font-weight: var(--fw-semibold);
   cursor: pointer; transition: border-color var(--dur-fast), color var(--dur-fast); }
 .share-btn:hover { border-color: var(--accent); color: var(--accent); }
+
+/* Glance-band segments are buttons (tap → jump the hourly strip there). */
+.glance-band .gb { border: none; padding: 0; cursor: pointer; transition: opacity var(--dur-fast), transform var(--dur-fast); }
+.glance-band .gb:hover { opacity: 1; transform: scaleY(1.25); }
+.hour.pulse { outline: 2px solid var(--accent); outline-offset: 2px; animation: hourpulse 1.6s var(--ease); }
+@keyframes hourpulse { 0%, 60% { outline-color: var(--accent); } 100% { outline-color: transparent; } }
