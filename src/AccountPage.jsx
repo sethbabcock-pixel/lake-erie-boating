@@ -132,7 +132,7 @@ function EmailCard({ auth }) {
           <p className="acct-note">
             {favCount
               ? `Covers your ${favCount} starred port${favCount > 1 ? "s" : ""}.`
-              : "Star a port first (★ on any port page) — these emails cover your starred ports."}
+              : "Star a port first (tap the star on any port page) — these emails cover your starred ports."}
           </p>
         </>
       )}
@@ -313,7 +313,7 @@ export default function AccountPage() {
         <a className="acctpage-back" href="/">← Back to conditions</a>
         <a className="acctpage-brand" href="/">
           <img className="logo" src={dark ? "/boat-mark-white.png" : "/boat-mark.png"} alt="" />
-          <span>Should I Boat?</span>
+          <span>shouldiboat.com</span>
         </a>
       </header>
 

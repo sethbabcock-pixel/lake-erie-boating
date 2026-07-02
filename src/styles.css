@@ -1,4 +1,4 @@
-/* Should I Boat? — app styles. Built against design tokens (tokens.css).
+/* shouldiboat.com — app styles. Built against design tokens (tokens.css).
    Never hand-key a hex; reference var(--*). Mobile-first; light + dark. */
 
 * { box-sizing: border-box; }
@@ -16,6 +16,10 @@ a { color: var(--accent); text-decoration: none; }
 a:hover { text-decoration: underline; }
 :focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; border-radius: var(--r-sm); }
 button { font-family: inherit; }
+
+/* Shared inline SVG icons (icons.jsx) — sit on the text baseline nicely. */
+svg.ico { vertical-align: -0.15em; flex: 0 0 auto; }
+.directory-title svg.ico, .fav-nudge svg.ico { color: var(--gold); }
 
 /* ===== shouldiboat.com brand palette (v1 style guide) — overrides the
    design-system tokens for both themes. Navy #004777 / teal #008BA8 /

@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from "react";
 import Takeover from "./Takeover.jsx";
+import { IconStar } from "./icons.jsx";
 import { fmtWaves } from "./units.js";
 
 const vclass = (v) => (v === "NO-GO" ? "nogo" : v === "CAUTION" ? "caution" : v === "GO" ? "go" : "unknown");
@@ -41,7 +42,7 @@ function SplashSelector({ q, setQ, summary, onSelect, favorites }) {
       )}
       {!ql && favCards.length > 0 && (
         <div className="splash-favs">
-          {favCards.map((s) => <button key={s.id} className="splash-fav" onClick={() => onSelect(s.id)}>★ {s.name}</button>)}
+          {favCards.map((s) => <button key={s.id} className="splash-fav" onClick={() => onSelect(s.id)}><IconStar filled /> {s.name}</button>)}
         </div>
       )}
       <a className="splash-scroll" href="#all-locations">Browse all locations ↓</a>
@@ -90,7 +91,7 @@ function RegionDirectory({ summary, q, onSelect, deepLake }) {
         const c = tally(list);
         return (
           <details className="region" key={lake} id={`lake-${lake.toLowerCase().replace(/\s+/g, "-")}`}
-            open={deepLake ? lake === deepLake : (lake === "Lake Erie" || !!ql)}>
+            open={deepLake ? lake === deepLake : !!ql}>
             <summary className="region-head">
               <span className="region-title">
                 <span className="region-name">{lake}</span>
@@ -127,7 +128,7 @@ function MyPorts({ summary, favorites, onSelect }) {
   if (!mine.length) return null;
   return (
     <section className="directory myports">
-      <h2 className="directory-title">★ My ports</h2>
+      <h2 className="directory-title"><IconStar filled /> My ports</h2>
       <div className="loc-grid">
         {mine.map((s) => <LocCard key={s.id} s={s} onSelect={onSelect} />)}
       </div>
@@ -161,7 +162,7 @@ export default function Landing({ adFree, onSelect, favorites, onCookieSettings,
         )}
         {signedIn && (favorites || []).length === 0 && (
           <div className="joinstrip fav-nudge">
-            <span><b>⭐ Star your home port</b> and it'll be front and center here — and in your morning verdict email. Tap any port below, then hit the star.</span>
+            <span><b><IconStar filled /> Star your home port</b> and it'll be front and center here — and in your morning verdict email. Tap any port below, then hit the star.</span>
           </div>
         )}
         {nudge}

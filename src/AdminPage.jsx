@@ -326,7 +326,7 @@ function CspPanel() {
       </div>
       <p className="acct-note" style={{ marginTop: 0 }}>What a stricter Content-Security-Policy <em>would</em> block (nothing is blocked yet). Use this to tighten the allowlist before enforcing.</p>
       {err && <div className="modal-err">{err}</div>}
-      {data && data.length === 0 && <p className="acct-note">No violations reported. 🎉</p>}
+      {data && data.length === 0 && <p className="acct-note">No violations reported.</p>}
       {data && data.map((r, i) => (
         <div className="acct-kv admin-notif" key={i}>
           <span><b>{r.directive}</b> · {r.blocked || "inline"}</span>
@@ -416,7 +416,7 @@ export default function AdminPage() {
     <div className="acctpage">
       <header className="acctpage-header">
         <a className="acctpage-back" href="/">← Back to site</a>
-        <a className="acctpage-brand" href="/"><img className="logo" src="/boat-mark-white.png" alt="" /><span>Should I Boat? · Admin</span></a>
+        <a className="acctpage-brand" href="/"><img className="logo" src="/boat-mark-white.png" alt="" /><span>shouldiboat.com · Admin</span></a>
       </header>
 
       <main className="acctpage-main admin-main">
