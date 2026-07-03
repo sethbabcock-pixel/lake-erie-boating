@@ -4,8 +4,9 @@
 // the NOAA hosts) and folds it into a single GO / CAUTION / NO-GO call for a
 // chosen launch spot between Toledo and Erie, PA.
 //
-// Data sources (all free, no API key):
+// Data sources (all free, public-domain NOAA, no API key):
 //   - NWS API (api.weather.gov): point forecast + active marine alerts
+//   - NWS raw forecast grid (waveHeight/wavePeriod/wind/gusts/precip hourly)
 //   - NWS nearshore marine zone forecast (text periods)
 //   - NDBC realtime buoy observations (waves, wind, water temp)
 //
@@ -60,7 +61,7 @@ const SPOTS = {
   },
 
   // ── Other Great Lakes (US shores). zone/office resolved from NWS; buoys
-  // optional (wind from forecast, waves from Open-Meteo cover spots w/o buoys).
+  // optional (wind from forecast, waves from the NWS grid cover spots w/o buoys).
   rochester: { name: "Rochester", lat: 43.22, lon: -77.62, zone: "LOZ043", office: "BUF", buoys: ["45012"], lake: "Lake Ontario" },
   "sodus-bay": { name: "Sodus Bay", lat: 43.27, lon: -76.97, zone: "LOZ043", office: "BUF", buoys: ["45012"], lake: "Lake Ontario" },
   oswego: { name: "Oswego", lat: 43.47, lon: -76.51, zone: "LOZ044", office: "BUF", buoys: ["45012"], lake: "Lake Ontario" },
@@ -181,7 +182,7 @@ async function fetchBuoy(buoys) {
 // One /points lookup → both the day/night forecast AND the hourly forecast.
 async function fetchForecasts(lat, lon) {
   try {
-    const pt = await getJSON(`${NWS}/points/${lat},${lon}`);
+    const pt = await cachedJSON(`${NWS}/points/${lat},${lon}`, 86400);
     const fUrl = pt?.properties?.forecast;
     const hUrl = pt?.properties?.forecastHourly;
     const [fc, hc] = await Promise.all([
@@ -216,62 +217,186 @@ async function fetchForecasts(lat, lon) {
   }
 }
 
-// Hourly wave height (ft) keyed by "YYYY-MM-DDTHH" (local) from Open-Meteo's
-// marine model — covers the whole lake incl. the buoy-poor western basin.
-async function fetchMarineHourly(lat, lon) {
+// ── NWS raw gridpoint data ───────────────────────────────────────────────────
+// The forecaster-edited ~2.5 km grid behind api.weather.gov. Over the Great
+// Lakes the marine cells carry waveHeight/wavePeriod, so this one endpoint
+// supplies hourly waves, wind, gusts, and precip — the public-domain NOAA
+// replacement for the former Open-Meteo dependency (whose free tier is
+// licensed non-commercial).
+
+const kmhToKt = (kmh) => kmh * 0.539957;
+
+// Cached JSON: edge cache on Workers, in-memory fallback for local/test runs.
+const memCache = new Map();
+async function cachedJSON(url, ttlSec) {
+  if (typeof caches !== "undefined" && caches.default) {
+    const key = new Request(`https://nws-cache.local/${encodeURIComponent(url)}`);
+    const hit = await caches.default.match(key).catch(() => null);
+    if (hit) return hit.json();
+    const data = await getJSON(url);
+    const resp = new Response(JSON.stringify(data), {
+      headers: { "Content-Type": "application/json", "Cache-Control": `public, max-age=${ttlSec}` },
+    });
+    await caches.default.put(key, resp).catch(() => {});
+    return data;
+  }
+  const m = memCache.get(url);
+  if (m && m.exp > Date.now()) return m.data;
+  const data = await getJSON(url);
+  memCache.set(url, { data, exp: Date.now() + ttlSec * 1000 });
+  return data;
+}
+
+// "2026-07-03T18:00:00+00:00/PT3H" → [firstEpochHour, hourCount]
+function expandValidTime(vt) {
+  const [start, dur] = String(vt).split("/");
+  const t = Date.parse(start);
+  if (Number.isNaN(t)) return null;
+  const m = String(dur || "PT1H").match(/^P(?:(\d+)D)?(?:T(?:(\d+)H)?(?:(\d+)M)?)?$/);
+  const hours = m ? Math.max(1, (+(m[1] || 0)) * 24 + (+(m[2] || 0)) + Math.round((+(m[3] || 0)) / 60)) : 1;
+  return [Math.floor(t / 3600000), hours];
+}
+
+// Gridpoint layer {uom, values:[{validTime, value}]} → Map(epochHour → value).
+function gridSeries(prop, xf = (v) => v) {
+  const map = new Map();
+  for (const { validTime, value } of prop?.values || []) {
+    if (value == null) continue;
+    const span = expandValidTime(validTime);
+    if (!span) continue;
+    for (let h = 0; h < span[1]; h++) map.set(span[0] + h, xf(value));
+  }
+  return map;
+}
+
+// A speed layer declares its unit in `uom` (km/h by default, sometimes m/s).
+const speedToKt = (prop) => (String(prop?.uom || "").includes("m_s") ? msToKt : kmhToKt);
+
+async function fetchGridAt(lat, lon) {
   try {
-    const d = await getJSON(
-      `https://marine-api.open-meteo.com/v1/marine?latitude=${lat}&longitude=${lon}` +
-      `&hourly=wave_height,wave_period&forecast_days=4&timezone=America%2FNew_York`
-    );
-    const times = d?.hourly?.time || [];
-    const wh = d?.hourly?.wave_height || [];
-    const wp = d?.hourly?.wave_period || [];
-    const map = {};
-    for (let i = 0; i < times.length; i++) {
-      map[times[i].slice(0, 13)] = {
-        waveFt: wh[i] == null ? null : round(mToFt(wh[i]), 1),
-        periodSec: wp[i] == null ? null : round(wp[i], 0),
-      };
-    }
-    return map;
+    const pt = await cachedJSON(`${NWS}/points/${lat},${lon}`, 86400); // grid mapping is static
+    const gUrl = pt?.properties?.forecastGridData;
+    if (!gUrl) return null;
+    const p = (await getJSON(gUrl))?.properties || {};
+    return {
+      tz: pt?.properties?.timeZone || "America/New_York",
+      windKt: gridSeries(p.windSpeed, speedToKt(p.windSpeed)),
+      gustKt: gridSeries(p.windGust, speedToKt(p.windGust)),
+      windDirDeg: gridSeries(p.windDirection),
+      waveFt: gridSeries(p.waveHeight, mToFt),
+      periodSec: gridSeries(p.wavePeriod),
+      precipPct: gridSeries(p.probabilityOfPrecipitation),
+    };
   } catch (e) {
-    return {};
+    return null;
   }
 }
 
-// 7-day planning outlook (+ today's sunrise/sunset): daily max wind/gust/wave
-// from Open-Meteo. Powers the "week ahead / weekend" strip — a per-day verdict
-// so a boater can pick Saturday on Wednesday.
-async function fetchDailyOutlook(lat, lon) {
-  try {
-    const [wx, mar] = await Promise.all([
-      getJSON(
-        `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}` +
-        `&daily=wind_speed_10m_max,wind_gusts_10m_max,precipitation_probability_max,sunrise,sunset` +
-        `&wind_speed_unit=kn&forecast_days=7&timezone=auto`
-      ),
-      getJSON(
-        `https://marine-api.open-meteo.com/v1/marine?latitude=${lat}&longitude=${lon}` +
-        `&daily=wave_height_max,wave_period_max&forecast_days=7&timezone=auto`
-      ).catch(() => null),
-    ]);
-    const d = wx?.daily || {};
-    const waves = mar?.daily?.wave_height_max || [];
-    const periods = mar?.daily?.wave_period_max || [];
-    const week = (d.time || []).map((date, i) => {
-      const windKt = round(d.wind_speed_10m_max?.[i], 0);
-      const gustKt = round(d.wind_gusts_10m_max?.[i], 0);
-      const precipPct = d.precipitation_probability_max?.[i] ?? null;
-      const waveFt = waves[i] == null ? null : round(mToFt(waves[i]), 1);
-      const periodSec = periods[i] == null ? null : round(periods[i], 0);
-      return { date, windKt, gustKt, precipPct, waveFt, periodSec, level: hourRisk(windKt, precipPct ?? 0, "", waveFt) };
-    });
-    const sun = d.sunrise?.[0] ? { sunrise: d.sunrise[0], sunset: d.sunset[0] } : null;
-    return { week, sun };
-  } catch (e) {
-    return { week: [], sun: null };
+// Launch coords sit on the shoreline, whose grid cell is often a LAND cell
+// with no wave layers. Sample a touch lakeward instead — wind/precip barely
+// change over ~3 km, and the marine cell carries waves. If the first nudge
+// still lands on a dry cell, try farther out once.
+function lakewardPoint(spot, stepDeg) {
+  const c = LAKE_CENTERS[spot.lake || "Lake Erie"];
+  const dLat = c.lat - spot.lat, dLon = c.lon - spot.lon;
+  const len = Math.hypot(dLat, dLon) || 1;
+  return { lat: round(spot.lat + (dLat / len) * stepDeg, 4), lon: round(spot.lon + (dLon / len) * stepDeg, 4) };
+}
+async function fetchSpotGrid(spot) {
+  const near = lakewardPoint(spot, 0.035);
+  const grid = await fetchGridAt(near.lat, near.lon);
+  if (grid && grid.waveFt.size) return grid;
+  const far = lakewardPoint(spot, 0.1);
+  const grid2 = await fetchGridAt(far.lat, far.lon);
+  return (grid2 && grid2.waveFt.size) ? grid2 : (grid || grid2);
+}
+
+// Nearest defined hour, so a "current" sample tolerates layers with gaps.
+function sampleNear(map, h) {
+  if (!map) return null;
+  return map.get(h) ?? map.get(h + 1) ?? map.get(h - 1) ?? map.get(h + 2) ?? map.get(h - 2) ?? null;
+}
+
+// Local calendar bucketing in a spot's timezone → { date: "YYYY-MM-DD", hour }.
+function localParts(tz) {
+  const fmt = new Intl.DateTimeFormat("en-CA", {
+    timeZone: tz, year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", hourCycle: "h23",
+  });
+  return (epochHour) => {
+    const parts = {};
+    for (const p of fmt.formatToParts(new Date(epochHour * 3600000))) parts[p.type] = p.value;
+    return { date: `${parts.year}-${parts.month}-${parts.day}`, hour: +parts.hour };
+  };
+}
+
+// Small concurrency pool for the multi-spot endpoints (be polite to the API).
+async function pooled(items, n, fn) {
+  const out = new Array(items.length);
+  let next = 0;
+  await Promise.all(Array.from({ length: Math.min(n, items.length) }, async () => {
+    while (next < items.length) {
+      const i = next++;
+      out[i] = await fn(items[i], i).catch(() => null);
+    }
+  }));
+  return out;
+}
+
+// Today's sunrise/sunset (UTC ISO) — the standard NOAA/SunCalc solar position
+// algorithm, computed locally so no weather API is needed for it.
+function sunTimes(lat, lon, date = new Date()) {
+  const rad = Math.PI / 180, dayMs = 864e5, J1970 = 2440588, J2000 = 2451545, e = rad * 23.4397;
+  const lw = rad * -lon, phi = rad * lat;
+  const d = date.valueOf() / dayMs - 0.5 + J1970 - J2000;
+  const n = Math.round(d - 0.0009 - lw / (2 * Math.PI));
+  const ds = 0.0009 + lw / (2 * Math.PI) + n;
+  const M = rad * (357.5291 + 0.98560028 * ds);
+  const C = rad * (1.9148 * Math.sin(M) + 0.02 * Math.sin(2 * M) + 0.0003 * Math.sin(3 * M));
+  const L = M + C + rad * 102.9372 + Math.PI;
+  const dec = Math.asin(Math.sin(L) * Math.sin(e));
+  const Jnoon = J2000 + ds + 0.0053 * Math.sin(M) - 0.0069 * Math.sin(2 * L);
+  const cosH = (Math.sin(rad * -0.833) - Math.sin(phi) * Math.sin(dec)) / (Math.cos(phi) * Math.cos(dec));
+  if (cosH < -1 || cosH > 1) return null; // polar day/night — not the Great Lakes
+  const w = Math.acos(cosH);
+  const Jset = J2000 + 0.0009 + (w + lw) / (2 * Math.PI) + n + 0.0053 * Math.sin(M) - 0.0069 * Math.sin(2 * L);
+  const Jrise = Jnoon - (Jset - Jnoon);
+  const toISO = (j) => new Date((j + 0.5 - J1970) * dayMs).toISOString();
+  return { sunrise: toISO(Jrise), sunset: toISO(Jset) };
+}
+
+// 7-day planning outlook from the grid: per-day max wind/gust/precip/wave in
+// the SPOT's local calendar. Powers the "week ahead / weekend" strip — a
+// per-day verdict so a boater can pick Saturday on Wednesday.
+function buildWeek(grid) {
+  if (!grid) return [];
+  const toLocal = localParts(grid.tz);
+  const days = new Map();
+  const keys = new Set([...grid.windKt.keys(), ...grid.waveFt.keys(), ...grid.precipPct.keys()]);
+  const max = (a, b) => (b == null ? a : a == null ? b : Math.max(a, b));
+  for (const h of keys) {
+    const { date } = toLocal(h);
+    let d = days.get(date);
+    if (!d) days.set(date, (d = { date, windKt: null, gustKt: null, precipPct: null, waveFt: null, periodSec: null }));
+    d.windKt = max(d.windKt, grid.windKt.get(h));
+    d.gustKt = max(d.gustKt, grid.gustKt.get(h));
+    d.precipPct = max(d.precipPct, grid.precipPct.get(h));
+    d.waveFt = max(d.waveFt, grid.waveFt.get(h));
+    d.periodSec = max(d.periodSec, grid.periodSec.get(h));
   }
+  const today = toLocal(Math.floor(Date.now() / 3600000)).date;
+  return [...days.values()]
+    .filter((d) => d.date >= today)
+    .sort((a, b) => (a.date < b.date ? -1 : 1))
+    .slice(0, 7)
+    .map((d) => ({
+      date: d.date,
+      windKt: round(d.windKt, 0),
+      gustKt: round(d.gustKt, 0),
+      precipPct: d.precipPct == null ? null : Math.round(d.precipPct),
+      waveFt: round(d.waveFt, 1),
+      periodSec: round(d.periodSec, 0),
+      level: hourRisk(round(d.windKt, 0), d.precipPct ?? 0, "", round(d.waveFt, 1)),
+    }));
 }
 
 async function fetchMarineForecast(zone) {
@@ -439,6 +564,7 @@ function windRead(dirCompass) {
 // blowing FROM lakeward is onshore (chop stacks at the launch), FROM the
 // opposite is offshore (deceptively flat at the ramp), the rest is cross-shore.
 const LAKE_CENTERS = {
+  "Lake Erie": { lat: 42.2, lon: -81.2 }, // used by lakewardPoint (wind reads use the curated table)
   "Lake Ontario": { lat: 43.7, lon: -77.9 },
   "Lake Huron": { lat: 44.8, lon: -82.4 },
   "Lake Michigan": { lat: 43.8, lon: -87.0 },
@@ -688,62 +814,49 @@ async function handleCamStatus(url) {
 }
 
 // Lightweight GO/CAUTION/NO-GO + wind/wave for every spot, for the homepage
-// directory. Two batched Open-Meteo calls (all coords at once) keep it cheap;
-// the whole result is edge-cached ~10 min so the API isn't hammered.
+// directory. Per-spot NWS grid fetches through a small pool; /points lookups
+// are edge-cached a day and the whole result ~10 min, so the API isn't hammered.
 export async function fetchSummary() {
   const entries = Object.entries(SPOTS);
-  const lats = entries.map(([, s]) => s.lat).join(",");
-  const lons = entries.map(([, s]) => s.lon).join(",");
-  const asArray = (d) => (Array.isArray(d) ? d : d ? [d] : []);
-  const [windRes, waveRes] = await Promise.all([
-    getJSON(`https://api.open-meteo.com/v1/forecast?latitude=${lats}&longitude=${lons}&current=wind_speed_10m,wind_gusts_10m,wind_direction_10m&wind_speed_unit=kn&timezone=auto`).catch(() => null),
-    getJSON(`https://marine-api.open-meteo.com/v1/marine?latitude=${lats}&longitude=${lons}&current=wave_height,wave_period&timezone=auto`).catch(() => null),
-  ]);
-  const wind = asArray(windRes);
-  const wave = asArray(waveRes);
+  const grids = await pooled(entries, 8, ([, s]) => fetchSpotGrid(s));
+  const nowH = Math.floor(Date.now() / 3600000);
   const spots = entries.map(([id, s], i) => {
-    const w = (wind[i] && wind[i].current) || {};
-    const wv = (wave[i] && wave[i].current) || {};
-    const windKt = round(w.wind_speed_10m, 0);
-    const gustKt = round(w.wind_gusts_10m, 0);
-    const dir = w.wind_direction_10m == null ? null : degToCompass(w.wind_direction_10m);
-    const waveFt = wv.wave_height == null ? null : round(mToFt(wv.wave_height), 1);
-    const periodSec = wv.wave_period == null ? null : round(wv.wave_period, 0);
+    const g = grids[i];
+    const windKt = round(sampleNear(g?.windKt, nowH), 0);
+    const gustKt = round(sampleNear(g?.gustKt, nowH), 0);
+    const dirDeg = sampleNear(g?.windDirDeg, nowH);
+    const dir = dirDeg == null ? null : degToCompass(dirDeg);
+    const waveFt = round(sampleNear(g?.waveFt, nowH), 1);
+    const periodSec = round(sampleNear(g?.periodSec, nowH), 0);
     const level = windKt == null && waveFt == null ? null : hourRisk(windKt, 0, "", waveFt);
     return { id, name: s.name, lake: s.lake || "Lake Erie", level, windKt, gustKt, dir, waveFt, periodSec };
   });
   return { spots, updatedAt: new Date().toISOString() };
 }
 
-// Today's best GO window for every port (for the daily digest email): two
-// batched Open-Meteo hourly calls, then the longest contiguous GO run between
-// 6am and 8pm local. Returns { spotId: {from, to, hours} | null }.
+// Today's best GO window for every port (for the daily digest email): per-spot
+// NWS grid hourlies, then the longest contiguous GO run between 6am and 8pm in
+// the spot's local time. Returns { spotId: {from, to, hours} | null }.
 const fmtH12 = (h) => `${h % 12 || 12}${h < 12 ? "am" : "pm"}`;
 export async function fetchTodayWindows() {
   const entries = Object.entries(SPOTS);
-  const lats = entries.map(([, s]) => s.lat).join(",");
-  const lons = entries.map(([, s]) => s.lon).join(",");
-  const asArray = (d) => (Array.isArray(d) ? d : d ? [d] : []);
-  const [windRes, waveRes] = await Promise.all([
-    getJSON(`https://api.open-meteo.com/v1/forecast?latitude=${lats}&longitude=${lons}&hourly=wind_speed_10m&wind_speed_unit=kn&forecast_days=1&timezone=auto`).catch(() => null),
-    getJSON(`https://marine-api.open-meteo.com/v1/marine?latitude=${lats}&longitude=${lons}&hourly=wave_height&forecast_days=1&timezone=auto`).catch(() => null),
-  ]);
-  const wind = asArray(windRes);
-  const wave = asArray(waveRes);
+  const grids = await pooled(entries, 8, ([, s]) => fetchSpotGrid(s));
+  const nowH = Math.floor(Date.now() / 3600000);
   const out = {};
   entries.forEach(([id], i) => {
-    const times = wind[i]?.hourly?.time || [];
-    const kts = wind[i]?.hourly?.wind_speed_10m || [];
-    const waves = wave[i]?.hourly?.wave_height || [];
+    const g = grids[i];
+    if (!g) { out[id] = null; return; }
+    const toLocal = localParts(g.tz);
+    const today = toLocal(nowH).date;
     let best = null, run = null;
-    for (let j = 0; j < times.length; j++) {
-      const h = parseInt(times[j].slice(11, 13), 10);
-      if (h < 6 || h > 20) { run = null; continue; }
-      const windKt = round(kts[j], 0);
-      const waveFt = waves[j] == null ? null : round(mToFt(waves[j]), 1);
+    for (let h = nowH - 23; h <= nowH + 30; h++) {
+      const loc = toLocal(h);
+      if (loc.date !== today || loc.hour < 6 || loc.hour > 20) { run = null; continue; }
+      const windKt = round(g.windKt.get(h), 0);
+      const waveFt = round(g.waveFt.get(h), 1);
       const ok = windKt != null && hourRisk(windKt, 0, "", waveFt) === "GO";
       if (!ok) { run = null; continue; }
-      if (!run) { run = { fromH: h, toH: h }; } else run.toH = h;
+      if (!run) { run = { fromH: loc.hour, toH: loc.hour }; } else run.toH = loc.hour;
       if (!best || (run.toH - run.fromH) > (best.toH - best.fromH)) best = { ...run };
     }
     out[id] = best ? { from: fmtH12(best.fromH), to: fmtH12(best.toH + 1), hours: best.toH - best.fromH + 1 } : null;
@@ -786,21 +899,23 @@ export async function onRequest(context) {
 
   // Fetch all sources concurrently; each resolves to null on failure so one
   // bad source never sinks the whole response.
-  const [buoy, fc, marine, alerts, noaaReport, waveMap, dailyOutlook] = await Promise.all([
+  const [buoy, fc, marine, alerts, noaaReport, grid] = await Promise.all([
     fetchBuoy(spot.buoys),
     fetchForecasts(spot.lat, spot.lon),
     fetchMarineForecast(spot.zone),
     fetchAlerts(spot.lat, spot.lon),
     fetchNSH(spot.office || "CLE"), // per-spot WFO (Erie spots default to Cleveland)
-    fetchMarineHourly(spot.lat, spot.lon),
-    fetchDailyOutlook(spot.lat, spot.lon),
+    fetchSpotGrid(spot),
   ]);
   const point = fc.daily;
-  // Merge hourly wave height (Open-Meteo) into the NWS hourly rows, then rate risk.
+  const week = buildWeek(grid);
+  const sun = sunTimes(spot.lat, spot.lon);
+  // Merge hourly wave height (NWS grid) into the NWS hourly rows, then rate
+  // risk. Keyed by epoch hour, so spots outside Eastern time line up too.
   const hourly = withRisk(
     fc.hourly.map((h) => {
-      const m = waveMap[h.time.slice(0, 13)] || {};
-      return { ...h, waveFt: m.waveFt ?? null, periodSec: m.periodSec ?? null };
+      const eh = Math.floor(Date.parse(h.time) / 3600000);
+      return { ...h, waveFt: round(grid?.waveFt.get(eh), 1), periodSec: round(grid?.periodSec.get(eh), 0) };
     })
   );
   const outlook = computeOutlook(hourly);
@@ -817,8 +932,8 @@ export async function onRequest(context) {
 
   // Effective waves: live buoy, else parsed from the marine forecast text, so a
   // wave height is shown even where no buoy reports (the western basin).
-  // Current waves: buoy → NSH/zone text → Open-Meteo's first hour (covers any
-  // spot, incl. lakes with no buoy and no parsed zone).
+  // Current waves: buoy → NSH/zone text → the NWS grid's first hour (covers
+  // any spot, incl. lakes with no buoy and no parsed zone).
   const forecastWaveFt = parseForecastWaves(marine) ?? nshWavesForZone(noaaReport?.text, spot.zone) ?? hourly[0]?.waveFt ?? null;
   const waves = {
     ft: buoy?.waveHeightFt ?? forecastWaveFt ?? null,
@@ -838,8 +953,8 @@ export async function onRequest(context) {
     windRead: read,
     hourly,
     outlook,
-    week: dailyOutlook.week,
-    sun: dailyOutlook.sun,
+    week,
+    sun,
     buoy,
     alerts: alerts || [],
     marineForecast: (marine && marine.length) ? marine : nshPeriodsForZone(noaaReport?.text, spot.zone),

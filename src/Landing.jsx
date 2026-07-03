@@ -169,7 +169,7 @@ export default function Landing({ adFree, onSelect, favorites, onCookieSettings,
         {signedIn && <MyPorts summary={summary} favorites={favorites} onSelect={onSelect} />}
         <RegionDirectory summary={summary} q={q} onSelect={onSelect} deepLake={deepLake} />
         <footer className="meta">
-          Live data from NOAA/NWS, NDBC buoys, Open-Meteo &amp; Windy. A planning aid — not an official forecast or a navigation tool.
+          Live data from NOAA/NWS &amp; NDBC buoys, maps by Windy. A planning aid — not an official forecast or a navigation tool.
           <div className="footlinks">
             <a href="/about" target="_blank" rel="noopener">About</a>
             <a href="/legal#terms" target="_blank" rel="noopener">Terms</a>
