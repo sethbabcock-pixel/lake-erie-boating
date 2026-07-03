@@ -2,7 +2,7 @@ import React, { useEffect, useRef, useState } from "react";
 import Cams from "./Cams.jsx";
 import WxIcon from "./WxIcon.jsx";
 import { IconStar, IconCheck, IconClock, IconNoGo, IconAlert, IconSunrise, IconSunset, IconDoc, IconRefresh } from "./icons.jsx";
-import { useAdsense, useAnalytics, getConsent, AdSlot, GearBlock, ConsentBanner } from "./monetize.jsx";
+import { useAdsense, useAnalytics, getConsent, updateConsentMode, AdSlot, GearBlock, ConsentBanner } from "./monetize.jsx";
 import { useAuth, Account, AuthModal } from "./auth.jsx";
 import Takeover from "./Takeover.jsx";
 import Landing from "./Landing.jsx";
@@ -631,7 +631,7 @@ export default function App() {
   const { choice, setChoice, effective } = useTheme();
   const auth = useAuth();
   const [consent, setConsent] = useState(getConsent());
-  const chooseConsent = (c) => { try { if (c) localStorage.setItem("sib.consent", c); else localStorage.removeItem("sib.consent"); } catch (e) {} setConsent(c); };
+  const chooseConsent = (c) => { try { if (c) localStorage.setItem("sib.consent", c); else localStorage.removeItem("sib.consent"); } catch (e) {} updateConsentMode(c); setConsent(c); };
   const adFree = !!(auth.user && auth.user.adFree);
   useAdsense(consent === "all" && !adFree);
   useAnalytics(consent === "all");

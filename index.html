@@ -32,6 +32,22 @@
       } catch (e) { document.documentElement.setAttribute("data-theme", "dark"); }
     })();
   </script>
+  <script>
+    // Google Consent Mode v2 — must run before any Google tag. Cookie
+    // permissions default to "denied" unless the user has already accepted via
+    // the cookie banner (persisted as sib.consent); the banner choice updates
+    // this at runtime (see monetize.jsx). With consent denied, the AdSense
+    // library below can still load for site review but serves only limited,
+    // non-personalized ads and sets no ad cookies.
+    window.dataLayer = window.dataLayer || [];
+    function gtag() { dataLayer.push(arguments); }
+    (function () {
+      var granted = false;
+      try { granted = localStorage.getItem("sib.consent") === "all"; } catch (e) {}
+      var v = granted ? "granted" : "denied";
+      gtag("consent", "default", { ad_storage: v, ad_user_data: v, ad_personalization: v, analytics_storage: v });
+    })();
+  </script>
   <!-- Google AdSense — library load (enables site review + ad serving). Ad units
        are still React-controlled and never render for ad-free subscribers. -->
   <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-9213366013949616" crossorigin="anonymous" data-adsbygoogle="1"></script>
