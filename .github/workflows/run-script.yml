@@ -1,0 +1,27 @@
+name: Run script
+
+# On-demand runner for repo scripts that need real network access (the remote
+# dev sandbox can't reach most external hosts). Dispatch with a script path,
+# e.g. scripts/test-nws.mjs, and read the run log for its output.
+
+on:
+  workflow_dispatch:
+    inputs:
+      script:
+        description: "Node script path to run"
+        required: true
+        default: "scripts/test-nws.mjs"
+
+permissions:
+  contents: read
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Run script
+        run: node "${{ inputs.script }}"

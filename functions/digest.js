@@ -8,8 +8,8 @@
 //     someone tows the boat for nothing.
 //
 // Both respect the global emailOptOut, carry the unsubscribe footer, and reuse
-// the same summary data the homepage directory shows (two batched Open-Meteo
-// calls for all ports — cheap enough to run hourly).
+// the same summary data the homepage directory shows (pooled NWS grid calls
+// for all ports, with cached /points lookups — cheap enough to run hourly).
 import { sendEmail, ensureUnsubToken, notify, emailFooter } from "./auth.js";
 import { fetchSummary, fetchTodayWindows } from "./marine/conditions.js";
 
@@ -75,7 +75,7 @@ export async function runScheduled(env, utcHour) {
 
   const summary = await fetchSummary();
   const byId = Object.fromEntries((summary.spots || []).map((s) => [s.id, s]));
-  // Today's best GO window per port — digest runs only (2 extra batched calls).
+  // Today's best GO window per port — digest runs only (pooled NWS grid calls).
   const windows = isDigestRun ? await fetchTodayWindows().catch(() => ({})) : {};
   const today = new Date().toISOString().slice(0, 10);
 
