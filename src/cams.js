@@ -1,14 +1,10 @@
 // Great Lakes live cams. The property present decides how each renders:
 //   iframe  → angelcam / wetmet / ipcamlive / ozolio / youtube (channel or video)
-//   image   → refreshing JPEG snapshot (WTOL, NOAA GLERL, etc.)
+//   image   → refreshing JPEG snapshot (NOAA GLERL, etc.)
 // All entries are verified live + embeddable (no X-Frame-Options) by
 // scripts/check-cams.mjs, which the cam-health GitHub Action runs weekly.
 export const CAMS = [
   { name: "Edgewater Beach · Cleveland", lat: 41.49, lon: -81.74, angelcam: "91yx8ek0ro" },
-  // WTOL (Toledo) refreshing snapshots
-  { name: "Jet Express · Lake Erie (Port Clinton)", lat: 41.51, lon: -82.94, img: "https://cdn.tegna-media.com/wtol/weather/webcams/jetexpress/snap_c1.jpg", link: "https://www.wtol.com/webcams" },
-  { name: "Toledo · Fifth Third Field (WTOL)", lat: 41.65, lon: -83.54, img: "https://cdn.tegna-media.com/wtol/weather/webcams/fifththird/snap_c1.jpg", link: "https://www.wtol.com/webcams" },
-  { name: "Toledo · Mercy Health (WTOL)", lat: 41.66, lon: -83.55, img: "https://cdn.tegna-media.com/wtol/weather/webcams/mercy/snap_c1.jpg", link: "https://www.wtol.com/webcams" },
   // Western basin — Toledo Harbor Light (NOAA GLERL refreshing snapshot)
   { name: "Western Basin · Toledo Light (NOAA)", lat: 41.776, lon: -83.326, img: "https://www.glerl.noaa.gov/metdata/tol2/tol2-01.jpg", link: "https://www.glerl.noaa.gov/metdata/" },
   // Put-in-Bay / South Bass Island (Ozolio — HTTPS, the feeds putinbay.com embeds)

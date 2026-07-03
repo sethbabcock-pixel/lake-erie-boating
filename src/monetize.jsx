@@ -36,6 +36,18 @@ export function getConsent() {
   try { return localStorage.getItem("sib.consent"); } catch (e) { return null; }
 }
 
+// Google Consent Mode v2 update — flips cookie permissions when the user makes
+// a banner choice. The page-load default (denied unless previously accepted) is
+// set inline in index.html before any Google script loads.
+export function updateConsentMode(choice) {
+  const v = choice === "all" ? "granted" : "denied";
+  window.dataLayer = window.dataLayer || [];
+  // gtag consent commands must be pushed as an `arguments` object — a plain
+  // array is silently ignored by Google's tag.
+  function gtag() { window.dataLayer.push(arguments); }
+  gtag("consent", "update", { ad_storage: v, ad_user_data: v, ad_personalization: v, analytics_storage: v });
+}
+
 // Inject the AdSense library once — only when configured AND the user consented.
 export function useAdsense(enabled) {
   useEffect(() => {

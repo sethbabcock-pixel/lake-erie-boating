@@ -1,0 +1,27 @@
+name: Cam scout
+
+# On-demand: crawls the lakerart.com Great Lakes cam directory and reports
+# which cams are live + legally embeddable (see scripts/scout-cams.mjs).
+# Read the run log for the CAM| report lines.
+
+on:
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+jobs:
+  scout:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Scout cams
+        run: node scripts/scout-cams.mjs | tee scout-report.txt
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: scout-report
+          path: scout-report.txt
