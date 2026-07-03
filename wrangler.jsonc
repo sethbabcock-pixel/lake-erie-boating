@@ -2,7 +2,11 @@
   "name": "lake-erie-boating",
   "compatibility_date": "2024-11-01",
   "main": "worker.js",
-  "assets": { "directory": "./dist", "binding": "ASSETS" },
+  // run_worker_first: assets are normally served before the Worker runs, which
+  // meant the www→apex redirect (and security headers) never applied to page
+  // loads. Routing everything through the Worker fixes that; worker.js serves
+  // the assets itself via the ASSETS binding.
+  "assets": { "directory": "./dist", "binding": "ASSETS", "run_worker_first": true },
   "build": { "command": "npm install && npm run build" },
   "kv_namespaces": [
     { "binding": "USERS", "id": "ab7226cefa2d4f8a805b4ecb1b23775b" }
