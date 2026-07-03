@@ -56,6 +56,11 @@ async function checkYouTube(id) {
   const res = await fetchT(`https://www.youtube.com/watch?v=${id}`);
   if (!res.ok) return { status: "DEAD", detail: `watch HTTP ${res.status}` };
   const body = await res.text();
+  // YouTube increasingly serves a bot-wall (consent/challenge page) to
+  // datacenter IPs; that page has no player JSON at all. Absence of the
+  // playableInEmbed key means "couldn't verify", not "dead" — the app's
+  // IFrame Player validates these client-side where it matters.
+  if (!body.includes("playableInEmbed")) return { status: "WARN", detail: "YouTube bot-wall — can't verify from this IP" };
   const embeddable = body.includes('"playableInEmbed":true');
   const liveNow = body.includes('"isLiveNow":true');
   if (!embeddable) return { status: "DEAD", detail: "embedding disabled / video gone" };

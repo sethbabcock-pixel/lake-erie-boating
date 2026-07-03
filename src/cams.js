@@ -34,7 +34,6 @@ export const CAMS = [
   // Found via the lakerart.com directory scout (all official embed players)
   { name: "Muskegon · Channel (USS Silversides)", lat: 43.228, lon: -86.331, wetmet: "75d6541617a2c940bd4d8a798aa35a69", lake: "Lake Michigan" },
   { name: "Port Washington · Harbor", lat: 43.387, lon: -87.868, wetmet: "e6c8abb0ca38a3035b522d5e7c316241", lake: "Lake Michigan" },
-  { name: "Whiting, IN · Whihala Boat Launch", lat: 41.682, lon: -87.485, ipcamlive: "whihalaboatlaunch", lake: "Lake Michigan" },
   { name: "Sturgeon Bay · Westwood Shores", lat: 44.811, lon: -87.39, angelcam: "24r4vn43r0", lake: "Lake Michigan" },
   { name: "Sturgeon Bay · Bay Shore Inn", lat: 44.87, lon: -87.331, angelcam: "17yd2417le", lake: "Lake Michigan" },
   // Lake Ontario
@@ -47,7 +46,6 @@ export const CAMS = [
   { name: "Port Huron · St. Clair River (StreamTime)", lat: 42.98, lon: -82.42, yt: "AwP_Q6IGwFs", lake: "Lake Huron" },
   { name: "Alpena · Thunder Bay (NOAA GLERL)", lat: 45.06, lon: -83.42, img: "https://www.glerl.noaa.gov/metdata/cams/apn04.jpg", link: "https://www.glerl.noaa.gov/metdata/", lake: "Lake Huron" },
   { name: "DeTour · Drummond Island Ferry", lat: 45.993, lon: -83.899, wetmet: "609fd1e6905ac5196fb8534a64f36993", lake: "Lake Huron" },
-  { name: "Sault Ste. Marie · Waterfront", lat: 46.51, lon: -84.336, angelcam: "51eyo65vy8", lake: "Lake Huron" },
   // Lake Superior
   { name: "Duluth · Canal Cam", lat: 46.78, lon: -92.08, yt: "HPS48TMmNag", lake: "Lake Superior" },
   { name: "Duluth · Western Harbor", lat: 46.78, lon: -92.08, yt: "mpMdJJjw59E", lake: "Lake Superior" },
