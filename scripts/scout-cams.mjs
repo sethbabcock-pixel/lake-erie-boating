@@ -80,6 +80,8 @@ async function probeYouTube(id) {
     if (!res.ok) return { ok: false, detail: `watch HTTP ${res.status}` };
     const body = await readBody(res);
     const title = stripTags((body.match(/<title>([\s\S]*?)<\/title>/i) || [])[1] || "").replace(/ - YouTube$/, "");
+    // No player JSON at all = YouTube bot-wall, not a dead video.
+    if (!body.includes("playableInEmbed")) return { ok: false, detail: "YouTube bot-wall — unverifiable from this IP" };
     const embeddable = body.includes('"playableInEmbed":true');
     const live = body.includes('"isLiveNow":true');
     return { ok: embeddable && live, embeddable, live, title, detail: embeddable ? (live ? "live + embeddable" : "embeddable, not live now") : "embedding disabled" };

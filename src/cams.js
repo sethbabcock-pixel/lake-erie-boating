@@ -5,8 +5,11 @@
 // scripts/check-cams.mjs, which the cam-health GitHub Action runs weekly.
 export const CAMS = [
   { name: "Edgewater Beach · Cleveland", lat: 41.49, lon: -81.74, angelcam: "91yx8ek0ro" },
-  // Western basin — Toledo Harbor Light (NOAA GLERL refreshing snapshot)
+  // Western basin — Toledo Harbor Light + Channel Marker 2 (NOAA GLERL snapshots)
   { name: "Western Basin · Toledo Light (NOAA)", lat: 41.776, lon: -83.326, img: "https://www.glerl.noaa.gov/metdata/tol2/tol2-01.jpg", link: "https://www.glerl.noaa.gov/metdata/" },
+  { name: "Western Basin · Toledo Channel Marker 2 (NOAA)", lat: 41.74, lon: -83.34, img: "https://www.glerl.noaa.gov/res/recon/plots/cmt/webcam1.jpg", link: "https://www.glerl.noaa.gov/res/recon/station-cmt-webcam-boats.html" },
+  // Port Clinton waterfront (Ozolio embed, via offtherockportclinton.com)
+  { name: "Port Clinton · Waterfront", lat: 41.512, lon: -82.937, ozolio: "EMB_IMGT00000FED" },
   // Put-in-Bay / South Bass Island (Ozolio — HTTPS, the feeds putinbay.com embeds)
   { name: "Put-in-Bay · Boardwalk Harbor", lat: 41.653, lon: -82.821, ozolio: "EMB_PSZZ000005DE" },
   { name: "Put-in-Bay · Perry's Monument (West)", lat: 41.654, lon: -82.812, ozolio: "EMB_ULHE00000B88" },
@@ -28,6 +31,11 @@ export const CAMS = [
   { name: "Leland · Leelanau Harbor", lat: 45.02, lon: -85.76, yt: "s7sY1waeOf4", lake: "Lake Michigan" },
   { name: "Muskegon · Harbor (NOAA GLERL)", lat: 43.23, lon: -86.34, img: "https://www.glerl.noaa.gov/metdata/cams/mkg08.jpg", link: "https://www.glerl.noaa.gov/metdata/", lake: "Lake Michigan" },
   { name: "New Buffalo · Harbor", lat: 41.79, lon: -86.74, ipcamlive: "cnbharbor", lake: "Lake Michigan" },
+  // Found via the lakerart.com directory scout (all official embed players)
+  { name: "Muskegon · Channel (USS Silversides)", lat: 43.228, lon: -86.331, wetmet: "75d6541617a2c940bd4d8a798aa35a69", lake: "Lake Michigan" },
+  { name: "Port Washington · Harbor", lat: 43.387, lon: -87.868, wetmet: "e6c8abb0ca38a3035b522d5e7c316241", lake: "Lake Michigan" },
+  { name: "Sturgeon Bay · Westwood Shores", lat: 44.811, lon: -87.39, angelcam: "24r4vn43r0", lake: "Lake Michigan" },
+  { name: "Sturgeon Bay · Bay Shore Inn", lat: 44.87, lon: -87.331, angelcam: "17yd2417le", lake: "Lake Michigan" },
   // Lake Ontario
   { name: "Rochester · Charlotte-Genesee Light", lat: 43.22, lon: -77.62, yt: "NHDgasBPtRY", lake: "Lake Ontario" },
   { name: "Sodus Bay · Sodus Lighthouse", lat: 43.27, lon: -76.97, yt: "68XVh5TcgBk", lake: "Lake Ontario" },
@@ -37,6 +45,7 @@ export const CAMS = [
   { name: "Port Huron · St. Clair River (BoatNerd)", lat: 42.98, lon: -82.42, yt: "dqrwY6i-Zz4", lake: "Lake Huron" },
   { name: "Port Huron · St. Clair River (StreamTime)", lat: 42.98, lon: -82.42, yt: "AwP_Q6IGwFs", lake: "Lake Huron" },
   { name: "Alpena · Thunder Bay (NOAA GLERL)", lat: 45.06, lon: -83.42, img: "https://www.glerl.noaa.gov/metdata/cams/apn04.jpg", link: "https://www.glerl.noaa.gov/metdata/", lake: "Lake Huron" },
+  { name: "DeTour · Drummond Island Ferry", lat: 45.993, lon: -83.899, wetmet: "609fd1e6905ac5196fb8534a64f36993", lake: "Lake Huron" },
   // Lake Superior
   { name: "Duluth · Canal Cam", lat: 46.78, lon: -92.08, yt: "HPS48TMmNag", lake: "Lake Superior" },
   { name: "Duluth · Western Harbor", lat: 46.78, lon: -92.08, yt: "mpMdJJjw59E", lake: "Lake Superior" },
@@ -44,6 +53,12 @@ export const CAMS = [
   { name: "Marquette · Lower Harbor", lat: 46.54, lon: -87.38, wetmet: "08a47e963e2f369ca92e4fe022b7f329", lake: "Lake Superior" },
   { name: "Houghton · Portage Lift Bridge", lat: 47.12, lon: -88.57, wetmet: "040f3085e8b73aa13a4d4c98fdc7f0ac", lake: "Lake Superior" },
   { name: "Grand Marais · Harbor Cam", lat: 47.75, lon: -90.33, yt: "n0H5FkWkjjs", lake: "Lake Superior" },
+  // Found via the lakerart.com directory scout (official embed players + NPS)
+  { name: "Bayfield · Bayfield Inn", lat: 46.812, lon: -90.818, angelcam: "v8ypjjj8y6", lake: "Lake Superior" },
+  { name: "Bayfield · Port Superior Marina", lat: 46.757, lon: -90.864, angelcam: "m1ervgoxr7", lake: "Lake Superior" },
+  { name: "Saxon Harbor, WI · Marina", lat: 46.565, lon: -90.437, ipcamlive: "saxonharbor", lake: "Lake Superior" },
+  { name: "Whitefish Point · Shipwreck Museum", lat: 46.771, lon: -84.958, wetmet: "977a312d5da91e21bc63f295c0b12cc7", lake: "Lake Superior" },
+  { name: "Isle Royale · Mott Island (NPS)", lat: 48.108, lon: -88.556, img: "https://www.nps.gov/webcams-isro/mottmain.jpg", link: "https://www.nps.gov/isro/learn/photosmultimedia/webcams.htm", lake: "Lake Superior" },
 ];
 
 // Extra cam directories to link out to, per lake (sites that block embedding).
@@ -69,7 +84,6 @@ export const LINK_CAMS = {
   ],
   "Lake Superior": [
     { name: "Duluth Harbor Cam hub", url: "https://www.duluthharborcam.com/p/canal-park-cams.html" },
-    { name: "Bayfield Inn live HD", url: "https://www.bayfieldlive.com/" },
     { name: "Great Lakes cam directory", url: "https://lakerart.com/links.htm" },
   ],
 };
