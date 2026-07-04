@@ -833,9 +833,10 @@ export async function fetchSummary() {
     const periodSec = round(sampleNear(g?.periodSec, nowH), 0);
     // Storm-aware verdict: precip + thunder from the grid, so a calm-wind
     // thunderstorm evening doesn't show a wall of GO tiles while the detail
-    // page (correctly) says NO-GO.
-    const precipPct = sampleNear(g?.precipPct, nowH) ?? 0;
-    const thunder = sampleNear(g?.thunder, nowH) === true;
+    // page (correctly) says NO-GO. Same "now or imminent" window as the
+    // detail verdict: this hour or the next.
+    const precipPct = Math.max(g?.precipPct.get(nowH) ?? 0, g?.precipPct.get(nowH + 1) ?? 0);
+    const thunder = g?.thunder.get(nowH) === true || g?.thunder.get(nowH + 1) === true;
     const level = windKt == null && waveFt == null ? null : hourRisk(windKt, precipPct, thunder ? "thunderstorms" : "", waveFt);
     return { id, name: s.name, lake: s.lake || "Lake Erie", level, windKt, gustKt, dir, waveFt, periodSec };
   });
