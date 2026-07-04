@@ -644,36 +644,23 @@ const IcoDoc = () => <GateIcon><rect x="5" y="3" width="14" height="18" rx="2" /
 const IcoBoat = () => <GateIcon><path d="M4 17h16l-2 4H6l-2-4z" /><path d="M12 3v14M12 4l7 9H12" /></GateIcon>;
 const IcoCal = () => <GateIcon><rect x="4" y="5" width="16" height="16" rx="2" /><path d="M4 10h16M9 3v4M15 3v4" /><path d="M15 15l2 2 3-4" /></GateIcon>;
 
-function SignupGate({ spotName, onSignup, onSignin }) {
+// Soft, non-blocking signup nudge. The whole toolkit is now free for everyone
+// (more traffic, ad impressions & SEO); a free account only adds saved ports +
+// alert/digest emails, so this invites rather than walls.
+function SignupNudge({ spotName, onSignup, onSignin }) {
   useEffect(() => { track("event", "signup_gate_view", { spot: spotName }); }, [spotName]);
   return (
-    <section className="gate">
-      <div className="gate-preview" aria-hidden="true">
-        <div className="gate-sk-row">
-          {Array.from({ length: 9 }, (_, i) => (
-            <div className="gate-sk-hour" key={i}>
-              <span className="gate-sk-bar" style={{ height: `${22 + ((i * 13) % 34)}px` }} />
-            </div>
-          ))}
+    <section className="card signup-nudge">
+      <div className="nudge-main">
+        <IcoBoat />
+        <div className="nudge-copy">
+          <b>Boating {spotName || "these waters"} often?</b>
+          <span> Create a free account to ⭐ save your launch spots and get a morning verdict + NO-GO alerts by email.</span>
         </div>
-        <div className="gate-sk-wide" />
-        <div className="gate-sk-grid"><div className="gate-sk-card" /><div className="gate-sk-card" /></div>
       </div>
-      <div className="gate-card">
-        <h2>See the full picture{spotName ? ` for ${spotName}` : ""} — free</h2>
-        <ul className="gate-list">
-          <li><IcoClock /> <span><b>Hour-by-hour</b> wind, waves &amp; rain — up to 3 days out</span></li>
-          <li><IcoBack /> <span><b>“Be back in by”</b> — the hour the weather turns</span></li>
-          <li><IcoCal /> <span><b>Week-ahead outlook</b> — pick Saturday on Wednesday</span></li>
-          <li><IcoCam /> <span><b>Live harbor cams</b> + wave / wind / radar maps</span></li>
-          <li><IcoDoc /> <span>The <b>full NWS nearshore forecast</b> for your zone</span></li>
-          <li><IcoBoat /> <span>A <b>morning verdict email</b> + NO-GO alerts for your ports</span></li>
-        </ul>
-        <div className="gate-actions">
-          <button className="cbtn gate-cta" onClick={() => { track("event", "signup_gate_click", { spot: spotName, action: "register" }); onSignup(); }}>Create free account</button>
-          <button className="cbtn ghost" onClick={() => { track("event", "signup_gate_click", { spot: spotName, action: "login" }); onSignin(); }}>Sign in</button>
-        </div>
-        <p className="gate-note">Free forever · no card required · unsubscribe anytime</p>
+      <div className="nudge-actions">
+        <button className="cbtn" onClick={() => { track("event", "signup_gate_click", { spot: spotName, action: "register" }); onSignup(); }}>Create free account</button>
+        <button className="linklike" onClick={() => { track("event", "signup_gate_click", { spot: spotName, action: "login" }); onSignin(); }}>Sign in</button>
       </div>
     </section>
   );
@@ -901,16 +888,16 @@ export default function App() {
                 to a /spot page (incl. signed-out SEO traffic) sees one. */}
             {!adFree && consent === "all" && <AdSlot name="detailTop" />}
 
-            {/* ── Full detail: free accounts only. The verdict + current
-                   conditions above stay public (that's what social posts
-                   link to); everything deeper drives the signup. ── */}
-            {gated && (
-              <SignupGate spotName={spot.name} onSignup={() => setGateAuth("register")} onSignin={() => setGateAuth("login")} />
-            )}
-            {!gated && !authPending && (
+            {/* ── Full toolkit — free for everyone. A free account only adds
+                   saved ports + alert emails, nudged softly below, not walled. ── */}
+            {!authPending && (
               <>
                 {/* ── When do I go? — one-look answer ── */}
                 <GlanceBand hours={data.hourly} />
+
+                {gated && (
+                  <SignupNudge spotName={spot.name} onSignup={() => setGateAuth("register")} onSignin={() => setGateAuth("login")} />
+                )}
 
                 {wr && (
                   <section className={`card wr-${wr.tone} windread`}>

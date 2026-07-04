@@ -721,6 +721,14 @@ body.has-takeover .app { background: var(--bg); border-radius: var(--r-lg) var(-
 .region-bar .caution { background: var(--warning); }
 .region-bar .nogo { background: var(--danger); }
 
+/* Soft signup nudge — a slim invite inside the free toolkit, not a wall. */
+.signup-nudge { display: flex; align-items: center; justify-content: space-between; gap: var(--s3); flex-wrap: wrap; }
+.nudge-main { display: flex; align-items: center; gap: var(--s3); min-width: 0; flex: 1 1 300px; }
+.nudge-main .gate-ico { color: var(--accent); width: 22px; height: 22px; flex: 0 0 auto; }
+.nudge-copy b { color: var(--text); }
+.nudge-copy span { color: var(--text-muted); }
+.nudge-actions { display: flex; align-items: center; gap: var(--s3); flex: 0 0 auto; }
+
 /* Gate list with line icons */
 .gate-list li { display: flex; align-items: flex-start; gap: var(--s2); }
 .gate-ico { flex: 0 0 auto; margin-top: 2px; color: var(--accent); }
