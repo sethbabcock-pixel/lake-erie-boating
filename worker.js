@@ -7,6 +7,7 @@
 import { onRequest } from "./functions/marine/conditions.js";
 import { handleAuth } from "./functions/auth.js";
 import { runScheduled } from "./functions/digest.js";
+import { robotsTxt, sitemapXml, seoForPath, injectSeo } from "./functions/seo.js";
 
 // Baseline security headers applied to every response. These are intentionally
 // conservative: no script/style CSP directives, so the Google Ads/Analytics/
@@ -51,20 +52,42 @@ async function route(request, env, ctx) {
   const p = url.pathname;
   if (p.startsWith("/marine/")) return onRequest({ request, env, ctx });
   if (p.startsWith("/auth/") || p.startsWith("/api/") || p.startsWith("/stripe/") || p === "/unsubscribe") return handleAuth(request, env, url, ctx);
+  // SEO endpoints (see functions/seo.js).
+  if (p === "/robots.txt") return new Response(robotsTxt(), { headers: { "Content-Type": "text/plain; charset=utf-8", "Cache-Control": "public, max-age=86400" } });
+  if (p === "/sitemap.xml") return new Response(sitemapXml(), { headers: { "Content-Type": "application/xml; charset=utf-8", "Cache-Control": "public, max-age=3600" } });
   // With run_worker_first (wrangler.jsonc) the Worker fronts every request so
   // the www redirect above applies to page loads, not just API calls — which
   // means assets must be served here instead of by the assets-first layer.
   if ((request.method === "GET" || request.method === "HEAD") && env.ASSETS) {
+    // SEO pages (home + /spot/<id>): serve the shell with per-page <head> meta
+    // so each spot is its own indexable result, not one generic SPA page.
+    const seo = seoForPath(p);
+    if (seo) {
+      const shellUrl = new URL(request.url);
+      shellUrl.pathname = "/index.html";
+      const shell = await env.ASSETS.fetch(new Request(shellUrl, { headers: request.headers }));
+      if (shell.ok) {
+        const body = request.method === "HEAD" ? null : injectSeo(await shell.text(), seo);
+        return new Response(body, { status: 200, headers: { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "public, max-age=300" } });
+      }
+    }
+    // Fetch the app shell with a fresh GET (redirect: follow). The incoming
+    // request defaults to redirect:"manual", which would pass through the
+    // assets layer's /index.html→/ canonicalization 307 instead of resolving it.
+    const fetchShell = () => {
+      const shellUrl = new URL(request.url);
+      shellUrl.pathname = "/index.html";
+      return env.ASSETS.fetch(new Request(shellUrl, { headers: request.headers }));
+    };
+    // Unknown /spot/* (e.g. a stale link) is still an SPA route — serve the app
+    // shell so the client can handle it, not the assets layer's 307/404.
+    if (p.startsWith("/spot/")) return fetchShell();
     const asset = await env.ASSETS.fetch(request);
     if (asset.status !== 404) return asset;
     // SPA fallback: a non-asset, non-API navigation (e.g. /account) should serve
     // the app shell so client-side routing and direct refreshes work, not 404.
     // Real asset 404s (paths with a file extension) still 404.
-    if (!/\.[a-z0-9]+$/i.test(p)) {
-      const shell = new URL(request.url);
-      shell.pathname = "/index.html";
-      return env.ASSETS.fetch(new Request(shell, request));
-    }
+    if (!/\.[a-z0-9]+$/i.test(p)) return fetchShell();
     return asset;
   }
   // Not an API route and not a servable static asset.

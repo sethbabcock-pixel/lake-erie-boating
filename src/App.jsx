@@ -355,7 +355,7 @@ function ShareButton({ spot, rec, wind, wv }) {
   const share = async () => {
     track("event", "share_verdict", { spot: spot.id, level: rec.level });
     const text = `${spot.name}: ${rec.level} right now — wind ${wind.speedKt ?? "–"} kt, waves ${wv.ft ?? "–"} ft.`;
-    const url = `https://shouldiboat.com/?spot=${encodeURIComponent(spot.id)}`;
+    const url = `https://shouldiboat.com/spot/${encodeURIComponent(spot.id)}`;
     if (navigator.share) { try { await navigator.share({ title: "shouldiboat.com", text, url }); } catch (e) { /* dismissed */ } return; }
     try { await navigator.clipboard.writeText(`${text} ${url}`); setCopied(true); setTimeout(() => setCopied(false), 2000); } catch (e) { /* ignore */ }
   };
@@ -709,7 +709,11 @@ export default function App() {
     }
   }, [auth.user]);
   const [spots, setSpots] = useState([]);
-  const urlSpot = () => new URLSearchParams(window.location.search).get("spot");
+  // Prefer the clean SEO path /spot/<id>; fall back to the legacy ?spot=<id>.
+  const urlSpot = () => {
+    const m = window.location.pathname.match(/^\/spot\/([a-z0-9-]{1,40})\/?$/);
+    return (m && m[1]) || new URLSearchParams(window.location.search).get("spot");
+  };
   const [active, setActive] = useState(() => urlSpot() || localStorage.getItem("boating.spot") || "sandusky");
   const [landing, setLanding] = useState(() => !urlSpot()); // bare "/" = splash + directory; ?spot=X = detail
   const [resetToken, setResetToken] = useState(() => new URLSearchParams(window.location.search).get("reset") || ""); // password-reset email link
@@ -723,19 +727,15 @@ export default function App() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
-  // Pick a location → navigate to its detail view (?spot=X), without a reload.
+  // Pick a location → navigate to its clean detail URL (/spot/X), without a reload.
   const selectLocation = (id) => {
-    const u = new URL(window.location.href);
-    u.searchParams.set("spot", id);
-    window.history.pushState({}, "", u);
+    window.history.pushState({}, "", `/spot/${id}`);
     setActive(id);
     setLanding(false);
     window.scrollTo(0, 0);
   };
   const goLanding = () => {
-    const u = new URL(window.location.href);
-    u.searchParams.delete("spot");
-    window.history.pushState({}, "", u);
+    window.history.pushState({}, "", "/");
     setLanding(true);
     window.scrollTo(0, 0);
   };

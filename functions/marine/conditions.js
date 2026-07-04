@@ -22,7 +22,7 @@ const NWS = "https://api.weather.gov";
 // the closest reporting NDBC buoy(s), ordered by preference. Buoys in Lake Erie
 // are seasonal (recovered over winter), so we list fallbacks and degrade
 // gracefully when none are reporting.
-const SPOTS = {
+export const SPOTS = {
   toledo: {
     name: "Toledo / Maumee Bay",
     lat: 41.694, lon: -83.32, zone: "LEZ142", buoys: ["45005", "THLO1"],
