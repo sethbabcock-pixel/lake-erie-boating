@@ -606,7 +606,14 @@ body.has-takeover .app { background: var(--bg); border-radius: var(--r-lg) var(-
   .hero-splash { min-height: 76vh; }
   .splash-search { min-height: 48px; }
   .loc-grid { grid-template-columns: 1fr 1fr; gap: var(--s2); padding: var(--s3); }
-  .region-head { flex-direction: column; align-items: flex-start; gap: var(--s2); }
+  .region .region-head { flex-direction: column; align-items: flex-start; gap: var(--s2); }
+  /* In the stacked (column) layout the desktop `flex: 0 1 320px` would become a
+     320px HEIGHT basis, leaving a tall empty gap under the tally. Reset it to
+     size to content and run the tally/bar full width instead. (Extra `.region`
+     specificity so this wins over the later base `.region-side` rule — media
+     queries don't add specificity.) */
+  .region .region-side { flex: 0 0 auto; width: 100%; min-width: 0; align-items: stretch; }
+  .region .region-bar { max-width: none; }
 }
 
 /* Admin user management */
