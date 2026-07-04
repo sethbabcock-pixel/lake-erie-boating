@@ -604,8 +604,9 @@ function windReadFor(spot, dirCompass) {
 }
 
 // ---- Hourly risk timeline ----
-// Per-hour GO/CAUTION/NO-GO from the NWS hourly forecast (sustained wind +
-// precip chance + thunderstorm wording; hourly has no gust data).
+// Per-hour GO/CAUTION/NO-GO from the NWS hourly forecast + grid (wind or gusts,
+// whichever is stronger — same treatment as the headline verdict — plus precip
+// chance, thunderstorm wording, and wave height).
 function hourRisk(windKt, precipPct, short, waveFt) {
   const s = (short || "").toLowerCase();
   const thunder = /thunder|tstm|waterspout/.test(s);
@@ -621,7 +622,10 @@ function hourRisk(windKt, precipPct, short, waveFt) {
 }
 
 function withRisk(hours) {
-  return (hours || []).map((h) => ({ ...h, level: hourRisk(h.windKt, h.precipPct, h.short, h.waveFt) }));
+  return (hours || []).map((h) => {
+    const top = Math.max(h.windKt ?? -1, h.gustKt ?? -1);
+    return { ...h, level: hourRisk(top < 0 ? null : top, h.precipPct, h.short, h.waveFt) };
+  });
 }
 
 // Turn the hourly timeline into an actionable "go now / be in by X" outlook.
@@ -924,7 +928,12 @@ export async function onRequest(context) {
   const hourly = withRisk(
     fc.hourly.map((h) => {
       const eh = Math.floor(Date.parse(h.time) / 3600000);
-      return { ...h, waveFt: round(grid?.waveFt.get(eh), 1), periodSec: round(grid?.periodSec.get(eh), 0) };
+      return {
+        ...h,
+        waveFt: round(grid?.waveFt.get(eh), 1),
+        periodSec: round(grid?.periodSec.get(eh), 0),
+        gustKt: round(grid?.gustKt.get(eh), 0), // NWS hourly forecast has no gusts; the grid does
+      };
     })
   );
   const outlook = computeOutlook(hourly);

@@ -21,6 +21,8 @@ for (const spot of ["cleveland", "chicago", "toledo"]) {
   const wavesMerged = d.hourly.filter((h) => h.waveFt != null).length;
   check(`${spot}: hourly rows`, d.hourly.length >= 24, `${d.hourly.length} rows`);
   check(`${spot}: waves merged into hourly`, wavesMerged >= 12, `${wavesMerged}/${d.hourly.length} rows have waveFt`);
+  const gustsMerged = d.hourly.filter((h) => h.gustKt != null).length;
+  check(`${spot}: gusts merged into hourly`, gustsMerged >= 12, `${gustsMerged}/${d.hourly.length} rows have gustKt`);
   check(`${spot}: week outlook days`, d.week.length >= 5, `${d.week.length} days`);
   check(`${spot}: week has wind everywhere`, d.week.every((w) => w.windKt != null));
   check(`${spot}: week has waves`, d.week.filter((w) => w.waveFt != null).length >= 3, d.week.map((w) => `${w.date}:${w.waveFt ?? "—"}ft/${w.windKt ?? "—"}kt`).join(" "));

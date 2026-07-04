@@ -541,12 +541,27 @@ function HourStrip({ hours, headInBy }) {
               <WindArrow dir={h.windDir} /><b>{h.windKt ?? "—"}</b>
             </div>
           ))}
-          {/* waves */}
+          {/* gusts (from the NWS grid; the strongest hour is what bites) */}
+          <Label unit="kt">Gusts</Label>
+          {hours.map((h) => (
+            <div key={h.time} className={cls(h, h.gustKt != null && h.windKt != null && h.gustKt - h.windKt >= 5 ? `hx-tint-${windTint(h.gustKt)}` : "hx-dim")}>
+              {h.gustKt ?? "—"}
+            </div>
+          ))}
+          {/* waves — "<1" reads as the calm it is, not as missing data */}
           <Label unit="ft">Waves</Label>
-          {hours.map((h) => <div key={h.time} className={cls(h, `hx-tint-${waveTint(h.waveFt)}`)}><b>{h.waveFt ?? "—"}</b></div>)}
-          {/* period */}
+          {hours.map((h) => (
+            <div key={h.time} className={cls(h, `hx-tint-${waveTint(h.waveFt)}`)}>
+              <b>{h.waveFt == null ? "—" : h.waveFt < 1 ? "<1" : h.waveFt}</b>
+            </div>
+          ))}
+          {/* period — meaningless on flat water, so quiet it to a dot */}
           <Label unit="s">Between waves</Label>
-          {hours.map((h) => <div key={h.time} className={cls(h, "hx-dim")}>{h.periodSec ?? "—"}</div>)}
+          {hours.map((h) => (
+            <div key={h.time} className={cls(h, "hx-dim")}>
+              {h.periodSec == null || (h.waveFt != null && h.waveFt < 1) ? "·" : h.periodSec}
+            </div>
+          ))}
           {/* rain */}
           <Label unit="%">Rain</Label>
           {hours.map((h) => <div key={h.time} className={cls(h, `hx-rain-${rainTint(h.precipPct)}`)}>{h.precipPct ? h.precipPct : "·"}</div>)}
