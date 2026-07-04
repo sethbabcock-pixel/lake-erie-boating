@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { useAuth, AuthModal } from "./auth.jsx";
 import { BOAT_TYPES, boatById, effectiveLimits } from "./boats.js";
+import { track } from "./monetize.jsx";
 
 const fmtDate = (unixSec) =>
   unixSec ? new Date(unixSec * 1000).toLocaleDateString(undefined, { year: "numeric", month: "long", day: "numeric" }) : null;
@@ -41,7 +42,7 @@ function SubscriptionCard({ auth }) {
         <h2>Subscription</h2>
         <p className="acct-lead">You're on the <b>free plan</b> — the site is ad-supported.</p>
         <p className="acct-note">Go ad-free for $2.99/month. Cancel anytime; you keep ad-free access through the end of the period you paid for.</p>
-        <button className="cbtn" disabled={busy} onClick={async () => { setBusy(true); setErr(""); try { await auth.checkout(); } catch (e) { setErr(e.message); setBusy(false); } }}>
+        <button className="cbtn" disabled={busy} onClick={async () => { track("event", "subscribe_click", { where: "account_page" }); setBusy(true); setErr(""); try { await auth.checkout(); } catch (e) { setErr(e.message); setBusy(false); } }}>
           {busy ? "…" : "Go ad-free — $2.99/mo"}
         </button>
         {err && <div className="modal-err" style={{ marginTop: 8 }}>{err}</div>}
