@@ -876,6 +876,13 @@ body.has-takeover .app { background: var(--bg); border-radius: var(--r-lg) var(-
 .hx-tint-bad { background: color-mix(in srgb, var(--danger) 26%, transparent); }
 .hx-rain-damp { background: color-mix(in srgb, var(--info) 12%, transparent); color: var(--text); }
 .hx-rain-wet { background: color-mix(in srgb, var(--info) 26%, transparent); }
+/* Wave bands: consecutive equal-height hours read as one rounded block with a
+   single centered number. Round the run's outer ends; a 1px surface-colored
+   inset on each new band (except at a day boundary, which already has its own
+   divider) separates touching bands without shifting the grid. */
+.hx-wb.wb-s { border-top-left-radius: 7px; border-bottom-left-radius: 7px; }
+.hx-wb.wb-e { border-top-right-radius: 7px; border-bottom-right-radius: 7px; }
+.hx-wb.wb-s:not(.hx-ds) { box-shadow: inset 1px 0 0 var(--surface); }
 @media (max-width: 640px) {
   .hx { font-size: 12px; }
   .hx-c { min-height: 27px; font-size: var(--fs-xs); }
