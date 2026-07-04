@@ -2,7 +2,7 @@ import React, { useEffect, useRef, useState } from "react";
 import Cams from "./Cams.jsx";
 import WxIcon from "./WxIcon.jsx";
 import { IconStar, IconCheck, IconClock, IconNoGo, IconAlert, IconSunrise, IconSunset, IconDoc, IconRefresh } from "./icons.jsx";
-import { useAdsense, useAnalytics, getConsent, updateConsentMode, AdSlot, GearBlock, ConsentBanner } from "./monetize.jsx";
+import { useAdsense, useAnalytics, getConsent, updateConsentMode, AdSlot, GearBlock, ConsentBanner, track } from "./monetize.jsx";
 import { useAuth, Account, AuthModal } from "./auth.jsx";
 import Takeover from "./Takeover.jsx";
 import Landing from "./Landing.jsx";
@@ -10,8 +10,6 @@ import { fmtWaves, waveFeel, compassToDeg } from "./units.js";
 
 const fmt = (v, unit) => (v == null ? "—" : `${v}${unit || ""}`);
 const verdictClass = (lvl) => (lvl === "NO-GO" ? "nogo" : lvl === "CAUTION" ? "caution" : "go");
-// GA4 event, if analytics is loaded (mirrors the gtag() arguments pattern).
-function track() { try { if (window.dataLayer) window.dataLayer.push(arguments); } catch (e) { /* ignore */ } }
 const fmtHour = (t, withMin) =>
   new Date(t).toLocaleTimeString([], withMin ? { hour: "numeric", minute: "2-digit" } : { hour: "numeric" });
 
@@ -757,7 +755,7 @@ export default function App() {
     setError(null);
     fetch(`/marine/conditions?spot=${encodeURIComponent(id)}`)
       .then((r) => { if (!r.ok) throw new Error(`Server returned ${r.status}`); return r.json(); })
-      .then((d) => { setData(d); setLoading(false); })
+      .then((d) => { setData(d); setLoading(false); track("event", "spot_view", { spot: id, level: d?.recommendation?.level }); })
       .catch((e) => { setError(e.message); setLoading(false); });
   };
 
@@ -811,7 +809,7 @@ export default function App() {
       </header>
 
       {landing ? (
-        <Landing adFree={adFree} onSelect={selectLocation} favorites={auth.user ? (auth.user.favorites || []) : []}
+        <Landing adFree={adFree} consent={consent} onSelect={selectLocation} favorites={auth.user ? (auth.user.favorites || []) : []}
           onCookieSettings={() => chooseConsent(null)}
           signedIn={!!auth.user}
           nudge={auth.user ? <EmailNudge auth={auth} /> : null}
@@ -899,6 +897,10 @@ export default function App() {
               </div>
             </div>
 
+            {/* Top ad — under the public verdict + conditions, so every visitor
+                to a /spot page (incl. signed-out SEO traffic) sees one. */}
+            {!adFree && consent === "all" && <AdSlot name="detailTop" />}
+
             {/* ── Full detail: free accounts only. The verdict + current
                    conditions above stay public (that's what social posts
                    link to); everything deeper drives the signup. ── */}
@@ -963,7 +965,7 @@ export default function App() {
             )}
 
             <GearBlock waterTempF={buoy ? buoy.waterTempF : null} />
-            {!adFree && consent === "all" && <AdSlot />}
+            {!adFree && consent === "all" && <AdSlot name="detailMid" />}
 
             <footer className="meta">
               Source: {buoy ? `Buoy ${buoy.station} · ${buoy.ageMinutes != null ? `${buoy.ageMinutes} min ago` : "latest"}` : "forecast only"}

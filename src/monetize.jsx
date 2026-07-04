@@ -6,13 +6,22 @@ import React, { useEffect, useState } from "react";
    stays clean). Affiliate links work as soon as AMAZON_TAG is set.
    ============================================================================ */
 export const ADSENSE = {
-  client: "ca-pub-9213366013949616", // AdSense publisher ID
+  client: "ca-pub-9213366013949616", // AdSense publisher ID (set)
+  // Ad-unit slot IDs. In AdSense: Ads → By ad unit → Display → create a unit →
+  // copy its 10-digit slot ID here. Empty means that placement renders nothing,
+  // so you can switch them on one at a time. See MONETIZATION.md.
   slots: {
-    inContent: "0000000000", // ← an ad-unit slot ID from AdSense
+    detailTop: "", // spot page, right under the current-conditions row (every /spot visitor sees it — highest value)
+    detailMid: "", // spot page, lower in the toolkit
+    landing: "",   // homepage, under the port directory
   },
 };
-export const AMAZON_TAG = ""; // ← your Amazon Associates tag, e.g. "shouldiboat-20"
+export const AMAZON_TAG = ""; // ← your Amazon Associates tag, e.g. "shouldiboat-20" (lights up the Gear block)
 export const GA_ID = "G-D2199LJV2T"; // GA4 Measurement ID (loads only after cookie consent)
+
+// Lightweight GA4 event push, shared across the app. No-op until analytics is
+// consented + loaded, so it's always safe to call.
+export function track() { try { if (window.dataLayer) window.dataLayer.push(arguments); } catch (e) { /* ignore */ } }
 
 // Load Google Analytics (GA4) only when configured AND the user consented.
 export function useAnalytics(enabled) {
@@ -61,10 +70,13 @@ export function useAdsense(enabled) {
   }, [enabled]);
 }
 
-// A single responsive in-content ad unit. Renders nothing until a real ad-unit
-// slot ID is set (an unconfigured placeholder slot would just show a blank box).
-export function AdSlot({ slot = ADSENSE.slots.inContent }) {
-  const ready = ADSENSE_ENABLED && !!slot && slot !== "0000000000";
+// A responsive in-content ad unit for a named placement (see ADSENSE.slots).
+// Renders nothing until that placement's slot ID is filled — so unconfigured
+// placements stay fully invisible (no blank boxes), and you enable each by
+// pasting one slot ID.
+export function AdSlot({ name = "detailTop" }) {
+  const slot = ADSENSE.slots[name] || "";
+  const ready = ADSENSE_ENABLED && !!slot;
   useEffect(() => {
     if (!ready) return;
     try { (window.adsbygoogle = window.adsbygoogle || []).push({}); } catch (e) { /* ignore */ }

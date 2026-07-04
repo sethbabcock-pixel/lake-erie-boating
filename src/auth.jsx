@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
+import { track } from "./monetize.jsx";
 
 // Password policy (mirrors the server): 8+ chars with a letter, number, and
 // special character. Returns an error string, or "" if acceptable.
@@ -294,7 +295,7 @@ export function Account({ auth }) {
             </div>
           </div>
           {auth.billing && !auth.user.adFree && (
-            <button className="upgrade-btn" disabled={busy} onClick={() => doBilling(auth.checkout)}>{busy ? "…" : "Go ad-free — $2.99/mo"}</button>
+            <button className="upgrade-btn" disabled={busy} onClick={() => { track("event", "subscribe_click", { where: "account_menu" }); doBilling(auth.checkout); }}>{busy ? "…" : "Go ad-free — $2.99/mo"}</button>
           )}
           {billErr && <div className="modal-err" style={{ margin: "4px 0" }}>{billErr}</div>}
           <div className="acct-menu-sep" />
