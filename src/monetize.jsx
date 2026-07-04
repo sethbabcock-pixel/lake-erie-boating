@@ -16,7 +16,7 @@ export const ADSENSE = {
     landing: "",   // homepage, under the port directory
   },
 };
-export const AMAZON_TAG = ""; // ← your Amazon Associates tag, e.g. "shouldiboat-20" (lights up the Gear block)
+export const AMAZON_TAG = "shouldiboat-20"; // Amazon Associates tag (lights up the Gear block)
 export const GA_ID = "G-D2199LJV2T"; // GA4 Measurement ID (loads only after cookie consent)
 
 // Lightweight GA4 event push, shared across the app. No-op until analytics is
