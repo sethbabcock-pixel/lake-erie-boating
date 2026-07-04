@@ -484,6 +484,39 @@ const windTint = (kt) => (kt == null ? "" : kt >= 22 ? "bad" : kt >= 15 ? "warn"
 const waveTint = (ft) => (ft == null ? "" : ft >= 4 ? "bad" : ft >= 2.5 ? "warn" : ft >= 2 ? "mild" : "ok");
 const rainTint = (p) => (p == null || p < 30 ? "" : p >= 55 ? "wet" : "damp");
 
+// Temperature heat-strip: a diverging tint around a ~60°F comfortable midpoint —
+// cool blue below, warm orange above, near-neutral in between. Deliberately blue/
+// orange (not the green/amber/red risk hues) so it reads as "temperature," not a
+// verdict, and never passes through green (no rainbow). Semi-transparent so it
+// works over either theme's surface.
+function tempTint(f) {
+  if (f == null) return undefined;
+  const d = Math.max(-35, Math.min(35, f - 60)) / 35; // -1 cold … +1 hot
+  const hue = d < 0 ? 208 : 24;
+  const sat = Math.round(Math.abs(d) * 58 + 6);
+  const alpha = (Math.abs(d) * 0.2 + 0.03).toFixed(3);
+  return `hsl(${hue} ${sat}% 52% / ${alpha})`;
+}
+
+// Group consecutive equal-height hours into Windy-style bands: the wave row then
+// reads as continuous blocks with one centered number each, instead of the same
+// digit repeated across a calm stretch. Runs break at day boundaries so a band
+// never crosses midnight. Returns per-hour { start, end, mid }.
+function waveBands(hours, dayStarts) {
+  const key = (h) => (h.waveFt == null ? "∅" : h.waveFt < 1 ? "<1" : String(h.waveFt));
+  const meta = new Array(hours.length);
+  let i = 0;
+  while (i < hours.length) {
+    const k = key(hours[i]);
+    let j = i;
+    while (j + 1 < hours.length && key(hours[j + 1]) === k && !dayStarts.has(hours[j + 1].time)) j++;
+    const mid = Math.floor((i + j) / 2);
+    for (let x = i; x <= j; x++) meta[x] = { start: x === i, end: x === j, mid: x === mid };
+    i = j + 1;
+  }
+  return meta;
+}
+
 function WindArrow({ dir }) {
   const deg = compassToDeg(dir);
   if (deg == null) return null;
@@ -500,6 +533,7 @@ function HourStrip({ hours, headInBy }) {
   if (!hours || !hours.length) return null;
   const days = groupByDay(hours);
   const dayStarts = new Set(days.map((d) => d.hours[0].time));
+  const waveBand = waveBands(hours, dayStarts);
   const cls = (h, extra = "") => `hx-c ${dayStarts.has(h.time) ? "hx-ds" : ""} ${extra}`;
   const cols = { gridTemplateColumns: `minmax(96px, auto) repeat(${hours.length}, minmax(52px, 1fr))` };
   const Label = ({ children, unit }) => <div className="hx-l">{children}{unit && <small> {unit}</small>}</div>;
@@ -531,9 +565,9 @@ function HourStrip({ hours, headInBy }) {
           {/* verdict strip */}
           <Label>Verdict</Label>
           {hours.map((h) => <div key={h.time} className={cls(h, "hx-vwrap")} title={`${fmtHour(h.time)} · ${h.level}`}><i className={`hx-v ${verdictClass(h.level)}`} /></div>)}
-          {/* temp */}
+          {/* temp — diverging heat-strip behind the numbers */}
           <Label unit="°F">Temp</Label>
-          {hours.map((h) => <div key={h.time} className={cls(h)}>{h.tempF ?? "—"}</div>)}
+          {hours.map((h) => <div key={h.time} className={cls(h)} style={{ background: tempTint(h.tempF) }}>{h.tempF ?? "—"}</div>)}
           {/* wind */}
           <Label unit="kt">Wind</Label>
           {hours.map((h) => (
@@ -548,13 +582,18 @@ function HourStrip({ hours, headInBy }) {
               {h.gustKt ?? "—"}
             </div>
           ))}
-          {/* waves — "<1" reads as the calm it is, not as missing data */}
+          {/* waves — Windy-style bands: one centered number per equal-height run.
+              "<1" reads as the calm it is, not as missing data. */}
           <Label unit="ft">Waves</Label>
-          {hours.map((h) => (
-            <div key={h.time} className={cls(h, `hx-tint-${waveTint(h.waveFt)}`)}>
-              <b>{h.waveFt == null ? "—" : h.waveFt < 1 ? "<1" : h.waveFt}</b>
-            </div>
-          ))}
+          {hours.map((h, idx) => {
+            const b = waveBand[idx];
+            return (
+              <div key={h.time} className={cls(h, `hx-tint-${waveTint(h.waveFt)} hx-wb ${b.start ? "wb-s" : ""} ${b.end ? "wb-e" : ""}`)}
+                title={`${fmtHour(h.time)} · ${h.waveFt == null ? "no data" : `${h.waveFt} ft`}`}>
+                {b.mid ? <b>{h.waveFt == null ? "—" : h.waveFt < 1 ? "<1" : h.waveFt}</b> : null}
+              </div>
+            );
+          })}
           {/* period — meaningless on flat water, so quiet it to a dot */}
           <Label unit="s">Between waves</Label>
           {hours.map((h) => (
