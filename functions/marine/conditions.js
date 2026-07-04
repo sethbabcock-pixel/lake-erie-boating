@@ -286,6 +286,9 @@ async function fetchGridAt(lat, lon) {
       waveFt: gridSeries(p.waveHeight, mToFt),
       periodSec: gridSeries(p.wavePeriod),
       precipPct: gridSeries(p.probabilityOfPrecipitation),
+      // weather layer → per-hour thunderstorm flag, so summary verdicts and GO
+      // windows see storms the same way the detail page does.
+      thunder: gridSeries(p.weather, (v) => (Array.isArray(v) ? v : []).some((c) => /thunder/i.test(c?.weather || ""))),
     };
   } catch (e) {
     return null;
@@ -828,7 +831,12 @@ export async function fetchSummary() {
     const dir = dirDeg == null ? null : degToCompass(dirDeg);
     const waveFt = round(sampleNear(g?.waveFt, nowH), 1);
     const periodSec = round(sampleNear(g?.periodSec, nowH), 0);
-    const level = windKt == null && waveFt == null ? null : hourRisk(windKt, 0, "", waveFt);
+    // Storm-aware verdict: precip + thunder from the grid, so a calm-wind
+    // thunderstorm evening doesn't show a wall of GO tiles while the detail
+    // page (correctly) says NO-GO.
+    const precipPct = sampleNear(g?.precipPct, nowH) ?? 0;
+    const thunder = sampleNear(g?.thunder, nowH) === true;
+    const level = windKt == null && waveFt == null ? null : hourRisk(windKt, precipPct, thunder ? "thunderstorms" : "", waveFt);
     return { id, name: s.name, lake: s.lake || "Lake Erie", level, windKt, gustKt, dir, waveFt, periodSec };
   });
   return { spots, updatedAt: new Date().toISOString() };
@@ -854,7 +862,7 @@ export async function fetchTodayWindows() {
       if (loc.date !== today || loc.hour < 6 || loc.hour > 20) { run = null; continue; }
       const windKt = round(g.windKt.get(h), 0);
       const waveFt = round(g.waveFt.get(h), 1);
-      const ok = windKt != null && hourRisk(windKt, 0, "", waveFt) === "GO";
+      const ok = windKt != null && hourRisk(windKt, g.precipPct.get(h) ?? 0, g.thunder.get(h) ? "thunderstorms" : "", waveFt) === "GO";
       if (!ok) { run = null; continue; }
       if (!run) { run = { fromH: loc.hour, toH: loc.hour }; } else run.toH = loc.hour;
       if (!best || (run.toH - run.fromH) > (best.toH - best.fromH)) best = { ...run };
