@@ -13,6 +13,33 @@ const PhotoIcon = (p) => (
   </svg>
 );
 const CamTypeIcon = ({ cam, ...p }) => (camIsImage(cam) ? <PhotoIcon {...p} /> : <VideoIcon {...p} />);
+const ExternalIcon = (p) => (
+  <svg viewBox="0 0 24 24" width="1em" height="1em" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" {...p}>
+    <path d="M15 3h6v6" /><path d="M10 14 21 3" /><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" />
+  </svg>
+);
+
+// Footer under the player: the current cam's direct link plus curated per-lake
+// cam directories, as quiet chip buttons instead of bare inline links.
+function CamLinks({ cam, lake }) {
+  const dirs = getLinkCams(lake);
+  if (!cam && !dirs.length) return null;
+  return (
+    <div className="camlinks">
+      {cam && (
+        <a className="camlink primary" href={camLink(cam)} target="_blank" rel="noopener">
+          Open this cam <ExternalIcon />
+        </a>
+      )}
+      {dirs.length > 0 && <span className="camlinks-label">More cams</span>}
+      {dirs.map((c) => (
+        <a key={c.name} className="camlink" href={c.url} target="_blank" rel="noopener">
+          {c.name} <ExternalIcon />
+        </a>
+      ))}
+    </div>
+  );
+}
 
 // Load the YouTube IFrame Player API once. The player reports real errors
 // (ended stream / "recording not available" / embedding disabled) that a plain
@@ -70,8 +97,15 @@ function YouTubeCam({ videoId, onLoaded, onFail }) {
 }
 
 export default function Cams({ lat, lon, spotName, lake }) {
+  // The effective cam list comes back with the status check (built-ins minus
+  // any the admin disabled, plus admin-added feeds); the bundled list is the
+  // fallback while loading or if the endpoint is unreachable.
+  const [serverCams, setServerCams] = useState(null);
   // Pull more than we'll show so we can drop any that are offline right now.
-  const candidates = useMemo(() => nearestCams(lat, lon, lake, 12), [lat, lon, lake]);
+  const candidates = useMemo(
+    () => nearestCams(lat, lon, lake, 12, serverCams || undefined),
+    [lat, lon, lake, serverCams]
+  );
 
   // Server-side liveness for the NON-YouTube feeds (images, ipcamlive, wetmet,
   // pixelcaster): { "<cam name>": "live" | "offline" | "unknown" }.
@@ -83,10 +117,14 @@ export default function Cams({ lat, lon, spotName, lake }) {
 
   useEffect(() => {
     let abort = false;
-    setStatus(null); setFailed({});
+    setStatus(null); setFailed({}); setServerCams(null);
     fetch(`/marine/cams?lake=${encodeURIComponent(lake || "Lake Erie")}`)
       .then((r) => r.json())
-      .then((d) => { if (!abort) setStatus(d.status || {}); })
+      .then((d) => {
+        if (abort) return;
+        if (Array.isArray(d.cams) && d.cams.length) setServerCams(d.cams);
+        setStatus(d.status || {});
+      })
       .catch(() => { if (!abort) setStatus({}); });
     const t = setTimeout(() => { if (!abort) setStatus((s) => s ?? {}); }, 8000);
     return () => { abort = true; clearTimeout(t); };
@@ -141,14 +179,7 @@ export default function Cams({ lat, lon, spotName, lake }) {
       <section className="card">
         <div className="card-head"><h2>Live cams</h2></div>
         <div className="camempty">No live webcams for this lake right now — they come and go. Check the directory links below or your local harbor cam.</div>
-        {getLinkCams(lake).length > 0 && (
-          <div className="linkcams">
-            More:{" "}
-            {getLinkCams(lake).map((c) => (
-              <a key={c.name} href={c.url} target="_blank" rel="noopener">{c.name} ↗</a>
-            ))}
-          </div>
-        )}
+        <CamLinks lake={lake} />
       </section>
     );
   }
@@ -191,21 +222,13 @@ export default function Cams({ lat, lon, spotName, lake }) {
         )}
       </div>
 
+      <CamLinks cam={cam} lake={lake} />
       <div className="hint">
-        <a href={camLink(cam)} target="_blank" rel="noopener">Open this cam ↗</a>
         {camIsImage(cam)
-          ? " · still image, refreshes every 15s"
-          : " · live video — some players need a tap to start"}
-        {hiddenCount > 0 && ` · ${hiddenCount} offline cam${hiddenCount > 1 ? "s" : ""} hidden`}
+          ? "Still image — refreshes every 15 seconds."
+          : "Live video — some players need a tap to start."}
+        {hiddenCount > 0 && ` ${hiddenCount} offline cam${hiddenCount > 1 ? "s" : ""} hidden.`}
       </div>
-      {getLinkCams(lake).length > 0 && (
-        <div className="linkcams">
-          More:{" "}
-          {getLinkCams(lake).map((c) => (
-            <a key={c.name} href={c.url} target="_blank" rel="noopener">{c.name} ↗</a>
-          ))}
-        </div>
-      )}
     </section>
   );
 }

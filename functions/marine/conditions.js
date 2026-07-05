@@ -13,7 +13,7 @@
 // GET /marine/conditions?spot=sandusky
 // GET /marine/conditions?spots  -> list available spots
 
-import { CAMS, camSrc } from "../../src/cams.js";
+import { camSrc, applyCamConfig } from "../../src/cams.js";
 
 const UA = "lake-erie-boating (seth.babcock@gmail.com)";
 const NWS = "https://api.weather.gov";
@@ -297,8 +297,11 @@ async function fetchGridAt(lat, lon) {
 
 // Launch coords sit on the shoreline, whose grid cell is often a LAND cell
 // with no wave layers. Sample a touch lakeward instead — wind/precip barely
-// change over ~3 km, and the marine cell carries waves. If the first nudge
-// still lands on a dry cell, try farther out once.
+// change over ~3 km, and the marine cell carries waves. Land cells can run a
+// few cells deep off harbors (Port Clinton's did), so step progressively
+// farther until a cell carries waves; keep the NEAREST cell's wind/precip and
+// graft the wave layers from the marine cell, since wind barely changes over
+// a few km but waves only exist over water.
 function lakewardPoint(spot, stepDeg) {
   const c = LAKE_CENTERS[spot.lake || "Lake Erie"];
   const dLat = c.lat - spot.lat, dLon = c.lon - spot.lon;
@@ -306,12 +309,18 @@ function lakewardPoint(spot, stepDeg) {
   return { lat: round(spot.lat + (dLat / len) * stepDeg, 4), lon: round(spot.lon + (dLon / len) * stepDeg, 4) };
 }
 async function fetchSpotGrid(spot) {
-  const near = lakewardPoint(spot, 0.035);
-  const grid = await fetchGridAt(near.lat, near.lon);
-  if (grid && grid.waveFt.size) return grid;
-  const far = lakewardPoint(spot, 0.1);
-  const grid2 = await fetchGridAt(far.lat, far.lon);
-  return (grid2 && grid2.waveFt.size) ? grid2 : (grid || grid2);
+  let base = null;
+  for (const step of [0.035, 0.1, 0.22]) {
+    const p = lakewardPoint(spot, step);
+    const g = await fetchGridAt(p.lat, p.lon);
+    if (!g) continue;
+    if (!base) base = g;
+    if (g.waveFt.size) {
+      if (g !== base) { base.waveFt = g.waveFt; base.periodSec = g.periodSec; }
+      return base;
+    }
+  }
+  return base;
 }
 
 // Nearest defined hour, so a "current" sample tolerates layers with gaps.
@@ -791,9 +800,7 @@ async function camLiveness(c) {
 
 // Pool the checks so a lake's slow feeds don't starve the rest (and to stay
 // gentle on upstreams). 5 in flight at a time.
-async function camStatusForLake(lake) {
-  const want = lake || "Lake Erie";
-  const cams = CAMS.filter((c) => (c.lake || "Lake Erie") === want);
+async function camStatusFor(cams) {
   const status = {};
   let next = 0;
   const worker = async () => {
@@ -806,17 +813,35 @@ async function camStatusForLake(lake) {
   return status;
 }
 
-async function handleCamStatus(url) {
+// The effective cam list = built-ins minus admin-disabled, plus admin-added
+// custom feeds (managed on /admin, stored in the site config in KV).
+async function effectiveCams(env) {
+  try {
+    const cfg = env?.USERS ? await env.USERS.get("site:config", "json") : null;
+    return applyCamConfig(cfg?.cams);
+  } catch {
+    return applyCamConfig(null);
+  }
+}
+
+// GET /marine/cams?lake=… → { lake, status, cams } — the effective cam list for
+// the lake plus per-cam liveness. ?fresh=1 (admin panel) bypasses the cache so
+// saved changes and re-checks show up immediately.
+async function handleCamStatus(url, env) {
   const lake = url.searchParams.get("lake") || "Lake Erie";
+  const fresh = url.searchParams.get("fresh") === "1";
   const cacheKey = new Request(`https://cam-status.local/${encodeURIComponent(lake)}`);
   const cache = caches.default;
-  const hit = await cache.match(cacheKey);
-  if (hit) return hit;
-  const status = await camStatusForLake(lake);
-  const resp = new Response(JSON.stringify({ lake, status }), {
-    headers: { "Content-Type": "application/json", "Cache-Control": "public, max-age=180" },
+  if (!fresh) {
+    const hit = await cache.match(cacheKey);
+    if (hit) return hit;
+  }
+  const cams = (await effectiveCams(env)).filter((c) => (c.lake || "Lake Erie") === lake);
+  const status = await camStatusFor(cams);
+  const resp = new Response(JSON.stringify({ lake, status, cams }), {
+    headers: { "Content-Type": "application/json", "Cache-Control": fresh ? "no-store" : "public, max-age=180" },
   });
-  await cache.put(cacheKey, resp.clone());
+  if (!fresh) await cache.put(cacheKey, resp.clone());
   return resp;
 }
 
@@ -892,7 +917,7 @@ async function handleSummary() {
 export async function onRequest(context) {
   const url = new URL(context.request.url);
 
-  if (url.pathname.endsWith("/cams")) return handleCamStatus(url);
+  if (url.pathname.endsWith("/cams")) return handleCamStatus(url, context.env);
   if (url.searchParams.has("summary")) return handleSummary();
 
   if (url.searchParams.has("spots")) {
