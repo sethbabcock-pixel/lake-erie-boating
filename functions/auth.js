@@ -438,10 +438,13 @@ export async function handleAuth(request, env, url, ctx) {
         const vtoken = randHex(20);
         await env.USERS.put(`verify:${vtoken}`, e, { expirationTtl: 86400 });
         const link = `${siteBase(env, url)}/?verify=${vtoken}`;
-        await runBg(ctx, notify(env, "email_verification", { email: e }, {
+        // Await the send here (user-initiated, latency is fine) so a real
+        // failure surfaces instead of a silent "on its way ✓".
+        const r = await notify(env, "email_verification", { email: e }, {
           to: e, subject: "Confirm your email · shouldiboat.com",
           html: verifyHtml(link), ttlDays: 7,
-        }));
+        });
+        if (!r.emailSent) return json({ error: "We couldn't send the email just now — please try again in a moment." }, 502);
       }
     }
     return json({ ok: true }); // don't reveal whether the account exists/needs it

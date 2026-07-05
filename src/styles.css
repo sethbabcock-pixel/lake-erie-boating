@@ -294,6 +294,19 @@ details.card[open] > summary { margin-bottom: var(--s3); }
   font-weight: var(--fw-semibold); text-decoration: none; transition: border-color var(--dur-fast); }
 .gear-item:hover { border-color: var(--accent); text-decoration: none; }
 .gear-item span { color: var(--accent); }
+/* Condition-aware gear carousel — horizontally scrollable product cards. */
+.gear-rail { display: flex; gap: var(--s3); overflow-x: auto; padding: 2px 0 6px; scrollbar-width: thin;
+  scrollbar-color: var(--border-strong) transparent; scroll-snap-type: x proximity; }
+.gear-rail::-webkit-scrollbar { height: 7px; }
+.gear-rail::-webkit-scrollbar-thumb { background: var(--border-strong); border-radius: 4px; }
+.gear-card { flex: 0 0 auto; width: 148px; scroll-snap-align: start; display: flex; flex-direction: column; gap: 4px;
+  padding: var(--s3); border: 1px solid var(--border); border-radius: var(--r-md); background: var(--surface-sunk);
+  color: var(--text); text-decoration: none; transition: border-color var(--dur-fast), transform var(--dur-fast); }
+.gear-card:hover { border-color: var(--accent); text-decoration: none; transform: translateY(-1px); }
+.gear-ic { font-size: 1.6rem; line-height: 1; }
+.gear-label { font-weight: var(--fw-semibold); font-size: var(--fs-sm); }
+.gear-why { font-size: var(--fs-xs); color: var(--text-muted); flex: 1 1 auto; }
+.gear-cta { font-size: var(--fs-xs); color: var(--accent); font-weight: var(--fw-semibold); margin-top: 2px; }
 .adwrap { margin-bottom: var(--s4); text-align: center; min-height: 1px; }
 .adlabel { display: block; font-size: 10px; text-transform: uppercase; letter-spacing: var(--tracking-wide); color: var(--text-faint); margin-bottom: 4px; }
 .consent { position: fixed; left: 50%; bottom: var(--s3); transform: translateX(-50%); z-index: 100;
@@ -375,6 +388,10 @@ details.card[open] > summary { margin-bottom: var(--s3); }
 .modal-hint { margin: calc(-1 * var(--s2)) 0 var(--s3); font-size: var(--fs-xs); color: var(--text-muted); }
 .modal-hint-ok { color: var(--success); }
 .modal-hint-bad { color: var(--danger); }
+/* Highlighted tip (e.g. "check your spam folder") — more visible than a hint. */
+.modal-tip { margin: 0 0 var(--s3); padding: 8px 11px; font-size: var(--fs-xs); line-height: 1.5;
+  color: var(--text); background: color-mix(in srgb, var(--info) 12%, transparent);
+  border: 1px solid color-mix(in srgb, var(--info) 26%, transparent); border-radius: var(--r-md); }
 .modal-submit { width: 100%; min-height: 44px; }
 .modal-switch { margin-top: var(--s4); text-align: center; font-size: var(--fs-sm); color: var(--text-muted); }
 .modal-switch button { background: none; border: none; color: var(--accent); font: inherit; font-weight: var(--fw-semibold); cursor: pointer; }

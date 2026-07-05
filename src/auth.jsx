@@ -186,15 +186,17 @@ export function AuthModal({ auth, onClose, initialMode = "login", resetToken = "
           )
         ) : registered ? (
           <>
-            <p className="modal-sub">Almost there — we sent a confirmation link to <b>{registered}</b>. Click it to activate your account, then sign in. (Check spam if you don't see it.)</p>
+            <p className="modal-sub">Almost there — we sent a confirmation link to <b>{registered}</b>. Click it to activate your account, then sign in.</p>
+            <p className="modal-tip">📩 <b>Don't see it?</b> Check your spam / junk folder — especially on Outlook or Hotmail — and mark it "Not junk" so future alerts reach your inbox.</p>
             {err && <div className="modal-err">{err}</div>}
-            {resent ? <p className="modal-sub">Sent again ✓</p> : <button className="linklike" onClick={resend}>Resend email</button>}
+            {resent ? <p className="modal-sub">Sent again ✓ — give it a minute, then check spam too.</p> : <button className="cbtn modal-submit" onClick={resend}>Resend email</button>}
           </>
         ) : needsVerify ? (
           <>
             <p className="modal-sub">Please confirm your email first. We sent a link to <b>{needsVerify}</b> when you signed up.</p>
+            <p className="modal-tip">📩 <b>Don't see it?</b> Check your spam / junk folder (especially Outlook / Hotmail) and mark it "Not junk."</p>
             {err && <div className="modal-err">{err}</div>}
-            {resent ? <p className="modal-sub">A fresh link is on its way ✓</p> : <button className="cbtn modal-submit" onClick={resend}>Resend verification email</button>}
+            {resent ? <p className="modal-sub">A fresh link is on its way ✓ — check spam if it's not in your inbox.</p> : <button className="cbtn modal-submit" onClick={resend}>Resend verification email</button>}
           </>
         ) : mode === "forgot" && sent ? (
           <p className="modal-sub">If an account exists for that email, a reset link is on its way. Check your inbox (and spam).</p>
