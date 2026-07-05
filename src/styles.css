@@ -284,7 +284,20 @@ details.card[open] > summary { margin-bottom: var(--s3); }
 .camtabs button:hover { color: var(--text); border-color: var(--accent); }
 .camtabs button.active { background: var(--accent); color: #fff; border-color: transparent; }
 .hint { font-size: var(--fs-xs); color: var(--text-faint); margin-top: var(--s2); line-height: var(--lh-snug); }
-.linkcams { margin-top: var(--s2); display: flex; flex-wrap: wrap; gap: 6px var(--s4); font-size: var(--fs-xs); }
+
+/* Links under the cam player — quiet chip buttons instead of bare text links */
+.camlinks { margin-top: var(--s3); display: flex; flex-wrap: wrap; align-items: center; gap: var(--s2); }
+.camlinks-label { font-size: var(--fs-xs); font-weight: var(--fw-semibold); color: var(--text-faint);
+  text-transform: uppercase; letter-spacing: var(--tracking-wide); margin-left: var(--s2); }
+.camlink { display: inline-flex; align-items: center; gap: 6px; min-height: 32px; padding: 5px 12px;
+  border-radius: var(--r-pill); border: 1px solid var(--border); background: var(--surface-sunk);
+  color: var(--text-muted); font-size: var(--fs-xs); font-weight: var(--fw-semibold);
+  text-decoration: none; transition: all var(--dur-fast); }
+.camlink svg { font-size: 11px; opacity: 0.65; }
+.camlink:hover { color: var(--text); border-color: var(--border-strong); text-decoration: none; }
+.camlink.primary { color: var(--accent); border-color: color-mix(in srgb, var(--accent) 40%, transparent);
+  background: color-mix(in srgb, var(--accent) 12%, transparent); }
+.camlink.primary:hover { background: color-mix(in srgb, var(--accent) 20%, transparent); border-color: var(--accent); }
 
 /* ---------- Monetization ---------- */
 .gear { margin-bottom: var(--s4); }
@@ -544,6 +557,27 @@ body.has-takeover .app { background: var(--bg); border-radius: var(--r-lg) var(-
 .admin-savebar { position: sticky; bottom: 0; display: flex; align-items: center; gap: var(--s3); flex-wrap: wrap;
   margin-top: var(--s5); padding: var(--s4) 0; background: linear-gradient(to top, var(--bg) 70%, transparent); }
 .admin-main code { font-family: var(--font-mono); font-size: 0.9em; background: var(--surface-sunk); padding: 1px 5px; border-radius: var(--r-sm); }
+
+/* Admin: live cams manager */
+.admin-camgroup { margin-top: var(--s4); }
+.admin-camgroup-head { display: flex; align-items: center; justify-content: space-between; gap: var(--s3);
+  padding-bottom: 6px; border-bottom: 1px solid var(--border); margin-bottom: var(--s2); }
+.admin-camgroup-head h3 { margin: 0; font-size: var(--fs-sm); text-transform: uppercase; letter-spacing: var(--tracking-wide); color: var(--text-muted); }
+.admin-camrow { display: flex; align-items: center; gap: var(--s2); padding: 7px 0; font-size: var(--fs-sm); }
+.admin-camrow.off .admin-camname, .admin-camrow.off .admin-cambadge { opacity: 0.45; }
+.admin-camname { flex: 1 1 auto; min-width: 0; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.admin-cambadge { flex: 0 0 auto; font-size: var(--fs-xs); color: var(--text-faint); background: var(--surface-sunk);
+  border: 1px solid var(--border); border-radius: var(--r-pill); padding: 1px 8px; white-space: nowrap; }
+.admin-cambadge.custom { color: var(--accent); border-color: color-mix(in srgb, var(--accent) 40%, transparent); background: color-mix(in srgb, var(--accent) 10%, transparent); }
+.admin-camtoggle { margin-top: 0; flex: 0 0 auto; font-size: var(--fs-xs); }
+.cam-dot { flex: 0 0 auto; width: 9px; height: 9px; border-radius: 50%; background: var(--border-strong); }
+.cam-dot.live { background: var(--success); }
+.cam-dot.offline { background: var(--danger); }
+.admin-campreview { position: relative; aspect-ratio: 16 / 9; margin: var(--s2) 0 var(--s3); border-radius: var(--r-md);
+  overflow: hidden; border: 1px solid var(--border); background: var(--surface-sunk); }
+.admin-campreview iframe, .admin-campreview img { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; object-fit: cover; }
+.admin-camedit { margin: var(--s3) 0; padding: var(--s3); border: 1px dashed var(--border-strong); border-radius: var(--r-md); }
+.admin-camedit .acct-actions { display: flex; gap: var(--s2); flex-wrap: wrap; margin-top: var(--s2); }
 
 /* Admin image upload */
 .admin-upload { display: flex; gap: var(--s2); align-items: stretch; }

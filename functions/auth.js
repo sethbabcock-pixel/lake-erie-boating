@@ -108,6 +108,7 @@ const DEFAULT_SITE_CONFIG = {
   takeovers: [],
   gam: { networkCode: "" },
   notifyEmails: [], // recipients for admin notices (signups etc.); empty → owner default
+  cams: { disabled: [], custom: [] }, // live-cam overrides: built-ins turned off + admin-added feeds
 };
 // Site owner — admin by default so /admin works with no Cloudflare setup.
 // Override (or add more admins) with the ADMIN_EMAIL env var.
@@ -151,6 +152,18 @@ function sanitizeSiteConfig(input) {
     gam: { networkCode: str(gam.networkCode, 30) },
     notifyEmails: (Array.isArray(c.notifyEmails) ? c.notifyEmails : []).slice(0, 20)
       .map((e) => str(e, 200).trim().toLowerCase()).filter((e) => /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(e)),
+    cams: (() => {
+      const cams = c.cams && typeof c.cams === "object" ? c.cams : {};
+      return {
+        disabled: (Array.isArray(cams.disabled) ? cams.disabled : []).slice(0, 300)
+          .map((n) => str(n, 160)).filter(Boolean),
+        custom: (Array.isArray(cams.custom) ? cams.custom : []).slice(0, 100).map((e) => ({
+          name: str(e.name, 160), lake: str(e.lake, 40) || "Lake Erie",
+          lat: Number(e.lat) || 0, lon: Number(e.lon) || 0,
+          kind: str(e.kind, 20), id: str(e.id, 500), link: str(e.link, 500),
+        })).filter((e) => e.name && e.id),
+      };
+    })(),
   };
 }
 

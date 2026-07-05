@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { useAuth, AuthModal } from "./auth.jsx";
+import { CAMS, CAM_KINDS, camSrc, camIsImage, normalizeCustomCam } from "./cams.js";
 
 const todayISO = () => new Date().toISOString().slice(0, 10);
 const blankCampaign = () => ({
@@ -92,6 +93,178 @@ function CampaignCard({ c, onChange, onRemove, idx }) {
 }
 
 const fmtDate = (s) => (s ? new Date(s).toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" }) : "—");
+
+// ── Live cams manager ────────────────────────────────────────────────────────
+const LAKES = ["Lake Erie", "Lake Michigan", "Lake Huron", "Lake Ontario", "Lake Superior"];
+const camKindOf = (c) => (c.img ? "img" : c.yt ? "yt" : c.ytChannel ? "ytChannel" : c.angelcam ? "angelcam" : c.wetmet ? "wetmet" : c.ipcamlive ? "ipcamlive" : c.ozolio ? "ozolio" : "");
+const camKindLabelOf = (c) => (CAM_KINDS.find((k) => k.kind === camKindOf(c)) || {}).label || "—";
+const blankCustomCam = () => ({ name: "", lake: "Lake Erie", lat: "", lon: "", kind: "yt", id: "", link: "" });
+
+function StatusDot({ state }) {
+  const label = state === "live" ? "live" : state === "offline" ? "offline" : "unchecked";
+  return <span className={`cam-dot ${state || "unknown"}`} title={label} aria-label={label} />;
+}
+
+function CamPreview({ cam }) {
+  if (!cam) return null;
+  return (
+    <div className="admin-campreview">
+      {camIsImage(cam)
+        ? <img src={cam.img} alt={cam.name} />
+        : <iframe title={cam.name} src={camSrc(cam)} allow="autoplay; fullscreen; encrypted-media" />}
+    </div>
+  );
+}
+
+// Add/edit form for a custom cam. Values stay as strings while typing;
+// normalizeCustomCam validates the finished entry (and powers the preview).
+function CamEditor({ initial, onSave, onCancel }) {
+  const [e, setE] = useState(initial);
+  const [preview, setPreview] = useState(false);
+  const set = (k, v) => { setE((p) => ({ ...p, [k]: v })); setPreview(false); };
+  const cam = normalizeCustomCam(e);
+  const hint = (CAM_KINDS.find((k) => k.kind === e.kind) || {}).hint;
+  return (
+    <div className="admin-camedit">
+      <div className="acct-field-row">
+        <Field label="Cam name" hint="(shown in the picker)"><input className="field" value={e.name} onChange={(ev) => set("name", ev.target.value)} placeholder="Port Clinton · Waterfront" /></Field>
+        <Field label="Lake">
+          <select className="field" value={e.lake} onChange={(ev) => set("lake", ev.target.value)}>
+            {LAKES.map((l) => <option key={l} value={l}>{l}</option>)}
+          </select>
+        </Field>
+      </div>
+      <div className="acct-field-row">
+        <Field label="Latitude"><input className="field" value={e.lat} onChange={(ev) => set("lat", ev.target.value)} placeholder="41.512" inputMode="decimal" /></Field>
+        <Field label="Longitude"><input className="field" value={e.lon} onChange={(ev) => set("lon", ev.target.value)} placeholder="-82.937" inputMode="decimal" /></Field>
+      </div>
+      <div className="acct-field-row">
+        <Field label="Provider">
+          <select className="field" value={e.kind} onChange={(ev) => set("kind", ev.target.value)}>
+            {CAM_KINDS.map((k) => <option key={k.kind} value={k.kind}>{k.label}</option>)}
+          </select>
+        </Field>
+        <Field label={e.kind === "img" ? "Image URL" : "Cam ID"} hint={hint ? `(${hint})` : undefined}>
+          <input className="field" value={e.id} onChange={(ev) => set("id", ev.target.value)} />
+        </Field>
+      </div>
+      {e.kind === "img" && (
+        <Field label="Source page URL" hint="(optional — where “Open this cam” goes)">
+          <input className="field" value={e.link} onChange={(ev) => set("link", ev.target.value)} placeholder="https://…" />
+        </Field>
+      )}
+      {preview && cam && <CamPreview cam={cam} />}
+      <div className="acct-actions">
+        <button className="cbtn" disabled={!cam} onClick={() => onSave(e)}>{cam ? "Done" : "Fill in name, coordinates & ID"}</button>
+        <button className="cbtn ghost" disabled={!cam} onClick={() => setPreview((p) => !p)}>{preview ? "Hide preview" : "Preview"}</button>
+        <button className="cbtn ghost" onClick={onCancel}>Cancel</button>
+      </div>
+    </div>
+  );
+}
+
+function CamsPanel({ cfg, setCfg }) {
+  const camCfg = cfg.cams || { disabled: [], custom: [] };
+  const disabled = new Set(camCfg.disabled || []);
+  const custom = camCfg.custom || [];
+  const setCams = (next) => setCfg((c) => ({ ...c, cams: { disabled: [...disabled], custom, ...next } }));
+
+  const toggleBuiltin = (name, on) => {
+    const d = new Set(disabled);
+    if (on) d.delete(name); else d.add(name);
+    setCams({ disabled: [...d] });
+  };
+  const saveCustom = (idx, entry) => {
+    const next = idx == null ? [...custom, entry] : custom.map((c, i) => (i === idx ? entry : c));
+    setCams({ custom: next });
+    setEditing(null); setAdding(false);
+  };
+  const removeCustom = (idx) => { setCams({ custom: custom.filter((_, i) => i !== idx) }); setEditing(null); };
+
+  // Per-lake live check against the SAVED config (the same endpoint the
+  // homepage uses, cache bypassed) — save first, then check.
+  const [stat, setStat] = useState({}); // lake -> { busy, status }
+  const check = async (lake) => {
+    setStat((s) => ({ ...s, [lake]: { busy: true, status: s[lake]?.status } }));
+    try {
+      const r = await fetch(`/marine/cams?lake=${encodeURIComponent(lake)}&fresh=1`);
+      const d = await r.json();
+      setStat((s) => ({ ...s, [lake]: { busy: false, status: d.status || {} } }));
+    } catch {
+      setStat((s) => ({ ...s, [lake]: { busy: false, status: s[lake]?.status } }));
+    }
+  };
+
+  const [preview, setPreview] = useState(null); // cam name currently previewed
+  const [editing, setEditing] = useState(null); // index into custom[]
+  const [adding, setAdding] = useState(false);
+
+  const row = (cam, extra) => {
+    const st = stat[cam.lake || "Lake Erie"]?.status?.[cam.name];
+    const open = preview === cam.name;
+    return (
+      <div className="admin-camrow-wrap" key={cam.name}>
+        <div className={`admin-camrow ${disabled.has(cam.name) ? "off" : ""}`}>
+          <StatusDot state={st} />
+          <span className="admin-camname">{cam.name}</span>
+          <span className="admin-cambadge">{camKindLabelOf(cam)}</span>
+          <button className="linklike" onClick={() => setPreview(open ? null : cam.name)}>{open ? "hide" : "preview"}</button>
+          {extra}
+        </div>
+        {open && <CamPreview cam={cam} />}
+      </div>
+    );
+  };
+
+  return (
+    <section className="card acct-sec">
+      <h2>Live cams</h2>
+      <p className="acct-note" style={{ marginTop: 0 }}>
+        Every feed the site can show, grouped by lake (each spot picks the nearest ones automatically).
+        Turn off a dead feed and it disappears from the site; add your own below. Changes apply when you hit <b>Save changes</b>;
+        “Check now” tests the saved list, and green/red dots mean live/offline (gray = can’t verify — YouTube blocks server checks).
+      </p>
+      {LAKES.map((lake) => {
+        const builtIns = CAMS.filter((c) => (c.lake || "Lake Erie") === lake);
+        const customHere = custom.map((e, i) => [e, i]).filter(([e]) => (e.lake || "Lake Erie") === lake);
+        if (!builtIns.length && !customHere.length) return null;
+        const s = stat[lake];
+        return (
+          <div className="admin-camgroup" key={lake}>
+            <div className="admin-camgroup-head">
+              <h3>{lake}</h3>
+              <button className="linklike" disabled={s?.busy} onClick={() => check(lake)}>{s?.busy ? "checking…" : "↻ Check now"}</button>
+            </div>
+            {builtIns.map((cam) =>
+              row(cam, (
+                <label className="admin-check admin-camtoggle" title={disabled.has(cam.name) ? "Hidden from the site" : "Shown on the site"}>
+                  <input type="checkbox" checked={!disabled.has(cam.name)} onChange={(e) => toggleBuiltin(cam.name, e.target.checked)} />
+                  On
+                </label>
+              ))
+            )}
+            {customHere.map(([e, i]) =>
+              editing === i ? (
+                <CamEditor key={`edit-${i}`} initial={e} onSave={(entry) => saveCustom(i, entry)} onCancel={() => setEditing(null)} />
+              ) : (
+                row({ ...(normalizeCustomCam(e) || { name: e.name || `Custom cam ${i + 1}` }) }, (
+                  <>
+                    <span className="admin-cambadge custom">custom</span>
+                    <button className="linklike" onClick={() => { setEditing(i); setAdding(false); }}>edit</button>
+                    <button className="linklike" onClick={() => removeCustom(i)}>remove</button>
+                  </>
+                ))
+              )
+            )}
+          </div>
+        );
+      })}
+      {adding
+        ? <CamEditor initial={blankCustomCam()} onSave={(entry) => saveCustom(null, entry)} onCancel={() => setAdding(false)} />
+        : <button className="cbtn ghost" onClick={() => { setAdding(true); setEditing(null); }}>+ Add a cam</button>}
+    </section>
+  );
+}
 
 function StatsPanel() {
   const [s, setS] = useState(null);
@@ -466,6 +639,8 @@ export default function AdminPage() {
                 Show the live GO / CAUTION / NO-GO verdict in the hero
               </label>
             </section>
+
+            <CamsPanel cfg={cfg} setCfg={setCfg} />
 
             {/* Takeovers */}
             <section className="card acct-sec">

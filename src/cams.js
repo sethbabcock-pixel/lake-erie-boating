@@ -89,6 +89,45 @@ export const LINK_CAMS = {
 };
 export const getLinkCams = (lake) => LINK_CAMS[lake] || [];
 
+// ── Admin-managed cam config ─────────────────────────────────────────────────
+// The admin page stores { disabled: [names], custom: [entries] } in the site
+// config (KV). Custom entries are provider-agnostic: { name, lake, lat, lon,
+// kind, id, link? } where `kind` picks the embed player and `id` is the
+// provider's cam id (or the image/watch URL for snapshot cams).
+export const CAM_KINDS = [
+  { kind: "yt", label: "YouTube live video", hint: "video id, e.g. ZZevIUr2cTk" },
+  { kind: "ytChannel", label: "YouTube channel live", hint: "channel id, e.g. UCxxxxxxxx" },
+  { kind: "angelcam", label: "Angelcam", hint: "cam id, e.g. 91yx8ek0ro" },
+  { kind: "wetmet", label: "WetMet", hint: "stream uid (32 hex chars)" },
+  { kind: "ipcamlive", label: "IPCamLive", hint: "alias, e.g. mhyc" },
+  { kind: "ozolio", label: "Ozolio", hint: "embed id, e.g. EMB_PSZZ000005DE" },
+  { kind: "img", label: "Refreshing photo (JPEG URL)", hint: "full image URL" },
+];
+
+// A stored custom entry → the property-keyed cam shape the site renders.
+export function normalizeCustomCam(e) {
+  if (!e || typeof e !== "object") return null;
+  const name = String(e.name || "").trim();
+  const lat = Number(e.lat), lon = Number(e.lon);
+  const kind = String(e.kind || "");
+  const id = String(e.id || "").trim();
+  if (!name || !id || !Number.isFinite(lat) || !Number.isFinite(lon)) return null;
+  if (!CAM_KINDS.some((k) => k.kind === kind)) return null;
+  const cam = { name, lat, lon, custom: true };
+  if (e.lake && e.lake !== "Lake Erie") cam.lake = String(e.lake);
+  if (kind === "img") { cam.img = id; if (e.link) cam.link = String(e.link); }
+  else cam[kind] = id;
+  return cam;
+}
+
+// Built-in list + admin config → the effective cam list the site shows.
+export function applyCamConfig(camCfg) {
+  const cfg = camCfg && typeof camCfg === "object" ? camCfg : {};
+  const disabled = new Set(Array.isArray(cfg.disabled) ? cfg.disabled : []);
+  const custom = (Array.isArray(cfg.custom) ? cfg.custom : []).map(normalizeCustomCam).filter(Boolean);
+  return [...CAMS.filter((c) => !disabled.has(c.name)), ...custom];
+}
+
 export const camIsImage = (c) => Boolean(c && c.img);
 export const camKind = (c) => (c && c.img ? "photo" : "video");
 export const camKindLabel = (c) => (c && c.img ? "Refreshing photo" : "Live video");
@@ -123,9 +162,9 @@ export const dist = (la, lo, la2, lo2) => {
 // beyond that the UI shows an empty state. ~1° ≈ 69 mi.
 const NEAR_DEG = 0.85;
 const MAX_DEG = 1.6;
-export const nearestCams = (lat, lon, lake, n = 6) => {
+export const nearestCams = (lat, lon, lake, n = 6, list = CAMS) => {
   const want = lake || "Lake Erie";
-  const ranked = CAMS
+  const ranked = list
     .filter((c) => (c.lake || "Lake Erie") === want)
     .map((c) => [c, dist(lat, lon, c.lat, c.lon)])
     .sort((a, b) => a[1] - b[1]);
