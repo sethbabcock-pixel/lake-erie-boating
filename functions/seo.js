@@ -27,12 +27,13 @@ const spotJsonld = (id, s, lake) => ({
   url: `${SITE}/spot/${id}`,
   about: `Boating conditions for ${s.name} on ${lake}`,
   isPartOf: { "@type": "WebSite", name: "shouldiboat.com", url: `${SITE}/` },
+  // Two levels only: every non-final crumb needs a real URL, and we don't have
+  // per-lake pages yet — a middle "lake" crumb with no `item` fails validation.
   breadcrumb: {
     "@type": "BreadcrumbList",
     itemListElement: [
       { "@type": "ListItem", position: 1, name: "Great Lakes", item: `${SITE}/` },
-      { "@type": "ListItem", position: 2, name: lake },
-      { "@type": "ListItem", position: 3, name: s.name, item: `${SITE}/spot/${id}` },
+      { "@type": "ListItem", position: 2, name: s.name, item: `${SITE}/spot/${id}` },
     ],
   },
 });
