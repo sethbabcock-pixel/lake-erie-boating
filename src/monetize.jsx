@@ -92,27 +92,48 @@ export function AdSlot({ name = "detailTop" }) {
   );
 }
 
-// Affiliate "gear for the water" block. Condition-aware: cold water surfaces a
-// cold-water item. Amazon search links carry the associate tag when set.
-export function GearBlock({ waterTempF }) {
+// Affiliate "gear for the water" carousel. It reads today's conditions and
+// surfaces the gear that fits — cold water → cold-water layers, a rough/NO-GO
+// day → safety & bailing gear, a calm sunny day → coolers, tubes & fishing —
+// so it shows each visitor what's relevant now. Links are tagged Amazon
+// searches (a real product carousel with photos/prices needs Amazon's Product
+// Advertising API, which unlocks after the account's first qualifying sales).
+const GEAR = {
+  pfd:    { icon: "🦺", label: "Life jacket (PFD)", q: "coast guard approved life jacket", why: "Required gear" },
+  vhf:    { icon: "📻", label: "Handheld VHF radio", q: "floating handheld marine VHF radio", why: "Reach help anywhere" },
+  anchor: { icon: "⚓", label: "Anchor kit", q: "boat anchor kit with rode", why: "Hold your spot" },
+  aid:    { icon: "🧰", label: "Marine first-aid kit", q: "marine first aid kit", why: "On-water essentials" },
+  dry:    { icon: "🎒", label: "Dry bag", q: "waterproof dry bag", why: "Keep phone & keys dry" },
+  cold:   { icon: "🥶", label: "Cold-water layer", q: "neoprene wetsuit top", why: "Cold-shock protection" },
+  bail:   { icon: "🪣", label: "Bilge / bailing pump", q: "portable bilge pump boat", why: "For a sloppy day" },
+  cooler: { icon: "🧊", label: "Cooler", q: "marine cooler", why: "Long day on the water" },
+  tube:   { icon: "🛟", label: "Towable tube", q: "towable tube for boating", why: "Flat-water fun" },
+  sun:    { icon: "🧴", label: "Reef-safe sunscreen", q: "reef safe sport sunscreen", why: "Sunny & calm" },
+  rod:    { icon: "🎣", label: "Rod & tackle", q: "fishing rod reel combo", why: "Bite's on" },
+};
+export function GearBlock({ waterTempF, airTempF, windKt, level }) {
   const url = (q) => `https://www.amazon.com/s?k=${encodeURIComponent(q)}${AMAZON_TAG ? `&tag=${AMAZON_TAG}` : ""}`;
-  const items = [
-    { label: "Life jackets (PFDs)", q: "coast guard approved life jacket" },
-    { label: "Handheld VHF radio", q: "handheld marine VHF radio floating" },
-    { label: "Anchor kit", q: "boat anchor kit with rode" },
-    { label: "Dry bag", q: "waterproof dry bag" },
-    { label: "Marine first-aid kit", q: "marine first aid kit" },
-  ];
-  if (waterTempF != null && waterTempF < 60) {
-    items.unshift({ label: "Cold-water layer", q: "neoprene wetsuit top paddling" });
-  }
+  const cold = waterTempF != null && waterTempF < 60;
+  const rough = level === "NO-GO" || level === "CAUTION" || (windKt != null && windKt >= 15);
+  const nice = level === "GO" && (windKt == null || windKt < 12) && (airTempF == null || airTempF >= 72);
+  const featured = [];
+  if (cold) featured.push(GEAR.cold);
+  if (rough) featured.push(GEAR.bail, GEAR.anchor);
+  if (nice) featured.push(GEAR.cooler, GEAR.tube, GEAR.sun, GEAR.rod);
+  const seen = new Set();
+  const items = [...featured, GEAR.pfd, GEAR.vhf, GEAR.anchor, GEAR.aid, GEAR.dry]
+    .filter((it) => (seen.has(it.q) ? false : seen.add(it.q)));
+  const heading = cold ? "Gear for cold water" : rough ? "Rough-day gear" : nice ? "Gear for a day out" : "Gear for the water";
   return (
     <section className="card gear">
-      <div className="card-head"><h2>Gear for the water</h2></div>
-      <div className="gear-grid">
+      <div className="card-head"><h2>{heading}</h2><span className="legend">picked for today's conditions</span></div>
+      <div className="gear-rail">
         {items.map((it) => (
-          <a key={it.q} className="gear-item" href={url(it.q)} target="_blank" rel="sponsored nofollow noopener">
-            {it.label} <span>↗</span>
+          <a key={it.q} className="gear-card" href={url(it.q)} target="_blank" rel="sponsored nofollow noopener">
+            <span className="gear-ic" aria-hidden="true">{it.icon}</span>
+            <span className="gear-label">{it.label}</span>
+            <span className="gear-why">{it.why}</span>
+            <span className="gear-cta">Shop on Amazon ↗</span>
           </a>
         ))}
       </div>

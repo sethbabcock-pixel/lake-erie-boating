@@ -951,7 +951,7 @@ export default function App() {
               </>
             )}
 
-            <GearBlock waterTempF={buoy ? buoy.waterTempF : null} />
+            <GearBlock waterTempF={buoy ? buoy.waterTempF : null} airTempF={buoy ? buoy.airTempF : null} windKt={wind ? wind.speedKt : null} level={rec ? rec.level : null} />
             {!adFree && consent === "all" && <AdSlot name="detailMid" />}
 
             <footer className="meta">
