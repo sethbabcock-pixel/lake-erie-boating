@@ -780,7 +780,7 @@ export default function App() {
       <header className="appheader">
         <div className="appheader-inner">
           <a className="brand" href="/" aria-label="shouldiboat.com — home" onClick={(e) => { e.preventDefault(); goLanding(); }}>
-            <img className="logo" src={effective === "dark" ? "/boat-mark-white.png" : "/boat-mark.png"} alt="" />
+            <img className="logo" width="248" height="82" src={effective === "dark" ? "/boat-mark-white.png" : "/boat-mark.png"} alt="" />
             <span className="wordmark">
               <span className="wm-name">SHOULDI<b>BOAT</b><span className="wm-dot">.com</span></span>
               <span className="wm-tag">Live Great Lakes boating conditions</span>

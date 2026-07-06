@@ -628,6 +628,8 @@ body.has-takeover .app { background: var(--bg); border-radius: var(--r-lg) var(-
 .directory { padding-top: var(--s5); }
 .directory-title { font-size: var(--fs-xl); font-weight: var(--fw-bold); margin: 0 0 var(--s4); color: var(--text); }
 .region { border: 1px solid var(--border); border-radius: var(--r-lg); margin-bottom: var(--s3); overflow: hidden; background: var(--surface); }
+.region-skel { height: 116px; animation: skelpulse 1.6s ease-in-out infinite; }
+@keyframes skelpulse { 0%, 100% { opacity: .5; } 50% { opacity: .8; } }
 .region-head { display: flex; align-items: center; justify-content: space-between; gap: var(--s3); padding: var(--s4);
   cursor: pointer; list-style: none; }
 .region-head::-webkit-details-marker { display: none; }
