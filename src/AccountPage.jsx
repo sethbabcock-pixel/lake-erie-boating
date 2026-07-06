@@ -313,7 +313,7 @@ export default function AccountPage() {
       <header className="acctpage-header">
         <a className="acctpage-back" href="/">← Back to conditions</a>
         <a className="acctpage-brand" href="/">
-          <img className="logo" src={dark ? "/boat-mark-white.png" : "/boat-mark.png"} alt="" />
+          <img className="logo" width="248" height="82" src={dark ? "/boat-mark-white.png" : "/boat-mark.png"} alt="" />
           <span>shouldiboat.com</span>
         </a>
       </header>

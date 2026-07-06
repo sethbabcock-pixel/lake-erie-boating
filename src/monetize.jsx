@@ -150,7 +150,7 @@ export function ConsentBanner({ consent, onChoose }) {
   return (
     <div className="consent" role="dialog" aria-label="Cookie notice">
       <span>We use cookies for analytics and ads to keep shouldiboat.com free. Accept to allow them, or reject non-essential cookies.{" "}
-        <a href="/legal#cookies" target="_blank" rel="noopener">Learn more</a>.</span>
+        <a href="/legal#cookies" target="_blank" rel="noopener" aria-label="Learn more about our cookie and privacy policy">Learn more</a>.</span>
       <div className="consent-actions">
         <button className="cbtn ghost" onClick={() => onChoose("essential")}>Reject</button>
         <button className="cbtn" onClick={() => onChoose("all")}>Accept</button>
