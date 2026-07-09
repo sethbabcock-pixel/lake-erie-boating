@@ -800,7 +800,8 @@ export default function App() {
           onCookieSettings={() => chooseConsent(null)}
           signedIn={!!auth.user}
           nudge={auth.user ? <EmailNudge auth={auth} /> : null}
-          onJoin={gated ? () => { track("event", "signup_gate_click", { spot: "landing", action: "register" }); setGateAuth("register"); } : null} />
+          onJoin={gated ? () => { track("event", "signup_gate_click", { spot: "landing", action: "register" }); setGateAuth("register"); } : null}
+          onSignIn={gated ? () => { track("event", "signup_gate_click", { spot: "landing", action: "login" }); setGateAuth("login"); } : null} />
       ) : (
       <>
       {/* FlightAware-style hero: sponsor takeover when sold, else house hero. */}

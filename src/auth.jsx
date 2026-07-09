@@ -256,10 +256,12 @@ const IconSignOut = () => (
 
 export function Account({ auth }) {
   const [modal, setModal] = useState(false);
+  const [authMode, setAuthMode] = useState("register"); // login | register when modal opens
   const [menu, setMenu] = useState(false);
   const ref = useRef(null);
   const [busy, setBusy] = useState(false);
   const [billErr, setBillErr] = useState("");
+  const openAuth = (mode) => { setAuthMode(mode); setModal(true); };
   const doBilling = async (fn) => {
     setBusy(true); setBillErr("");
     try { await fn(); } catch (e) { setBillErr(e.message); setBusy(false); } // success redirects away
@@ -273,11 +275,14 @@ export function Account({ auth }) {
 
   if (!auth.available || auth.user === undefined) return null; // accounts off or still loading
   if (!auth.user) {
-    // The business goal is the signup — lead with it; sign-in lives inside the modal.
+    // Lead with signup, but always offer Sign in for returning boaters.
     return (
       <>
-        <button className="signin-btn" onClick={() => setModal(true)}>Sign up free</button>
-        {modal && <AuthModal auth={auth} initialMode="register" onClose={() => setModal(false)} />}
+        <div className="auth-ctas">
+          <button className="signin-btn ghost" onClick={() => openAuth("login")}>Sign in</button>
+          <button className="signin-btn" onClick={() => openAuth("register")}>Sign up free</button>
+        </div>
+        {modal && <AuthModal key={authMode} auth={auth} initialMode={authMode} onClose={() => setModal(false)} />}
       </>
     );
   }

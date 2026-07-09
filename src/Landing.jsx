@@ -143,7 +143,7 @@ function MyPorts({ summary, favorites, onSelect }) {
   );
 }
 
-export default function Landing({ adFree, consent, onSelect, favorites, onCookieSettings, onJoin, signedIn, nudge }) {
+export default function Landing({ adFree, consent, onSelect, favorites, onCookieSettings, onJoin, onSignIn, signedIn, nudge }) {
   const [summary, setSummary] = useState(null);
   const [q, setQ] = useState("");
   const deepLake = lakeParam();
@@ -164,7 +164,10 @@ export default function Landing({ adFree, consent, onSelect, favorites, onCookie
         {onJoin && (
           <div className="joinstrip">
             <span><b>Every port's verdict is below — free.</b> Create an account for the hour-by-hour picture, live cams &amp; “be back in by” times.</span>
-            <button className="cbtn" onClick={onJoin}>Create free account</button>
+            <div className="joinstrip-actions">
+              <button className="cbtn" onClick={onJoin}>Create free account</button>
+              {onSignIn && <button className="linklike joinstrip-signin" onClick={onSignIn}>Already have an account? Sign in</button>}
+            </div>
           </div>
         )}
         {signedIn && (favorites || []).length === 0 && (

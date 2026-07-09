@@ -341,9 +341,12 @@ details.card[open] > summary { margin-bottom: var(--s3); }
 .linklike { background: none; border: none; color: var(--accent); font: inherit; font-size: var(--fs-xs); cursor: pointer; padding: 0; }
 
 /* ---------- Accounts ---------- */
+.auth-ctas { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; justify-content: flex-end; }
 .signin-btn { min-height: 44px; padding: 0 16px; border-radius: var(--r-pill); background: var(--brand); color: #fff;
   border: 1px solid transparent; font-family: var(--font-sans); font-size: var(--fs-sm); font-weight: var(--fw-semibold); cursor: pointer; }
 .signin-btn:hover { background: var(--brand-hover); }
+.signin-btn.ghost { background: transparent; color: var(--text); border-color: var(--border-strong); }
+.signin-btn.ghost:hover { border-color: var(--accent); color: var(--text); background: var(--surface-sunk); }
 .acct { position: relative; }
 .acct-btn { width: 44px; height: 44px; border-radius: var(--r-pill); background: var(--surface); border: 1px solid var(--border-strong); cursor: pointer; padding: 0; }
 .acct-btn:hover { border-color: var(--accent); }
@@ -727,8 +730,13 @@ body.has-takeover .app { background: var(--bg); border-radius: var(--r-lg) var(-
   background: linear-gradient(135deg, color-mix(in srgb, var(--accent) 12%, var(--surface)), var(--surface));
   border: 1px solid var(--border-strong); border-radius: var(--r-lg); font-size: var(--fs-sm); color: var(--text-muted); }
 .joinstrip b { color: var(--text); }
+.joinstrip-actions { display: flex; flex-direction: column; align-items: flex-end; gap: 8px; flex: 0 0 auto; }
 .joinstrip .cbtn { flex: 0 0 auto; white-space: nowrap; }
-@media (max-width: 640px) { .joinstrip { flex-direction: column; align-items: stretch; text-align: center; } }
+.joinstrip-signin { font-size: var(--fs-sm); }
+@media (max-width: 640px) {
+  .joinstrip { flex-direction: column; align-items: stretch; text-align: center; }
+  .joinstrip-actions { align-items: center; }
+}
 
 /* ── Week-ahead strip ──────────────────────────────────────────────────────── */
 .week { display: flex; gap: var(--s2); overflow-x: auto; padding-bottom: 2px; }
