@@ -90,6 +90,12 @@ export const SPOTS = {
   marquette: { name: "Marquette", lat: 46.54, lon: -87.38, zone: "LSZ249", office: "MQT", buoys: ["45004"], lake: "Lake Superior" },
   houghton: { name: "Houghton / Keweenaw", lat: 47.12, lon: -88.57, zone: "LSZ267", office: "MQT", buoys: [], lake: "Lake Superior" },
   "grand-marais": { name: "Grand Marais, MN", lat: 47.75, lon: -90.33, zone: "LSZ140", office: "DLH", buoys: [], lake: "Lake Superior" },
+
+  // ── Inland lakes. NWS models waves/marine-zones/buoys only on the Great Lakes
+  // and oceans, so these get the full land forecast (wind, gusts, temps, rain,
+  // hourly + week outlook) but no wave number or nearshore text. zone left empty
+  // so the marine-forecast fetch is skipped.
+  "buckeye-lake": { name: "Buckeye Lake", lat: 39.905, lon: -82.48, zone: "", office: "ILN", buoys: [], lake: "Buckeye Lake" },
 };
 
 const json = (obj, status = 200) =>
@@ -304,13 +310,18 @@ async function fetchGridAt(lat, lon) {
 // a few km but waves only exist over water.
 function lakewardPoint(spot, stepDeg) {
   const c = LAKE_CENTERS[spot.lake || "Lake Erie"];
+  if (!c) return { lat: round(spot.lat, 4), lon: round(spot.lon, 4) }; // inland lake: no marine cell to reach toward — sample at the point
   const dLat = c.lat - spot.lat, dLon = c.lon - spot.lon;
   const len = Math.hypot(dLat, dLon) || 1;
   return { lat: round(spot.lat + (dLat / len) * stepDeg, 4), lon: round(spot.lon + (dLon / len) * stepDeg, 4) };
 }
 async function fetchSpotGrid(spot) {
+  // Great Lakes: nudge lakeward until we hit a marine cell that carries waves.
+  // Inland lakes have no wave grid, so just sample the point once (wind/gusts/
+  // precip/temp are all present on land; waves stay blank).
+  const inland = !LAKE_CENTERS[spot.lake || "Lake Erie"];
   let base = null;
-  for (const step of [0.035, 0.1, 0.22]) {
+  for (const step of (inland ? [0] : [0.035, 0.1, 0.22])) {
     const p = lakewardPoint(spot, step);
     const g = await fetchGridAt(p.lat, p.lon);
     if (!g) continue;
@@ -412,6 +423,7 @@ function buildWeek(grid) {
 }
 
 async function fetchMarineForecast(zone) {
+  if (!zone) return null; // inland lake: no NWS marine zone
   try {
     const data = await getJSON(`${NWS}/zones/marine/${zone}/forecast`);
     return (data?.properties?.periods || []).slice(0, 6).map((p) => ({
