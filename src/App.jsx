@@ -817,6 +817,7 @@ export default function App() {
           onCookieSettings={() => chooseConsent(null)}
           signedIn={!!auth.user}
           region={region} onRegion={goRegion}
+          userEmail={auth.user ? auth.user.email : ""}
           nudge={auth.user ? <EmailNudge auth={auth} /> : null}
           onJoin={gated ? () => { track("event", "signup_gate_click", { spot: "landing", action: "register" }); setGateAuth("register"); } : null}
           onSignIn={gated ? () => { track("event", "signup_gate_click", { spot: "landing", action: "login" }); setGateAuth("login"); } : null} />

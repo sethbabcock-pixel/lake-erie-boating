@@ -613,6 +613,48 @@ export async function handleAuth(request, env, url, ctx) {
     return json({ notifications: notifications.slice(0, 100) });
   }
 
+  // ---- public: request a new location (demand signal for expansion) ----
+  // Anyone can ask for a launch we don't cover yet, and optionally hand us the
+  // local webcam URL (the part we can't automate). Stored as a demand list and
+  // pinged to admins so we know where to expand next.
+  if (path === "/api/request-location" && request.method === "POST") {
+    if (!(await rateLimit(env, request, "locreq", 8, 3600))) return json({ error: "Too many requests. Try again later." }, 429);
+    const body = await request.json().catch(() => ({}));
+    const clean = (v, max) => String(v ?? "").replace(/[\u0000-\u001f]+/g, " ").trim().slice(0, max);
+    const location = clean(body.location, 120);
+    if (location.length < 2) return json({ error: "Please enter a location." }, 400);
+    const webcam = clean(body.webcam, 300);
+    const note = clean(body.note, 500);
+    const u = await userFromRequest(env, request).catch(() => null);
+    let email = clean(body.email, 254);
+    if (email && !validEmail(email)) email = ""; // keep the request, drop a bad address
+    email = email || (u && u.email) || "";
+    const rec = { location, email, webcam, note, from: (u && u.email) || null, at: new Date().toISOString() };
+    const ts = Date.now();
+    try { await env.USERS.put(`locreq:${ts}:${randHex(3)}`, JSON.stringify(rec), { expirationTtl: 180 * 86400 }); } catch (e) { /* ignore */ }
+    // KV-log always (shows in the admin notifications feed) + email admins if configured.
+    const esc = (s) => String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+    const rows = [["Location", location], ["From", email || "(not given)"], ["Webcam", webcam || "(none)"], ["Note", note || "(none)"]]
+      .map(([k, v]) => `<tr><td style="padding:2px 12px 2px 0;color:#5b6b78">${k}</td><td><b>${esc(v)}</b></td></tr>`).join("");
+    const html = `<div style="font-family:system-ui,sans-serif;color:#1a2b38"><h2 style="margin:0 0 8px">New location request</h2><table style="border-collapse:collapse;font-size:14px">${rows}</table></div>`;
+    const to = (await adminEmails(env))[0];
+    runBg(ctx, notify(env, "location_request", { location, email, webcam }, to ? { to, subject: `Location request: ${location}`, html, ttlDays: 60 } : null));
+    return json({ ok: true });
+  }
+
+  // ---- admin: location-request demand list (newest first) ----
+  if (path === "/api/admin/location-requests" && request.method === "GET") {
+    const u = await userFromRequest(env, request);
+    if (!u) return json({ error: "Not signed in." }, 401);
+    if (!isAdmin(env, u)) return json({ error: "Forbidden — not an admin account." }, 403);
+    const list = await env.USERS.list({ prefix: "locreq:", limit: 1000 });
+    const recent = list.keys.slice(-200).reverse(); // keys sort ascending by ts → newest last
+    const requests = [];
+    for (const k of recent) { const r = await env.USERS.get(k.name, "json"); if (r) requests.push(r); }
+    requests.sort((a, b) => (b.at || "").localeCompare(a.at || ""));
+    return json({ requests: requests.slice(0, 150) });
+  }
+
   // ---- first-party hit beacon (public, cookieless): counts visits/visitors ----
   if (path === "/api/hit" && (request.method === "POST" || request.method === "GET")) {
     if (env.USERS) {

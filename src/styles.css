@@ -648,6 +648,16 @@ body.has-takeover .app { background: var(--bg); border-radius: var(--r-lg) var(-
   white-space: nowrap; transition: background .15s, color .15s, border-color .15s; }
 .region-chip:hover { color: var(--text); border-color: var(--text-faint); }
 .region-chip.on { background: var(--accent); border-color: var(--accent); color: #fff; }
+/* Request-a-location card */
+.reqloc { margin-top: var(--s5); border: 1px solid var(--border); border-radius: var(--r-lg); background: var(--surface); padding: var(--s4) var(--s5); }
+.reqloc-head { display: flex; align-items: center; justify-content: space-between; gap: var(--s4); flex-wrap: wrap; }
+.reqloc-head .cbtn { white-space: nowrap; }
+.reqloc-form { margin-top: var(--s4); }
+.reqloc-form textarea.field { min-height: 64px; padding: 10px 13px; resize: vertical; line-height: 1.4; }
+.reqloc-actions { margin-top: var(--s2); }
+.reqloc .opt { font-weight: var(--fw-regular); color: var(--text-faint); text-transform: none; letter-spacing: 0; }
+.reqloc .req-star { color: var(--danger); font-style: normal; }
+.reqloc-done { color: var(--text); font-size: var(--fs-base); }
 .region { border: 1px solid var(--border); border-radius: var(--r-lg); margin-bottom: var(--s3); overflow: hidden; background: var(--surface); }
 .region-skel { height: 116px; animation: skelpulse 1.6s ease-in-out infinite; }
 @keyframes skelpulse { 0%, 100% { opacity: .5; } 50% { opacity: .8; } }

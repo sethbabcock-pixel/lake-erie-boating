@@ -148,6 +148,68 @@ function RegionDirectory({ summary, q, onSelect, deepLake, region, onRegion }) {
   );
 }
 
+// Request a water body we don't cover yet. Doubles as our expansion demand
+// signal, and collects the one thing we can't automate: the local webcam URL.
+// openToken bumps to force-open + prefill from the "near me" no-coverage funnel.
+function RequestLocation({ userEmail, openToken, prefill }) {
+  const [open, setOpen] = useState(false);
+  const [location, setLocation] = useState("");
+  const [email, setEmail] = useState(userEmail || "");
+  const [webcam, setWebcam] = useState("");
+  const [note, setNote] = useState("");
+  const [state, setState] = useState("idle"); // idle | sending | done
+  const [err, setErr] = useState("");
+  useEffect(() => { if (openToken) { setOpen(true); if (prefill) setLocation(prefill); } }, [openToken]);
+  useEffect(() => { if (userEmail && !email) setEmail(userEmail); }, [userEmail]);
+  const submit = async (e) => {
+    e.preventDefault();
+    if (location.trim().length < 2) { setErr("Please enter a location."); return; }
+    setState("sending"); setErr("");
+    try {
+      const r = await fetch("/api/request-location", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ location, email, webcam, note }),
+      });
+      const d = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(d.error || "Something went wrong. Try again.");
+      setState("done");
+    } catch (e2) { setErr(e2.message); }
+  };
+  return (
+    <section className="reqloc" id="request-location">
+      {state === "done" ? (
+        <div className="reqloc-done"><b>Request received.</b> Thanks. We log every request and use them to decide where to add water, and cameras, next.</div>
+      ) : (
+        <>
+          <div className="reqloc-head">
+            <div>
+              <h2 className="directory-title" style={{ marginBottom: 4 }}>Don't see your water?</h2>
+              <p className="directory-blurb" style={{ margin: 0 }}>Tell us where you boat. Requests drive where we expand next, and if you know the local harbor webcam, that's the piece we can't automate.</p>
+            </div>
+            {!open && <button className="cbtn" onClick={() => setOpen(true)}>Request a location</button>}
+          </div>
+          {open && (
+            <form className="reqloc-form" onSubmit={submit}>
+              <label className="acct-field"><span>Location <em className="req-star">*</em></span>
+                <input className="field" value={location} onChange={(e) => setLocation(e.target.value)} placeholder="City, lake, bay, or river (e.g. Middle River, MD)" maxLength={120} required /></label>
+              <label className="acct-field"><span>Your email <span className="opt">(optional, so we can tell you when it's live)</span></span>
+                <input className="field" type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="you@example.com" maxLength={254} /></label>
+              <label className="acct-field"><span>Local webcam URL <span className="opt">(optional)</span></span>
+                <input className="field" value={webcam} onChange={(e) => setWebcam(e.target.value)} placeholder="Link to a public harbor or marina cam" maxLength={300} /></label>
+              <label className="acct-field"><span>Anything else <span className="opt">(optional)</span></span>
+                <textarea className="field" value={note} onChange={(e) => setNote(e.target.value)} rows={2} maxLength={500} placeholder="Launch ramp, nearest buoy, whatever helps" /></label>
+              {err && <div className="modal-err">{err}</div>}
+              <div className="reqloc-actions">
+                <button className="cbtn" type="submit" disabled={state === "sending"}>{state === "sending" ? "Sending…" : "Send request"}</button>
+              </div>
+            </form>
+          )}
+        </>
+      )}
+    </section>
+  );
+}
+
 // Signed-in boaters with starred ports get their shoreline first, side-by-side.
 function MyPorts({ summary, favorites, onSelect }) {
   const mine = (favorites || []).map((id) => (summary || []).find((s) => s.id === id)).filter(Boolean);
@@ -162,9 +224,16 @@ function MyPorts({ summary, favorites, onSelect }) {
   );
 }
 
-export default function Landing({ adFree, consent, onSelect, favorites, onCookieSettings, onJoin, onSignIn, signedIn, nudge, region, onRegion }) {
+export default function Landing({ adFree, consent, onSelect, favorites, onCookieSettings, onJoin, onSignIn, signedIn, nudge, region, onRegion, userEmail }) {
   const [summary, setSummary] = useState(null);
   const [q, setQ] = useState("");
+  const [reqToken, setReqToken] = useState(0);
+  const [reqPrefill, setReqPrefill] = useState("");
+  const openRequest = (name = "") => {
+    setReqPrefill(name);
+    setReqToken((n) => n + 1);
+    setTimeout(() => document.getElementById("request-location")?.scrollIntoView({ behavior: "smooth", block: "center" }), 60);
+  };
   const deepLake = lakeParam();
   useEffect(() => {
     let alive = true;
@@ -198,6 +267,7 @@ export default function Landing({ adFree, consent, onSelect, favorites, onCookie
         {!adFree && consent === "all" && <AdSlot name="landingTop" />}
         {signedIn && <MyPorts summary={summary} favorites={favorites} onSelect={onSelect} />}
         <RegionDirectory summary={summary} q={q} onSelect={onSelect} deepLake={region ? null : deepLake} region={region} onRegion={onRegion} />
+        <RequestLocation userEmail={userEmail} openToken={reqToken} prefill={reqPrefill} />
         {!adFree && consent === "all" && <AdSlot name="landing" />}
         <footer className="meta">
           Live data from NOAA/NWS &amp; NDBC buoys, maps by Windy. A planning aid, not an official forecast or a navigation tool.
