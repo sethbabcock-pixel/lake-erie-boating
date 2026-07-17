@@ -46,6 +46,23 @@ for (const s of summary.spots) {
   console.log(`   ${String(s.level ?? "—").padEnd(7)} ${String(s.windKt ?? "—").padStart(3)}kt g${String(s.gustKt ?? "—").padStart(3)} ${String(s.waveFt ?? "—").padStart(4)}ft  ${s.name}`);
 }
 
+// Inland lake (Buckeye Lake, OH): NWS models no waves/marine-zone/buoy here, so
+// it must still return a full land forecast (wind, gusts, temps, rain, hourly,
+// week, verdict) without erroring — waves are expected blank.
+{
+  const resp = await onRequest({ request: new Request("https://shouldiboat.com/marine/conditions?spot=buckeye-lake") });
+  const d = await resp.json();
+  check("buckeye: responds 200", resp.status === 200, `status ${resp.status}`);
+  check("buckeye: hourly rows", (d.hourly?.length || 0) >= 24, `${d.hourly?.length} rows`);
+  check("buckeye: hourly has wind", d.hourly?.filter((h) => h.windKt != null).length >= 12, `${d.hourly?.filter((h) => h.windKt != null).length} rows`);
+  check("buckeye: week outlook days", (d.week?.length || 0) >= 5, `${d.week?.length} days`);
+  check("buckeye: week has wind", d.week?.every((w) => w.windKt != null));
+  check("buckeye: verdict computed", ["GO", "CAUTION", "NO-GO"].includes(d.recommendation?.level), d.recommendation?.level);
+  check("buckeye: no marine zone text", Array.isArray(d.marineForecast) && d.marineForecast.length === 0, `${d.marineForecast?.length} periods`);
+  check("buckeye: sun present", !!(d.sun && d.sun.sunrise && d.sun.sunset), `${d.sun?.sunrise} → ${d.sun?.sunset}`);
+  console.log(`   buckeye verdict ${d.recommendation?.level}: ${(d.recommendation?.reasons || []).slice(0, 3).join("; ")}`);
+}
+
 // Digest "best GO window today" per port.
 const windows = await fetchTodayWindows();
 check("windows: covers every spot", Object.keys(windows).length === summary.spots.length, `${Object.keys(windows).length} entries`);
