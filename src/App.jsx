@@ -673,7 +673,10 @@ export default function App() {
   const [consent, setConsent] = useState(getConsent());
   const chooseConsent = (c) => { try { if (c) localStorage.setItem("sib.consent", c); else localStorage.removeItem("sib.consent"); } catch (e) {} updateConsentMode(c); setConsent(c); };
   const adFree = !!(auth.user && auth.user.adFree);
-  useAdsense(consent === "all" && !adFree);
+  // Ads load for free visitors even before cookie Accept: Consent Mode defaults to
+  // denied and Google serves limited non-personalized ads (see privacy policy).
+  // Analytics still waits for Accept. Ad-free subscribers never get either.
+  useAdsense(!adFree);
   useAnalytics(consent === "all");
 
   const toggleFav = (id) => {
@@ -813,7 +816,7 @@ export default function App() {
       </header>
 
       {landing ? (
-        <Landing adFree={adFree} consent={consent} onSelect={selectLocation} favorites={auth.user ? (auth.user.favorites || []) : []}
+        <Landing adFree={adFree} onSelect={selectLocation} favorites={auth.user ? (auth.user.favorites || []) : []}
           onCookieSettings={() => chooseConsent(null)}
           signedIn={!!auth.user}
           region={region} onRegion={goRegion}
@@ -906,7 +909,7 @@ export default function App() {
 
             {/* Top ad — under the public verdict + conditions, so every visitor
                 to a /spot page (incl. signed-out SEO traffic) sees one. */}
-            {!adFree && consent === "all" && <AdSlot name="detailTop" />}
+            {!adFree && <AdSlot name="detailTop" />}
 
             {/* ── Full toolkit — free for everyone. A free account only adds
                    saved ports + alert emails, nudged softly below, not walled. ── */}
@@ -972,7 +975,7 @@ export default function App() {
             )}
 
             <GearBlock waterTempF={buoy ? buoy.waterTempF : null} airTempF={buoy ? buoy.airTempF : null} windKt={wind ? wind.speedKt : null} level={rec ? rec.level : null} />
-            {!adFree && consent === "all" && <AdSlot name="detailMid" />}
+            {!adFree && <AdSlot name="detailMid" />}
 
             <footer className="meta">
               Source: {buoy ? `Buoy ${buoy.station} · ${buoy.ageMinutes != null ? `${buoy.ageMinutes} min ago` : "latest"}` : "forecast only"}
@@ -992,7 +995,7 @@ export default function App() {
       </>
       )}
       <ConsentBanner consent={consent} onChoose={chooseConsent} />
-      <StickyFooterAd enabled={!adFree && consent === "all"} />
+      <StickyFooterAd enabled={!adFree} />
       {resetToken && <AuthModal auth={auth} initialMode="reset" resetToken={resetToken} onClose={() => setResetToken("")} />}
       {!resetToken && verifyToken && <AuthModal auth={auth} initialMode="verify" verifyToken={verifyToken} onClose={() => setVerifyToken("")} />}
       {!resetToken && !verifyToken && gateAuth && <AuthModal auth={auth} initialMode={gateAuth} spotId={!landing ? active : ""} onClose={() => setGateAuth(null)} />}

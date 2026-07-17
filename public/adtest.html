@@ -16,6 +16,9 @@
     #status.unfilled { background: #fee2e2; color: #991b1b; }
     #status.waiting { background: #fef9c3; color: #854d0e; }
     code { background: #f3f4f6; padding: 1px 5px; border-radius: 4px; }
+    .checklist { font-size: 14px; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 12px 16px; }
+    .checklist li { margin: 6px 0; }
+    #tech { font-size: 12px; color: #64748b; font-family: ui-monospace, monospace; white-space: pre-wrap; }
   </style>
 </head>
 <body>
@@ -39,6 +42,20 @@
   </div>
 
   <p class="note" id="verdict"></p>
+  <pre id="tech"></pre>
+
+  <div class="checklist" id="account" hidden>
+    <b>When status is UNFILLED, the site code is fine — Google returned no creative.</b>
+    Check in your AdSense account:
+    <ol>
+      <li><b>Sites</b> → <code>shouldiboat.com</code> must be <b>Ready</b> (not “Getting ready” / under review).</li>
+      <li><b>Ads → By ad unit</b> → units <code>9841170882</code> etc. exist and are Active.</li>
+      <li>Account not limited: complete identity / payment / tax if AdSense asks.</li>
+      <li>New units / new sites often take <b>24–48 hours</b> (sometimes longer) after Ready before fill.</li>
+      <li>Test without an ad blocker, Brave shields, or privacy DNS; try a phone on cellular.</li>
+      <li>Publisher accounts often see fewer live ads on their own devices — use this page’s test mode or a second device/browser.</li>
+    </ol>
+  </div>
 
   <script>
     (adsbygoogle = window.adsbygoogle || []).push({});
@@ -48,25 +65,43 @@
     var el = document.getElementById("unit");
     var status = document.getElementById("status");
     var verdict = document.getElementById("verdict");
+    var tech = document.getElementById("tech");
+    var account = document.getElementById("account");
     var tries = 0;
+
+    function snapshot() {
+      return {
+        adStatus: el.getAttribute("data-ad-status"),
+        adsbygoogleStatus: el.getAttribute("data-adsbygoogle-status"),
+        width: el.offsetWidth,
+        height: el.offsetHeight,
+        iframeCount: el.querySelectorAll("iframe").length,
+      };
+    }
+
     var timer = setInterval(function () {
       tries++;
       var s = el.getAttribute("data-ad-status");
+      var done = el.getAttribute("data-adsbygoogle-status") === "done";
+      tech.textContent = JSON.stringify(snapshot(), null, 2);
+
       if (s === "filled") {
         clearInterval(timer);
         status.className = "filled";
         status.textContent = "✅ FILLED — AdSense served an ad here. Rendering + serving both work.";
-        verdict.innerHTML = "Since this fills but the main site looks blank to you, the cause is on the site side: most likely you had not <b>accepted the cookie banner</b> in that browser (ads only render after Accept), or you were viewing your own ads (Google hides <i>live</i> ads from the publisher — normal).";
-      } else if (s === "unfilled") {
+        verdict.innerHTML = "Since this fills but the main site looks blank to you, check: (1) ad blocker off, (2) you are not on an ad-free account, (3) live ads can be suppressed on the publisher’s own device — try a second browser/device.";
+      } else if (s === "unfilled" || (done && tries >= 3 && !s)) {
         clearInterval(timer);
         status.className = "unfilled";
         status.textContent = "⚠️ UNFILLED — the library loaded and requested, but Google returned no ad.";
-        verdict.innerHTML = "Rendering works; the account/unit just is not serving yet. Common on a freshly-approved account: brand-new units can take a few hours (up to ~24–48h) to begin filling, and a zero-history site gets low fill. Not a code problem.";
+        verdict.innerHTML = "This is <b>not a site-code problem</b>. We measured empty Google responses (<code>&lt;html&gt;&lt;body/&gt;&lt;/html&gt;</code>) for this unit. Fill starts only when the AdSense site is <b>Ready</b> and inventory is available.";
+        account.hidden = false;
       } else if (tries > 15) {
         clearInterval(timer);
         status.className = "unfilled";
         status.textContent = "❌ NO RESPONSE — the ad unit never reported a status.";
-        verdict.innerHTML = "The AdSense script likely did not load/run. Usual causes: an <b>ad blocker</b> or privacy DNS (uBlock, Brave shields, Pi-hole) on this device/network, or the library being blocked. Try a different network with all blockers off.";
+        verdict.innerHTML = "The AdSense script likely did not load/run. Usual causes: an <b>ad blocker</b> or privacy DNS (uBlock, Brave shields, Pi-hole) on this device/network. Try a different network with all blockers off.";
+        account.hidden = false;
       }
     }, 1000);
   </script>
