@@ -1,0 +1,74 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="robots" content="noindex,nofollow" />
+  <title>AdSense render test — shouldiboat.com</title>
+  <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-9213366013949616" crossorigin="anonymous"></script>
+  <style>
+    body { font-family: system-ui, sans-serif; max-width: 760px; margin: 24px auto; padding: 0 16px; line-height: 1.5; color: #111; background: #fff; }
+    h1 { font-size: 20px; }
+    .note { color: #555; font-size: 14px; }
+    .adbox { border: 1px dashed #bbb; margin: 16px 0; min-height: 100px; padding: 8px; }
+    #status { font-weight: 600; padding: 10px 12px; border-radius: 8px; background: #f3f4f6; }
+    #status.filled { background: #dcfce7; color: #065f46; }
+    #status.unfilled { background: #fee2e2; color: #991b1b; }
+    #status.waiting { background: #fef9c3; color: #854d0e; }
+    code { background: #f3f4f6; padding: 1px 5px; border-radius: 4px; }
+  </style>
+</head>
+<body>
+  <h1>AdSense render test</h1>
+  <p class="note">
+    Standalone page — <b>no cookie-consent gate, no React, no ad-free check</b>. It loads the AdSense
+    library and requests the <code>detailTop</code> unit in <b>test mode</b> (<code>data-adtest="on"</code>,
+    so no real impressions and no policy risk). The box below should fill with a Google <i>test</i> ad.
+  </p>
+
+  <div id="status" class="waiting">Requesting a test ad… (give it up to ~15s)</div>
+
+  <div class="adbox">
+    <ins id="unit" class="adsbygoogle"
+         style="display:block"
+         data-ad-client="ca-pub-9213366013949616"
+         data-ad-slot="9841170882"
+         data-ad-format="auto"
+         data-full-width-responsive="true"
+         data-adtest="on"></ins>
+  </div>
+
+  <p class="note" id="verdict"></p>
+
+  <script>
+    (adsbygoogle = window.adsbygoogle || []).push({});
+
+    // The <ins> gets data-ad-status="filled" | "unfilled" once Google responds.
+    // Poll it and report a plain-language verdict so the result is unambiguous.
+    var el = document.getElementById("unit");
+    var status = document.getElementById("status");
+    var verdict = document.getElementById("verdict");
+    var tries = 0;
+    var timer = setInterval(function () {
+      tries++;
+      var s = el.getAttribute("data-ad-status");
+      if (s === "filled") {
+        clearInterval(timer);
+        status.className = "filled";
+        status.textContent = "✅ FILLED — AdSense served an ad here. Rendering + serving both work.";
+        verdict.innerHTML = "Since this fills but the main site looks blank to you, the cause is on the site side: most likely you had not <b>accepted the cookie banner</b> in that browser (ads only render after Accept), or you were viewing your own ads (Google hides <i>live</i> ads from the publisher — normal).";
+      } else if (s === "unfilled") {
+        clearInterval(timer);
+        status.className = "unfilled";
+        status.textContent = "⚠️ UNFILLED — the library loaded and requested, but Google returned no ad.";
+        verdict.innerHTML = "Rendering works; the account/unit just is not serving yet. Common on a freshly-approved account: brand-new units can take a few hours (up to ~24–48h) to begin filling, and a zero-history site gets low fill. Not a code problem.";
+      } else if (tries > 15) {
+        clearInterval(timer);
+        status.className = "unfilled";
+        status.textContent = "❌ NO RESPONSE — the ad unit never reported a status.";
+        verdict.innerHTML = "The AdSense script likely did not load/run. Usual causes: an <b>ad blocker</b> or privacy DNS (uBlock, Brave shields, Pi-hole) on this device/network, or the library being blocked. Try a different network with all blockers off.";
+      }
+    }, 1000);
+  </script>
+</body>
+</html>
