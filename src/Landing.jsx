@@ -176,6 +176,7 @@ export default function Landing({ adFree, consent, onSelect, favorites, onCookie
           </div>
         )}
         {nudge}
+        {!adFree && consent === "all" && <AdSlot name="landingTop" />}
         {signedIn && <MyPorts summary={summary} favorites={favorites} onSelect={onSelect} />}
         <RegionDirectory summary={summary} q={q} onSelect={onSelect} deepLake={deepLake} />
         {!adFree && consent === "all" && <AdSlot name="landing" />}

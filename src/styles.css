@@ -322,6 +322,17 @@ details.card[open] > summary { margin-bottom: var(--s3); }
 .gear-cta { font-size: var(--fs-xs); color: var(--accent); font-weight: var(--fw-semibold); margin-top: 2px; }
 .adwrap { margin-bottom: var(--s4); text-align: center; min-height: 1px; }
 .adlabel { display: block; font-size: 10px; text-transform: uppercase; letter-spacing: var(--tracking-wide); color: var(--text-faint); margin-bottom: 4px; }
+/* Sticky footer (anchor) ad — pinned bottom, above the fold-line, dismissible. */
+.sticky-ad { position: fixed; left: 0; right: 0; bottom: 0; z-index: 90;
+  height: 60px; background: var(--surface); border-top: 1px solid var(--border-strong);
+  box-shadow: var(--shadow-lg); display: flex; align-items: center; justify-content: center; overflow: hidden; }
+.sticky-ad .adsbygoogle { max-width: 970px; }
+.sticky-ad-close { position: absolute; top: -11px; right: 8px; z-index: 1;
+  width: 22px; height: 22px; border-radius: 50%; border: 1px solid var(--border-strong);
+  background: var(--surface); color: var(--text-muted); font-size: 15px; line-height: 1; cursor: pointer;
+  display: flex; align-items: center; justify-content: center; box-shadow: var(--shadow-lg); }
+.sticky-ad-close:hover { color: var(--text); border-color: var(--accent); }
+@media (min-width: 720px) { .sticky-ad { height: 90px; } }
 .consent { position: fixed; left: 50%; bottom: var(--s3); transform: translateX(-50%); z-index: 100;
   width: min(680px, calc(100% - 24px)); display: flex; align-items: center; gap: var(--s4); flex-wrap: wrap;
   justify-content: space-between; background: var(--surface); border: 1px solid var(--border-strong);

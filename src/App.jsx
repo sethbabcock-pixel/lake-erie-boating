@@ -2,7 +2,7 @@ import React, { useEffect, useRef, useState } from "react";
 import Cams from "./Cams.jsx";
 import WxIcon from "./WxIcon.jsx";
 import { IconStar, IconCheck, IconClock, IconNoGo, IconAlert, IconSunrise, IconSunset, IconDoc, IconRefresh } from "./icons.jsx";
-import { useAdsense, useAnalytics, getConsent, updateConsentMode, AdSlot, GearBlock, ConsentBanner, track } from "./monetize.jsx";
+import { useAdsense, useAnalytics, getConsent, updateConsentMode, AdSlot, GearBlock, ConsentBanner, StickyFooterAd, track } from "./monetize.jsx";
 import { useAuth, Account, AuthModal } from "./auth.jsx";
 import Takeover from "./Takeover.jsx";
 import Landing from "./Landing.jsx";
@@ -973,6 +973,7 @@ export default function App() {
       </>
       )}
       <ConsentBanner consent={consent} onChoose={chooseConsent} />
+      <StickyFooterAd enabled={!adFree && consent === "all"} />
       {resetToken && <AuthModal auth={auth} initialMode="reset" resetToken={resetToken} onClose={() => setResetToken("")} />}
       {!resetToken && verifyToken && <AuthModal auth={auth} initialMode="verify" verifyToken={verifyToken} onClose={() => setVerifyToken("")} />}
       {!resetToken && !verifyToken && gateAuth && <AuthModal auth={auth} initialMode={gateAuth} spotId={!landing ? active : ""} onClose={() => setGateAuth(null)} />}
