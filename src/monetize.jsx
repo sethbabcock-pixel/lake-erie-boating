@@ -11,9 +11,9 @@ export const ADSENSE = {
   // copy its 10-digit slot ID here. Empty means that placement renders nothing,
   // so you can switch them on one at a time. See MONETIZATION.md.
   slots: {
-    detailTop: "", // spot page, right under the current-conditions row (every /spot visitor sees it — highest value)
-    detailMid: "", // spot page, lower in the toolkit
-    landing: "",   // homepage, under the port directory
+    detailTop: "9841170882", // spot page, right under the current-conditions row (every /spot visitor sees it — highest value)
+    detailMid: "8915670243", // spot page, lower in the toolkit
+    landing: "3032908319",   // homepage, under the port directory
   },
 };
 export const AMAZON_TAG = "shouldiboat-20"; // Amazon Associates tag (lights up the Gear block)
