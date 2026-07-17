@@ -888,7 +888,9 @@ export async function fetchSummary() {
     const precipPct = Math.max(g?.precipPct.get(nowH) ?? 0, g?.precipPct.get(nowH + 1) ?? 0);
     const thunder = g?.thunder.get(nowH) === true || g?.thunder.get(nowH + 1) === true;
     const level = windKt == null && waveFt == null ? null : hourRisk(windKt, precipPct, thunder ? "thunderstorms" : "", waveFt);
-    return { id, name: s.name, lake: s.lake || "Lake Erie", level, windKt, gustKt, dir, waveFt, periodSec };
+    // lat/lon travel with each spot so the homepage can find the nearest launch
+    // from a ZIP or the browser's location without a second request.
+    return { id, name: s.name, lake: s.lake || "Lake Erie", lat: s.lat, lon: s.lon, level, windKt, gustKt, dir, waveFt, periodSec };
   });
   return { spots, updatedAt: new Date().toISOString() };
 }

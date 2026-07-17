@@ -36,7 +36,9 @@ function withSecurityHeaders(resp) {
   h.set("X-Content-Type-Options", "nosniff");
   h.set("X-Frame-Options", "SAMEORIGIN");
   h.set("Referrer-Policy", "strict-origin-when-cross-origin");
-  h.set("Permissions-Policy", "geolocation=(), microphone=(), camera=()");
+  // Allow first-party geolocation (the "find the nearest launch" button); still
+  // deny mic/camera. (self) means our own origin may prompt, third parties can't.
+  h.set("Permissions-Policy", "geolocation=(self), microphone=(), camera=()");
   h.set("Content-Security-Policy", "frame-ancestors 'self'; base-uri 'self'; object-src 'none'");
   h.set("Content-Security-Policy-Report-Only", CSP_REPORT_ONLY);
   return new Response(resp.body, { status: resp.status, statusText: resp.statusText, headers: h });

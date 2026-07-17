@@ -294,14 +294,14 @@ async function adminEmails(env) {
 // Footer for non-essential (relationship/marketing) email only — NOT for
 // transactional mail like verification, password reset, or receipts.
 export const emailFooter = (unsubUrl) => unsubUrl ? `<p style="color:#99a;font-size:12px;margin-top:24px;font-family:system-ui,sans-serif">You're receiving this because you have a shouldiboat.com account. <a href="${unsubUrl}" style="color:#99a">Unsubscribe from non-essential emails</a>.</p>` : "";
-const welcomeHtml = (unsubUrl) => `<div style="font-family:system-ui,sans-serif"><h2>Welcome aboard</h2><p>Thanks for joining <b>shouldiboat.com</b> — your quick GO / CAUTION / NO-GO call for Great Lakes boating.</p><ul><li>Save your favorite launch spots</li><li>Set comfort limits tuned to your boat</li><li>Go ad-free anytime for $2.99/mo</li></ul><p><a href="https://shouldiboat.com" style="display:inline-block;background:#008BA8;color:#fff;padding:10px 18px;border-radius:8px;text-decoration:none">Open shouldiboat.com</a></p></div>${emailFooter(unsubUrl)}`;
-const adFreeHtml = () => `<div style="font-family:system-ui,sans-serif"><h2>You're ad-free</h2><p>Thanks for supporting shouldiboat.com — your subscription is active and the ads are gone. You can manage or cancel anytime from your <a href="https://shouldiboat.com/account">account</a>.</p></div>`;
+const welcomeHtml = (unsubUrl) => `<div style="font-family:system-ui,sans-serif"><h2>Welcome aboard</h2><p>Thanks for joining <b>shouldiboat.com</b>, your quick GO / CAUTION / NO-GO call for boating conditions.</p><ul><li>Save your favorite launch spots</li><li>Set comfort limits tuned to your boat</li><li>Go ad-free anytime for $2.99/mo</li></ul><p><a href="https://shouldiboat.com" style="display:inline-block;background:#008BA8;color:#fff;padding:10px 18px;border-radius:8px;text-decoration:none">Open shouldiboat.com</a></p></div>${emailFooter(unsubUrl)}`;
+const adFreeHtml = () => `<div style="font-family:system-ui,sans-serif"><h2>You're ad-free</h2><p>Thanks for supporting shouldiboat.com. Your subscription is active and the ads are gone. You can manage or cancel anytime from your <a href="https://shouldiboat.com/account">account</a>.</p></div>`;
 const verifyHtml = (link) => `<div style="font-family:system-ui,-apple-system,sans-serif;max-width:520px;color:#1a2b38">
   <h2 style="margin:0 0 10px">Confirm your email address</h2>
-  <p style="line-height:1.55;margin:0 0 14px">Thanks for creating a <b>shouldiboat.com</b> account — the quick GO / CAUTION / NO-GO call for boating conditions across the Great Lakes. To finish setting up your account, please confirm this is your email address.</p>
+  <p style="line-height:1.55;margin:0 0 14px">Thanks for creating a <b>shouldiboat.com</b> account, the quick GO / CAUTION / NO-GO call for boating conditions. To finish setting up your account, please confirm this is your email address.</p>
   <p style="margin:18px 0"><a href="${link}" style="display:inline-block;background:#008BA8;color:#fff;padding:12px 22px;border-radius:8px;text-decoration:none;font-weight:600">Confirm my email</a></p>
   <p style="line-height:1.5;color:#5b6b78;font-size:14px;margin:0 0 12px">Or paste this link into your browser:<br><a href="${link}" style="color:#008BA8;word-break:break-all">${link}</a></p>
-  <p style="line-height:1.5;color:#5b6b78;font-size:14px;margin:0">This link expires in 24 hours. If you didn't create a shouldiboat.com account, you can safely ignore this email — no account is activated without confirmation.</p>
+  <p style="line-height:1.5;color:#5b6b78;font-size:14px;margin:0">This link expires in 24 hours. If you didn't create a shouldiboat.com account, you can safely ignore this email. No account is activated without confirmation.</p>
   <hr style="border:none;border-top:1px solid #e3e9ee;margin:22px 0">
   <p style="color:#8a99a6;font-size:12px;margin:0"><a href="https://shouldiboat.com" style="color:#8a99a6">shouldiboat.com</a> · Great Lakes boating conditions</p>
 </div>`;
@@ -457,7 +457,7 @@ export async function handleAuth(request, env, url, ctx) {
           to: e, subject: "Confirm your email · shouldiboat.com",
           html: verifyHtml(link), ttlDays: 7,
         });
-        if (!r.emailSent) return json({ error: "We couldn't send the email just now — please try again in a moment." }, 502);
+        if (!r.emailSent) return json({ error: "We couldn't send the email just now. Please try again in a moment." }, 502);
       }
     }
     return json({ ok: true }); // don't reveal whether the account exists/needs it
@@ -533,7 +533,7 @@ export async function handleAuth(request, env, url, ctx) {
     const hash = await pbkdf2(password, user.salt, iter);
     if (!timingSafeEqual(hash, user.pass)) return json({ error: "Invalid email or password." }, 401);
     if (user.emailVerified === false) // explicit false = newer unverified account (old accounts grandfathered)
-      return json({ error: "Please confirm your email first — check your inbox for the verification link.", needsVerification: true, email: user.email }, 403);
+      return json({ error: "Please confirm your email first. Check your inbox for the verification link.", needsVerification: true, email: user.email }, 403);
     // Transparently upgrade the password hash to the current work factor.
     if (iter < PBKDF2_ITERATIONS) {
       user.salt = randHex(16);
@@ -642,6 +642,32 @@ export async function handleAuth(request, env, url, ctx) {
     return json({ ok: true });
   }
 
+  // ---- public: ZIP -> lat/lon (for "find the nearest launch") ----
+  // Uses the free, key-less Zippopotam service, cached in KV so repeat lookups
+  // are instant and we stay gentle on it. Fails soft — the UI just shows a note.
+  if (path === "/api/geocode" && request.method === "GET") {
+    const zip = (url.searchParams.get("zip") || "").trim();
+    if (!/^\d{5}$/.test(zip)) return json({ error: "Enter a 5-digit US ZIP code." }, 400);
+    if (!(await rateLimit(env, request, "geocode", 40, 3600))) return json({ error: "Too many lookups. Try again later." }, 429);
+    const cacheKey = `geo:zip:${zip}`;
+    const cached = await env.USERS.get(cacheKey, "json").catch(() => null);
+    if (cached) return json(cached);
+    try {
+      const resp = await fetch(`https://api.zippopotam.us/us/${zip}`, { signal: AbortSignal.timeout(6000), headers: { "User-Agent": "shouldiboat.com" } });
+      if (!resp.ok) return json({ error: "That ZIP code wasn't found." }, 404);
+      const d = await resp.json();
+      const p = (d.places || [])[0];
+      const lat = p && parseFloat(p.latitude), lon = p && parseFloat(p.longitude);
+      if (!p || Number.isNaN(lat) || Number.isNaN(lon)) return json({ error: "That ZIP code wasn't found." }, 404);
+      const place = `${p["place name"] || ""}, ${p["state abbreviation"] || p.state || ""}`.replace(/^,\s*|,\s*$/g, "");
+      const out = { zip, lat, lon, place };
+      await env.USERS.put(cacheKey, JSON.stringify(out), { expirationTtl: 30 * 86400 }).catch(() => {});
+      return json(out);
+    } catch (e) {
+      return json({ error: "Couldn't look up that ZIP right now." }, 502);
+    }
+  }
+
   // ---- admin: location-request demand list (newest first) ----
   if (path === "/api/admin/location-requests" && request.method === "GET") {
     const u = await userFromRequest(env, request);
@@ -737,7 +763,7 @@ export async function handleAuth(request, env, url, ctx) {
     // POST: either email a password-reset link, or toggle account flags.
     const body = await request.json().catch(() => ({}));
     if (body.action === "sendReset") {
-      if (!target.pass) return json({ error: "This user signs in with Google — no password to reset." }, 400);
+      if (!target.pass) return json({ error: "This user signs in with Google, so there's no password to reset." }, 400);
       const token = randHex(20);
       await env.USERS.put(`reset:${token}`, target.email, { expirationTtl: 3600 });
       const link = `${siteBase(env, url)}/?reset=${token}`;
@@ -774,7 +800,7 @@ export async function handleAuth(request, env, url, ctx) {
     const buf = await request.arrayBuffer();
     if (!buf.byteLength) return json({ error: "Empty upload." }, 400);
     const cap = isVideo ? 12 * 1024 * 1024 : 4 * 1024 * 1024;
-    if (buf.byteLength > cap) return json({ error: isVideo ? "Video too large — max 12 MB (use a short, compressed loop, or host on Cloudflare Stream)." : "Image too large — max 4 MB." }, 413);
+    if (buf.byteLength > cap) return json({ error: isVideo ? "Video too large: max 12 MB (use a short, compressed loop, or host on Cloudflare Stream)." : "Image too large: max 4 MB." }, 413);
     const id = randHex(8);
     await env.USERS.put(`asset:${id}`, buf);
     await env.USERS.put(`asset:${id}:ct`, ct);

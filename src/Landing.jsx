@@ -7,6 +7,15 @@ import { REGIONS, LAKE_ORDER } from "./regions.js";
 
 const vclass = (v) => (v === "NO-GO" ? "nogo" : v === "CAUTION" ? "caution" : v === "GO" ? "go" : "unknown");
 
+// Great-circle miles between two {lat, lon} points (nearest-launch ranking).
+const haversineMi = (a, b) => {
+  const R = 3958.8, toRad = (d) => (d * Math.PI) / 180;
+  const dLat = toRad(b.lat - a.lat), dLon = toRad(b.lon - a.lon);
+  const s = Math.sin(dLat / 2) ** 2 + Math.cos(toRad(a.lat)) * Math.cos(toRad(b.lat)) * Math.sin(dLon / 2) ** 2;
+  return 2 * R * Math.asin(Math.sqrt(s));
+};
+const COVERAGE_MI = 75; // beyond this, we treat the area as "not covered yet"
+
 function StatusChip({ level }) {
   return <span className={`loc-status ${level ? vclass(level) : "unknown"}`}>{level || "—"}</span>;
 }
@@ -148,6 +157,77 @@ function RegionDirectory({ summary, q, onSelect, deepLake, region, onRegion }) {
   );
 }
 
+// Find the nearest covered launch from the browser's location or a US ZIP.
+// When nothing's within range it funnels straight into a location request.
+function NearestFinder({ summary, onSelect, onRequest }) {
+  const [zip, setZip] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState("");
+  const [result, setResult] = useState(null); // { label, near:[{s,mi}], covered, nearest }
+  const withCoords = (summary || []).filter((s) => s.lat != null && s.lon != null);
+  const findFrom = (lat, lon, label) => {
+    if (!withCoords.length) { setErr("Still loading conditions. Try again in a second."); return; }
+    const ranked = withCoords.map((s) => ({ s, mi: haversineMi({ lat, lon }, s) })).sort((a, b) => a.mi - b.mi);
+    const near = ranked.filter((r) => r.mi <= COVERAGE_MI).slice(0, 3);
+    setErr("");
+    setResult({ label, near, covered: near.length > 0, nearest: ranked[0] });
+  };
+  const useMyLocation = () => {
+    if (!navigator.geolocation) { setErr("Your browser can't share location. Try a ZIP code."); return; }
+    setBusy(true); setErr("");
+    navigator.geolocation.getCurrentPosition(
+      (pos) => { setBusy(false); findFrom(pos.coords.latitude, pos.coords.longitude, "your location"); },
+      (e) => { setBusy(false); setErr(e.code === 1 ? "Location permission denied. Try a ZIP code instead." : "Couldn't get your location. Try a ZIP code."); },
+      { timeout: 8000, maximumAge: 300000 },
+    );
+  };
+  const lookupZip = async (e) => {
+    e.preventDefault();
+    if (!/^\d{5}$/.test(zip.trim())) { setErr("Enter a 5-digit ZIP code."); return; }
+    setBusy(true); setErr("");
+    try {
+      const r = await fetch(`/api/geocode?zip=${zip.trim()}`);
+      const d = await r.json();
+      if (!r.ok) throw new Error(d.error || "Couldn't look up that ZIP.");
+      findFrom(d.lat, d.lon, d.place || `ZIP ${d.zip}`);
+    } catch (e2) { setErr(e2.message); } finally { setBusy(false); }
+  };
+  return (
+    <section className="nearby-finder">
+      <h2 className="directory-title" style={{ margin: 0 }}>Nearest launch to you</h2>
+      <div className="nf-controls">
+        <button className="cbtn ghost" onClick={useMyLocation} disabled={busy}>📍 Use my location</button>
+        <span className="nf-or">or</span>
+        <form className="nf-zip" onSubmit={lookupZip}>
+          <input className="field" inputMode="numeric" pattern="\d*" maxLength={5} value={zip}
+            onChange={(e) => setZip(e.target.value.replace(/\D/g, ""))} placeholder="ZIP code" aria-label="ZIP code" />
+          <button className="cbtn" type="submit" disabled={busy}>Go</button>
+        </form>
+      </div>
+      {err && <div className="modal-err" style={{ marginTop: 8 }}>{err}</div>}
+      {result && result.covered && (
+        <div className="nf-results">
+          <p className="acct-note" style={{ margin: "8px 0 6px" }}>Closest to {result.label}:</p>
+          <div className="loc-grid">
+            {result.near.map(({ s, mi }) => (
+              <button key={s.id} className="loc-card" onClick={() => onSelect(s.id)}>
+                <div className="loc-card-top"><span className="loc-name">{s.name}</span><StatusChip level={s.level} /></div>
+                <div className="loc-card-meta">{Math.round(mi)} mi away · {s.lake}</div>
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+      {result && !result.covered && (
+        <div className="nf-nocover">
+          <p>No covered water within {COVERAGE_MI} miles of {result.label}{result.nearest ? ` (closest is ${result.nearest.s.name}, ${Math.round(result.nearest.mi)} mi)` : ""}. We're expanding, so tell us where you boat.</p>
+          <button className="cbtn" onClick={() => onRequest(result.label && result.label !== "your location" ? result.label : "")}>Request coverage here</button>
+        </div>
+      )}
+    </section>
+  );
+}
+
 // Request a water body we don't cover yet. Doubles as our expansion demand
 // signal, and collects the one thing we can't automate: the local webcam URL.
 // openToken bumps to force-open + prefill from the "near me" no-coverage funnel.
@@ -249,6 +329,7 @@ export default function Landing({ adFree, consent, onSelect, favorites, onCookie
         <SplashSelector q={q} setQ={setQ} summary={summary} onSelect={onSelect} favorites={favorites} />
       </Takeover>
       <main className="app">
+        <NearestFinder summary={summary} onSelect={onSelect} onRequest={openRequest} />
         {onJoin && (
           <div className="joinstrip">
             <span><b>Every port's verdict is below, free.</b> Create an account for the hour-by-hour picture, live cams &amp; “be back in by” times.</span>
