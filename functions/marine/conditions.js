@@ -90,6 +90,13 @@ export const SPOTS = {
   marquette: { name: "Marquette", lat: 46.54, lon: -87.38, zone: "LSZ249", office: "MQT", buoys: ["45004"], lake: "Lake Superior" },
   houghton: { name: "Houghton / Keweenaw", lat: 47.12, lon: -88.57, zone: "LSZ267", office: "MQT", buoys: [], lake: "Lake Superior" },
   "grand-marais": { name: "Grand Marais, MN", lat: 47.75, lon: -90.33, zone: "LSZ140", office: "DLH", buoys: [], lake: "Lake Superior" },
+
+  // ── Beyond the Great Lakes: coastal / tidal waters. Same NWS grid + marine
+  // zone + NDBC pipeline — the water body (`lake`) just needs a WATER_CENTERS
+  // entry so a seaward wave cell gets sampled. Zone/office/buoy IDs are the
+  // NWS/NDBC identifiers for each area; verify against live data when adding more.
+  "middle-river": { name: "Middle River / Essex, MD", lat: 39.31, lon: -76.40, zone: "ANZ531", office: "LWX", buoys: ["FSKM2", "44062"], lake: "Chesapeake Bay" },
+  "bath-nc": { name: "Bath / Pamlico River, NC", lat: 35.44, lon: -76.75, zone: "AMZ137", office: "MHX", buoys: [], lake: "Pamlico Sound" },
 };
 
 const json = (obj, status = 200) =>
@@ -296,27 +303,27 @@ async function fetchGridAt(lat, lon) {
 }
 
 // Launch coords sit on the shoreline, whose grid cell is often a LAND cell
-// with no wave layers. Sample a touch lakeward instead — wind/precip barely
+// with no wave layers. Sample a touch seaward instead — wind/precip barely
 // change over ~3 km, and the marine cell carries waves. Land cells can run a
 // few cells deep off harbors (Port Clinton's did), so step progressively
 // farther until a cell carries waves; keep the NEAREST cell's wind/precip and
 // graft the wave layers from the marine cell, since wind barely changes over
 // a few km but waves only exist over water.
-function lakewardPoint(spot, stepDeg) {
-  const c = LAKE_CENTERS[spot.lake || "Lake Erie"];
-  if (!c) return { lat: round(spot.lat, 4), lon: round(spot.lon, 4) }; // inland lake: no marine cell to reach toward — sample at the point
+function seawardPoint(spot, stepDeg) {
+  const c = WATER_CENTERS[spot.lake || "Lake Erie"];
+  if (!c) return { lat: round(spot.lat, 4), lon: round(spot.lon, 4) }; // inland: no marine cell to reach toward — sample at the point
   const dLat = c.lat - spot.lat, dLon = c.lon - spot.lon;
   const len = Math.hypot(dLat, dLon) || 1;
   return { lat: round(spot.lat + (dLat / len) * stepDeg, 4), lon: round(spot.lon + (dLon / len) * stepDeg, 4) };
 }
 async function fetchSpotGrid(spot) {
-  // Great Lakes: nudge lakeward until we hit a marine cell that carries waves.
-  // Inland lakes have no wave grid, so just sample the point once (wind/gusts/
-  // precip/temp are all present on land; waves stay blank).
-  const inland = !LAKE_CENTERS[spot.lake || "Lake Erie"];
+  // Open water (lakes, bays, sounds): nudge seaward until we hit a marine cell
+  // that carries waves. Inland waters have no wave grid, so just sample the
+  // point once (wind/gusts/precip/temp are all present on land; waves stay blank).
+  const inland = !WATER_CENTERS[spot.lake || "Lake Erie"];
   let base = null;
   for (const step of (inland ? [0] : [0.035, 0.1, 0.22])) {
-    const p = lakewardPoint(spot, step);
+    const p = seawardPoint(spot, step);
     const g = await fetchGridAt(p.lat, p.lon);
     if (!g) continue;
     if (!base) base = g;
@@ -575,18 +582,24 @@ function windRead(dirCompass) {
   return r ? { dir: dirCompass, ...r } : null;
 }
 
-// ── Port-aware wind read for the other lakes ─────────────────────────────────
+// ── Port-aware wind read for waters other than Lake Erie ─────────────────────
 // The curated WIND_READS above are written for Lake Erie's Ohio/PA shore.
 // Elsewhere we derive onshore / offshore / cross-shore from geometry: the
-// bearing from the port toward the middle of its lake is "lakeward" — wind
-// blowing FROM lakeward is onshore (chop stacks at the launch), FROM the
+// bearing from the port toward the middle of its water body is "seaward" — wind
+// blowing FROM seaward is onshore (chop stacks at the launch), FROM the
 // opposite is offshore (deceptively flat at the ramp), the rest is cross-shore.
-const LAKE_CENTERS = {
-  "Lake Erie": { lat: 42.2, lon: -81.2 }, // used by lakewardPoint (wind reads use the curated table)
+// A body listed here is treated as open water (a lakeward/seaward wave cell is
+// sampled); a body NOT listed is treated as inland (waves stay blank). This is
+// what lets the engine reach past the Great Lakes to coastal bays and sounds.
+const WATER_CENTERS = {
+  "Lake Erie": { lat: 42.2, lon: -81.2 }, // used by seawardPoint (wind reads use the curated table)
   "Lake Ontario": { lat: 43.7, lon: -77.9 },
   "Lake Huron": { lat: 44.8, lon: -82.4 },
   "Lake Michigan": { lat: 43.8, lon: -87.0 },
   "Lake Superior": { lat: 47.7, lon: -87.5 },
+  // Coastal / tidal waters (NWS models waves + marine zones here too).
+  "Chesapeake Bay": { lat: 38.7, lon: -76.4 },
+  "Pamlico Sound": { lat: 35.35, lon: -75.95 },
 };
 const COMPASS_16 = ["N","NNE","NE","ENE","E","ESE","SE","SSE","S","SSW","SW","WSW","W","WNW","NW","NNW"];
 const compassToDeg = (c) => { const i = COMPASS_16.indexOf(c); return i < 0 ? null : i * 22.5; };
@@ -600,11 +613,11 @@ function bearingDeg(lat1, lon1, lat2, lon2) {
 function windReadFor(spot, dirCompass) {
   const lake = spot.lake || "Lake Erie";
   if (lake === "Lake Erie") return windRead(dirCompass); // curated south-shore reads
-  const center = LAKE_CENTERS[lake];
+  const center = WATER_CENTERS[lake];
   const windDeg = compassToDeg(dirCompass);
   if (!center || windDeg == null) return null;
-  const lakeward = bearingDeg(spot.lat, spot.lon, center.lat, center.lon); // wind FROM here = onshore
-  let diff = Math.abs(windDeg - lakeward);
+  const seaward = bearingDeg(spot.lat, spot.lon, center.lat, center.lon); // wind FROM here = onshore
+  let diff = Math.abs(windDeg - seaward);
   if (diff > 180) diff = 360 - diff;
   if (diff <= 56.25) {
     return { dir: dirCompass, tone: "caution", short: `${dirCompass} onshore, chop stacks up at the launch`,

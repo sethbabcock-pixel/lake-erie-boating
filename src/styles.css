@@ -641,6 +641,13 @@ body.has-takeover .app { background: var(--bg); border-radius: var(--r-lg) var(-
 
 .directory { padding-top: var(--s5); }
 .directory-title { font-size: var(--fs-xl); font-weight: var(--fw-bold); margin: 0 0 var(--s4); color: var(--text); }
+.directory-blurb { margin: calc(-1 * var(--s3)) 0 var(--s4); color: var(--text-muted); font-size: var(--fs-sm); max-width: 60ch; }
+.region-nav { display: flex; flex-wrap: wrap; gap: var(--s2); margin: 0 0 var(--s4); }
+.region-chip { display: inline-flex; align-items: center; padding: 6px 14px; border-radius: 999px; border: 1px solid var(--border);
+  background: var(--surface); color: var(--text-muted); font-size: var(--fs-sm); font-weight: var(--fw-semibold); text-decoration: none;
+  white-space: nowrap; transition: background .15s, color .15s, border-color .15s; }
+.region-chip:hover { color: var(--text); border-color: var(--text-faint); }
+.region-chip.on { background: var(--accent); border-color: var(--accent); color: #fff; }
 .region { border: 1px solid var(--border); border-radius: var(--r-lg); margin-bottom: var(--s3); overflow: hidden; background: var(--surface); }
 .region-skel { height: 116px; animation: skelpulse 1.6s ease-in-out infinite; }
 @keyframes skelpulse { 0%, 100% { opacity: .5; } 50% { opacity: .8; } }

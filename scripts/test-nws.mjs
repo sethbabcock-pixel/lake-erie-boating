@@ -53,6 +53,20 @@ for (const s of summary.spots) {
   console.log(`   ${String(s.level ?? "—").padEnd(7)} ${String(s.windKt ?? "—").padStart(3)}kt g${String(s.gustKt ?? "—").padStart(3)} ${String(s.waveFt ?? "—").padStart(4)}ft  ${s.name}`);
 }
 
+// Beyond the Great Lakes: coastal / tidal spots must still return a full land
+// forecast + verdict off the same pipeline (waves optional — some estuary/river
+// cells aren't wave-modeled, which is expected to degrade gracefully, not error).
+for (const spot of ["middle-river", "bath-nc"]) {
+  const resp = await onRequest({ request: new Request(`https://shouldiboat.com/marine/conditions?spot=${spot}`) });
+  const d = await resp.json();
+  check(`${spot}: responds 200`, resp.status === 200, `status ${resp.status}`);
+  check(`${spot}: hourly rows`, (d.hourly?.length || 0) >= 24, `${d.hourly?.length} rows`);
+  check(`${spot}: hourly has wind`, (d.hourly?.filter((h) => h.windKt != null).length || 0) >= 12, `${d.hourly?.filter((h) => h.windKt != null).length} rows`);
+  check(`${spot}: verdict computed`, ["GO", "CAUTION", "NO-GO"].includes(d.recommendation?.level), d.recommendation?.level);
+  check(`${spot}: sun present`, !!(d.sun && d.sun.sunrise && d.sun.sunset), `${d.sun?.sunrise} → ${d.sun?.sunset}`);
+  console.log(`   ${spot}: ${d.recommendation?.level} · waves ${d.waves?.ft ?? "—"}ft (${d.waves?.source ?? "none"}) · marine periods ${d.marineForecast?.length ?? 0}`);
+}
+
 // Digest "best GO window today" per port.
 const windows = await fetchTodayWindows();
 check("windows: covers every spot", Object.keys(windows).length === summary.spots.length, `${Object.keys(windows).length} entries`);

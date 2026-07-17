@@ -7,6 +7,7 @@ import { useAuth, Account, AuthModal } from "./auth.jsx";
 import Takeover from "./Takeover.jsx";
 import Landing from "./Landing.jsx";
 import { fmtWaves, waveFeel, compassToDeg } from "./units.js";
+import { regionBySlug, regionFromPath } from "./regions.js";
 
 const fmt = (v, unit) => (v == null ? "—" : `${v}${unit || ""}`);
 const verdictClass = (lvl) => (lvl === "NO-GO" ? "nogo" : lvl === "CAUTION" ? "caution" : "go");
@@ -701,6 +702,7 @@ export default function App() {
   };
   const [active, setActive] = useState(() => urlSpot() || localStorage.getItem("boating.spot") || "sandusky");
   const [landing, setLanding] = useState(() => !urlSpot()); // bare "/" = splash + directory; ?spot=X = detail
+  const [region, setRegion] = useState(() => regionFromPath(window.location.pathname)); // /greatlakes etc.
   const [resetToken, setResetToken] = useState(() => new URLSearchParams(window.location.search).get("reset") || ""); // password-reset email link
   const [verifyToken, setVerifyToken] = useState(() => new URLSearchParams(window.location.search).get("verify") || ""); // email-confirmation link
   const [gateAuth, setGateAuth] = useState(null); // signup-gate modal: "register" | "login" | null
@@ -717,15 +719,30 @@ export default function App() {
     window.history.pushState({}, "", `/spot/${id}`);
     setActive(id);
     setLanding(false);
+    setRegion(null);
     window.scrollTo(0, 0);
   };
   const goLanding = () => {
     window.history.pushState({}, "", "/");
     setLanding(true);
+    setRegion(null);
+    window.scrollTo(0, 0);
+  };
+  // Region subpage nav (slug or null for "all waters"); keeps the URL crawlable.
+  const goRegion = (slug) => {
+    const r = slug ? regionBySlug(slug) : null;
+    window.history.pushState({}, "", r ? `/${r.slug}` : "/");
+    setRegion(r);
+    setLanding(true);
     window.scrollTo(0, 0);
   };
   useEffect(() => {
-    const onPop = () => { const sp = urlSpot(); setLanding(!sp); if (sp) setActive(sp); };
+    const onPop = () => {
+      const sp = urlSpot();
+      setLanding(!sp);
+      if (sp) setActive(sp);
+      setRegion(sp ? null : regionFromPath(window.location.pathname));
+    };
     window.addEventListener("popstate", onPop);
     return () => window.removeEventListener("popstate", onPop);
   }, []);
@@ -750,10 +767,10 @@ export default function App() {
   // Per-view titles → share cards, tabs, and search results name the port.
   useEffect(() => {
     const name = (spots.find((s) => s.id === active) || {}).name;
-    document.title = landing || !name
-      ? "shouldiboat.com · Live Great Lakes boating conditions"
-      : `${name} boating conditions · shouldiboat.com`;
-  }, [landing, active, spots]);
+    document.title = landing
+      ? (region ? `${region.title} boating conditions · shouldiboat.com` : "shouldiboat.com · Live boating conditions")
+      : (name ? `${name} boating conditions · shouldiboat.com` : "shouldiboat.com · Live boating conditions");
+  }, [landing, active, spots, region]);
   // Save spot/theme to the account (debounced) once the signed-in prefs are applied.
   useEffect(() => {
     if (!appliedRef.current || !authRef.current.user) return;
@@ -783,7 +800,7 @@ export default function App() {
             <img className="logo" width="248" height="82" src={effective === "dark" ? "/boat-mark-white.png" : "/boat-mark.png"} alt="" />
             <span className="wordmark">
               <span className="wm-name">SHOULDI<b>BOAT</b><span className="wm-dot">.com</span></span>
-              <span className="wm-tag">Live Great Lakes boating conditions</span>
+              <span className="wm-tag">Live boating conditions</span>
             </span>
           </a>
           <div className="controls">
@@ -799,6 +816,7 @@ export default function App() {
         <Landing adFree={adFree} consent={consent} onSelect={selectLocation} favorites={auth.user ? (auth.user.favorites || []) : []}
           onCookieSettings={() => chooseConsent(null)}
           signedIn={!!auth.user}
+          region={region} onRegion={goRegion}
           nudge={auth.user ? <EmailNudge auth={auth} /> : null}
           onJoin={gated ? () => { track("event", "signup_gate_click", { spot: "landing", action: "register" }); setGateAuth("register"); } : null}
           onSignIn={gated ? () => { track("event", "signup_gate_click", { spot: "landing", action: "login" }); setGateAuth("login"); } : null} />

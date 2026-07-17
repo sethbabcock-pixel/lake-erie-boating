@@ -3,9 +3,9 @@ import Takeover from "./Takeover.jsx";
 import { IconStar } from "./icons.jsx";
 import { fmtWaves } from "./units.js";
 import { AdSlot } from "./monetize.jsx";
+import { REGIONS, LAKE_ORDER } from "./regions.js";
 
 const vclass = (v) => (v === "NO-GO" ? "nogo" : v === "CAUTION" ? "caution" : v === "GO" ? "go" : "unknown");
-const LAKE_ORDER = ["Lake Erie", "Lake Ontario", "Lake Huron", "Lake Michigan", "Lake Superior"];
 
 function StatusChip({ level }) {
   return <span className={`loc-status ${level ? vclass(level) : "unknown"}`}>{level || "—"}</span>;
@@ -60,10 +60,27 @@ function lakeParam() {
   } catch (e) { return null; }
 }
 
-function RegionDirectory({ summary, q, onSelect, deepLake }) {
+// Crawlable chips linking to each region page. Real <a href="/slug"> so search
+// engines follow them, with an onClick for in-app navigation (no reload).
+function RegionNav({ region, onRegion }) {
+  return (
+    <nav className="region-nav" aria-label="Regions">
+      <a href="/" className={`region-chip ${!region ? "on" : ""}`}
+        onClick={(e) => { if (onRegion) { e.preventDefault(); onRegion(null); } }}>All waters</a>
+      {REGIONS.map((r) => (
+        <a key={r.slug} href={`/${r.slug}`} className={`region-chip ${region?.slug === r.slug ? "on" : ""}`}
+          onClick={(e) => { if (onRegion) { e.preventDefault(); onRegion(r.slug); } }}>{r.title}</a>
+      ))}
+    </nav>
+  );
+}
+
+function RegionDirectory({ summary, q, onSelect, deepLake, region, onRegion }) {
   const ql = q.trim().toLowerCase();
+  const inRegion = (lake) => !region || (region.lakes || []).includes(lake || "Lake Erie");
   const byLake = {};
   (summary || []).forEach((s) => {
+    if (!inRegion(s.lake)) return;
     if (ql && !s.name.toLowerCase().includes(ql) && !(s.lake || "").toLowerCase().includes(ql)) return;
     (byLake[s.lake || "Lake Erie"] ||= []).push(s);
   });
@@ -84,7 +101,9 @@ function RegionDirectory({ summary, q, onSelect, deepLake }) {
   };
   return (
     <section className="directory" id="all-locations">
-      <h2 className="directory-title">All locations</h2>
+      <RegionNav region={region} onRegion={onRegion} />
+      <h2 className="directory-title">{region ? region.title : "All locations"}</h2>
+      {region && <p className="directory-blurb">{region.blurb}</p>}
       {summary == null && (
         // Reserve the directory's height with skeleton cards so the footer
         // doesn't jump when live conditions load (kills the homepage CLS).
@@ -92,17 +111,17 @@ function RegionDirectory({ summary, q, onSelect, deepLake }) {
           {["Erie", "Ontario", "Huron", "Michigan", "Superior"].map((k) => <div className="region region-skel" key={k} />)}
         </div>
       )}
-      {summary != null && lakes.length === 0 && <p className="acct-note">No spots match “{q}”.</p>}
+      {summary != null && lakes.length === 0 && <p className="acct-note">{ql ? <>No spots match “{q}”.</> : "No spots here yet."}</p>}
       {lakes.map((lake) => {
         const list = byLake[lake];
         const c = tally(list);
         return (
           <details className="region" key={lake} id={`lake-${lake.toLowerCase().replace(/\s+/g, "-")}`}
-            open={deepLake ? lake === deepLake : !!ql}>
+            open={deepLake ? lake === deepLake : (!!ql || !!region)}>
             <summary className="region-head">
               <span className="region-title">
                 <span className="region-name">{lake}</span>
-                <span className="region-sub">State of the lake · {list.length} ports</span>
+                <span className="region-sub">{list.length} port{list.length === 1 ? "" : "s"}</span>
               </span>
               <span className="region-side">
                 <span className="region-tally">
@@ -143,7 +162,7 @@ function MyPorts({ summary, favorites, onSelect }) {
   );
 }
 
-export default function Landing({ adFree, consent, onSelect, favorites, onCookieSettings, onJoin, onSignIn, signedIn, nudge }) {
+export default function Landing({ adFree, consent, onSelect, favorites, onCookieSettings, onJoin, onSignIn, signedIn, nudge, region, onRegion }) {
   const [summary, setSummary] = useState(null);
   const [q, setQ] = useState("");
   const deepLake = lakeParam();
@@ -178,7 +197,7 @@ export default function Landing({ adFree, consent, onSelect, favorites, onCookie
         {nudge}
         {!adFree && consent === "all" && <AdSlot name="landingTop" />}
         {signedIn && <MyPorts summary={summary} favorites={favorites} onSelect={onSelect} />}
-        <RegionDirectory summary={summary} q={q} onSelect={onSelect} deepLake={deepLake} />
+        <RegionDirectory summary={summary} q={q} onSelect={onSelect} deepLake={region ? null : deepLake} region={region} onRegion={onRegion} />
         {!adFree && consent === "all" && <AdSlot name="landing" />}
         <footer className="meta">
           Live data from NOAA/NWS &amp; NDBC buoys, maps by Windy. A planning aid, not an official forecast or a navigation tool.

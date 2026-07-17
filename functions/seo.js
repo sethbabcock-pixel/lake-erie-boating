@@ -8,6 +8,7 @@
 //     result ("Should I boat at <spot> today?") with canonical + JSON-LD.
 // The client reads /spot/<id> from the path (App.jsx) and renders normally.
 import { SPOTS } from "./marine/conditions.js";
+import { REGIONS, regionBySlug } from "../src/regions.js";
 
 const SITE = "https://shouldiboat.com";
 const lakeOf = (s) => s.lake || "Lake Erie";
@@ -38,6 +39,22 @@ const spotJsonld = (id, s, lake) => ({
   },
 });
 
+const regionJsonld = (region, count) => ({
+  "@context": "https://schema.org",
+  "@type": "WebPage",
+  name: `${region.title} boating conditions`,
+  url: `${SITE}/${region.slug}`,
+  about: `Boating conditions for ${count} launch spots across ${region.title}`,
+  isPartOf: { "@type": "WebSite", name: "shouldiboat.com", url: `${SITE}/` },
+  breadcrumb: {
+    "@type": "BreadcrumbList",
+    itemListElement: [
+      { "@type": "ListItem", position: 1, name: "shouldiboat.com", item: `${SITE}/` },
+      { "@type": "ListItem", position: 2, name: region.title, item: `${SITE}/${region.slug}` },
+    ],
+  },
+});
+
 // Per-page <head> content for an SEO-relevant path, or null to serve the shell
 // unchanged (real asset pages like /about and /legal carry their own meta).
 export function seoForPath(pathname) {
@@ -47,6 +64,19 @@ export function seoForPath(pathname) {
       title: "Should I boat today? Live Great Lakes boating conditions · shouldiboat.com",
       description: "A clear GO / CAUTION / NO-GO call for boating across the Great Lakes, from live NOAA wind, waves, gusts, an hour-by-hour risk timeline, marine warnings, weather maps and live webcams for 30+ launch spots.",
       jsonld: websiteJsonld(),
+    };
+  }
+  // Region subpages (/greatlakes, /chesapeake, …) — each an indexable page for
+  // its water bodies, so the site ranks beyond "Great Lakes" as coverage grows.
+  const rm = pathname.match(/^\/([a-z0-9-]{2,40})\/?$/);
+  const region = rm && regionBySlug(rm[1]);
+  if (region) {
+    const count = Object.values(SPOTS).filter((s) => (region.lakes || []).includes(s.lake || "Lake Erie")).length;
+    return {
+      url: `${SITE}/${region.slug}`,
+      title: `${region.title} boating conditions · GO / CAUTION / NO-GO · shouldiboat.com`,
+      description: `Live boating conditions for ${region.title}: a clear GO / CAUTION / NO-GO call for ${count} launch spots, from NOAA wind, waves, gusts, an hour-by-hour risk timeline, marine warnings and live webcams.`,
+      jsonld: regionJsonld(region, count),
     };
   }
   const m = pathname.match(/^\/spot\/([a-z0-9-]{1,40})\/?$/);
@@ -87,6 +117,7 @@ export function robotsTxt() {
 export function sitemapXml() {
   const urls = [
     { loc: `${SITE}/`, freq: "hourly", priority: "1.0" },
+    ...REGIONS.map((r) => ({ loc: `${SITE}/${r.slug}`, freq: "hourly", priority: "0.9" })),
     ...Object.keys(SPOTS).map((id) => ({ loc: `${SITE}/spot/${id}`, freq: "hourly", priority: "0.8" })),
     { loc: `${SITE}/about`, freq: "monthly", priority: "0.3" },
     { loc: `${SITE}/legal`, freq: "yearly", priority: "0.2" },
