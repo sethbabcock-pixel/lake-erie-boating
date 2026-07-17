@@ -45,7 +45,7 @@ export function seoForPath(pathname) {
     return {
       url: `${SITE}/`,
       title: "Should I boat today? Live Great Lakes boating conditions · shouldiboat.com",
-      description: "A clear GO / CAUTION / NO-GO call for boating across the Great Lakes — live NOAA wind, waves, gusts, an hour-by-hour risk timeline, marine warnings, weather maps and live webcams for 30+ launch spots.",
+      description: "A clear GO / CAUTION / NO-GO call for boating across the Great Lakes, from live NOAA wind, waves, gusts, an hour-by-hour risk timeline, marine warnings, weather maps and live webcams for 30+ launch spots.",
       jsonld: websiteJsonld(),
     };
   }
@@ -56,7 +56,7 @@ export function seoForPath(pathname) {
     return {
       url: `${SITE}/spot/${m[1]}`,
       title: `Should I boat at ${s.name} today? Live conditions · shouldiboat.com`,
-      description: `Live GO / CAUTION / NO-GO boating conditions for ${s.name} on ${lake} — NOAA wind, waves, gusts, an hour-by-hour risk timeline, marine warnings and live webcams.`,
+      description: `Live GO / CAUTION / NO-GO boating conditions for ${s.name} on ${lake}, from NOAA wind, waves, gusts, an hour-by-hour risk timeline, marine warnings and live webcams.`,
       jsonld: spotJsonld(m[1], s, lake),
     };
   }

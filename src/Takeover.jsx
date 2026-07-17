@@ -43,7 +43,7 @@ function SponsorSkin({ s }) {
   const bg = s.bgImage ? `${s.bg || "#102036"} url(${s.bgImage}) center/cover no-repeat` : s.bg;
   return (
     <a className="takeover-skin" href={s.href} target="_blank" rel="sponsored noopener"
-      aria-label={`${s.sponsor} — sponsor`} style={{ background: bg }} />
+      aria-label={`${s.sponsor} sponsor`} style={{ background: bg }} />
   );
 }
 
@@ -102,7 +102,7 @@ function HouseHero({ hero, spotName, verdict, adFree, splash, children, signedIn
         {h.showVerdict && verdict ? (
           <div className="hero-verdict">
             <span className={`hv-badge ${vclass(verdict)}`}>{verdict}</span>
-            <span className="hv-text">right now — full breakdown below.</span>
+            <span className="hv-text">right now. Full breakdown below.</span>
           </div>
         ) : (
           <p className="hero-subtitle">{h.sub || "A clear GO / CAUTION / NO-GO call from live NOAA wind, waves & weather."}</p>
@@ -110,9 +110,9 @@ function HouseHero({ hero, spotName, verdict, adFree, splash, children, signedIn
         {children}
         {/* One goal per audience: signed-out → sign up; signed-in free → ad-free upsell. */}
         {!splash && !signedIn && onJoin && (
-          <button className="hero-housecta linkbtn" onClick={onJoin}>Create a free account — hour-by-hour, cams &amp; alerts →</button>
+          <button className="hero-housecta linkbtn" onClick={onJoin}>Create a free account for hour-by-hour, cams &amp; alerts →</button>
         )}
-        {!splash && signedIn && !adFree && <a className="hero-housecta" href="/account">Go ad-free — no banners, ever →</a>}
+        {!splash && signedIn && !adFree && <a className="hero-housecta" href="/account">Go ad-free, no banners ever →</a>}
       </div>
     </section>
   );

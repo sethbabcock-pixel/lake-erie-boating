@@ -178,7 +178,7 @@ export default function Cams({ lat, lon, spotName, lake }) {
     return (
       <section className="card">
         <div className="card-head"><h2>Live cams</h2></div>
-        <div className="camempty">No live webcams for this lake right now — they come and go. Check the directory links below or your local harbor cam.</div>
+        <div className="camempty">No live webcams for this lake right now; they come and go. Check the directory links below or your local harbor cam.</div>
         <CamLinks lake={lake} />
       </section>
     );
@@ -225,8 +225,8 @@ export default function Cams({ lat, lon, spotName, lake }) {
       <CamLinks cam={cam} lake={lake} />
       <div className="hint">
         {camIsImage(cam)
-          ? "Still image — refreshes every 15 seconds."
-          : "Live video — some players need a tap to start."}
+          ? "Still image, refreshes every 15 seconds."
+          : "Live video. Some players need a tap to start."}
         {hiddenCount > 0 && ` ${hiddenCount} offline cam${hiddenCount > 1 ? "s" : ""} hidden.`}
       </div>
     </section>

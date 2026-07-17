@@ -31,7 +31,7 @@ function SplashSelector({ q, setQ, summary, onSelect, favorites }) {
   const favCards = (favorites || []).map((id) => (summary || []).find((x) => x.id === id)).filter(Boolean).slice(0, 4);
   return (
     <div className="splash-pick">
-      <input className="splash-search" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Find your launch — search a spot…" aria-label="Search spots" />
+      <input className="splash-search" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Find your launch, search a spot…" aria-label="Search spots" />
       {matches.length > 0 && (
         <div className="splash-matches">
           {matches.map((s) => (
@@ -163,7 +163,7 @@ export default function Landing({ adFree, consent, onSelect, favorites, onCookie
       <main className="app">
         {onJoin && (
           <div className="joinstrip">
-            <span><b>Every port's verdict is below — free.</b> Create an account for the hour-by-hour picture, live cams &amp; “be back in by” times.</span>
+            <span><b>Every port's verdict is below, free.</b> Create an account for the hour-by-hour picture, live cams &amp; “be back in by” times.</span>
             <div className="joinstrip-actions">
               <button className="cbtn" onClick={onJoin}>Create free account</button>
               {onSignIn && <button className="linklike joinstrip-signin" onClick={onSignIn}>Already have an account? Sign in</button>}
@@ -172,7 +172,7 @@ export default function Landing({ adFree, consent, onSelect, favorites, onCookie
         )}
         {signedIn && (favorites || []).length === 0 && (
           <div className="joinstrip fav-nudge">
-            <span><b><IconStar filled /> Star your home port</b> and it'll be front and center here — and in your morning verdict email. Tap any port below, then hit the star.</span>
+            <span><b><IconStar filled /> Star your home port</b> and it'll be front and center here, and in your morning verdict email. Tap any port below, then hit the star.</span>
           </div>
         )}
         {nudge}
@@ -181,7 +181,7 @@ export default function Landing({ adFree, consent, onSelect, favorites, onCookie
         <RegionDirectory summary={summary} q={q} onSelect={onSelect} deepLake={deepLake} />
         {!adFree && consent === "all" && <AdSlot name="landing" />}
         <footer className="meta">
-          Live data from NOAA/NWS &amp; NDBC buoys, maps by Windy. A planning aid — not an official forecast or a navigation tool.
+          Live data from NOAA/NWS &amp; NDBC buoys, maps by Windy. A planning aid, not an official forecast or a navigation tool.
           <div className="footlinks">
             <a href="/about" target="_blank" rel="noopener">About</a>
             <a href="/legal#terms" target="_blank" rel="noopener">Terms</a>
