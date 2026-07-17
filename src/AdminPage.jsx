@@ -547,6 +547,44 @@ function NotificationsPanel() {
   );
 }
 
+// Demand list from the homepage "Request a location" form: where boaters want
+// coverage next, and any webcam URLs they handed us (the un-automatable part).
+function LocationRequestsPanel() {
+  const [items, setItems] = useState(null);
+  const [err, setErr] = useState("");
+  const load = async () => {
+    setErr("");
+    try {
+      const r = await fetch("/api/admin/location-requests");
+      const d = await r.json();
+      if (!r.ok) throw new Error(d.error || "Could not load.");
+      setItems(d.requests);
+    } catch (e) { setErr(e.message); }
+  };
+  useEffect(() => { load(); }, []);
+  return (
+    <section className="card acct-sec">
+      <div className="card-head">
+        <h2>Location requests</h2>
+        {items && <button className="linklike" onClick={load}>↻ refresh</button>}
+      </div>
+      <p className="acct-note" style={{ marginTop: 0 }}>Where boaters have asked for coverage. Use it to prioritize new spots and to collect local webcam URLs.</p>
+      {err && <div className="modal-err">{err}</div>}
+      {items && items.length === 0 && <p className="acct-note">No requests yet.</p>}
+      {items && items.map((r, i) => (
+        <div className="admin-notif-row" key={i}>
+          <div className="acct-kv admin-notif">
+            <span><b>{r.location}</b>{r.email ? ` · ${r.email}` : ""}</span>
+            <b className="notif-off">{fmtDate(r.at)}</b>
+          </div>
+          {r.webcam && <div className="acct-note" style={{ margin: "2px 0 0" }}>📷 <a href={r.webcam} target="_blank" rel="noopener noreferrer nofollow">{r.webcam}</a></div>}
+          {r.note && <div className="acct-note" style={{ margin: "2px 0 0" }}>{r.note}</div>}
+        </div>
+      ))}
+    </section>
+  );
+}
+
 export default function AdminPage() {
   const auth = useAuth();
   const [cfg, setCfg] = useState(null);
@@ -680,6 +718,8 @@ export default function AdminPage() {
             <DiagnosticsPanel />
 
             <CspPanel />
+
+            <LocationRequestsPanel />
 
             <NotificationsPanel />
 

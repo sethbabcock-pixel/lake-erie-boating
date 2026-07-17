@@ -3,9 +3,18 @@ import Takeover from "./Takeover.jsx";
 import { IconStar } from "./icons.jsx";
 import { fmtWaves } from "./units.js";
 import { AdSlot } from "./monetize.jsx";
+import { REGIONS, LAKE_ORDER } from "./regions.js";
 
 const vclass = (v) => (v === "NO-GO" ? "nogo" : v === "CAUTION" ? "caution" : v === "GO" ? "go" : "unknown");
-const LAKE_ORDER = ["Lake Erie", "Lake Ontario", "Lake Huron", "Lake Michigan", "Lake Superior"];
+
+// Great-circle miles between two {lat, lon} points (nearest-launch ranking).
+const haversineMi = (a, b) => {
+  const R = 3958.8, toRad = (d) => (d * Math.PI) / 180;
+  const dLat = toRad(b.lat - a.lat), dLon = toRad(b.lon - a.lon);
+  const s = Math.sin(dLat / 2) ** 2 + Math.cos(toRad(a.lat)) * Math.cos(toRad(b.lat)) * Math.sin(dLon / 2) ** 2;
+  return 2 * R * Math.asin(Math.sqrt(s));
+};
+const COVERAGE_MI = 75; // beyond this, we treat the area as "not covered yet"
 
 function StatusChip({ level }) {
   return <span className={`loc-status ${level ? vclass(level) : "unknown"}`}>{level || "—"}</span>;
@@ -31,7 +40,7 @@ function SplashSelector({ q, setQ, summary, onSelect, favorites }) {
   const favCards = (favorites || []).map((id) => (summary || []).find((x) => x.id === id)).filter(Boolean).slice(0, 4);
   return (
     <div className="splash-pick">
-      <input className="splash-search" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Find your launch — search a spot…" aria-label="Search spots" />
+      <input className="splash-search" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Find your launch, search a spot…" aria-label="Search spots" />
       {matches.length > 0 && (
         <div className="splash-matches">
           {matches.map((s) => (
@@ -60,10 +69,27 @@ function lakeParam() {
   } catch (e) { return null; }
 }
 
-function RegionDirectory({ summary, q, onSelect, deepLake }) {
+// Crawlable chips linking to each region page. Real <a href="/slug"> so search
+// engines follow them, with an onClick for in-app navigation (no reload).
+function RegionNav({ region, onRegion }) {
+  return (
+    <nav className="region-nav" aria-label="Regions">
+      <a href="/" className={`region-chip ${!region ? "on" : ""}`}
+        onClick={(e) => { if (onRegion) { e.preventDefault(); onRegion(null); } }}>All waters</a>
+      {REGIONS.map((r) => (
+        <a key={r.slug} href={`/${r.slug}`} className={`region-chip ${region?.slug === r.slug ? "on" : ""}`}
+          onClick={(e) => { if (onRegion) { e.preventDefault(); onRegion(r.slug); } }}>{r.title}</a>
+      ))}
+    </nav>
+  );
+}
+
+function RegionDirectory({ summary, q, onSelect, deepLake, region, onRegion }) {
   const ql = q.trim().toLowerCase();
+  const inRegion = (lake) => !region || (region.lakes || []).includes(lake || "Lake Erie");
   const byLake = {};
   (summary || []).forEach((s) => {
+    if (!inRegion(s.lake)) return;
     if (ql && !s.name.toLowerCase().includes(ql) && !(s.lake || "").toLowerCase().includes(ql)) return;
     (byLake[s.lake || "Lake Erie"] ||= []).push(s);
   });
@@ -84,7 +110,9 @@ function RegionDirectory({ summary, q, onSelect, deepLake }) {
   };
   return (
     <section className="directory" id="all-locations">
-      <h2 className="directory-title">All locations</h2>
+      <RegionNav region={region} onRegion={onRegion} />
+      <h2 className="directory-title">{region ? region.title : "All locations"}</h2>
+      {region && <p className="directory-blurb">{region.blurb}</p>}
       {summary == null && (
         // Reserve the directory's height with skeleton cards so the footer
         // doesn't jump when live conditions load (kills the homepage CLS).
@@ -92,17 +120,17 @@ function RegionDirectory({ summary, q, onSelect, deepLake }) {
           {["Erie", "Ontario", "Huron", "Michigan", "Superior"].map((k) => <div className="region region-skel" key={k} />)}
         </div>
       )}
-      {summary != null && lakes.length === 0 && <p className="acct-note">No spots match “{q}”.</p>}
+      {summary != null && lakes.length === 0 && <p className="acct-note">{ql ? <>No spots match “{q}”.</> : "No spots here yet."}</p>}
       {lakes.map((lake) => {
         const list = byLake[lake];
         const c = tally(list);
         return (
           <details className="region" key={lake} id={`lake-${lake.toLowerCase().replace(/\s+/g, "-")}`}
-            open={deepLake ? lake === deepLake : !!ql}>
+            open={deepLake ? lake === deepLake : (!!ql || !!region)}>
             <summary className="region-head">
               <span className="region-title">
                 <span className="region-name">{lake}</span>
-                <span className="region-sub">State of the lake · {list.length} ports</span>
+                <span className="region-sub">{list.length} port{list.length === 1 ? "" : "s"}</span>
               </span>
               <span className="region-side">
                 <span className="region-tally">
@@ -129,6 +157,139 @@ function RegionDirectory({ summary, q, onSelect, deepLake }) {
   );
 }
 
+// Find the nearest covered launch from the browser's location or a US ZIP.
+// When nothing's within range it funnels straight into a location request.
+function NearestFinder({ summary, onSelect, onRequest }) {
+  const [zip, setZip] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState("");
+  const [result, setResult] = useState(null); // { label, near:[{s,mi}], covered, nearest }
+  const withCoords = (summary || []).filter((s) => s.lat != null && s.lon != null);
+  const findFrom = (lat, lon, label) => {
+    if (!withCoords.length) { setErr("Still loading conditions. Try again in a second."); return; }
+    const ranked = withCoords.map((s) => ({ s, mi: haversineMi({ lat, lon }, s) })).sort((a, b) => a.mi - b.mi);
+    const near = ranked.filter((r) => r.mi <= COVERAGE_MI).slice(0, 3);
+    setErr("");
+    setResult({ label, near, covered: near.length > 0, nearest: ranked[0] });
+  };
+  const useMyLocation = () => {
+    if (!navigator.geolocation) { setErr("Your browser can't share location. Try a ZIP code."); return; }
+    setBusy(true); setErr("");
+    navigator.geolocation.getCurrentPosition(
+      (pos) => { setBusy(false); findFrom(pos.coords.latitude, pos.coords.longitude, "your location"); },
+      (e) => { setBusy(false); setErr(e.code === 1 ? "Location permission denied. Try a ZIP code instead." : "Couldn't get your location. Try a ZIP code."); },
+      { timeout: 8000, maximumAge: 300000 },
+    );
+  };
+  const lookupZip = async (e) => {
+    e.preventDefault();
+    if (!/^\d{5}$/.test(zip.trim())) { setErr("Enter a 5-digit ZIP code."); return; }
+    setBusy(true); setErr("");
+    try {
+      const r = await fetch(`/api/geocode?zip=${zip.trim()}`);
+      const d = await r.json();
+      if (!r.ok) throw new Error(d.error || "Couldn't look up that ZIP.");
+      findFrom(d.lat, d.lon, d.place || `ZIP ${d.zip}`);
+    } catch (e2) { setErr(e2.message); } finally { setBusy(false); }
+  };
+  return (
+    <section className="nearby-finder">
+      <h2 className="directory-title" style={{ margin: 0 }}>Nearest launch to you</h2>
+      <div className="nf-controls">
+        <button className="cbtn ghost" onClick={useMyLocation} disabled={busy}>📍 Use my location</button>
+        <span className="nf-or">or</span>
+        <form className="nf-zip" onSubmit={lookupZip}>
+          <input className="field" inputMode="numeric" pattern="\d*" maxLength={5} value={zip}
+            onChange={(e) => setZip(e.target.value.replace(/\D/g, ""))} placeholder="ZIP code" aria-label="ZIP code" />
+          <button className="cbtn" type="submit" disabled={busy}>Go</button>
+        </form>
+      </div>
+      {err && <div className="modal-err" style={{ marginTop: 8 }}>{err}</div>}
+      {result && result.covered && (
+        <div className="nf-results">
+          <p className="acct-note" style={{ margin: "8px 0 6px" }}>Closest to {result.label}:</p>
+          <div className="loc-grid">
+            {result.near.map(({ s, mi }) => (
+              <button key={s.id} className="loc-card" onClick={() => onSelect(s.id)}>
+                <div className="loc-card-top"><span className="loc-name">{s.name}</span><StatusChip level={s.level} /></div>
+                <div className="loc-card-meta">{Math.round(mi)} mi away · {s.lake}</div>
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+      {result && !result.covered && (
+        <div className="nf-nocover">
+          <p>No covered water within {COVERAGE_MI} miles of {result.label}{result.nearest ? ` (closest is ${result.nearest.s.name}, ${Math.round(result.nearest.mi)} mi)` : ""}. We're expanding, so tell us where you boat.</p>
+          <button className="cbtn" onClick={() => onRequest(result.label && result.label !== "your location" ? result.label : "")}>Request coverage here</button>
+        </div>
+      )}
+    </section>
+  );
+}
+
+// Request a water body we don't cover yet. Doubles as our expansion demand
+// signal, and collects the one thing we can't automate: the local webcam URL.
+// openToken bumps to force-open + prefill from the "near me" no-coverage funnel.
+function RequestLocation({ userEmail, openToken, prefill }) {
+  const [open, setOpen] = useState(false);
+  const [location, setLocation] = useState("");
+  const [email, setEmail] = useState(userEmail || "");
+  const [webcam, setWebcam] = useState("");
+  const [note, setNote] = useState("");
+  const [state, setState] = useState("idle"); // idle | sending | done
+  const [err, setErr] = useState("");
+  useEffect(() => { if (openToken) { setOpen(true); if (prefill) setLocation(prefill); } }, [openToken]);
+  useEffect(() => { if (userEmail && !email) setEmail(userEmail); }, [userEmail]);
+  const submit = async (e) => {
+    e.preventDefault();
+    if (location.trim().length < 2) { setErr("Please enter a location."); return; }
+    setState("sending"); setErr("");
+    try {
+      const r = await fetch("/api/request-location", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ location, email, webcam, note }),
+      });
+      const d = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(d.error || "Something went wrong. Try again.");
+      setState("done");
+    } catch (e2) { setErr(e2.message); }
+  };
+  return (
+    <section className="reqloc" id="request-location">
+      {state === "done" ? (
+        <div className="reqloc-done"><b>Request received.</b> Thanks. We log every request and use them to decide where to add water, and cameras, next.</div>
+      ) : (
+        <>
+          <div className="reqloc-head">
+            <div>
+              <h2 className="directory-title" style={{ marginBottom: 4 }}>Don't see your water?</h2>
+              <p className="directory-blurb" style={{ margin: 0 }}>Tell us where you boat. Requests drive where we expand next, and if you know the local harbor webcam, that's the piece we can't automate.</p>
+            </div>
+            {!open && <button className="cbtn" onClick={() => setOpen(true)}>Request a location</button>}
+          </div>
+          {open && (
+            <form className="reqloc-form" onSubmit={submit}>
+              <label className="acct-field"><span>Location <em className="req-star">*</em></span>
+                <input className="field" value={location} onChange={(e) => setLocation(e.target.value)} placeholder="City, lake, bay, or river (e.g. Middle River, MD)" maxLength={120} required /></label>
+              <label className="acct-field"><span>Your email <span className="opt">(optional, so we can tell you when it's live)</span></span>
+                <input className="field" type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="you@example.com" maxLength={254} /></label>
+              <label className="acct-field"><span>Local webcam URL <span className="opt">(optional)</span></span>
+                <input className="field" value={webcam} onChange={(e) => setWebcam(e.target.value)} placeholder="Link to a public harbor or marina cam" maxLength={300} /></label>
+              <label className="acct-field"><span>Anything else <span className="opt">(optional)</span></span>
+                <textarea className="field" value={note} onChange={(e) => setNote(e.target.value)} rows={2} maxLength={500} placeholder="Launch ramp, nearest buoy, whatever helps" /></label>
+              {err && <div className="modal-err">{err}</div>}
+              <div className="reqloc-actions">
+                <button className="cbtn" type="submit" disabled={state === "sending"}>{state === "sending" ? "Sending…" : "Send request"}</button>
+              </div>
+            </form>
+          )}
+        </>
+      )}
+    </section>
+  );
+}
+
 // Signed-in boaters with starred ports get their shoreline first, side-by-side.
 function MyPorts({ summary, favorites, onSelect }) {
   const mine = (favorites || []).map((id) => (summary || []).find((s) => s.id === id)).filter(Boolean);
@@ -143,9 +304,16 @@ function MyPorts({ summary, favorites, onSelect }) {
   );
 }
 
-export default function Landing({ adFree, onSelect, favorites, onCookieSettings, onJoin, onSignIn, signedIn, nudge }) {
+export default function Landing({ adFree, onSelect, favorites, onCookieSettings, onJoin, onSignIn, signedIn, nudge, region, onRegion, userEmail }) {
   const [summary, setSummary] = useState(null);
   const [q, setQ] = useState("");
+  const [reqToken, setReqToken] = useState(0);
+  const [reqPrefill, setReqPrefill] = useState("");
+  const openRequest = (name = "") => {
+    setReqPrefill(name);
+    setReqToken((n) => n + 1);
+    setTimeout(() => document.getElementById("request-location")?.scrollIntoView({ behavior: "smooth", block: "center" }), 60);
+  };
   const deepLake = lakeParam();
   useEffect(() => {
     let alive = true;
@@ -161,9 +329,10 @@ export default function Landing({ adFree, onSelect, favorites, onCookieSettings,
         <SplashSelector q={q} setQ={setQ} summary={summary} onSelect={onSelect} favorites={favorites} />
       </Takeover>
       <main className="app">
+        <NearestFinder summary={summary} onSelect={onSelect} onRequest={openRequest} />
         {onJoin && (
           <div className="joinstrip">
-            <span><b>Every port's verdict is below — free.</b> Create an account for the hour-by-hour picture, live cams &amp; “be back in by” times.</span>
+            <span><b>Every port's verdict is below, free.</b> Create an account for the hour-by-hour picture, live cams &amp; “be back in by” times.</span>
             <div className="joinstrip-actions">
               <button className="cbtn" onClick={onJoin}>Create free account</button>
               {onSignIn && <button className="linklike joinstrip-signin" onClick={onSignIn}>Already have an account? Sign in</button>}
@@ -172,16 +341,17 @@ export default function Landing({ adFree, onSelect, favorites, onCookieSettings,
         )}
         {signedIn && (favorites || []).length === 0 && (
           <div className="joinstrip fav-nudge">
-            <span><b><IconStar filled /> Star your home port</b> and it'll be front and center here — and in your morning verdict email. Tap any port below, then hit the star.</span>
+            <span><b><IconStar filled /> Star your home port</b> and it'll be front and center here, and in your morning verdict email. Tap any port below, then hit the star.</span>
           </div>
         )}
         {nudge}
         {!adFree && <AdSlot name="landingTop" />}
         {signedIn && <MyPorts summary={summary} favorites={favorites} onSelect={onSelect} />}
-        <RegionDirectory summary={summary} q={q} onSelect={onSelect} deepLake={deepLake} />
+        <RegionDirectory summary={summary} q={q} onSelect={onSelect} deepLake={region ? null : deepLake} region={region} onRegion={onRegion} />
+        <RequestLocation userEmail={userEmail} openToken={reqToken} prefill={reqPrefill} />
         {!adFree && <AdSlot name="landing" />}
         <footer className="meta">
-          Live data from NOAA/NWS &amp; NDBC buoys, maps by Windy. A planning aid — not an official forecast or a navigation tool.
+          Live data from NOAA/NWS &amp; NDBC buoys, maps by Windy. A planning aid, not an official forecast or a navigation tool.
           <div className="footlinks">
             <a href="/about" target="_blank" rel="noopener">About</a>
             <a href="/legal#terms" target="_blank" rel="noopener">Terms</a>

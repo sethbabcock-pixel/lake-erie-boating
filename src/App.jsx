@@ -7,6 +7,7 @@ import { useAuth, Account, AuthModal } from "./auth.jsx";
 import Takeover from "./Takeover.jsx";
 import Landing from "./Landing.jsx";
 import { fmtWaves, waveFeel, compassToDeg } from "./units.js";
+import { regionBySlug, regionFromPath } from "./regions.js";
 
 const fmt = (v, unit) => (v == null ? "—" : `${v}${unit || ""}`);
 const verdictClass = (lvl) => (lvl === "NO-GO" ? "nogo" : lvl === "CAUTION" ? "caution" : "go");
@@ -146,7 +147,7 @@ function RawNSH({ text }) {
   return (
     <div className="nshfmt">
       {blocks.map((b, i) => b.type === "period"
-        ? <p className="nsh-period" key={i}><b>{b.name}</b>{b.body ? ` — ${b.body}` : ""}</p>
+        ? <p className="nsh-period" key={i}><b>{b.name}</b>{b.body ? `: ${b.body}` : ""}</p>
         : <div className="nsh-meta" key={i}>{b.text}</div>)}
     </div>
   );
@@ -275,7 +276,7 @@ function GlanceBand({ hours }) {
   const best = runs.filter((r) => r.level === "GO").sort((a, b) => (b.to - b.from) - (a.to - a.from))[0] || null;
   const label = best
     ? <>Best window: <b>{best.from === 0 ? "now" : fmtHour(win[best.from].time)} – {fmtHour(win[Math.min(best.to + 1, win.length - 1)].time)}</b> ({best.to - best.from + 1}h)</>
-    : <>No clean GO window in the next 18h — check the week ahead</>;
+    : <>No clean GO window in the next 18h. Check the week ahead</>;
   // Tap an hour → jump the hour-by-hour strip to it (and pulse the tile).
   const jumpTo = (time) => {
     const tile = document.querySelector(`[data-t="${time}"]`);
@@ -291,7 +292,7 @@ function GlanceBand({ hours }) {
         {win.map((h, i) => (
           <button key={h.time} onClick={() => jumpTo(h.time)}
             className={`gb ${verdictClass(h.level)} ${best && i >= best.from && i <= best.to ? "best" : ""}`}
-            title={`${fmtHour(h.time)} · ${h.level} — see the detail`}
+            title={`${fmtHour(h.time)} · ${h.level}, see the detail`}
             aria-label={`${fmtHour(h.time)}: ${h.level}. Jump to hour detail.`} />
         ))}
       </div>
@@ -352,7 +353,7 @@ function ShareButton({ spot, rec, wind, wv }) {
   const [copied, setCopied] = useState(false);
   const share = async () => {
     track("event", "share_verdict", { spot: spot.id, level: rec.level });
-    const text = `${spot.name}: ${rec.level} right now — wind ${wind.speedKt ?? "–"} kt, waves ${wv.ft ?? "–"} ft.`;
+    const text = `${spot.name}: ${rec.level} right now. Wind ${wind.speedKt ?? "–"} kt, waves ${wv.ft ?? "–"} ft.`;
     const url = `https://shouldiboat.com/spot/${encodeURIComponent(spot.id)}`;
     if (navigator.share) { try { await navigator.share({ title: "shouldiboat.com", text, url }); } catch (e) { /* dismissed */ } return; }
     try { await navigator.clipboard.writeText(`${text} ${url}`); setCopied(true); setTimeout(() => setCopied(false), 2000); } catch (e) { /* ignore */ }
@@ -407,7 +408,7 @@ function WeekStrip({ week, marineForecast }) {
           const f = fmtDay(d.date);
           return (
             <button key={d.date} onClick={() => setSel(sel === i ? null : i)} aria-expanded={sel === i}
-              className={`wday ${verdictClass(d.level)} ${f.weekend ? "weekend" : ""} ${sel === i ? "sel" : ""}`} title={`${f.wd} ${f.md} — tap for the day's forecast`}>
+              className={`wday ${verdictClass(d.level)} ${f.weekend ? "weekend" : ""} ${sel === i ? "sel" : ""}`} title={`${f.wd} ${f.md}, tap for the day's forecast`}>
               <div className="wd-name">{i === 0 ? "Today" : f.wd}{f.weekend && <span className="wd-star">•</span>}</div>
               <div className={`wd-level ${verdictClass(d.level)}`}>{d.level === "NO-GO" ? "NO" : d.level}</div>
               <div className="wd-m"><b>{d.windKt ?? "—"}</b><small>kt</small></div>
@@ -433,7 +434,7 @@ function WeekStrip({ week, marineForecast }) {
           {selPeriods.length > 0 ? (
             <div className="mlist">{selPeriods.map((p, i) => <MarinePeriodRow p={p} key={i} />)}</div>
           ) : (
-            <p className="acct-note wpanel-note">The official NWS nearshore text only reaches ~2–3 days out, so there's no written forecast for this day yet — the numbers above are the model outlook. Check back as it gets closer.</p>
+            <p className="acct-note wpanel-note">The official NWS nearshore text only reaches about 2 to 3 days out, so there's no written forecast for this day yet. The numbers above are the model outlook. Check back as it gets closer.</p>
           )}
         </div>
       )}
@@ -704,6 +705,7 @@ export default function App() {
   };
   const [active, setActive] = useState(() => urlSpot() || localStorage.getItem("boating.spot") || "sandusky");
   const [landing, setLanding] = useState(() => !urlSpot()); // bare "/" = splash + directory; ?spot=X = detail
+  const [region, setRegion] = useState(() => regionFromPath(window.location.pathname)); // /greatlakes etc.
   const [resetToken, setResetToken] = useState(() => new URLSearchParams(window.location.search).get("reset") || ""); // password-reset email link
   const [verifyToken, setVerifyToken] = useState(() => new URLSearchParams(window.location.search).get("verify") || ""); // email-confirmation link
   const [gateAuth, setGateAuth] = useState(null); // signup-gate modal: "register" | "login" | null
@@ -720,15 +722,30 @@ export default function App() {
     window.history.pushState({}, "", `/spot/${id}`);
     setActive(id);
     setLanding(false);
+    setRegion(null);
     window.scrollTo(0, 0);
   };
   const goLanding = () => {
     window.history.pushState({}, "", "/");
     setLanding(true);
+    setRegion(null);
+    window.scrollTo(0, 0);
+  };
+  // Region subpage nav (slug or null for "all waters"); keeps the URL crawlable.
+  const goRegion = (slug) => {
+    const r = slug ? regionBySlug(slug) : null;
+    window.history.pushState({}, "", r ? `/${r.slug}` : "/");
+    setRegion(r);
+    setLanding(true);
     window.scrollTo(0, 0);
   };
   useEffect(() => {
-    const onPop = () => { const sp = urlSpot(); setLanding(!sp); if (sp) setActive(sp); };
+    const onPop = () => {
+      const sp = urlSpot();
+      setLanding(!sp);
+      if (sp) setActive(sp);
+      setRegion(sp ? null : regionFromPath(window.location.pathname));
+    };
     window.addEventListener("popstate", onPop);
     return () => window.removeEventListener("popstate", onPop);
   }, []);
@@ -753,10 +770,10 @@ export default function App() {
   // Per-view titles → share cards, tabs, and search results name the port.
   useEffect(() => {
     const name = (spots.find((s) => s.id === active) || {}).name;
-    document.title = landing || !name
-      ? "shouldiboat.com — Live Great Lakes boating conditions"
-      : `${name} boating conditions — shouldiboat.com`;
-  }, [landing, active, spots]);
+    document.title = landing
+      ? (region ? `${region.title} boating conditions · shouldiboat.com` : "shouldiboat.com · Live boating conditions")
+      : (name ? `${name} boating conditions · shouldiboat.com` : "shouldiboat.com · Live boating conditions");
+  }, [landing, active, spots, region]);
   // Save spot/theme to the account (debounced) once the signed-in prefs are applied.
   useEffect(() => {
     if (!appliedRef.current || !authRef.current.user) return;
@@ -782,11 +799,11 @@ export default function App() {
     <>
       <header className="appheader">
         <div className="appheader-inner">
-          <a className="brand" href="/" aria-label="shouldiboat.com — home" onClick={(e) => { e.preventDefault(); goLanding(); }}>
+          <a className="brand" href="/" aria-label="shouldiboat.com home" onClick={(e) => { e.preventDefault(); goLanding(); }}>
             <img className="logo" width="248" height="82" src={effective === "dark" ? "/boat-mark-white.png" : "/boat-mark.png"} alt="" />
             <span className="wordmark">
               <span className="wm-name">SHOULDI<b>BOAT</b><span className="wm-dot">.com</span></span>
-              <span className="wm-tag">Live Great Lakes boating conditions</span>
+              <span className="wm-tag">Live boating conditions</span>
             </span>
           </a>
           <div className="controls">
@@ -802,6 +819,8 @@ export default function App() {
         <Landing adFree={adFree} onSelect={selectLocation} favorites={auth.user ? (auth.user.favorites || []) : []}
           onCookieSettings={() => chooseConsent(null)}
           signedIn={!!auth.user}
+          region={region} onRegion={goRegion}
+          userEmail={auth.user ? auth.user.email : ""}
           nudge={auth.user ? <EmailNudge auth={auth} /> : null}
           onJoin={gated ? () => { track("event", "signup_gate_click", { spot: "landing", action: "register" }); setGateAuth("register"); } : null}
           onSignIn={gated ? () => { track("event", "signup_gate_click", { spot: "landing", action: "login" }); setGateAuth("login"); } : null} />
@@ -827,7 +846,7 @@ export default function App() {
                     {auth.user && (
                       <button
                         className={`favstar call-fav ${(auth.user.favorites || []).includes(active) ? "on" : ""}`}
-                        title={(auth.user.favorites || []).includes(active) ? "Remove from my ports" : "Add to my ports — front and center on the homepage + morning email"}
+                        title={(auth.user.favorites || []).includes(active) ? "Remove from my ports" : "Add to my ports: front and center on the homepage + morning email"}
                         onClick={() => toggleFav(active)}><IconStar filled={(auth.user.favorites || []).includes(active)} /></button>
                     )}
                   </span>
@@ -840,7 +859,7 @@ export default function App() {
                 {comfort && (
                   <div className={`comfort ${comfort.ok ? "ok" : "over"}`}>
                     <b>Your comfort ({comfort.limits}):</b>{" "}
-                    {comfort.ok ? "today's conditions are within your limits." : `above your limit — ${comfort.over.join("; ")}.`}
+                    {comfort.ok ? "today's conditions are within your limits." : `above your limit: ${comfort.over.join("; ")}.`}
                   </div>
                 )}
               </div>
