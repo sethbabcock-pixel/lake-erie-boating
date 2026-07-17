@@ -68,15 +68,18 @@ export function updateConsentMode(choice) {
   gtag("consent", "update", { ad_storage: v, ad_user_data: v, ad_personalization: v, analytics_storage: v });
 }
 
-// Inject the AdSense library once — only when configured AND the user consented.
+// Inject the AdSense library once when ads are allowed (not ad-free).
+// Consent Mode (index.html) still controls personalization; denied consent gets
+// limited non-personalized ads, matching the privacy policy. The library is also
+// loaded from index.html for site review — this is a backup for shells that omit it.
 export function useAdsense(enabled) {
   useEffect(() => {
-    if (!enabled || !ADSENSE_ENABLED || document.querySelector("script[data-adsbygoogle]")) return;
+    if (!enabled || !ADSENSE_ENABLED || document.querySelector("script[data-sib-ads],script[src*='adsbygoogle.js']")) return;
     const s = document.createElement("script");
     s.async = true;
     s.src = `https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=${ADSENSE.client}`;
     s.crossOrigin = "anonymous";
-    s.setAttribute("data-adsbygoogle", "1");
+    s.setAttribute("data-sib-ads", "1");
     document.head.appendChild(s);
   }, [enabled]);
 }

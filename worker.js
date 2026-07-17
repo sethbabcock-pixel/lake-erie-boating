@@ -18,12 +18,12 @@ import { robotsTxt, sitemapXml, seoForPath, injectSeo } from "./functions/seo.js
 // reports, tighten the allowlist, then promote this to an enforced policy.
 const CSP_REPORT_ONLY = [
   "default-src 'self'",
-  "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://pagead2.googlesyndication.com https://*.googlesyndication.com https://www.googletagmanager.com https://www.google-analytics.com https://*.google-analytics.com https://securepubads.g.doubleclick.net https://*.doubleclick.net https://www.googletagservices.com https://js.stripe.com https://adservice.google.com https://fundingchoicesmessages.google.com https://static.cloudflareinsights.com",
+  "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://pagead2.googlesyndication.com https://*.googlesyndication.com https://www.googletagmanager.com https://www.google-analytics.com https://*.google-analytics.com https://securepubads.g.doubleclick.net https://*.doubleclick.net https://www.googletagservices.com https://js.stripe.com https://adservice.google.com https://fundingchoicesmessages.google.com https://ep1.adtrafficquality.google https://ep2.adtrafficquality.google https://*.adtrafficquality.google https://static.cloudflareinsights.com",
   "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
   "img-src 'self' data: https:",
   "font-src 'self' data: https://fonts.gstatic.com",
-  "connect-src 'self' https://*.google-analytics.com https://*.analytics.google.com https://*.doubleclick.net https://pagead2.googlesyndication.com https://*.googlesyndication.com https://api.stripe.com https://region1.google-analytics.com",
-  "frame-src 'self' https://googleads.g.doubleclick.net https://tpc.googlesyndication.com https://*.doubleclick.net https://*.googlesyndication.com https://js.stripe.com https://*.stripe.com https://www.google.com https://fundingchoicesmessages.google.com",
+  "connect-src 'self' https://*.google-analytics.com https://*.analytics.google.com https://*.doubleclick.net https://pagead2.googlesyndication.com https://*.googlesyndication.com https://ep1.adtrafficquality.google https://ep2.adtrafficquality.google https://*.adtrafficquality.google https://api.stripe.com https://region1.google-analytics.com",
+  "frame-src 'self' https://googleads.g.doubleclick.net https://tpc.googlesyndication.com https://*.doubleclick.net https://*.googlesyndication.com https://ep1.adtrafficquality.google https://ep2.adtrafficquality.google https://*.adtrafficquality.google https://js.stripe.com https://*.stripe.com https://www.google.com https://fundingchoicesmessages.google.com https://embed.windy.com https://*.ozolio.com",
   "frame-ancestors 'self'",
   "base-uri 'self'",
   "object-src 'none'",

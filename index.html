@@ -50,7 +50,9 @@
   </script>
   <!-- Google AdSense — library load (enables site review + ad serving). Ad units
        are still React-controlled and never render for ad-free subscribers. -->
-  <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-9213366013949616" crossorigin="anonymous" data-adsbygoogle="1"></script>
+  <!-- data-sib-ads marks our load so React doesn't inject a second copy.
+       Do not use data-adsbygoogle — AdSense warns that attribute is unsupported on the head tag. -->
+  <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-9213366013949616" crossorigin="anonymous" data-sib-ads="1"></script>
 </head>
 <body>
   <div id="root"></div>

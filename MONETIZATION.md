@@ -7,7 +7,7 @@ deploy rebuilds automatically).
 
 | Stream | Status | What to do |
 |---|---|---|
-| Display ads (AdSense) | Publisher ID set; **0 ad units placed** | Create ad units, paste slot IDs (below) |
+| Display ads (AdSense) | Publisher + slots wired (`detailTop` / `detailMid` / `landing` / `landingTop`) | Confirm site is **Ready** in AdSense; fill can lag 24–48h |
 | Affiliate (Amazon) | Wired; **tag empty** | Paste your Associates tag (below) |
 | Subscription (Stripe) | Live — $2.99/mo ad-free | Test a real checkout end-to-end |
 | Direct sponsorships | Wired (admin UI) | Sell a takeover, enter it at `/admin` |
@@ -26,16 +26,31 @@ its 10-digit **slot ID**. Paste into `ADSENSE.slots`:
 export const ADSENSE = {
   client: "ca-pub-9213366013949616", // already set
   slots: {
-    detailTop: "",  // ← paste slot ID: spot page, under the conditions row (highest traffic)
-    detailMid: "",  // ← paste slot ID: spot page, lower down
-    landing: "",    // ← paste slot ID: homepage, under the port directory
+    detailTop: "9841170882",  // spot page, under the conditions row (highest traffic)
+    detailMid: "8915670243",  // spot page, lower down
+    landing: "3032908319",    // homepage, under the port directory
+    landingTop: "1882789819", // homepage, high up
+    footerSticky: "",         // paste a slot ID to enable the sticky footer ad
   },
 };
 ```
 
-Each placement renders **nothing** until its slot is filled, so you can turn
-them on one by one. `ads.txt` is already correct. Ads only load after a visitor
-consents (Consent Mode v2) and never show for ad-free subscribers.
+Each placement renders **nothing** until its slot ID is set. `ads.txt` is
+correct. Placements show for free visitors (Consent Mode serves limited
+non-personalized ads until Accept; personalized after Accept) and never for
+ad-free subscribers.
+
+### Diagnose: https://shouldiboat.com/adtest
+
+Standalone page (no consent / React / ad-free). Expect:
+
+| Result | Meaning |
+|---|---|
+| **FILLED** | Serving works end-to-end |
+| **UNFILLED** | Code OK; Google returned no creative — check Sites → **Ready**, unit Active, wait for inventory |
+| **NO RESPONSE** | Script blocked (ad blocker / privacy DNS) |
+
+Owner preview on the real app: add `?adtest=1` (sample ads, no real impressions).
 
 ## 2. Amazon affiliate — `src/monetize.jsx`
 

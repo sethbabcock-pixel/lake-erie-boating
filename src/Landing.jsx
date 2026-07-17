@@ -143,7 +143,7 @@ function MyPorts({ summary, favorites, onSelect }) {
   );
 }
 
-export default function Landing({ adFree, consent, onSelect, favorites, onCookieSettings, onJoin, onSignIn, signedIn, nudge }) {
+export default function Landing({ adFree, onSelect, favorites, onCookieSettings, onJoin, onSignIn, signedIn, nudge }) {
   const [summary, setSummary] = useState(null);
   const [q, setQ] = useState("");
   const deepLake = lakeParam();
@@ -176,10 +176,10 @@ export default function Landing({ adFree, consent, onSelect, favorites, onCookie
           </div>
         )}
         {nudge}
-        {!adFree && consent === "all" && <AdSlot name="landingTop" />}
+        {!adFree && <AdSlot name="landingTop" />}
         {signedIn && <MyPorts summary={summary} favorites={favorites} onSelect={onSelect} />}
         <RegionDirectory summary={summary} q={q} onSelect={onSelect} deepLake={deepLake} />
-        {!adFree && consent === "all" && <AdSlot name="landing" />}
+        {!adFree && <AdSlot name="landing" />}
         <footer className="meta">
           Live data from NOAA/NWS &amp; NDBC buoys, maps by Windy. A planning aid — not an official forecast or a navigation tool.
           <div className="footlinks">

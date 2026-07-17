@@ -322,6 +322,11 @@ details.card[open] > summary { margin-bottom: var(--s3); }
 .gear-cta { font-size: var(--fs-xs); color: var(--accent); font-weight: var(--fw-semibold); margin-top: 2px; }
 .adwrap { margin-bottom: var(--s4); text-align: center; min-height: 1px; }
 .adlabel { display: block; font-size: 10px; text-transform: uppercase; letter-spacing: var(--tracking-wide); color: var(--text-faint); margin-bottom: 4px; }
+/* Collapse empty inventory: Google marks no-fill units; hide the whole placement
+   (label + box) so unfilled ads don't leave an "Advertisement" stub on the page. */
+ins.adsbygoogle[data-ad-status="unfilled"] { display: none !important; }
+.adwrap:has(ins.adsbygoogle[data-ad-status="unfilled"]),
+.sticky-ad:has(ins.adsbygoogle[data-ad-status="unfilled"]) { display: none !important; }
 /* Sticky footer (anchor) ad — pinned bottom, above the fold-line, dismissible. */
 .sticky-ad { position: fixed; left: 0; right: 0; bottom: 0; z-index: 90;
   height: 60px; background: var(--surface); border-top: 1px solid var(--border-strong);
