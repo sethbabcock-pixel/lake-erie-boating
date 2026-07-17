@@ -27,6 +27,19 @@
     "mainEntityOfPage": "https://shouldiboat.com/guides/reading-a-marine-forecast"
   }
   </script>
+  <!-- Google AdSense — site review + ad serving. Consent Mode v2 default (denied
+       unless the visitor accepted on the main app) runs before the ad library. -->
+  <script>
+    window.dataLayer = window.dataLayer || [];
+    function gtag() { dataLayer.push(arguments); }
+    (function () {
+      var granted = false;
+      try { granted = localStorage.getItem("sib.consent") === "all"; } catch (e) {}
+      var v = granted ? "granted" : "denied";
+      gtag("consent", "default", { ad_storage: v, ad_user_data: v, ad_personalization: v, analytics_storage: v });
+    })();
+  </script>
+  <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-9213366013949616" crossorigin="anonymous"></script>
 </head>
 <body>
   <div class="wrap">
