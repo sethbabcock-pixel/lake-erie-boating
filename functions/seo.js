@@ -84,10 +84,24 @@ export function robotsTxt() {
   return `User-agent: *\nAllow: /\nDisallow: /account\nDisallow: /admin\nDisallow: /api/\nDisallow: /auth/\n\nSitemap: ${SITE}/sitemap.xml\n`;
 }
 
+// Editorial guides (static content pages under /guides). Listed explicitly so
+// each is a first-class indexable result; keep in sync with public/guides/.
+const GUIDES = [
+  "reading-a-marine-forecast",
+  "go-caution-nogo-explained",
+  "cold-water-safety",
+  "wind-direction-and-fetch",
+  "small-craft-advisory-explained",
+  "safety-gear-checklist",
+  "before-you-launch",
+];
+
 export function sitemapXml() {
   const urls = [
     { loc: `${SITE}/`, freq: "hourly", priority: "1.0" },
     ...Object.keys(SPOTS).map((id) => ({ loc: `${SITE}/spot/${id}`, freq: "hourly", priority: "0.8" })),
+    { loc: `${SITE}/guides/`, freq: "weekly", priority: "0.6" },
+    ...GUIDES.map((slug) => ({ loc: `${SITE}/guides/${slug}`, freq: "monthly", priority: "0.5" })),
     { loc: `${SITE}/about`, freq: "monthly", priority: "0.3" },
     { loc: `${SITE}/legal`, freq: "yearly", priority: "0.2" },
   ];

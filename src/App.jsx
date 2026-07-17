@@ -885,6 +885,11 @@ export default function App() {
               </div>
             </div>
 
+            <div className="learn-line">
+              New to the numbers? <a href="/guides/reading-a-marine-forecast" target="_blank" rel="noopener">How to read a marine forecast</a> ·{" "}
+              <a href="/guides/go-caution-nogo-explained" target="_blank" rel="noopener">what GO / CAUTION / NO-GO means</a>
+            </div>
+
             {/* Top ad — under the public verdict + conditions, so every visitor
                 to a /spot page (incl. signed-out SEO traffic) sees one. */}
             {!adFree && consent === "all" && <AdSlot name="detailTop" />}
@@ -961,6 +966,7 @@ export default function App() {
               <span className="buildtag" title="Deployed version">{typeof __BUILD__ !== "undefined" ? ` · v ${__BUILD__}` : ""}</span>
               <button onClick={() => loadSpot(active)}><IconRefresh /> Refresh</button>
               <div className="footlinks">
+                <a href="/guides/" target="_blank" rel="noopener">Guides</a>
                 <a href="/about" target="_blank" rel="noopener">About</a>
                 <a href="/legal#terms" target="_blank" rel="noopener">Terms</a>
                 <a href="/legal#privacy" target="_blank" rel="noopener">Privacy</a>
