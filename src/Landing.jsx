@@ -157,71 +157,83 @@ function RegionDirectory({ summary, q, onSelect, deepLake, region, onRegion }) {
   );
 }
 
-// Find the nearest covered launch from the browser's location or a US ZIP.
-// When nothing's within range it funnels straight into a location request.
-function NearestFinder({ summary, onSelect, onRequest }) {
-  const [zip, setZip] = useState("");
+// Search a town/lake/ZIP (or use the browser's location): point to the nearest
+// covered launch, and offer to build a live page for that exact spot from NOAA
+// data. No coverage nearby → build a page and/or request a curated spot.
+function NearestFinder({ summary, onSelect, onRequest, onPreview }) {
+  const [q, setQ] = useState("");
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
-  const [result, setResult] = useState(null); // { label, near:[{s,mi}], covered, nearest }
+  const [result, setResult] = useState(null); // { label, pt:{lat,lon}, near:[{s,mi}], covered, nearest }
   const withCoords = (summary || []).filter((s) => s.lat != null && s.lon != null);
   const findFrom = (lat, lon, label) => {
-    if (!withCoords.length) { setErr("Still loading conditions. Try again in a second."); return; }
+    const pt = { lat, lon };
     const ranked = withCoords.map((s) => ({ s, mi: haversineMi({ lat, lon }, s) })).sort((a, b) => a.mi - b.mi);
     const near = ranked.filter((r) => r.mi <= COVERAGE_MI).slice(0, 3);
     setErr("");
-    setResult({ label, near, covered: near.length > 0, nearest: ranked[0] });
+    setResult({ label, pt, near, covered: near.length > 0, nearest: ranked[0] || null });
   };
   const useMyLocation = () => {
-    if (!navigator.geolocation) { setErr("Your browser can't share location. Try a ZIP code."); return; }
+    if (!navigator.geolocation) { setErr("Your browser can't share location. Type a place or ZIP instead."); return; }
     setBusy(true); setErr("");
     navigator.geolocation.getCurrentPosition(
       (pos) => { setBusy(false); findFrom(pos.coords.latitude, pos.coords.longitude, "your location"); },
-      (e) => { setBusy(false); setErr(e.code === 1 ? "Location permission denied. Try a ZIP code instead." : "Couldn't get your location. Try a ZIP code."); },
+      (e) => { setBusy(false); setErr(e.code === 1 ? "Location permission denied. Type a place or ZIP instead." : "Couldn't get your location. Type a place or ZIP."); },
       { timeout: 8000, maximumAge: 300000 },
     );
   };
-  const lookupZip = async (e) => {
+  const lookup = async (e) => {
     e.preventDefault();
-    if (!/^\d{5}$/.test(zip.trim())) { setErr("Enter a 5-digit ZIP code."); return; }
+    const term = q.trim();
+    if (term.length < 2) { setErr("Type a town, lake, or 5-digit ZIP."); return; }
     setBusy(true); setErr("");
     try {
-      const r = await fetch(`/api/geocode?zip=${zip.trim()}`);
+      const param = /^\d{5}$/.test(term) ? `zip=${term}` : `q=${encodeURIComponent(term)}`;
+      const r = await fetch(`/api/geocode?${param}`);
       const d = await r.json();
-      if (!r.ok) throw new Error(d.error || "Couldn't look up that ZIP.");
-      findFrom(d.lat, d.lon, d.place || `ZIP ${d.zip}`);
+      if (!r.ok) throw new Error(d.error || "Couldn't look up that place.");
+      findFrom(d.lat, d.lon, d.place || term);
     } catch (e2) { setErr(e2.message); } finally { setBusy(false); }
   };
+  const label = result ? (result.label === "your location" ? "your spot" : result.label) : "";
+  const buildPage = () => onPreview && result?.pt && onPreview({ ...result.pt, name: result.label === "your location" ? "" : result.label });
   return (
     <section className="nearby-finder">
-      <h2 className="directory-title" style={{ margin: 0 }}>Nearest launch to you</h2>
+      <h2 className="directory-title" style={{ margin: 0 }}>Find or build a page for any spot</h2>
+      <p className="directory-blurb" style={{ margin: "4px 0 0" }}>Search a town, lake, or ZIP. We'll point you at the nearest covered launch, or build a live page for that exact spot straight from NOAA.</p>
       <div className="nf-controls">
         <button className="cbtn ghost" onClick={useMyLocation} disabled={busy}>📍 Use my location</button>
         <span className="nf-or">or</span>
-        <form className="nf-zip" onSubmit={lookupZip}>
-          <input className="field" inputMode="numeric" pattern="\d*" maxLength={5} value={zip}
-            onChange={(e) => setZip(e.target.value.replace(/\D/g, ""))} placeholder="ZIP code" aria-label="ZIP code" />
-          <button className="cbtn" type="submit" disabled={busy}>Go</button>
+        <form className="nf-zip" onSubmit={lookup}>
+          <input className="field nf-q" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Town, lake, or ZIP" aria-label="Search a place or ZIP" />
+          <button className="cbtn" type="submit" disabled={busy}>{busy ? "…" : "Go"}</button>
         </form>
       </div>
       {err && <div className="modal-err" style={{ marginTop: 8 }}>{err}</div>}
-      {result && result.covered && (
+      {result && (
         <div className="nf-results">
-          <p className="acct-note" style={{ margin: "8px 0 6px" }}>Closest to {result.label}:</p>
-          <div className="loc-grid">
-            {result.near.map(({ s, mi }) => (
-              <button key={s.id} className="loc-card" onClick={() => onSelect(s.id)}>
-                <div className="loc-card-top"><span className="loc-name">{s.name}</span><StatusChip level={s.level} /></div>
-                <div className="loc-card-meta">{Math.round(mi)} mi away · {s.lake}</div>
-              </button>
-            ))}
-          </div>
-        </div>
-      )}
-      {result && !result.covered && (
-        <div className="nf-nocover">
-          <p>No covered water within {COVERAGE_MI} miles of {result.label}{result.nearest ? ` (closest is ${result.nearest.s.name}, ${Math.round(result.nearest.mi)} mi)` : ""}. We're expanding, so tell us where you boat.</p>
-          <button className="cbtn" onClick={() => onRequest(result.label && result.label !== "your location" ? result.label : "")}>Request coverage here</button>
+          {result.covered ? (
+            <>
+              <p className="acct-note" style={{ margin: "10px 0 6px" }}>Closest covered launches to {label}:</p>
+              <div className="loc-grid">
+                {result.near.map(({ s, mi }) => (
+                  <button key={s.id} className="loc-card" onClick={() => onSelect(s.id)}>
+                    <div className="loc-card-top"><span className="loc-name">{s.name}</span><StatusChip level={s.level} /></div>
+                    <div className="loc-card-meta">{Math.round(mi)} mi away · {s.lake}</div>
+                  </button>
+                ))}
+              </div>
+              {onPreview && <p className="acct-note" style={{ margin: "8px 0 0" }}>Or <button className="linklike" onClick={buildPage}>build a live page for {label} →</button></p>}
+            </>
+          ) : (
+            <div className="nf-nocover">
+              <p>No covered launch within {COVERAGE_MI} miles{result.nearest ? ` (closest is ${result.nearest.s.name}, ${Math.round(result.nearest.mi)} mi)` : ""}. Build a live page for {label} straight from NOAA data:</p>
+              <div className="nf-actions">
+                {onPreview && <button className="cbtn" onClick={buildPage}>Build this page</button>}
+                <button className="cbtn ghost" onClick={() => onRequest(result.label === "your location" ? "" : result.label)}>Request a curated spot</button>
+              </div>
+            </div>
+          )}
         </div>
       )}
     </section>
@@ -304,7 +316,7 @@ function MyPorts({ summary, favorites, onSelect }) {
   );
 }
 
-export default function Landing({ adFree, onSelect, favorites, onCookieSettings, onJoin, onSignIn, signedIn, nudge, region, onRegion, userEmail }) {
+export default function Landing({ adFree, onSelect, favorites, onCookieSettings, onJoin, onSignIn, signedIn, nudge, region, onRegion, userEmail, onPreview }) {
   const [summary, setSummary] = useState(null);
   const [q, setQ] = useState("");
   const [reqToken, setReqToken] = useState(0);
@@ -329,7 +341,7 @@ export default function Landing({ adFree, onSelect, favorites, onCookieSettings,
         <SplashSelector q={q} setQ={setQ} summary={summary} onSelect={onSelect} favorites={favorites} />
       </Takeover>
       <main className="app">
-        <NearestFinder summary={summary} onSelect={onSelect} onRequest={openRequest} />
+        <NearestFinder summary={summary} onSelect={onSelect} onRequest={openRequest} onPreview={onPreview} />
         {onJoin && (
           <div className="joinstrip">
             <span><b>Every port's verdict is below, free.</b> Create an account for the hour-by-hour picture, live cams &amp; “be back in by” times.</span>

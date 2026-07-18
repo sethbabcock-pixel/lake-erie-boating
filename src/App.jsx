@@ -354,7 +354,9 @@ function ShareButton({ spot, rec, wind, wv }) {
   const share = async () => {
     track("event", "share_verdict", { spot: spot.id, level: rec.level });
     const text = `${spot.name}: ${rec.level} right now. Wind ${wind.speedKt ?? "–"} kt, waves ${wv.ft ?? "–"} ft.`;
-    const url = `https://shouldiboat.com/spot/${encodeURIComponent(spot.id)}`;
+    const url = spot.adHoc
+      ? `https://shouldiboat.com/preview?lat=${spot.lat}&lon=${spot.lon}&name=${encodeURIComponent(spot.name)}`
+      : `https://shouldiboat.com/spot/${encodeURIComponent(spot.id)}`;
     if (navigator.share) { try { await navigator.share({ title: "shouldiboat.com", text, url }); } catch (e) { /* dismissed */ } return; }
     try { await navigator.clipboard.writeText(`${text} ${url}`); setCopied(true); setTimeout(() => setCopied(false), 2000); } catch (e) { /* ignore */ }
   };
@@ -703,8 +705,17 @@ export default function App() {
     const m = window.location.pathname.match(/^\/spot\/([a-z0-9-]{1,40})\/?$/);
     return (m && m[1]) || new URLSearchParams(window.location.search).get("spot");
   };
+  // Preview mode: /preview?lat=&lon=&name= builds a page for any point (the
+  // coordinate-driven engine), not a curated spot.
+  const urlPreview = () => {
+    if (!/^\/preview\/?$/.test(window.location.pathname)) return null;
+    const q = new URLSearchParams(window.location.search);
+    const lat = parseFloat(q.get("lat")), lon = parseFloat(q.get("lon"));
+    return Number.isFinite(lat) && Number.isFinite(lon) ? { lat, lon, name: q.get("name") || "" } : null;
+  };
   const [active, setActive] = useState(() => urlSpot() || localStorage.getItem("boating.spot") || "sandusky");
-  const [landing, setLanding] = useState(() => !urlSpot()); // bare "/" = splash + directory; ?spot=X = detail
+  const [preview, setPreview] = useState(() => urlPreview());
+  const [landing, setLanding] = useState(() => !urlSpot() && !urlPreview()); // bare "/" = splash; ?spot / /preview = detail
   const [region, setRegion] = useState(() => regionFromPath(window.location.pathname)); // /greatlakes etc.
   const [resetToken, setResetToken] = useState(() => new URLSearchParams(window.location.search).get("reset") || ""); // password-reset email link
   const [verifyToken, setVerifyToken] = useState(() => new URLSearchParams(window.location.search).get("verify") || ""); // email-confirmation link
@@ -723,11 +734,23 @@ export default function App() {
     setActive(id);
     setLanding(false);
     setRegion(null);
+    setPreview(null);
     window.scrollTo(0, 0);
   };
   const goLanding = () => {
     window.history.pushState({}, "", "/");
     setLanding(true);
+    setRegion(null);
+    setPreview(null);
+    window.scrollTo(0, 0);
+  };
+  // Build a page for any point (from location search) → /preview, no reload.
+  const goPreview = (pt) => {
+    const qs = new URLSearchParams({ lat: (+pt.lat).toFixed(4), lon: (+pt.lon).toFixed(4) });
+    if (pt.name) qs.set("name", pt.name);
+    window.history.pushState({}, "", `/preview?${qs}`);
+    setPreview({ lat: +pt.lat, lon: +pt.lon, name: pt.name || "" });
+    setLanding(false);
     setRegion(null);
     window.scrollTo(0, 0);
   };
@@ -737,14 +760,17 @@ export default function App() {
     window.history.pushState({}, "", r ? `/${r.slug}` : "/");
     setRegion(r);
     setLanding(true);
+    setPreview(null);
     window.scrollTo(0, 0);
   };
   useEffect(() => {
     const onPop = () => {
       const sp = urlSpot();
-      setLanding(!sp);
+      const pv = urlPreview();
+      setPreview(pv);
+      setLanding(!sp && !pv);
       if (sp) setActive(sp);
-      setRegion(sp ? null : regionFromPath(window.location.pathname));
+      setRegion(sp || pv ? null : regionFromPath(window.location.pathname));
     };
     window.addEventListener("popstate", onPop);
     return () => window.removeEventListener("popstate", onPop);
@@ -765,15 +791,35 @@ export default function App() {
       .then((d) => { setData(d); setLoading(false); track("event", "spot_view", { spot: id, level: d?.recommendation?.level }); })
       .catch((e) => { setError(e.message); setLoading(false); });
   };
+  // Ad-hoc point: build a page from lat/lon. A 422 means it isn't marine water.
+  const loadPoint = (pt) => {
+    setLoading(true);
+    setError(null);
+    setData(null);
+    const qs = new URLSearchParams({ lat: pt.lat, lon: pt.lon });
+    if (pt.name) qs.set("name", pt.name);
+    fetch(`/marine/conditions?${qs}`)
+      .then(async (r) => {
+        const d = await r.json().catch(() => ({}));
+        if (r.status === 422) { setData({ notMarine: true, name: pt.name }); setLoading(false); return null; }
+        if (!r.ok) throw new Error(d.error || `Server returned ${r.status}`);
+        return d;
+      })
+      .then((d) => { if (!d) return; setData(d); setLoading(false); track("event", "preview_view", { level: d?.recommendation?.level }); })
+      .catch((e) => { setError(e.message); setLoading(false); });
+  };
 
-  useEffect(() => { if (!landing) loadSpot(active); localStorage.setItem("boating.spot", active); }, [active, landing]);
+  useEffect(() => {
+    if (preview) { loadPoint(preview); return; }
+    if (!landing) { loadSpot(active); localStorage.setItem("boating.spot", active); }
+  }, [active, landing, preview]);
   // Per-view titles → share cards, tabs, and search results name the port.
   useEffect(() => {
-    const name = (spots.find((s) => s.id === active) || {}).name;
+    const name = preview ? (preview.name || data?.spot?.name) : (spots.find((s) => s.id === active) || {}).name;
     document.title = landing
       ? (region ? `${region.title} boating conditions · shouldiboat.com` : "shouldiboat.com · Live boating conditions")
       : (name ? `${name} boating conditions · shouldiboat.com` : "shouldiboat.com · Live boating conditions");
-  }, [landing, active, spots, region]);
+  }, [landing, active, spots, region, preview, data]);
   // Save spot/theme to the account (debounced) once the signed-in prefs are applied.
   useEffect(() => {
     if (!appliedRef.current || !authRef.current.user) return;
@@ -793,7 +839,9 @@ export default function App() {
   const spotOptions = spots.length ? spots : (spot ? [{ ...spot, lake: "Lake Erie" }] : [{ id: active, name: "Loading…", lake: "Lake Erie" }]);
   const byLake = {};
   spotOptions.forEach((s) => { (byLake[s.lake || "Lake Erie"] ||= []).push(s); });
-  const activeName = (spots.find((s) => s.id === active) || data?.spot || {}).name;
+  const activeName = preview
+    ? (data?.spot?.name || preview.name || "Preview")
+    : (spots.find((s) => s.id === active) || data?.spot || {}).name;
 
   return (
     <>
@@ -819,7 +867,7 @@ export default function App() {
         <Landing adFree={adFree} onSelect={selectLocation} favorites={auth.user ? (auth.user.favorites || []) : []}
           onCookieSettings={() => chooseConsent(null)}
           signedIn={!!auth.user}
-          region={region} onRegion={goRegion}
+          region={region} onRegion={goRegion} onPreview={goPreview}
           userEmail={auth.user ? auth.user.email : ""}
           nudge={auth.user ? <EmailNudge auth={auth} /> : null}
           onJoin={gated ? () => { track("event", "signup_gate_click", { spot: "landing", action: "register" }); setGateAuth("register"); } : null}
@@ -832,9 +880,23 @@ export default function App() {
       <main className="app">
         {auth.user && <EmailNudge auth={auth} />}
         {loading && !data && <div className="loading">Loading live conditions…</div>}
-        {error && <div className="err">Couldn't load conditions: {error}. <button onClick={() => loadSpot(active)}>Retry</button></div>}
+        {error && <div className="err">Couldn't load conditions: {error}. <button onClick={() => (preview ? loadPoint(preview) : loadSpot(active))}>Retry</button></div>}
 
-        {data && (
+        {data?.notMarine && (
+          <section className="notmarine">
+            <h2>Not boatable water</h2>
+            <p>NOAA doesn't issue a marine forecast for {data.name ? <b>{data.name}</b> : "that spot"} — it doesn't sit on a lake, bay, sound, or coast we can forecast. Try a launch on open water.</p>
+            <button className="cbtn" onClick={goLanding}>← Back to all locations</button>
+          </section>
+        )}
+
+        {spot?.adHoc && !data?.notMarine && (
+          <div className="preview-banner">
+            <span><b>Preview</b> · live conditions for {spot.name}{spot.zoneName ? ` (${spot.zoneName})` : ""}. This page isn't saved yet.</span>
+          </div>
+        )}
+
+        {data && !data.notMarine && (
           <>
             {/* ── The Call ── */}
             <section className={`call ${verdictClass(rec.level)}`}>
@@ -843,7 +905,7 @@ export default function App() {
                 <div className="call-top">
                   <span className="call-spot">
                     {spot.name}
-                    {auth.user && (
+                    {auth.user && !spot.adHoc && (
                       <button
                         className={`favstar call-fav ${(auth.user.favorites || []).includes(active) ? "on" : ""}`}
                         title={(auth.user.favorites || []).includes(active) ? "Remove from my ports" : "Add to my ports: front and center on the homepage + morning email"}
