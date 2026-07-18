@@ -1043,34 +1043,49 @@ async function fetchWindyCams(env, lat, lon, lake) {
   const key = env?.WINDY_WEBCAMS_KEY;
   if (!key || lat == null || lon == null) return null;
   try {
-    const u = `https://api.windy.com/webcams/api/v3/webcams?nearby=${round(lat, 3)},${round(lon, 3)},60&limit=5&include=location,player,urls`;
+    // Over-fetch so we can rank: water views (harbor, bay, beach…) beat city
+    // and traffic cams for a boating audience, and live streams beat replays.
+    const u = `https://api.windy.com/webcams/api/v3/webcams?nearby=${round(lat, 3)},${round(lon, 3)},60&limit=20&include=categories,location,player,urls`;
     const r = await fetch(u, { headers: { "X-WINDY-API-KEY": key, Accept: "application/json" }, signal: AbortSignal.timeout(8000) });
     if (!r.ok) return null;
     const d = await r.json();
     const list = d?.webcams || d?.result?.webcams || [];
-    const out = [];
-    out.raw = list.length;
+    const WATER = /beach|harbou?r|\bbay\b|coast|lake|river|marina|\bpier\b|\bport\b|water|island|\bsea\b/i;
+    const scored = [];
     for (const w of list) {
       const id = w.webcamId ?? w.id;
       if (!id) continue;
       // v3 returns player entries as plain URL strings; v2 wrapped them in
-      // objects with an .embed property. Accept both, and fall back to the
-      // documented embed-player URL built from the id, which always exists.
+      // objects with an .embed property. Accept both. Live stream first —
+      // the day player is a 24 h replay, not a live view — and only fall back
+      // to the id-built day player when no player was listed at all.
       const p = w.player || {};
-      const embed = [p.day, p.live, p.lifetime, p.month, p.year]
-        .map((v) => (typeof v === "string" ? v : v?.embed))
-        .find(Boolean) || `https://webcams.windy.com/webcams/public/embed/player/${id}/day`;
+      const asUrl = (v) => (typeof v === "string" ? v : v?.embed);
+      const live = asUrl(p.live);
+      const embed = live || asUrl(p.day) || asUrl(p.lifetime) || asUrl(p.month) || asUrl(p.year)
+        || `https://webcams.windy.com/webcams/public/embed/player/${id}/day`;
       const loc = w.location || {};
       // Windy sometimes returns the literal string "unknown" for city/region.
       const clean = (v) => (v && !/^unknown$/i.test(String(v).trim()) ? v : "");
       const city = clean(loc.city) || clean(loc.region) || "";
       const title = (w.title || city || "Webcam").trim();
       const label = `${title}${city && !title.toLowerCase().includes(String(city).toLowerCase()) ? ` · ${city}` : ""}`.slice(0, 72);
-      out.push({
-        name: `${label} (Windy)`, lat: loc.latitude ?? lat, lon: loc.longitude ?? lon, lake,
-        embed, link: w.urls?.detail || w.urls?.provider || `https://www.windy.com/webcams/${id}`, source: "windy",
+      const catStr = (w.categories || []).map((c) => `${c?.id || ""} ${c?.name || ""}`).join(" ");
+      const watery = WATER.test(catStr) || WATER.test(title);
+      const traffic = /traffic/i.test(catStr);
+      scored.push({
+        watery, live: !!live, traffic,
+        cam: {
+          name: `${label} (${live ? "Windy" : "Windy · replay"})`, lat: loc.latitude ?? lat, lon: loc.longitude ?? lon, lake,
+          embed, link: w.urls?.detail || w.urls?.provider || `https://www.windy.com/webcams/${id}`, source: "windy",
+        },
       });
     }
+    // Water first, live before replay, traffic cams last; ties keep Windy's
+    // nearest-first order. Cut to 5 after ranking.
+    scored.sort((a, b) => (b.watery - a.watery) || (a.traffic - b.traffic) || (b.live - a.live));
+    const out = scored.slice(0, 5).map((s) => s.cam);
+    out.raw = list.length;
     return out;
   } catch (e) {
     return null;
