@@ -1061,7 +1061,9 @@ async function fetchWindyCams(env, lat, lon, lake) {
         .map((v) => (typeof v === "string" ? v : v?.embed))
         .find(Boolean) || `https://webcams.windy.com/webcams/public/embed/player/${id}/day`;
       const loc = w.location || {};
-      const city = loc.city || loc.region || "";
+      // Windy sometimes returns the literal string "unknown" for city/region.
+      const clean = (v) => (v && !/^unknown$/i.test(String(v).trim()) ? v : "");
+      const city = clean(loc.city) || clean(loc.region) || "";
       const title = (w.title || city || "Webcam").trim();
       const label = `${title}${city && !title.toLowerCase().includes(String(city).toLowerCase()) ? ` · ${city}` : ""}`.slice(0, 72);
       out.push({
