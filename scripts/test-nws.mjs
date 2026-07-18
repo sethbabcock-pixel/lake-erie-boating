@@ -67,6 +67,25 @@ for (const spot of ["middle-river", "bath-nc"]) {
   console.log(`   ${spot}: ${d.recommendation?.level} · waves ${d.waves?.ft ?? "—"}ft (${d.waves?.source ?? "none"}) · marine periods ${d.marineForecast?.length ?? 0}`);
 }
 
+// Coordinate-driven engine: build a full page for an ARBITRARY point (no curated
+// spot), and guard non-marine inland points. This is the foundation for location
+// search + "build a page".
+for (const [label, lat, lon, marine] of [
+  ["Annapolis, MD (Chesapeake)", 38.98, -76.49, true],
+  ["Grand Haven, MI (Lake Michigan)", 43.06, -86.24, true],
+  ["Columbus, OH (inland, non-marine)", 39.96, -83.00, false],
+]) {
+  const resp = await onRequest({ request: new Request(`https://shouldiboat.com/marine/conditions?lat=${lat}&lon=${lon}`) });
+  const d = await resp.json();
+  if (marine) {
+    check(`point ${label}: resolves ad-hoc`, resp.status === 200 && d.spot?.adHoc === true, `status ${resp.status}, zone ${d.spot?.zone}`);
+    check(`point ${label}: verdict computed`, ["GO", "CAUTION", "NO-GO"].includes(d.recommendation?.level), d.recommendation?.level);
+    console.log(`   ${label}: ${d.recommendation?.level} · ${d.spot?.zone} (${d.spot?.lake}) · waves ${d.waves?.ft ?? "—"}ft · periods ${d.marineForecast?.length ?? 0}`);
+  } else {
+    check(`point ${label}: guarded non-marine`, resp.status === 422 && d.notMarine === true, `status ${resp.status}`);
+  }
+}
+
 // Wave floor / temps / alert-dedup diagnostic (Erie PA — an Eastern-basin spot
 // with no live buoy, where the grid reads low and the nearshore is authoritative).
 {
