@@ -527,19 +527,49 @@ function waterBodyFromZone(zoneName) {
   return m ? m[1] : null;
 }
 
-async function resolveSpotFromPoint(lat, lon, name) {
-  lat = round(lat, 4); lon = round(lon, 4);
+// The live NWS resolution — the costly part: /points + the seaward ring search.
+async function resolveMarineContext(lat, lon) {
   const [pt, mz] = await Promise.all([
     cachedJSON(`${NWS}/points/${lat},${lon}`, 86400).catch(() => null),
     marineZoneAt(lat, lon),
   ]);
   if (!mz) return null; // no marine zone here → not boatable water we forecast
-  const office = pt?.properties?.gridId || "CLE";
   const rel = pt?.properties?.relativeLocation?.properties;
-  const derivedName = name || (rel?.city ? `${rel.city}, ${rel.state}` : `${lat}, ${lon}`);
   const product = GL_ZONE.test(mz.id) ? "NSH" : "CWF";
-  const lake = waterBodyFromZone(mz.name) || (product === "NSH" ? "Great Lakes" : "Coastal waters");
-  return { name: derivedName, lat, lon, zone: mz.id, zoneName: mz.name, office, product, buoys: [], lake, adHoc: true };
+  return {
+    zone: mz.id, zoneName: mz.name,
+    office: pt?.properties?.gridId || "CLE",
+    product,
+    lake: waterBodyFromZone(mz.name) || (product === "NSH" ? "Great Lakes" : "Coastal waters"),
+    relName: rel?.city ? `${rel.city}, ${rel.state}` : null,
+  };
+}
+
+// Resolved context is ~static per cell and the ring search is the costly part,
+// so cache it in KV keyed by snapped (~1 km) coords — a repeat or nearby search
+// then costs one KV read, not up to ~17 NWS calls. Negatives (inland) are cached
+// too (shorter TTL) behind a `marine` sentinel, so a cached miss is
+// distinguishable from "never resolved". Falls back to a live resolve with no KV.
+const snapCoord = (n) => Math.round(n * 100) / 100;
+async function resolveSpotFromPoint(lat, lon, name, env) {
+  lat = round(lat, 4); lon = round(lon, 4);
+  const key = `geoctx:${snapCoord(lat)},${snapCoord(lon)}`;
+  let cached = null;
+  if (env?.USERS) cached = await env.USERS.get(key, "json").catch(() => null);
+  let ctx;
+  if (cached) {
+    if (!cached.marine) return null; // cached inland point
+    ctx = cached;
+  } else {
+    ctx = await resolveMarineContext(lat, lon);
+    if (env?.USERS) {
+      await env.USERS.put(key, JSON.stringify(ctx ? { marine: true, ...ctx } : { marine: false }),
+        { expirationTtl: (ctx ? 60 : 7) * 86400 }).catch(() => {});
+    }
+    if (!ctx) return null;
+  }
+  const derivedName = name || ctx.relName || `${lat}, ${lon}`;
+  return { name: derivedName, lat, lon, zone: ctx.zone, zoneName: ctx.zoneName, office: ctx.office, product: ctx.product, buoys: [], lake: ctx.lake, adHoc: true };
 }
 
 // Pull a wind speed (kt) + direction from an NWS forecast period like
@@ -1084,7 +1114,7 @@ export async function onRequest(context) {
   const lonP = parseFloat(url.searchParams.get("lon"));
   let spot, spotId;
   if (Number.isFinite(latP) && Number.isFinite(lonP) && Math.abs(latP) <= 90 && Math.abs(lonP) <= 180) {
-    spot = await resolveSpotFromPoint(latP, lonP, url.searchParams.get("name") || null);
+    spot = await resolveSpotFromPoint(latP, lonP, url.searchParams.get("name") || null, context.env);
     if (!spot) {
       return json({ error: "No NWS marine forecast covers that spot — it doesn't look like boatable open water.", notMarine: true }, 422);
     }
