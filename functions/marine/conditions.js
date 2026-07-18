@@ -1032,10 +1032,54 @@ async function effectiveCams(env) {
 // GET /marine/cams?lake=… → { lake, status, cams } — the effective cam list for
 // the lake plus per-cam liveness. ?fresh=1 (admin panel) bypasses the cache so
 // saved changes and re-checks show up immediately.
+// Nearest Windy webcams to a point, as embeddable cam entries. This is how any
+// spot without a curated cam (built pages, coastal spots) still gets a live
+// view. Requires WINDY_WEBCAMS_KEY; any failure returns [] so cams degrade to
+// the curated list, never breaking the panel.
+async function fetchWindyCams(env, lat, lon, lake) {
+  const key = env?.WINDY_WEBCAMS_KEY;
+  if (!key || lat == null || lon == null) return [];
+  try {
+    const u = `https://api.windy.com/webcams/api/v3/webcams?nearby=${round(lat, 3)},${round(lon, 3)},60&limit=5&include=location,player,urls`;
+    const r = await fetch(u, { headers: { "X-WINDY-API-KEY": key, Accept: "application/json" }, signal: AbortSignal.timeout(8000) });
+    if (!r.ok) return [];
+    const d = await r.json();
+    const list = d?.webcams || d?.result?.webcams || [];
+    const out = [];
+    for (const w of list) {
+      const id = w.webcamId ?? w.id;
+      const p = w.player || {};
+      const embed = p.day?.embed || p.live?.embed || p.lifetime?.embed || p.month?.embed || p.year?.embed;
+      if (!id || !embed) continue;
+      const loc = w.location || {};
+      const city = loc.city || loc.region || "";
+      const title = (w.title || city || "Webcam").trim();
+      const label = `${title}${city && !title.toLowerCase().includes(String(city).toLowerCase()) ? ` · ${city}` : ""}`.slice(0, 72);
+      out.push({
+        name: `${label} (Windy)`, lat: loc.latitude ?? lat, lon: loc.longitude ?? lon, lake,
+        embed, link: w.urls?.detail || w.urls?.provider || `https://www.windy.com/webcams/${id}`, source: "windy",
+      });
+    }
+    return out;
+  } catch (e) {
+    return [];
+  }
+}
+
+// Planar-ish distance in degrees (only for "is there a curated cam near here").
+function degDist(la, lo, la2, lo2) {
+  const dx = (lo - lo2) * Math.cos(((la + la2) / 2) * Math.PI / 180);
+  return Math.hypot(dx, la - la2);
+}
+
 async function handleCamStatus(url, env) {
   const lake = url.searchParams.get("lake") || "Lake Erie";
+  const lat = url.searchParams.has("lat") ? parseFloat(url.searchParams.get("lat")) : null;
+  const lon = url.searchParams.has("lon") ? parseFloat(url.searchParams.get("lon")) : null;
+  const hasPt = Number.isFinite(lat) && Number.isFinite(lon);
   const fresh = url.searchParams.get("fresh") === "1";
-  const cacheKey = new Request(`https://cam-status.local/${encodeURIComponent(lake)}`);
+  const cellKey = hasPt ? `${round(lat, 2)},${round(lon, 2)}` : lake;
+  const cacheKey = new Request(`https://cam-status.local/${encodeURIComponent(cellKey)}`);
   const cache = caches.default;
   if (!fresh) {
     const hit = await cache.match(cacheKey);
@@ -1043,6 +1087,11 @@ async function handleCamStatus(url, env) {
   }
   const cams = (await effectiveCams(env)).filter((c) => (c.lake || "Lake Erie") === lake);
   const status = await camStatusFor(cams);
+  // No curated cam within ~60 mi of the point? Pull in nearby Windy webcams.
+  const nearCurated = hasPt && cams.some((c) => degDist(lat, lon, c.lat, c.lon) <= 0.85);
+  if (hasPt && !nearCurated) {
+    for (const w of await fetchWindyCams(env, lat, lon, lake)) { cams.push(w); status[w.name] = "live"; }
+  }
   const resp = new Response(JSON.stringify({ lake, status, cams }), {
     headers: { "Content-Type": "application/json", "Cache-Control": fresh ? "no-store" : "public, max-age=180" },
   });
