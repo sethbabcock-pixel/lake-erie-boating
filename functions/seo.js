@@ -111,7 +111,7 @@ export function injectSeo(html, meta) {
 }
 
 export function robotsTxt() {
-  return `User-agent: *\nAllow: /\nDisallow: /account\nDisallow: /admin\nDisallow: /api/\nDisallow: /auth/\n\nSitemap: ${SITE}/sitemap.xml\n`;
+  return `User-agent: *\nAllow: /\nDisallow: /account\nDisallow: /admin\nDisallow: /api/\nDisallow: /auth/\nDisallow: /preview\n\nSitemap: ${SITE}/sitemap.xml\n`;
 }
 
 export function sitemapXml() {

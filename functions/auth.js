@@ -642,30 +642,58 @@ export async function handleAuth(request, env, url, ctx) {
     return json({ ok: true });
   }
 
-  // ---- public: ZIP -> lat/lon (for "find the nearest launch") ----
-  // Uses the free, key-less Zippopotam service, cached in KV so repeat lookups
-  // are instant and we stay gentle on it. Fails soft — the UI just shows a note.
+  // ---- public: geocode a US ZIP or a place name -> lat/lon ----
+  // ZIP via the key-less Zippopotam service; a place name ("Annapolis, MD") via
+  // OpenStreetMap Nominatim. Both cached in KV so repeat lookups are instant and
+  // we stay gentle on the upstreams. Fails soft — the UI just shows a note.
   if (path === "/api/geocode" && request.method === "GET") {
-    const zip = (url.searchParams.get("zip") || "").trim();
-    if (!/^\d{5}$/.test(zip)) return json({ error: "Enter a 5-digit US ZIP code." }, 400);
     if (!(await rateLimit(env, request, "geocode", 40, 3600))) return json({ error: "Too many lookups. Try again later." }, 429);
-    const cacheKey = `geo:zip:${zip}`;
-    const cached = await env.USERS.get(cacheKey, "json").catch(() => null);
-    if (cached) return json(cached);
-    try {
-      const resp = await fetch(`https://api.zippopotam.us/us/${zip}`, { signal: AbortSignal.timeout(6000), headers: { "User-Agent": "shouldiboat.com" } });
-      if (!resp.ok) return json({ error: "That ZIP code wasn't found." }, 404);
-      const d = await resp.json();
-      const p = (d.places || [])[0];
-      const lat = p && parseFloat(p.latitude), lon = p && parseFloat(p.longitude);
-      if (!p || Number.isNaN(lat) || Number.isNaN(lon)) return json({ error: "That ZIP code wasn't found." }, 404);
-      const place = `${p["place name"] || ""}, ${p["state abbreviation"] || p.state || ""}`.replace(/^,\s*|,\s*$/g, "");
-      const out = { zip, lat, lon, place };
-      await env.USERS.put(cacheKey, JSON.stringify(out), { expirationTtl: 30 * 86400 }).catch(() => {});
-      return json(out);
-    } catch (e) {
-      return json({ error: "Couldn't look up that ZIP right now." }, 502);
+    const zip = (url.searchParams.get("zip") || "").trim();
+    const q = (url.searchParams.get("q") || "").trim().slice(0, 120);
+    if (zip) {
+      if (!/^\d{5}$/.test(zip)) return json({ error: "Enter a 5-digit US ZIP code." }, 400);
+      const cacheKey = `geo:zip:${zip}`;
+      const cached = await env.USERS.get(cacheKey, "json").catch(() => null);
+      if (cached) return json(cached);
+      try {
+        const resp = await fetch(`https://api.zippopotam.us/us/${zip}`, { signal: AbortSignal.timeout(6000), headers: { "User-Agent": "shouldiboat.com" } });
+        if (!resp.ok) return json({ error: "That ZIP code wasn't found." }, 404);
+        const d = await resp.json();
+        const p = (d.places || [])[0];
+        const lat = p && parseFloat(p.latitude), lon = p && parseFloat(p.longitude);
+        if (!p || Number.isNaN(lat) || Number.isNaN(lon)) return json({ error: "That ZIP code wasn't found." }, 404);
+        const place = `${p["place name"] || ""}, ${p["state abbreviation"] || p.state || ""}`.replace(/^,\s*|,\s*$/g, "");
+        const out = { zip, lat, lon, place };
+        await env.USERS.put(cacheKey, JSON.stringify(out), { expirationTtl: 30 * 86400 }).catch(() => {});
+        return json(out);
+      } catch (e) {
+        return json({ error: "Couldn't look up that ZIP right now." }, 502);
+      }
     }
+    if (q.length >= 2) {
+      const cacheKey = `geo:q:${q.toLowerCase()}`;
+      const cached = await env.USERS.get(cacheKey, "json").catch(() => null);
+      if (cached) return json(cached);
+      try {
+        const u = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(q)}&format=jsonv2&limit=1&countrycodes=us&addressdetails=1`;
+        const resp = await fetch(u, { signal: AbortSignal.timeout(6000), headers: { "User-Agent": "shouldiboat.com (seth.babcock@gmail.com)" } });
+        if (!resp.ok) return json({ error: "Couldn't look up that place right now." }, 502);
+        const arr = await resp.json();
+        const p = Array.isArray(arr) ? arr[0] : null;
+        const lat = p && parseFloat(p.lat), lon = p && parseFloat(p.lon);
+        if (!p || Number.isNaN(lat) || Number.isNaN(lon)) return json({ error: "No match for that place. Try a nearby town, or a ZIP." }, 404);
+        const a = p.address || {};
+        const town = a.city || a.town || a.village || a.hamlet || a.county || (p.display_name || "").split(",")[0];
+        const st = a.state_code || a.state || "";
+        const place = [town, st].filter(Boolean).join(", ") || q;
+        const out = { q, lat, lon, place };
+        await env.USERS.put(cacheKey, JSON.stringify(out), { expirationTtl: 30 * 86400 }).catch(() => {});
+        return json(out);
+      } catch (e) {
+        return json({ error: "Couldn't look up that place right now." }, 502);
+      }
+    }
+    return json({ error: "Enter a place or a 5-digit ZIP." }, 400);
   }
 
   // ---- admin: location-request demand list (newest first) ----

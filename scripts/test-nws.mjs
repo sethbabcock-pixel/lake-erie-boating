@@ -86,6 +86,22 @@ for (const [label, lat, lon, marine] of [
   }
 }
 
+// Resolution cache: with a KV binding, a point's marine context is cached by
+// snapped coords, so a second lookup reuses it instead of re-hitting NWS.
+{
+  const store = new Map();
+  const env = { USERS: {
+    get: async (k, t) => { const v = store.get(k); return v == null ? null : (t === "json" ? JSON.parse(v) : v); },
+    put: async (k, v) => { store.set(k, v); },
+  } };
+  const req = () => new Request("https://shouldiboat.com/marine/conditions?lat=38.98&lon=-76.49");
+  const a = await (await onRequest({ request: req(), env })).json();
+  const keys = [...store.keys()].filter((k) => k.startsWith("geoctx:"));
+  const b = await (await onRequest({ request: req(), env })).json();
+  check("geoctx: context cached after first resolve", keys.length >= 1, keys.join(","));
+  check("geoctx: same zone served from cache", !!a.spot?.zone && a.spot.zone === b.spot?.zone, `${a.spot?.zone} vs ${b.spot?.zone}`);
+}
+
 // Wave floor / temps / alert-dedup diagnostic (Erie PA — an Eastern-basin spot
 // with no live buoy, where the grid reads low and the nearshore is authoritative).
 {
