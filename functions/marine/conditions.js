@@ -485,6 +485,46 @@ async function fetchMarineText(office = "CLE", product = "NSH") {
   }
 }
 
+// ── Coordinate-driven spot resolution ───────────────────────────────────────
+// A curated SPOTS entry is just a cache of the marine context I resolve by hand.
+// This resolves the same context for ANY point straight from api.weather.gov, so
+// the app can build a full conditions page for a searched location, not only the
+// hand-listed ports. Returns a synthetic spot, or null when NWS has no marine
+// zone there (i.e. it isn't boatable open water we forecast).
+const GL_ZONE = /^(?:LEZ|LOZ|LHZ|LMZ|LSZ)/; // Great Lakes marine-zone prefixes → NSH product
+
+async function marineZoneAt(lat, lon) {
+  try {
+    const d = await cachedJSON(`${NWS}/zones?type=marine&point=${lat},${lon}`, 86400);
+    const f = (d?.features || [])[0];
+    return f?.properties?.id ? { id: f.properties.id, name: f.properties.name || "" } : null;
+  } catch (e) {
+    return null;
+  }
+}
+
+// A short water-body label from a verbose zone name ("Chesapeake Bay from Pooles
+// Island to Sandy Point MD" → "Chesapeake Bay"), for grouping. null if unknown.
+function waterBodyFromZone(zoneName) {
+  const m = String(zoneName || "").match(/\b(Lake (?:Erie|Ontario|Huron|Michigan|Superior)|Chesapeake Bay|Delaware Bay|Pamlico Sound|Albemarle Sound|Long Island Sound|San Francisco Bay|Puget Sound|Galveston Bay|Tampa Bay|Sabine Lake)\b/i);
+  return m ? m[1] : null;
+}
+
+async function resolveSpotFromPoint(lat, lon, name) {
+  lat = round(lat, 4); lon = round(lon, 4);
+  const [pt, mz] = await Promise.all([
+    cachedJSON(`${NWS}/points/${lat},${lon}`, 86400).catch(() => null),
+    marineZoneAt(lat, lon),
+  ]);
+  if (!mz) return null; // no marine zone here → not boatable water we forecast
+  const office = pt?.properties?.gridId || "CLE";
+  const rel = pt?.properties?.relativeLocation?.properties;
+  const derivedName = name || (rel?.city ? `${rel.city}, ${rel.state}` : `${lat}, ${lon}`);
+  const product = GL_ZONE.test(mz.id) ? "NSH" : "CWF";
+  const lake = waterBodyFromZone(mz.name) || (product === "NSH" ? "Great Lakes" : "Coastal waters");
+  return { name: derivedName, lat, lon, zone: mz.id, zoneName: mz.name, office, product, buoys: [], lake, adHoc: true };
+}
+
 // Pull a wind speed (kt) + direction from an NWS forecast period like
 // "SW 10 to 15 mph" — the fallback when no buoy is reporting wind.
 function parseForecastWind(period) {
@@ -1020,10 +1060,24 @@ export async function onRequest(context) {
     });
   }
 
-  const spotId = (url.searchParams.get("spot") || "sandusky").toLowerCase();
-  const spot = SPOTS[spotId];
-  if (!spot) {
-    return json({ error: `Unknown spot '${spotId}'`, spots: Object.keys(SPOTS) }, 400);
+  // Ad-hoc point (?lat=&lon=): the coordinate-driven engine behind location
+  // search and "build a page" — resolve the marine context for ANY point and
+  // run the same pipeline. Falls back to the curated ?spot= lookup otherwise.
+  const latP = parseFloat(url.searchParams.get("lat"));
+  const lonP = parseFloat(url.searchParams.get("lon"));
+  let spot, spotId;
+  if (Number.isFinite(latP) && Number.isFinite(lonP) && Math.abs(latP) <= 90 && Math.abs(lonP) <= 180) {
+    spot = await resolveSpotFromPoint(latP, lonP, url.searchParams.get("name") || null);
+    if (!spot) {
+      return json({ error: "No NWS marine forecast covers that spot — it doesn't look like boatable open water.", notMarine: true }, 422);
+    }
+    spotId = `@${round(latP, 3)},${round(lonP, 3)}`;
+  } else {
+    spotId = (url.searchParams.get("spot") || "sandusky").toLowerCase();
+    spot = SPOTS[spotId];
+    if (!spot) {
+      return json({ error: `Unknown spot '${spotId}'`, spots: Object.keys(SPOTS) }, 400);
+    }
   }
 
   // Fetch all sources concurrently; each resolves to null on failure so one
@@ -1101,7 +1155,7 @@ export async function onRequest(context) {
   const recommendation = buildRecommendation({ buoy, alerts, wind, waves, read, hours: hourly });
 
   return json({
-    spot: { id: spotId, name: spot.name, zone: spot.zone, lat: spot.lat, lon: spot.lon, lake: spot.lake || "Lake Erie" },
+    spot: { id: spotId, name: spot.name, zone: spot.zone, lat: spot.lat, lon: spot.lon, lake: spot.lake || "Lake Erie", adHoc: !!spot.adHoc, zoneName: spot.zoneName || null },
     updatedAt: new Date().toISOString(),
     recommendation,
     wind,
