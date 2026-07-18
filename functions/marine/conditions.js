@@ -439,16 +439,31 @@ async function fetchMarineForecast(zone) {
 async function fetchAlerts(lat, lon) {
   try {
     const data = await getJSON(`${NWS}/alerts/active?point=${lat},${lon}`);
-    return (data?.features || []).map((f) => ({
+    return dedupeAlerts((data?.features || []).map((f) => ({
       event: f.properties?.event,
       severity: f.properties?.severity,
       headline: f.properties?.headline,
       description: f.properties?.description,
+      sent: f.properties?.sent || f.properties?.effective || null,
       ends: f.properties?.ends || f.properties?.expires,
-    }));
+    })));
   } catch (e) {
     return null;
   }
+}
+
+// NWS re-issues the same advisory repeatedly (e.g. three "Air Quality Alert"
+// features minutes apart). Collapse to one card per event type, keeping the
+// most recently sent, so the page shows one Air Quality Alert, not three.
+function dedupeAlerts(alerts) {
+  if (!alerts || !alerts.length) return alerts;
+  const byEvent = new Map();
+  for (const a of alerts) {
+    const key = (a.event || "").toLowerCase().trim();
+    const prev = byEvent.get(key);
+    if (!prev || (a.sent || "") > (prev.sent || "")) byEvent.set(key, a);
+  }
+  return [...byEvent.values()];
 }
 
 // Latest official NWS Nearshore Marine Forecast (NSH) text product. This is the
@@ -476,17 +491,33 @@ function parseForecastWind(period) {
   return { speedKt: round(mphToKt(mph)), dir: period.windDir || null, mph };
 }
 
-// Pull a wave height (ft) from NWS marine/nearshore forecast text like
-// "Waves 2 to 4 feet" or "Waves 1 foot or less" — the fallback when no buoy is
-// reporting waves (common in the buoy-poor western basin).
+// Highest wave height (ft) a single marine/nearshore period calls for, e.g.
+// "Waves 1 to 3 feet building to 3 to 5 feet" -> 5, "2 feet or less" -> 2.
+// We take the period's PEAK (not the first number): the nearshore product is
+// the authoritative open-water forecast a boater actually meets once they leave
+// the sheltered ramp, so under-reporting it would under-warn. "Occasionally" /
+// "at times" gust-equivalent clauses are dropped so it reflects the sustained
+// forecast, not the odd rogue wave.
+function periodWaveFt(text) {
+  let t = (text || "").toLowerCase();
+  if (!t) return null;
+  t = t.replace(/\b(?:occasionally|at times|isolated)\b[^.]*?f(?:ee|oo)t/g, " ");
+  let max = null;
+  const bump = (v) => { if (v != null && !Number.isNaN(v) && (max == null || v > max)) max = v; };
+  let m, re = /(\d+)\s+to\s+(\d+)\s*f(?:ee|oo)t/g;       // "3 to 5 feet"
+  while ((m = re.exec(t))) bump(Math.max(+m[1], +m[2]));
+  re = /(?:around |about |up to |near )?(\d+)\s*f(?:ee|oo)t/g; // "around 4 feet" / bare "2 feet"
+  while ((m = re.exec(t))) bump(+m[1]);
+  if (max == null && /f(?:oo|ee)t or less|less than a foot/.test(t)) max = 1;
+  return max;
+}
+
+// Current-period wave height (ft) from the marine/nearshore periods (the first
+// period is "now"). The authoritative human forecast for the zone.
 function parseForecastWaves(periods) {
   for (const p of periods || []) {
-    const t = (p.forecast || p.detailed || "").toLowerCase();
-    let m = t.match(/waves?\s+(\d+)\s+to\s+(\d+)\s*f(?:ee|oo)t/);
-    if (m) return Math.max(+m[1], +m[2]);
-    m = t.match(/waves?\s+(?:around |about |up to |near )?(\d+)\s*f(?:ee|oo)t/);
-    if (m) return +m[1];
-    if (/waves?[^.]*(?:foot or less|less than a foot|1 foot or less)/.test(t)) return 1;
+    const v = periodWaveFt(p.forecast || p.detailed || "");
+    if (v != null) return v;
   }
   return null;
 }
@@ -509,21 +540,57 @@ function zoneNumbers(spec) {
 // text product (the reliable wave source for nearshore zones, which the API's
 // zone-forecast endpoint leaves blank).
 function nshWavesForZone(text, zone) {
-  if (!text || !zone) return null;
-  const want = parseInt(String(zone).replace(/\D/g, ""), 10);
-  if (!want) return null;
-  const lines = text.split("\n");
-  for (let i = 0; i < lines.length; i++) {
-    const h = lines[i].match(/^([A-Z]{3}[\d>\-]+?)-\d{6}-\s*$/);
-    if (!h || !zoneNumbers(h[1]).includes(want)) continue;
-    let body = "";
-    for (let j = i + 1; j < lines.length; j++) {
-      if (/^[A-Z]{3}[\d>\-]+?-\d{6}-\s*$/.test(lines[j])) break;
-      body += lines[j] + " ";
-    }
-    return parseForecastWaves([{ forecast: body }]);
+  const periods = nshPeriodsForZone(text, zone);
+  return periods.length ? periodWaveFt(periods[0].forecast) : null;
+}
+
+// Raise the grid's hourly waves to the authoritative nearshore forecast. The
+// forecaster-edited grid samples the cell just off the ramp, which is sheltered
+// and reads low; the nearshore product forecasts the open water a boater
+// actually crosses. So we floor each hour's grid wave at its period's forecast
+// peak (never lower it), which keeps the grid's timing but the nearshore's
+// magnitude — and makes the headline, the hour-by-hour strip, and the week all
+// agree with the nearshore report. Marine periods run in ~12h day/night blocks
+// starting from "now", so we bucket each hour into a period by local half-day.
+function applyMarineWaveFloor(grid, marine) {
+  if (!grid || !marine || !marine.length) return;
+  const periodWaves = marine.map((p) => periodWaveFt(p.forecast || p.detailed || ""));
+  if (!periodWaves.some((v) => v != null)) return;
+  const toLocal = localParts(grid.tz);
+  const halfIdx = (h) => {                       // monotonic day(06-18)/night index
+    const { date, hour } = toLocal(h);
+    const day = Math.round(Date.parse(`${date}T00:00:00Z`) / 86400000);
+    if (hour < 6) return (day - 1) * 2 + 1;      // small hours belong to the prior night
+    if (hour < 18) return day * 2;               // daytime
+    return day * 2 + 1;                          // evening / overnight
+  };
+  const base = halfIdx(Math.floor(Date.now() / 3600000));
+  const keys = new Set([...grid.waveFt.keys(), ...grid.windKt.keys()]); // fill blank wave cells too
+  for (const h of keys) {
+    const slot = halfIdx(h) - base;
+    if (slot < 0 || slot >= periodWaves.length) continue;
+    const floor = periodWaves[slot];
+    if (floor == null) continue;
+    const g = grid.waveFt.get(h);
+    if (g == null || floor > g) grid.waveFt.set(h, floor);
   }
-  return null;
+}
+
+// Water temperature (°F) parsed from the NSH text, which lists a few ports:
+// "...water temperature off Toledo is 81 degrees, off Cleveland 73 degrees,
+// and off Erie 76 degrees." Pick the port named in the spot, else a rough
+// basin average — the fallback when a spot has no live buoy water temp.
+function nshWaterTempF(text, spot) {
+  if (!text) return null;
+  const pairs = [];
+  const re = /off\s+([a-z .'\-]+?)\s+(?:is\s+)?(\d{2,3})\s*degrees/gi;
+  let m;
+  while ((m = re.exec(text))) pairs.push({ place: m[1].trim().toLowerCase(), temp: +m[2] });
+  if (!pairs.length) return null;
+  const name = (spot.name || "").toLowerCase();
+  const hit = pairs.find((p) => p.place && (name.includes(p.place) || name.split(/[ ,/]+/)[0] === p.place));
+  if (hit) return hit.temp;
+  return Math.round(pairs.reduce((a, p) => a + p.temp, 0) / pairs.length);
 }
 
 const titleCase = (s) => s.toLowerCase().replace(/\b\w/g, (c) => c.toUpperCase());
@@ -969,6 +1036,10 @@ export async function onRequest(context) {
     fetchSpotGrid(spot),
   ]);
   const point = fc.daily;
+  // Floor the grid's hourly waves at the authoritative nearshore forecast BEFORE
+  // deriving the week and the hourly strip, so every wave number on the page
+  // comes from one (nearshore-corrected) series and they can't disagree.
+  applyMarineWaveFloor(grid, marine);
   const week = buildWeek(grid);
   const sun = sunTimes(spot.lat, spot.lon);
   // Merge hourly wave height (NWS grid) into the NWS hourly rows, then rate
@@ -996,13 +1067,11 @@ export async function onRequest(context) {
     source: buoy?.windKt != null ? "buoy" : forecastWind?.speedKt != null ? "forecast" : null,
   };
 
-  // Effective waves reflect RIGHT NOW, so the headline agrees with the
-  // hour-by-hour strip. Order: live buoy, then the NWS grid's current hour (the
-  // same series the timeline shows), then the nearshore/zone forecast text as a
-  // last resort where the grid has no wave cell (parts of the buoy-poor western
-  // basin). The zone text is a whole-period peak, not a "now" value, so it must
-  // not outrank the current grid hour — that mismatch was the old discrepancy
-  // where the banner read ~3 ft while the strip showed under a foot.
+  // Effective waves reflect RIGHT NOW and agree with the hour-by-hour strip,
+  // because the strip's current hour is already floored at the nearshore
+  // forecast (applyMarineWaveFloor above). Order: live buoy, then that
+  // nearshore-corrected current hour, then the zone text where the grid has no
+  // cell at all (some coastal/estuary spots).
   const gridNowFt = hourly[0]?.waveFt ?? null;
   const gridNowPeriod = hourly[0]?.periodSec ?? null;
   const textWaveFt = parseForecastWaves(marine) ?? nshWavesForZone(noaaReport?.text, spot.zone) ?? null;
@@ -1011,6 +1080,18 @@ export async function onRequest(context) {
     ft: buoy?.waveHeightFt ?? currentWaveFt ?? null,
     periodSec: buoy?.dominantPeriodSec ?? gridNowPeriod ?? null,
     source: buoy?.waveHeightFt != null ? "buoy" : currentWaveFt != null ? "forecast" : null,
+  };
+
+  // Water temp: live buoy, else the NSH text (which lists a few ports). Air
+  // temp: live buoy, else the current hour of the NWS point forecast. So the
+  // Water/Air tiles aren't blank at the many spots with no reporting buoy.
+  const waterTempF = buoy?.waterTempF ?? nshWaterTempF(noaaReport?.text, spot);
+  const airTempF = buoy?.airTempF ?? hourly[0]?.tempF ?? null;
+  const temps = {
+    waterF: waterTempF ?? null,
+    waterSource: buoy?.waterTempF != null ? "buoy" : waterTempF != null ? "NWS" : null,
+    airF: airTempF ?? null,
+    airSource: buoy?.airTempF != null ? "buoy" : airTempF != null ? "NWS" : null,
   };
 
   const read = windReadFor(spot, wind.dir);
@@ -1022,6 +1103,7 @@ export async function onRequest(context) {
     recommendation,
     wind,
     waves,
+    temps,
     windRead: read,
     hourly,
     outlook,

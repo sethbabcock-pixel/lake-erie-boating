@@ -67,6 +67,23 @@ for (const spot of ["middle-river", "bath-nc"]) {
   console.log(`   ${spot}: ${d.recommendation?.level} · waves ${d.waves?.ft ?? "—"}ft (${d.waves?.source ?? "none"}) · marine periods ${d.marineForecast?.length ?? 0}`);
 }
 
+// Wave floor / temps / alert-dedup diagnostic (Erie PA — an Eastern-basin spot
+// with no live buoy, where the grid reads low and the nearshore is authoritative).
+{
+  const resp = await onRequest({ request: new Request("https://shouldiboat.com/marine/conditions?spot=erie") });
+  const d = await resp.json();
+  const strip = (d.hourly || []).slice(0, 12).map((h) => h.waveFt ?? "—").join(",");
+  console.log(`   erie headline waves: ${d.waves?.ft ?? "—"}ft (${d.waves?.source})`);
+  console.log(`   erie hourly[0..12] waves: ${strip}`);
+  console.log(`   erie nearshore periods: ${(d.marineForecast || []).map((p) => p.name).join(" | ")}`);
+  console.log(`   erie temps: water ${d.temps?.waterF ?? "—"}°F (${d.temps?.waterSource ?? "none"}), air ${d.temps?.airF ?? "—"}°F (${d.temps?.airSource ?? "none"})`);
+  const events = (d.alerts || []).map((a) => a.event);
+  console.log(`   erie alerts (${events.length}): ${events.join(" | ") || "none"}`);
+  check("erie: no duplicate alert events", new Set(events.map((e) => (e || "").toLowerCase())).size === events.length, events.join(", "));
+  check("erie: headline wave matches strip[0]", d.waves?.source !== "forecast" || d.hourly?.[0]?.waveFt == null || d.waves.ft === d.hourly[0].waveFt,
+    `headline ${d.waves?.ft} vs strip0 ${d.hourly?.[0]?.waveFt}`);
+}
+
 // Digest "best GO window today" per port.
 const windows = await fetchTodayWindows();
 check("windows: covers every spot", Object.keys(windows).length === summary.spots.length, `${Object.keys(windows).length} entries`);
