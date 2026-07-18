@@ -138,7 +138,10 @@ svg.ico { vertical-align: -0.15em; flex: 0 0 auto; }
      the location picker stretches across the row beside the theme toggle, and
      the two auth buttons split an equal, full-width row beneath it. */
   .controls { width: 100%; justify-content: flex-start; row-gap: var(--s2); }
-  .controls .locpick { flex: 1 1 auto; min-width: 0; }
+  /* flex-basis 0 so line-wrapping ignores the picker's text width: it shares a
+     row with the theme toggle (signed-out) or the toggle + avatar (signed-in)
+     and grows to fill, instead of taking a full row and pushing them to wrap. */
+  .controls .locpick { flex: 1 1 0; min-width: 0; }
   .locpick-btn { width: 100%; max-width: none; }
   .controls .auth-ctas { flex: 1 1 100%; width: 100%; justify-content: stretch; }
   .auth-ctas .signin-btn { flex: 1 1 0; min-width: 0; display: flex; align-items: center; justify-content: center; }
