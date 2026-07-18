@@ -95,8 +95,8 @@ export const SPOTS = {
   // zone + NDBC pipeline — the water body (`lake`) just needs a WATER_CENTERS
   // entry so a seaward wave cell gets sampled. Zone/office/buoy IDs are the
   // NWS/NDBC identifiers for each area; verify against live data when adding more.
-  "middle-river": { name: "Middle River / Essex, MD", lat: 39.31, lon: -76.40, zone: "ANZ531", office: "LWX", buoys: ["FSKM2", "44062"], lake: "Chesapeake Bay" },
-  "bath-nc": { name: "Bath / Pamlico River, NC", lat: 35.44, lon: -76.75, zone: "AMZ137", office: "MHX", buoys: [], lake: "Pamlico Sound" },
+  "middle-river": { name: "Middle River / Essex, MD", lat: 39.31, lon: -76.40, zone: "ANZ531", office: "LWX", product: "CWF", buoys: ["FSKM2", "44062"], lake: "Chesapeake Bay" },
+  "bath-nc": { name: "Bath / Pamlico River, NC", lat: 35.44, lon: -76.75, zone: "AMZ136", office: "MHX", product: "CWF", buoys: [], lake: "Pamlico Sound" },
 };
 
 const json = (obj, status = 200) =>
@@ -466,16 +466,20 @@ function dedupeAlerts(alerts) {
   return [...byEvent.values()];
 }
 
-// Latest official NWS Nearshore Marine Forecast (NSH) text product. This is the
-// formal NOAA report boaters read — full text, all Lake Erie zones.
-async function fetchNSH(office = "CLE") {
+// Latest official NWS marine text product for an office. This is the formal
+// NOAA report boaters read, and the real source of the per-zone forecast
+// periods (the structured /zones/marine/{id}/forecast API is largely
+// unpopulated now). The Great Lakes use NSH (Nearshore Marine Forecast); the
+// ocean coasts use CWF (Coastal Waters Forecast) — same text layout (UGC zone
+// headers + .PERIOD... blocks), so the same parser reads both.
+async function fetchMarineText(office = "CLE", product = "NSH") {
   try {
-    const list = await getJSON(`${NWS}/products/types/NSH/locations/${office}`);
+    const list = await getJSON(`${NWS}/products/types/${product}/locations/${office}`);
     const id = (list?.["@graph"] || list?.products || [])[0]?.id;
     if (!id) return null;
     const prod = await getJSON(`${NWS}/products/${id}`);
     if (!prod?.productText) return null;
-    return { text: prod.productText, issued: prod.issuanceTime || null, office };
+    return { text: prod.productText, issued: prod.issuanceTime || null, office, product };
   } catch (e) {
     return null;
   }
@@ -1029,7 +1033,7 @@ export async function onRequest(context) {
     fetchForecasts(spot.lat, spot.lon),
     fetchMarineForecast(spot.zone),
     fetchAlerts(spot.lat, spot.lon),
-    fetchNSH(spot.office || "CLE"), // per-spot WFO (Erie spots default to Cleveland)
+    fetchMarineText(spot.office || "CLE", spot.product || "NSH"), // NSH on the lakes, CWF on the coasts
     fetchSpotGrid(spot),
   ]);
   const point = fc.daily;
