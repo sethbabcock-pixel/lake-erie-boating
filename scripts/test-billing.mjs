@@ -768,7 +768,9 @@ async function run() {
     check("delete: cancels stripe subscription immediately", !!delCall, JSON.stringify(stripeCalls.map((c) => c.method + " " + c.url)));
   }
 
-  // 43. legacy (100k-iteration) password hash is upgraded on next login
+  // 43. grandfathered (100k-iteration) password hash still verifies on login.
+  // 100k is the Cloudflare Workers PBKDF2 ceiling, so it's already the current
+  // work factor — it must NOT be re-hashed above the cap (that would throw).
   {
     const env = { USERS: makeKV() };
     const salt = "aabbccddeeff00112233445566778899";
@@ -780,10 +782,10 @@ async function run() {
     const ok = await call(req("POST", "/auth/login", { body: { email: "legacy@example.com", password: "Legacy1!" } }), env);
     eq("legacy: correct password → 200", ok.status, 200);
     const u = await env.USERS.get("user:legacy@example.com", "json");
-    eq("legacy: work factor upgraded to 300k", u.passIter, 300000);
-    check("legacy: hash re-salted on upgrade", u.salt !== salt);
-    // and the upgraded hash still verifies on the next login
-    eq("legacy: still logs in after upgrade", (await call(req("POST", "/auth/login", { body: { email: "legacy@example.com", password: "Legacy1!" } }), env)).status, 200);
+    eq("legacy: work factor stays at the 100k Workers cap", u.passIter ?? 100000, 100000);
+    check("legacy: not re-hashed above the cap (salt unchanged)", u.salt === salt);
+    // and it still verifies on the next login
+    eq("legacy: still logs in", (await call(req("POST", "/auth/login", { body: { email: "legacy@example.com", password: "Legacy1!" } }), env)).status, 200);
   }
 
   // 44. per-IP rate limiting on login

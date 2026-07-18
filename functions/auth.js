@@ -47,10 +47,12 @@ function timingSafeEqual(a, b) {
   return m === 0;
 }
 
-// PBKDF2 work factor. Raised from the original 100k; existing hashes record
-// their own iteration count (passIter) and are transparently re-hashed to this
-// value on the user's next successful login.
-const PBKDF2_ITERATIONS = 300000;
+// PBKDF2 work factor. Capped at 100k because Cloudflare Workers' Web Crypto
+// rejects PBKDF2 iteration counts above 100000 ("iteration counts above 100000
+// are not supported") — a higher value throws and breaks signup + login.
+// Existing hashes record their own iteration count (passIter) and are
+// transparently re-hashed to this value on the user's next successful login.
+const PBKDF2_ITERATIONS = 100000;
 const LEGACY_PBKDF2_ITERATIONS = 100000;
 async function pbkdf2(password, saltHex, iterations = PBKDF2_ITERATIONS) {
   const salt = hexToBuf(saltHex);
