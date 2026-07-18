@@ -1049,11 +1049,17 @@ async function fetchWindyCams(env, lat, lon, lake) {
     const d = await r.json();
     const list = d?.webcams || d?.result?.webcams || [];
     const out = [];
+    out.raw = list.length;
     for (const w of list) {
       const id = w.webcamId ?? w.id;
+      if (!id) continue;
+      // v3 returns player entries as plain URL strings; v2 wrapped them in
+      // objects with an .embed property. Accept both, and fall back to the
+      // documented embed-player URL built from the id, which always exists.
       const p = w.player || {};
-      const embed = p.day?.embed || p.live?.embed || p.lifetime?.embed || p.month?.embed || p.year?.embed;
-      if (!id || !embed) continue;
+      const embed = [p.day, p.live, p.lifetime, p.month, p.year]
+        .map((v) => (typeof v === "string" ? v : v?.embed))
+        .find(Boolean) || `https://webcams.windy.com/webcams/public/embed/player/${id}/day`;
       const loc = w.location || {};
       const city = loc.city || loc.region || "";
       const title = (w.title || city || "Webcam").trim();
@@ -1099,7 +1105,9 @@ async function handleCamStatus(url, env) {
     const found = await fetchWindyCams(env, lat, lon, lake);
     if (found == null) windy = "error";
     else {
-      windy = `ok:${found.length}`;
+      // ok:<usable>/<returned-by-api> — distinguishes "API found nothing
+      // nearby" from "cams returned but none parsed into an embed".
+      windy = `ok:${found.length}/${found.raw ?? found.length}`;
       for (const w of found) { cams.push(w); status[w.name] = "live"; }
     }
   }
