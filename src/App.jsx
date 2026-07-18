@@ -897,13 +897,13 @@ export default function App() {
               </div>
               <div className="stat">
                 <div className="k">Water</div>
-                <div className="v">{fmt(buoy ? buoy.waterTempF : null, "")}<small>°F</small></div>
-                <div className="sub">{buoy ? "buoy" : "—"}</div>
+                <div className="v">{fmt(data.temps?.waterF, "")}<small>°F</small></div>
+                <div className="sub">{data.temps?.waterSource || "—"}</div>
               </div>
               <div className="stat">
                 <div className="k">Air</div>
-                <div className="v">{fmt(buoy && buoy.airTempF != null ? buoy.airTempF : null, "")}<small>°F</small></div>
-                <div className="sub">{buoy && buoy.airTempF != null ? "buoy" : "—"}</div>
+                <div className="v">{fmt(data.temps?.airF, "")}<small>°F</small></div>
+                <div className="sub">{data.temps?.airSource || "—"}</div>
               </div>
             </div>
 
