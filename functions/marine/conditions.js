@@ -96,7 +96,7 @@ export const SPOTS = {
   // entry so a seaward wave cell gets sampled. Zone/office/buoy IDs are the
   // NWS/NDBC identifiers for each area; verify against live data when adding more.
   "middle-river": { name: "Middle River / Essex, MD", lat: 39.31, lon: -76.40, zone: "ANZ531", office: "LWX", buoys: ["FSKM2", "44062"], lake: "Chesapeake Bay" },
-  "bath-nc": { name: "Bath / Pamlico River, NC", lat: 35.44, lon: -76.75, zone: "AMZ137", office: "MHX", buoys: [], lake: "Pamlico Sound" },
+  "bath-nc": { name: "Bath / Pamlico River, NC", lat: 35.44, lon: -76.75, zone: "AMZ136", office: "MHX", buoys: [], lake: "Pamlico Sound" },
 };
 
 const json = (obj, status = 200) =>
