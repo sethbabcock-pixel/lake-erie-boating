@@ -134,8 +134,14 @@ svg.ico { vertical-align: -0.15em; flex: 0 0 auto; }
 @media (max-width: 620px) {
   .wm-tag { display: none; }
   .wm-name { font-size: var(--fs-lg); }
-  .locpick-btn { max-width: 60vw; }
-  .controls { width: 100%; }
+  /* Use the full header width on phones instead of hugging the right edge:
+     the location picker stretches across the row beside the theme toggle, and
+     the two auth buttons split an equal, full-width row beneath it. */
+  .controls { width: 100%; justify-content: flex-start; row-gap: var(--s2); }
+  .controls .locpick { flex: 1 1 auto; min-width: 0; }
+  .locpick-btn { width: 100%; max-width: none; }
+  .controls .auth-ctas { flex: 1 1 100%; width: 100%; justify-content: stretch; }
+  .auth-ctas .signin-btn { flex: 1 1 0; min-width: 0; display: flex; align-items: center; justify-content: center; }
   .sel.locsel { flex: 1 1 auto; }
 }
 
