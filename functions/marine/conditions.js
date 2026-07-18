@@ -536,14 +536,6 @@ function zoneNumbers(spec) {
   return nums;
 }
 
-// Parse the current-period wave height (ft) for a specific zone out of the NSH
-// text product (the reliable wave source for nearshore zones, which the API's
-// zone-forecast endpoint leaves blank).
-function nshWavesForZone(text, zone) {
-  const periods = nshPeriodsForZone(text, zone);
-  return periods.length ? periodWaveFt(periods[0].forecast) : null;
-}
-
 // Raise the grid's hourly waves to the authoritative nearshore forecast. The
 // forecaster-edited grid samples the cell just off the ramp, which is sheltered
 // and reads low; the nearshore product forecasts the open water a boater
@@ -554,7 +546,12 @@ function nshWavesForZone(text, zone) {
 // starting from "now", so we bucket each hour into a period by local half-day.
 function applyMarineWaveFloor(grid, marine) {
   if (!grid || !marine || !marine.length) return;
-  const periodWaves = marine.map((p) => periodWaveFt(p.forecast || p.detailed || ""));
+  // Drop leading advisory / synopsis entries (e.g. a "Dense Smoke Advisory"
+  // headline) that aren't day/night forecast periods, so period[0] lines up with
+  // the current half-day. Real periods always carry a wind or wave number.
+  const periods = marine.filter((p) => /\b(?:knots?|kt|mph|f(?:ee|oo)t|seas)\b/i.test(p.forecast || p.detailed || ""));
+  if (!periods.length) return;
+  const periodWaves = periods.map((p) => periodWaveFt(p.forecast || p.detailed || ""));
   if (!periodWaves.some((v) => v != null)) return;
   const toLocal = localParts(grid.tz);
   const halfIdx = (h) => {                       // monotonic day(06-18)/night index
@@ -1036,10 +1033,12 @@ export async function onRequest(context) {
     fetchSpotGrid(spot),
   ]);
   const point = fc.daily;
+  // The nearshore periods, from the marine-zone API or (fallback) the NSH text.
+  const marinePeriods = (marine && marine.length) ? marine : nshPeriodsForZone(noaaReport?.text, spot.zone);
   // Floor the grid's hourly waves at the authoritative nearshore forecast BEFORE
   // deriving the week and the hourly strip, so every wave number on the page
   // comes from one (nearshore-corrected) series and they can't disagree.
-  applyMarineWaveFloor(grid, marine);
+  applyMarineWaveFloor(grid, marinePeriods);
   const week = buildWeek(grid);
   const sun = sunTimes(spot.lat, spot.lon);
   // Merge hourly wave height (NWS grid) into the NWS hourly rows, then rate
@@ -1074,7 +1073,7 @@ export async function onRequest(context) {
   // cell at all (some coastal/estuary spots).
   const gridNowFt = hourly[0]?.waveFt ?? null;
   const gridNowPeriod = hourly[0]?.periodSec ?? null;
-  const textWaveFt = parseForecastWaves(marine) ?? nshWavesForZone(noaaReport?.text, spot.zone) ?? null;
+  const textWaveFt = parseForecastWaves(marinePeriods) ?? null;
   const currentWaveFt = gridNowFt ?? textWaveFt;
   const waves = {
     ft: buoy?.waveHeightFt ?? currentWaveFt ?? null,
@@ -1111,7 +1110,7 @@ export async function onRequest(context) {
     sun,
     buoy,
     alerts: alerts || [],
-    marineForecast: (marine && marine.length) ? marine : nshPeriodsForZone(noaaReport?.text, spot.zone),
+    marineForecast: marinePeriods,
     pointForecast: point || [],
     noaaReport,
     sources: {
