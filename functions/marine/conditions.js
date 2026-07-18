@@ -493,14 +493,31 @@ async function fetchMarineText(office = "CLE", product = "NSH") {
 // zone there (i.e. it isn't boatable open water we forecast).
 const GL_ZONE = /^(?:LEZ|LOZ|LHZ|LMZ|LSZ)/; // Great Lakes marine-zone prefixes → NSH product
 
-async function marineZoneAt(lat, lon) {
+async function oneMarineZone(lat, lon) {
   try {
-    const d = await cachedJSON(`${NWS}/zones?type=marine&point=${lat},${lon}`, 86400);
+    const d = await cachedJSON(`${NWS}/zones?type=marine&point=${round(lat, 4)},${round(lon, 4)}`, 86400);
     const f = (d?.features || [])[0];
     return f?.properties?.id ? { id: f.properties.id, name: f.properties.name || "" } : null;
   } catch (e) {
     return null;
   }
+}
+
+// A searched place is usually a town centroid on LAND, but marine zones only
+// cover water — so a point-in-zone lookup at the exact spot misses. Try the
+// point, then expanding rings of nearby offsets, until one lands in a marine
+// zone (i.e. the nearest water). Inland points exhaust the rings and return
+// null, which is how we tell "not boatable water".
+async function marineZoneAt(lat, lon) {
+  const center = await oneMarineZone(lat, lon);
+  if (center) return center;
+  const dirs = [[0, 1], [1, 0], [0, -1], [-1, 0], [1, 1], [1, -1], [-1, 1], [-1, -1]];
+  for (const r of [0.08, 0.18]) {                 // ~5.5 mi, then ~12 mi
+    const hits = await Promise.all(dirs.map(([dLat, dLon]) => oneMarineZone(lat + dLat * r, lon + dLon * r)));
+    const hit = hits.find(Boolean);
+    if (hit) return hit;
+  }
+  return null;
 }
 
 // A short water-body label from a verbose zone name ("Chesapeake Bay from Pooles
