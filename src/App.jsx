@@ -200,10 +200,13 @@ function ThemeToggle({ effective, onToggle }) {
 }
 
 // Custom, searchable, lake-grouped location picker (replaces the bland select).
-function LocationPicker({ byLake, active, activeName, onSelect, favorites = [], onToggleFav }) {
+function LocationPicker({ byLake, active, activeName, onSelect, favorites = [], onToggleFav, onBuild }) {
   const [open, setOpen] = useState(false);
   const [q, setQ] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState("");
   const ref = useRef(null);
+  const listRef = useRef(null);
   const favSet = new Set(favorites);
   const allSpots = Object.values(byLake).flat();
   const favSpots = favorites.map((id) => allSpots.find((s) => s.id === id)).filter(Boolean);
@@ -226,7 +229,43 @@ function LocationPicker({ byLake, active, activeName, onSelect, favorites = [], 
     document.addEventListener("keydown", onKey);
     return () => { document.removeEventListener("mousedown", onDoc); document.removeEventListener("keydown", onKey); };
   }, [open]);
+  // Keep the list above the on-screen keyboard: mobile browsers overlay the
+  // keyboard without resizing the layout viewport, so a CSS max-height can't
+  // know where the keyboard starts — the visual viewport does. Cap the list to
+  // the space between its top edge and the keyboard, live as it opens/closes.
+  useEffect(() => {
+    if (!open) return;
+    const vv = window.visualViewport;
+    if (!vv) return;
+    const apply = () => {
+      const el = listRef.current;
+      if (!el) return;
+      const top = el.getBoundingClientRect().top;
+      el.style.maxHeight = `${Math.max(140, vv.height + vv.offsetTop - top - 12)}px`;
+    };
+    apply();
+    vv.addEventListener("resize", apply);
+    vv.addEventListener("scroll", apply);
+    return () => { vv.removeEventListener("resize", apply); vv.removeEventListener("scroll", apply); };
+  }, [open]);
+  // "Build a page" from the same search box: geocode the query and open the
+  // /preview flow — so any spot page can reach any water, not just the homepage.
+  const buildFromSearch = async () => {
+    const term = q.trim();
+    if (term.length < 2 || !onBuild) return;
+    setBusy(true); setErr("");
+    try {
+      const param = /^\d{5}$/.test(term) ? `zip=${term}` : `q=${encodeURIComponent(term)}`;
+      const r = await fetch(`/api/geocode?${param}`);
+      const d = await r.json();
+      if (!r.ok) throw new Error(d.error || "Couldn't find that place.");
+      setOpen(false); setQ("");
+      onBuild({ lat: d.lat, lon: d.lon, name: d.place || term });
+    } catch (e2) { setErr(e2.message); } finally { setBusy(false); }
+  };
   const ql = q.trim().toLowerCase();
+  const anyMatch = !ql || Object.entries(byLake).some(([lake, list]) =>
+    list.some((s) => s.name.toLowerCase().includes(ql) || lake.toLowerCase().includes(ql)));
   return (
     <div className="locpick" ref={ref}>
       <button className="locpick-btn" onClick={() => setOpen((o) => !o)} aria-haspopup="listbox" aria-expanded={open}>
@@ -238,8 +277,9 @@ function LocationPicker({ byLake, active, activeName, onSelect, favorites = [], 
       </button>
       {open && (
         <div className="locpick-panel" role="listbox">
-          <input className="locpick-search" placeholder="Search spots…" value={q} onChange={(e) => setQ(e.target.value)} autoFocus />
-          <div className="locpick-list">
+          <input className="locpick-search" placeholder="Search spots, or any town / ZIP…" value={q} onChange={(e) => setQ(e.target.value)}
+            onKeyDown={(e) => { if (e.key === "Enter" && ql && !anyMatch) buildFromSearch(); }} autoFocus />
+          <div className="locpick-list" ref={listRef}>
             {onToggleFav && favSpots.length > 0 && !ql && (
               <div className="locpick-group">
                 <div className="locpick-lake"><IconStar filled /> Favorites</div>
@@ -256,7 +296,16 @@ function LocationPicker({ byLake, active, activeName, onSelect, favorites = [], 
                 </div>
               );
             })}
+            {ql && !anyMatch && <div className="locpick-none">No covered spots match “{q.trim()}”.</div>}
           </div>
+          {onBuild && ql.length >= 2 && (
+            <div className="locpick-build">
+              <button className="locpick-buildbtn" onClick={buildFromSearch} disabled={busy}>
+                {busy ? "Looking up…" : <>🌊 Build a live page for “{q.trim()}” →</>}
+              </button>
+              {err && <div className="locpick-err">{err}</div>}
+            </div>
+          )}
         </div>
       )}
     </div>
@@ -595,13 +644,20 @@ function HourStrip({ hours, headInBy }) {
               </div>
             );
           })}
-          {/* period — meaningless on flat water, so quiet it to a dot */}
-          <Label unit="s">Between waves</Label>
-          {hours.map((h) => (
-            <div key={h.time} className={cls(h, "hx-dim")}>
-              {h.periodSec == null || (h.waveFt != null && h.waveFt < 1) ? "·" : h.periodSec}
-            </div>
-          ))}
+          {/* period — some waters' NWS grids carry no wavePeriod layer at all
+              (e.g. Chesapeake); a permanently blank row reads as broken, so
+              only render it when at least one hour has data. Values stay
+              visible (dimmed) even on flat water. */}
+          {hours.some((h) => h.periodSec != null) && (
+            <>
+              <Label unit="s">Between waves</Label>
+              {hours.map((h) => (
+                <div key={h.time} className={cls(h, "hx-dim")}>
+                  {h.periodSec == null ? "·" : h.periodSec}
+                </div>
+              ))}
+            </>
+          )}
           {/* rain */}
           <Label unit="%">Rain</Label>
           {hours.map((h) => <div key={h.time} className={cls(h, `hx-rain-${rainTint(h.precipPct)}`)}>{h.precipPct ? h.precipPct : "·"}</div>)}
@@ -875,7 +931,7 @@ export default function App() {
           </a>
           <div className="controls">
             <LocationPicker byLake={byLake} active={active} activeName={activeName} onSelect={selectLocation}
-              favorites={auth.user ? (auth.user.favorites || []) : []} onToggleFav={auth.user ? toggleFav : undefined} />
+              favorites={auth.user ? (auth.user.favorites || []) : []} onToggleFav={auth.user ? toggleFav : undefined} onBuild={goPreview} />
             <ThemeToggle effective={effective} onToggle={() => setChoice(effective === "dark" ? "light" : "dark")} />
             <Account auth={auth} />
           </div>

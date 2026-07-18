@@ -269,6 +269,16 @@ function RequestLocation({ userEmail, openToken, prefill }) {
       setState("done");
     } catch (e2) { setErr(e2.message); }
   };
+  // Collapsed by default: a one-line invitation, not a second feature card —
+  // the finder above is the primary path and its no-coverage flow force-opens
+  // this form via openToken.
+  if (state !== "done" && !open) {
+    return (
+      <section className="reqloc reqloc-slim" id="request-location">
+        <p className="reqloc-line">Don't see your water? <button className="linklike" onClick={() => setOpen(true)}>Request a location →</button></p>
+      </section>
+    );
+  }
   return (
     <section className="reqloc" id="request-location">
       {state === "done" ? (
@@ -280,7 +290,6 @@ function RequestLocation({ userEmail, openToken, prefill }) {
               <h2 className="directory-title" style={{ marginBottom: 4 }}>Don't see your water?</h2>
               <p className="directory-blurb" style={{ margin: 0 }}>Tell us where you boat. Requests drive where we expand next, and if you know the local harbor webcam, that's the piece we can't automate.</p>
             </div>
-            {!open && <button className="cbtn" onClick={() => setOpen(true)}>Request a location</button>}
           </div>
           {open && (
             <form className="reqloc-form" onSubmit={submit}>

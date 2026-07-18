@@ -1036,13 +1036,16 @@ async function effectiveCams(env) {
 // spot without a curated cam (built pages, coastal spots) still gets a live
 // view. Requires WINDY_WEBCAMS_KEY; any failure returns [] so cams degrade to
 // the curated list, never breaking the panel.
+// Returns an array on success (possibly empty) or null on API failure, so the
+// caller can report "no key" / "error" / "ok" distinctly in the response's
+// `windy` field — otherwise a missing key and a dead API look identical.
 async function fetchWindyCams(env, lat, lon, lake) {
   const key = env?.WINDY_WEBCAMS_KEY;
-  if (!key || lat == null || lon == null) return [];
+  if (!key || lat == null || lon == null) return null;
   try {
     const u = `https://api.windy.com/webcams/api/v3/webcams?nearby=${round(lat, 3)},${round(lon, 3)},60&limit=5&include=location,player,urls`;
     const r = await fetch(u, { headers: { "X-WINDY-API-KEY": key, Accept: "application/json" }, signal: AbortSignal.timeout(8000) });
-    if (!r.ok) return [];
+    if (!r.ok) return null;
     const d = await r.json();
     const list = d?.webcams || d?.result?.webcams || [];
     const out = [];
@@ -1062,7 +1065,7 @@ async function fetchWindyCams(env, lat, lon, lake) {
     }
     return out;
   } catch (e) {
-    return [];
+    return null;
   }
 }
 
@@ -1088,11 +1091,19 @@ async function handleCamStatus(url, env) {
   const cams = (await effectiveCams(env)).filter((c) => (c.lake || "Lake Erie") === lake);
   const status = await camStatusFor(cams);
   // No curated cam within ~60 mi of the point? Pull in nearby Windy webcams.
+  // `windy` reports why there aren't any: "no-key" (secret unset), "error"
+  // (API call failed), "ok:N", or "curated"/"off" when Windy wasn't consulted.
   const nearCurated = hasPt && cams.some((c) => degDist(lat, lon, c.lat, c.lon) <= 0.85);
-  if (hasPt && !nearCurated) {
-    for (const w of await fetchWindyCams(env, lat, lon, lake)) { cams.push(w); status[w.name] = "live"; }
+  let windy = hasPt ? (nearCurated ? "curated" : "no-key") : "off";
+  if (hasPt && !nearCurated && env?.WINDY_WEBCAMS_KEY) {
+    const found = await fetchWindyCams(env, lat, lon, lake);
+    if (found == null) windy = "error";
+    else {
+      windy = `ok:${found.length}`;
+      for (const w of found) { cams.push(w); status[w.name] = "live"; }
+    }
   }
-  const resp = new Response(JSON.stringify({ lake, status, cams }), {
+  const resp = new Response(JSON.stringify({ lake, status, cams, windy }), {
     headers: { "Content-Type": "application/json", "Cache-Control": fresh ? "no-store" : "public, max-age=180" },
   });
   if (!fresh) await cache.put(cacheKey, resp.clone());

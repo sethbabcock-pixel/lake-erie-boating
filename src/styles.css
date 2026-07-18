@@ -115,6 +115,15 @@ svg.ico { vertical-align: -0.15em; flex: 0 0 auto; }
 .locpick-item:hover { background: var(--surface-sunk); }
 .locpick-item.active { background: color-mix(in srgb, var(--accent) 14%, transparent); color: var(--accent); font-weight: var(--fw-semibold); }
 .locpick-item .check { color: var(--accent); font-weight: var(--fw-bold); }
+.locpick-none { padding: 10px 12px; color: var(--text-muted); font-size: var(--fs-sm); }
+/* "Build a page" footer: the escape hatch when the query isn't a covered spot. */
+.locpick-build { border-top: 1px solid var(--border); padding: 6px; }
+.locpick-buildbtn { display: block; width: 100%; text-align: left; padding: 10px 8px; min-height: 44px;
+  background: none; border: none; border-radius: var(--r-sm); color: var(--accent);
+  font-family: var(--font-sans); font-size: var(--fs-sm); font-weight: var(--fw-semibold); cursor: pointer; }
+.locpick-buildbtn:hover { background: var(--surface-sunk); }
+.locpick-buildbtn:disabled { opacity: 0.6; cursor: wait; }
+.locpick-err { padding: 0 8px 8px; color: var(--danger); font-size: var(--fs-xs); }
 
 /* Structured nearshore forecast */
 .mlist { display: flex; flex-direction: column; }
@@ -659,6 +668,10 @@ body.has-takeover .app { background: var(--bg); border-radius: var(--r-lg) var(-
 .region-chip.on { background: var(--accent); border-color: var(--accent); color: #fff; }
 /* Request-a-location card */
 .reqloc { margin-top: var(--s5); border: 1px solid var(--border); border-radius: var(--r-lg); background: var(--surface); padding: var(--s4) var(--s5); }
+/* Collapsed one-liner (default): an invitation, not a second feature card. */
+.reqloc-slim { background: transparent; border: none; padding: var(--s2) 0; text-align: center; }
+.reqloc-line { margin: 0; color: var(--text-muted); font-size: var(--fs-sm); }
+.reqloc-line .linklike { font-size: var(--fs-sm); font-weight: var(--fw-semibold); }
 .reqloc-head { display: flex; align-items: center; justify-content: space-between; gap: var(--s4); flex-wrap: wrap; }
 .reqloc-head .cbtn { white-space: nowrap; }
 .reqloc-form { margin-top: var(--s4); }
