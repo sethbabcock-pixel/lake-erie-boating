@@ -668,16 +668,28 @@ body.has-takeover .app { background: var(--bg); border-radius: var(--r-lg) var(-
 .reqloc .req-star { color: var(--danger); font-style: normal; }
 .reqloc-done { color: var(--text); font-size: var(--fs-base); }
 /* Nearest-launch finder (near me / ZIP) */
-.nearby-finder { margin: var(--s5) 0 0; border: 1px solid var(--border); border-radius: var(--r-lg); background: var(--surface); padding: var(--s4) var(--s5); }
-.nf-controls { display: flex; align-items: center; gap: var(--s3); flex-wrap: wrap; margin-top: var(--s3); }
-.nf-or { color: var(--text-faint); font-size: var(--fs-sm); }
-.nf-zip { display: flex; align-items: center; gap: var(--s2); }
-.nf-zip .field { width: 120px; margin-bottom: 0; }
+.nearby-finder { margin: var(--s5) 0 0; border: 1px solid var(--border); border-radius: var(--r-lg); background: var(--surface); padding: var(--s5); }
+/* Search-first control row: the place/ZIP bar dominates (input flexes to fill
+   the card), with "Use my location" as a compact secondary beside it. All
+   controls match the input's 44px height for consistent touch targets. */
+.nf-controls { display: flex; align-items: center; gap: var(--s3); flex-wrap: wrap; margin-top: var(--s4); }
+.nf-bar { display: flex; align-items: center; gap: var(--s2); flex: 1 1 320px; min-width: 0; }
+.nf-q { flex: 1 1 auto; width: auto; min-width: 0; margin-bottom: 0; }
+.nf-go { min-height: 44px; padding: 0 22px; flex: 0 0 auto; }
+.nf-locbtn { min-height: 44px; display: inline-flex; align-items: center; justify-content: center; gap: 6px; white-space: nowrap; flex: 0 0 auto; }
 .nf-nocover { margin-top: var(--s3); }
 .nf-nocover p { margin: 0 0 var(--s3); color: var(--text-muted); }
 .nf-actions { display: flex; gap: var(--s2); flex-wrap: wrap; }
 .nf-results .loc-grid { margin-top: var(--s2); }
-.nf-q { width: 200px; max-width: 60vw; margin-bottom: 0; }
+@media (max-width: 620px) {
+  .nearby-finder { padding: var(--s4); }
+  .nf-bar { flex: 1 1 100%; }
+  .nf-locbtn { flex: 1 1 100%; }
+  /* Request-a-location card: stack the copy and give the CTA a full-width,
+     44px touch target instead of a right-aligned wrap. */
+  .reqloc-head { flex-direction: column; align-items: stretch; }
+  .reqloc-head .cbtn { width: 100%; min-height: 44px; }
+}
 /* Preview (build-a-page) banner + not-marine card */
 .preview-banner { margin: var(--s4) 0 calc(-1 * var(--s2)); padding: var(--s3) var(--s4); border: 1px solid var(--accent);
   border-radius: var(--r-md); background: color-mix(in srgb, var(--accent) 10%, transparent); color: var(--text); font-size: var(--fs-sm);

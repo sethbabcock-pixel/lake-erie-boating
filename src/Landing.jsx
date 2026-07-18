@@ -201,13 +201,15 @@ function NearestFinder({ summary, onSelect, onRequest, onPreview }) {
     <section className="nearby-finder">
       <h2 className="directory-title" style={{ margin: 0 }}>Find or build a page for any spot</h2>
       <p className="directory-blurb" style={{ margin: "4px 0 0" }}>Search a town, lake, or ZIP. We'll point you at the nearest covered launch, or build a live page for that exact spot straight from NOAA.</p>
+      {/* Search-first: the type-a-place bar is the primary action and grows to
+          fill the card; geolocation is the compact secondary beside it (its own
+          full-width row on phones). */}
       <div className="nf-controls">
-        <button className="cbtn ghost" onClick={useMyLocation} disabled={busy}>📍 Use my location</button>
-        <span className="nf-or">or</span>
-        <form className="nf-zip" onSubmit={lookup}>
+        <form className="nf-bar" onSubmit={lookup}>
           <input className="field nf-q" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Town, lake, or ZIP" aria-label="Search a place or ZIP" />
-          <button className="cbtn" type="submit" disabled={busy}>{busy ? "…" : "Go"}</button>
+          <button className="cbtn nf-go" type="submit" disabled={busy}>{busy ? "…" : "Search"}</button>
         </form>
+        <button className="cbtn ghost nf-locbtn" type="button" onClick={useMyLocation} disabled={busy}>📍 Use my location</button>
       </div>
       {err && <div className="modal-err" style={{ marginTop: 8 }}>{err}</div>}
       {result && (
