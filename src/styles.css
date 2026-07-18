@@ -680,10 +680,15 @@ body.has-takeover .app { background: var(--bg); border-radius: var(--r-lg) var(-
 .nf-q { width: 200px; max-width: 60vw; margin-bottom: 0; }
 /* Preview (build-a-page) banner + not-marine card */
 .preview-banner { margin: var(--s4) 0 calc(-1 * var(--s2)); padding: var(--s3) var(--s4); border: 1px solid var(--accent);
-  border-radius: var(--r-md); background: color-mix(in srgb, var(--accent) 10%, transparent); color: var(--text); font-size: var(--fs-sm); }
+  border-radius: var(--r-md); background: color-mix(in srgb, var(--accent) 10%, transparent); color: var(--text); font-size: var(--fs-sm);
+  display: flex; align-items: center; justify-content: space-between; gap: var(--s4); flex-wrap: wrap; }
+.preview-banner .cbtn { white-space: nowrap; }
 .notmarine { margin: var(--s5) 0; padding: var(--s5); border: 1px solid var(--border); border-radius: var(--r-lg); background: var(--surface); text-align: center; }
 .notmarine h2 { margin: 0 0 var(--s2); color: var(--text); }
 .notmarine p { margin: 0 0 var(--s4); color: var(--text-muted); }
+.built-actions { display: flex; gap: var(--s3); margin-top: 4px; }
+.built-actions .linklike { font-size: var(--fs-sm); }
+.built-actions .danger-link { color: var(--danger); }
 .region { border: 1px solid var(--border); border-radius: var(--r-lg); margin-bottom: var(--s3); overflow: hidden; background: var(--surface); }
 .region-skel { height: 116px; animation: skelpulse 1.6s ease-in-out infinite; }
 @keyframes skelpulse { 0%, 100% { opacity: .5; } 50% { opacity: .8; } }

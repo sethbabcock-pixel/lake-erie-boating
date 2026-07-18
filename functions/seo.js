@@ -93,6 +93,22 @@ export function seoForPath(pathname) {
   return null;
 }
 
+// A user-built /spot/<slug> page (KV). Indexable meta once an admin features it;
+// otherwise a noindex shell so pending pages stay out of search. null = unknown.
+export async function seoForBuiltSpot(env, slug) {
+  if (!env?.USERS) return null;
+  const b = await env.USERS.get(`builtspot:${slug}`, "json").catch(() => null);
+  if (!b || b.disabled) return null;
+  const lake = b.lake || "the water";
+  return {
+    url: `${SITE}/spot/${slug}`,
+    title: `Should I boat at ${b.name} today? Live conditions · shouldiboat.com`,
+    description: `Live GO / CAUTION / NO-GO boating conditions for ${b.name} on ${lake}, from NOAA wind, waves, an hour-by-hour risk timeline and marine warnings.`,
+    jsonld: spotJsonld(slug, b, lake),
+    noindex: !b.featured,
+  };
+}
+
 // Targeted single-purpose rewrites of the shell's existing head tags, so this
 // stays robust to unrelated head edits. Adds a JSON-LD block before </head>.
 export function injectSeo(html, meta) {
@@ -107,18 +123,27 @@ export function injectSeo(html, meta) {
     .replace(/(<meta property="og:url" content=")[^"]*(")/, `$1${u}$2`)
     .replace(/(<meta name="twitter:title" content=")[^"]*(")/, `$1${t}$2`)
     .replace(/(<meta name="twitter:description" content=")[^"]*(")/, `$1${d}$2`)
-    .replace("</head>", `${ld}</head>`);
+    .replace("</head>", `${meta.noindex ? '<meta name="robots" content="noindex,follow">' : ""}${ld}</head>`);
 }
 
 export function robotsTxt() {
   return `User-agent: *\nAllow: /\nDisallow: /account\nDisallow: /admin\nDisallow: /api/\nDisallow: /auth/\nDisallow: /preview\n\nSitemap: ${SITE}/sitemap.xml\n`;
 }
 
-export function sitemapXml() {
+export async function sitemapXml(env) {
+  // Admin-featured user-built pages join the sitemap; pending ones stay out.
+  let built = [];
+  try {
+    if (env?.USERS) {
+      const list = await env.USERS.list({ prefix: "builtspot:", limit: 1000 });
+      for (const k of list.keys) { const b = await env.USERS.get(k.name, "json").catch(() => null); if (b && b.featured && !b.disabled) built.push(b.slug); }
+    }
+  } catch (e) { built = []; }
   const urls = [
     { loc: `${SITE}/`, freq: "hourly", priority: "1.0" },
     ...REGIONS.map((r) => ({ loc: `${SITE}/${r.slug}`, freq: "hourly", priority: "0.9" })),
     ...Object.keys(SPOTS).map((id) => ({ loc: `${SITE}/spot/${id}`, freq: "hourly", priority: "0.8" })),
+    ...built.map((slug) => ({ loc: `${SITE}/spot/${slug}`, freq: "hourly", priority: "0.7" })),
     { loc: `${SITE}/about`, freq: "monthly", priority: "0.3" },
     { loc: `${SITE}/legal`, freq: "yearly", priority: "0.2" },
   ];

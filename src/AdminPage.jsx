@@ -585,6 +585,64 @@ function LocationRequestsPanel() {
   );
 }
 
+// User-built pages (self-serve "build a page"). Feature to index + list them in
+// the directory; disable to hide; delete to remove. Pending pages are live by
+// direct link but stay noindex and out of the directory until featured.
+function BuiltPagesPanel() {
+  const [items, setItems] = useState(null);
+  const [err, setErr] = useState("");
+  const [busy, setBusy] = useState("");
+  const load = async () => {
+    setErr("");
+    try {
+      const r = await fetch("/api/admin/built-spots");
+      const d = await r.json();
+      if (!r.ok) throw new Error(d.error || "Could not load.");
+      setItems(d.spots);
+    } catch (e) { setErr(e.message); }
+  };
+  useEffect(() => { load(); }, []);
+  const act = async (slug, action) => {
+    if (action === "delete" && !window.confirm("Delete this page for good?")) return;
+    setBusy(slug + action); setErr("");
+    try {
+      const r = await fetch("/api/admin/built-spot", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ slug, action }) });
+      const d = await r.json();
+      if (!r.ok) throw new Error(d.error || "Action failed.");
+      await load();
+    } catch (e) { setErr(e.message); } finally { setBusy(""); }
+  };
+  return (
+    <section className="card acct-sec">
+      <div className="card-head">
+        <h2>Built pages</h2>
+        {items && <button className="linklike" onClick={load}>↻ refresh</button>}
+      </div>
+      <p className="acct-note" style={{ marginTop: 0 }}>Pages visitors built for their own spots. <b>Feature</b> to index + show in the directory; <b>disable</b> to hide; <b>delete</b> to remove. Un-featured pages work by direct link but stay out of search.</p>
+      {err && <div className="modal-err">{err}</div>}
+      {items && items.length === 0 && <p className="acct-note">No built pages yet.</p>}
+      {items && items.map((b) => (
+        <div className="admin-notif-row" key={b.slug}>
+          <div className="acct-kv admin-notif">
+            <span>
+              <a href={`/spot/${b.slug}`} target="_blank" rel="noopener noreferrer"><b>{b.name}</b></a>
+              {" · "}{b.lake}{b.zone ? ` (${b.zone})` : ""}
+              {b.featured && <span className="acct-badge ok" style={{ marginLeft: 6 }}>Featured</span>}
+              {b.disabled && <span className="acct-badge" style={{ marginLeft: 6 }}>Disabled</span>}
+            </span>
+            <b className="notif-off">{fmtDate(b.createdAt)}</b>
+          </div>
+          <div className="built-actions">
+            <button className="linklike" disabled={!!busy} onClick={() => act(b.slug, b.featured ? "unfeature" : "feature")}>{b.featured ? "Unfeature" : "Feature"}</button>
+            <button className="linklike" disabled={!!busy} onClick={() => act(b.slug, b.disabled ? "enable" : "disable")}>{b.disabled ? "Enable" : "Disable"}</button>
+            <button className="linklike danger-link" disabled={!!busy} onClick={() => act(b.slug, "delete")}>Delete</button>
+          </div>
+        </div>
+      ))}
+    </section>
+  );
+}
+
 export default function AdminPage() {
   const auth = useAuth();
   const [cfg, setCfg] = useState(null);
@@ -718,6 +776,8 @@ export default function AdminPage() {
             <DiagnosticsPanel />
 
             <CspPanel />
+
+            <BuiltPagesPanel />
 
             <LocationRequestsPanel />
 
