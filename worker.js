@@ -23,7 +23,7 @@ const CSP_REPORT_ONLY = [
   "img-src 'self' data: https:",
   "font-src 'self' data: https://fonts.gstatic.com",
   "connect-src 'self' https://*.google-analytics.com https://*.analytics.google.com https://*.doubleclick.net https://pagead2.googlesyndication.com https://*.googlesyndication.com https://ep1.adtrafficquality.google https://ep2.adtrafficquality.google https://*.adtrafficquality.google https://api.stripe.com https://region1.google-analytics.com",
-  "frame-src 'self' https://googleads.g.doubleclick.net https://tpc.googlesyndication.com https://*.doubleclick.net https://*.googlesyndication.com https://ep1.adtrafficquality.google https://ep2.adtrafficquality.google https://*.adtrafficquality.google https://js.stripe.com https://*.stripe.com https://www.google.com https://fundingchoicesmessages.google.com https://embed.windy.com https://*.ozolio.com",
+  "frame-src 'self' https://googleads.g.doubleclick.net https://tpc.googlesyndication.com https://*.doubleclick.net https://*.googlesyndication.com https://ep1.adtrafficquality.google https://ep2.adtrafficquality.google https://*.adtrafficquality.google https://js.stripe.com https://*.stripe.com https://www.google.com https://fundingchoicesmessages.google.com https://embed.windy.com https://*.windy.com https://*.ozolio.com",
   "frame-ancestors 'self'",
   "base-uri 'self'",
   "object-src 'none'",

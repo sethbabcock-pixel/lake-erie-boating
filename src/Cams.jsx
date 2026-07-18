@@ -118,7 +118,8 @@ export default function Cams({ lat, lon, spotName, lake }) {
   useEffect(() => {
     let abort = false;
     setStatus(null); setFailed({}); setServerCams(null);
-    fetch(`/marine/cams?lake=${encodeURIComponent(lake || "Lake Erie")}`)
+    const pt = (lat != null && lon != null) ? `&lat=${lat}&lon=${lon}` : "";
+    fetch(`/marine/cams?lake=${encodeURIComponent(lake || "Lake Erie")}${pt}`)
       .then((r) => r.json())
       .then((d) => {
         if (abort) return;
@@ -128,7 +129,7 @@ export default function Cams({ lat, lon, spotName, lake }) {
       .catch(() => { if (!abort) setStatus({}); });
     const t = setTimeout(() => { if (!abort) setStatus((s) => s ?? {}); }, 8000);
     return () => { abort = true; clearTimeout(t); };
-  }, [lake]);
+  }, [lake, lat, lon]);
 
   // Hide cams confirmed offline (server) or reported dead (player). Fall back to
   // the full list if that would leave nothing, so the section is never empty.
