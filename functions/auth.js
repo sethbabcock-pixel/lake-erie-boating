@@ -28,6 +28,8 @@
 // Email/password needs only the USERS KV namespace. Google sign-in also needs
 // GOOGLE_CLIENT_ID + GOOGLE_CLIENT_SECRET secrets.
 
+import { resolveMarineContext } from "./marine/conditions.js";
+
 const SESSION_DAYS = 30;
 const enc = new TextEncoder();
 
@@ -707,6 +709,72 @@ export async function handleAuth(request, env, url, ctx) {
     for (const k of recent) { const r = await env.USERS.get(k.name, "json"); if (r) requests.push(r); }
     requests.sort((a, b) => (b.at || "").localeCompare(a.at || ""));
     return json({ requests: requests.slice(0, 150) });
+  }
+
+  // ---- public: build a page for a point (self-serve publish) ----
+  // Resolves the marine context server-side (never trusts client-supplied
+  // zone/office), stores it as a builtspot:<slug>, and returns the /spot slug.
+  // Published pages are live + shareable immediately but stay noindex and out of
+  // the directory until an admin features them (and an admin can disable/delete).
+  if (path === "/api/build-page" && request.method === "POST") {
+    if (!(await rateLimit(env, request, "buildpage", 10, 3600))) return json({ error: "Too many pages built just now. Try again later." }, 429);
+    const body = await request.json().catch(() => ({}));
+    const lat = Math.round(parseFloat(body.lat) * 1e4) / 1e4, lon = Math.round(parseFloat(body.lon) * 1e4) / 1e4;
+    if (!Number.isFinite(lat) || !Number.isFinite(lon) || Math.abs(lat) > 90 || Math.abs(lon) > 180) return json({ error: "Invalid coordinates." }, 400);
+    let name = String(body.name ?? "").replace(/[\u0000-\u001f]+/g, " ").trim().slice(0, 80);
+    let mctx;
+    try { mctx = await resolveMarineContext(lat, lon); } catch (e) { mctx = null; }
+    if (!mctx) return json({ error: "That spot isn't on boatable water we can forecast." }, 422);
+    if (!name) name = mctx.relName || `${lat}, ${lon}`;
+    // Reuse an existing page for the same ~1 km cell instead of making duplicates.
+    const cellKey = `builtcell:${Math.round(lat * 100) / 100},${Math.round(lon * 100) / 100}`;
+    const existing = await env.USERS.get(cellKey);
+    if (existing) {
+      const rec = await env.USERS.get(`builtspot:${existing}`, "json").catch(() => null);
+      if (rec && !rec.disabled) return json({ slug: existing, url: `/spot/${existing}`, existed: true });
+    }
+    const base = (name.toLowerCase().normalize("NFKD").replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 40)) || "spot";
+    const slug = `${base}-${randHex(2)}`;
+    const u = await userFromRequest(env, request).catch(() => null);
+    const rec = {
+      slug, name, lat, lon,
+      zone: mctx.zone, zoneName: mctx.zoneName, office: mctx.office, product: mctx.product,
+      lake: mctx.lake, buoys: [],
+      featured: false, disabled: false,
+      createdAt: new Date().toISOString(), createdBy: (u && u.email) || null,
+    };
+    await env.USERS.put(`builtspot:${slug}`, JSON.stringify(rec));
+    await env.USERS.put(cellKey, slug, { expirationTtl: 400 * 86400 });
+    runBg(ctx, notify(env, "page_built", { name, slug, lake: mctx.lake }, null));
+    return json({ slug, url: `/spot/${slug}` });
+  }
+
+  // ---- admin: built pages (feature / disable / delete) ----
+  if (path === "/api/admin/built-spots" && request.method === "GET") {
+    const u = await userFromRequest(env, request);
+    if (!u) return json({ error: "Not signed in." }, 401);
+    if (!isAdmin(env, u)) return json({ error: "Forbidden — not an admin account." }, 403);
+    const list = await env.USERS.list({ prefix: "builtspot:", limit: 1000 });
+    const spots = [];
+    for (const k of list.keys) { const b = await env.USERS.get(k.name, "json"); if (b) spots.push(b); }
+    spots.sort((a, b) => (b.createdAt || "").localeCompare(a.createdAt || ""));
+    return json({ spots });
+  }
+  if (path === "/api/admin/built-spot" && request.method === "POST") {
+    const u = await userFromRequest(env, request);
+    if (!u) return json({ error: "Not signed in." }, 401);
+    if (!isAdmin(env, u)) return json({ error: "Forbidden — not an admin account." }, 403);
+    const { slug, action } = await request.json().catch(() => ({}));
+    const rec = slug ? await env.USERS.get(`builtspot:${slug}`, "json").catch(() => null) : null;
+    if (!rec) return json({ error: "Page not found." }, 404);
+    if (action === "delete") { await env.USERS.delete(`builtspot:${slug}`); return json({ ok: true, deleted: true }); }
+    if (action === "feature") rec.featured = true;
+    else if (action === "unfeature") rec.featured = false;
+    else if (action === "disable") rec.disabled = true;
+    else if (action === "enable") rec.disabled = false;
+    else return json({ error: "Unknown action." }, 400);
+    await env.USERS.put(`builtspot:${slug}`, JSON.stringify(rec));
+    return json({ ok: true, spot: rec });
   }
 
   // ---- first-party hit beacon (public, cookieless): counts visits/visitors ----

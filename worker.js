@@ -7,7 +7,7 @@
 import { onRequest } from "./functions/marine/conditions.js";
 import { handleAuth } from "./functions/auth.js";
 import { runScheduled } from "./functions/digest.js";
-import { robotsTxt, sitemapXml, seoForPath, injectSeo } from "./functions/seo.js";
+import { robotsTxt, sitemapXml, seoForPath, seoForBuiltSpot, injectSeo } from "./functions/seo.js";
 
 // Baseline security headers applied to every response. These are intentionally
 // conservative: no script/style CSP directives, so the Google Ads/Analytics/
@@ -56,14 +56,20 @@ async function route(request, env, ctx) {
   if (p.startsWith("/auth/") || p.startsWith("/api/") || p.startsWith("/stripe/") || p === "/unsubscribe") return handleAuth(request, env, url, ctx);
   // SEO endpoints (see functions/seo.js).
   if (p === "/robots.txt") return new Response(robotsTxt(), { headers: { "Content-Type": "text/plain; charset=utf-8", "Cache-Control": "public, max-age=86400" } });
-  if (p === "/sitemap.xml") return new Response(sitemapXml(), { headers: { "Content-Type": "application/xml; charset=utf-8", "Cache-Control": "public, max-age=3600" } });
+  if (p === "/sitemap.xml") return new Response(await sitemapXml(env), { headers: { "Content-Type": "application/xml; charset=utf-8", "Cache-Control": "public, max-age=3600" } });
   // With run_worker_first (wrangler.jsonc) the Worker fronts every request so
   // the www redirect above applies to page loads, not just API calls — which
   // means assets must be served here instead of by the assets-first layer.
   if ((request.method === "GET" || request.method === "HEAD") && env.ASSETS) {
     // SEO pages (home + /spot/<id>): serve the shell with per-page <head> meta
-    // so each spot is its own indexable result, not one generic SPA page.
-    const seo = seoForPath(p);
+    // so each spot is its own indexable result, not one generic SPA page. A
+    // /spot/<slug> that isn't a curated spot may be a user-built page (KV) —
+    // indexable once featured, otherwise served noindex.
+    let seo = seoForPath(p);
+    if (!seo) {
+      const bm = p.match(/^\/spot\/([a-z0-9-]{1,60})\/?$/);
+      if (bm) seo = await seoForBuiltSpot(env, bm[1]);
+    }
     if (seo) {
       const shellUrl = new URL(request.url);
       shellUrl.pathname = "/index.html";

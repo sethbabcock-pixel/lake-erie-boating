@@ -528,7 +528,7 @@ function waterBodyFromZone(zoneName) {
 }
 
 // The live NWS resolution — the costly part: /points + the seaward ring search.
-async function resolveMarineContext(lat, lon) {
+export async function resolveMarineContext(lat, lon) {
   const [pt, mz] = await Promise.all([
     cachedJSON(`${NWS}/points/${lat},${lon}`, 86400).catch(() => null),
     marineZoneAt(lat, lon),
@@ -550,6 +550,35 @@ async function resolveMarineContext(lat, lon) {
 // then costs one KV read, not up to ~17 NWS calls. Negatives (inland) are cached
 // too (shorter TTL) behind a `marine` sentinel, so a cached miss is
 // distinguishable from "never resolved". Falls back to a live resolve with no KV.
+// ── User-built spots (self-serve "build a page") ─────────────────────────────
+// Published points live in KV as builtspot:<slug>. They serve like a curated
+// spot, but stay out of the directory/sitemap and are noindex until an admin
+// features them (and an admin can disable or delete them).
+async function getBuiltSpot(env, slug) {
+  if (!env?.USERS) return null;
+  const b = await env.USERS.get(`builtspot:${slug}`, "json").catch(() => null);
+  if (!b || b.disabled) return null;
+  return {
+    name: b.name, lat: b.lat, lon: b.lon, zone: b.zone, zoneName: b.zoneName || null,
+    office: b.office, product: b.product, buoys: b.buoys || [], lake: b.lake,
+    adHoc: true, built: true, slug: b.slug, featured: !!b.featured,
+  };
+}
+export async function listFeaturedBuiltSpots(env) {
+  if (!env?.USERS) return [];
+  try {
+    const list = await env.USERS.list({ prefix: "builtspot:", limit: 1000 });
+    const out = [];
+    for (const k of list.keys) {
+      const b = await env.USERS.get(k.name, "json").catch(() => null);
+      if (b && b.featured && !b.disabled) out.push(b);
+    }
+    return out;
+  } catch (e) {
+    return [];
+  }
+}
+
 const snapCoord = (n) => Math.round(n * 100) / 100;
 async function resolveSpotFromPoint(lat, lon, name, env) {
   lat = round(lat, 4); lon = round(lon, 4);
@@ -1024,8 +1053,10 @@ async function handleCamStatus(url, env) {
 // Lightweight GO/CAUTION/NO-GO + wind/wave for every spot, for the homepage
 // directory. Per-spot NWS grid fetches through a small pool; /points lookups
 // are edge-cached a day and the whole result ~10 min, so the API isn't hammered.
-export async function fetchSummary() {
-  const entries = Object.entries(SPOTS);
+export async function fetchSummary(env) {
+  // Curated spots + admin-featured user-built pages (both render in the directory).
+  const built = await listFeaturedBuiltSpots(env);
+  const entries = [...Object.entries(SPOTS), ...built.map((b) => [b.slug, { name: b.name, lat: b.lat, lon: b.lon, zone: b.zone, office: b.office, product: b.product, lake: b.lake, buoys: b.buoys || [] }])];
   const grids = await pooled(entries, 8, ([, s]) => fetchSpotGrid(s));
   const nowH = Math.floor(Date.now() / 3600000);
   const spots = entries.map(([id, s], i) => {
@@ -1080,12 +1111,12 @@ export async function fetchTodayWindows() {
   return out;
 }
 
-async function handleSummary() {
+async function handleSummary(env) {
   const cacheKey = new Request("https://sib-summary.local/all");
   const cache = caches.default;
   const hit = await cache.match(cacheKey);
   if (hit) return hit;
-  const resp = new Response(JSON.stringify(await fetchSummary()), {
+  const resp = new Response(JSON.stringify(await fetchSummary(env)), {
     headers: { "Content-Type": "application/json", "Cache-Control": "public, max-age=600" },
   });
   await cache.put(cacheKey, resp.clone());
@@ -1096,14 +1127,18 @@ export async function onRequest(context) {
   const url = new URL(context.request.url);
 
   if (url.pathname.endsWith("/cams")) return handleCamStatus(url, context.env);
-  if (url.searchParams.has("summary")) return handleSummary();
+  if (url.searchParams.has("summary")) return handleSummary(context.env);
 
   if (url.searchParams.has("spots")) {
+    const built = await listFeaturedBuiltSpots(context.env);
     return json({
-      spots: Object.entries(SPOTS).map(([id, s]) => ({
-        id, name: s.name, zone: s.zone, lat: s.lat, lon: s.lon,
-        lake: s.lake || "Lake Erie", // each spot carries its lake → grouped picker, scales to all 5
-      })),
+      spots: [
+        ...Object.entries(SPOTS).map(([id, s]) => ({
+          id, name: s.name, zone: s.zone, lat: s.lat, lon: s.lon,
+          lake: s.lake || "Lake Erie", // each spot carries its lake → grouped picker, scales to all 5
+        })),
+        ...built.map((b) => ({ id: b.slug, name: b.name, zone: b.zone, lat: b.lat, lon: b.lon, lake: b.lake, built: true })),
+      ],
     });
   }
 
@@ -1121,9 +1156,9 @@ export async function onRequest(context) {
     spotId = `@${round(latP, 3)},${round(lonP, 3)}`;
   } else {
     spotId = (url.searchParams.get("spot") || "sandusky").toLowerCase();
-    spot = SPOTS[spotId];
+    spot = SPOTS[spotId] || await getBuiltSpot(context.env, spotId); // curated, else a user-built page
     if (!spot) {
-      return json({ error: `Unknown spot '${spotId}'`, spots: Object.keys(SPOTS) }, 400);
+      return json({ error: `Unknown spot '${spotId}'` }, 404);
     }
   }
 
@@ -1202,7 +1237,7 @@ export async function onRequest(context) {
   const recommendation = buildRecommendation({ buoy, alerts, wind, waves, read, hours: hourly });
 
   return json({
-    spot: { id: spotId, name: spot.name, zone: spot.zone, lat: spot.lat, lon: spot.lon, lake: spot.lake || "Lake Erie", adHoc: !!spot.adHoc, zoneName: spot.zoneName || null },
+    spot: { id: spotId, name: spot.name, zone: spot.zone, lat: spot.lat, lon: spot.lon, lake: spot.lake || "Lake Erie", adHoc: !!spot.adHoc, zoneName: spot.zoneName || null, built: !!spot.built, slug: spot.slug || null, featured: !!spot.featured },
     updatedAt: new Date().toISOString(),
     recommendation,
     wind,

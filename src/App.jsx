@@ -727,6 +727,8 @@ export default function App() {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [building, setBuilding] = useState(false);
+  const [buildErr, setBuildErr] = useState("");
 
   // Pick a location → navigate to its clean detail URL (/spot/X), without a reload.
   const selectLocation = (id) => {
@@ -827,6 +829,23 @@ export default function App() {
     return () => clearTimeout(t);
   }, [active, choice]);
 
+  // Publish an ad-hoc preview as a permanent /spot page, then open it.
+  const buildThisPage = async () => {
+    const s = data?.spot;
+    if (!s?.adHoc || building) return;
+    setBuilding(true); setBuildErr("");
+    try {
+      const r = await fetch("/api/build-page", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ lat: s.lat, lon: s.lon, name: s.name }),
+      });
+      const d = await r.json().catch(() => ({}));
+      if (!r.ok || !d.slug) throw new Error(d.error || "Couldn't build the page.");
+      track("event", "page_built", { slug: d.slug });
+      selectLocation(d.slug); // now a real /spot/<slug> page
+    } catch (e) { setBuildErr(e.message); } finally { setBuilding(false); }
+  };
+
   const spot = data?.spot;
   const rec = data?.recommendation;
   const wind = data?.wind || {};
@@ -890,9 +909,13 @@ export default function App() {
           </section>
         )}
 
-        {spot?.adHoc && !data?.notMarine && (
+        {spot?.adHoc && !spot.built && !data?.notMarine && (
           <div className="preview-banner">
-            <span><b>Preview</b> · live conditions for {spot.name}{spot.zoneName ? ` (${spot.zoneName})` : ""}. This page isn't saved yet.</span>
+            <div>
+              <b>Preview</b> · live conditions for {spot.name}{spot.zoneName ? ` (${spot.zoneName})` : ""}. This page isn't saved yet.
+              {buildErr && <div className="modal-err" style={{ marginTop: 6 }}>{buildErr}</div>}
+            </div>
+            <button className="cbtn" onClick={buildThisPage} disabled={building}>{building ? "Building…" : "Build this page"}</button>
           </div>
         )}
 
