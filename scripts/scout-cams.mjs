@@ -17,7 +17,10 @@
 // Run from GitHub Actions (cam-scout workflow) — the dev sandbox has no
 // outbound network.
 
-const SEED = "https://lakerart.com/links.htm";
+// Directory to crawl. Defaults to the Great Lakes list; override to scout a new
+// region: `SCOUT_SEED=https://carolinawebcams.com/nc-webcams.htm node scripts/scout-cams.mjs`
+// (or pass the URL as the cam-scout workflow's `directory` input).
+const SEED = process.env.SCOUT_SEED || process.argv[2] || "https://lakerart.com/links.htm";
 const UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Safari/537.36";
 const TIMEOUT_MS = 15000;
 const CONCURRENCY = 8;

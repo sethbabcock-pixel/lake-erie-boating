@@ -1,11 +1,17 @@
 name: Cam scout
 
-# On-demand: crawls the lakerart.com Great Lakes cam directory and reports
-# which cams are live + legally embeddable (see scripts/scout-cams.mjs).
-# Read the run log for the CAM| report lines.
+# On-demand: crawls a webcam directory and reports which cams are live + legally
+# embeddable (see scripts/scout-cams.mjs). Defaults to the lakerart.com Great
+# Lakes list; pass a `directory` URL to scout a new region (e.g. a Chesapeake or
+# Carolina coast directory). Read the run log / artifact for the CAM| report lines.
 
 on:
-  workflow_dispatch: {}
+  workflow_dispatch:
+    inputs:
+      directory:
+        description: "Webcam directory URL to crawl (blank = Great Lakes default)"
+        required: false
+        default: ""
 
 permissions:
   contents: read
@@ -19,6 +25,8 @@ jobs:
         with:
           node-version: 20
       - name: Scout cams
+        env:
+          SCOUT_SEED: ${{ inputs.directory }}
         run: node scripts/scout-cams.mjs | tee scout-report.txt
       - uses: actions/upload-artifact@v4
         if: always()
