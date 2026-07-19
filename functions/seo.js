@@ -8,6 +8,7 @@
 //     result ("Should I boat at <spot> today?") with canonical + JSON-LD.
 // The client reads /spot/<id> from the path (App.jsx) and renders normally.
 import { SPOTS } from "./marine/conditions.js";
+import { REGIONS, regionBySlug } from "../src/regions.js";
 
 const SITE = "https://shouldiboat.com";
 const lakeOf = (s) => s.lake || "Lake Erie";
@@ -38,6 +39,22 @@ const spotJsonld = (id, s, lake) => ({
   },
 });
 
+const regionJsonld = (region, count) => ({
+  "@context": "https://schema.org",
+  "@type": "WebPage",
+  name: `${region.title} boating conditions`,
+  url: `${SITE}/${region.slug}`,
+  about: `Boating conditions for ${count} launch spots across ${region.title}`,
+  isPartOf: { "@type": "WebSite", name: "shouldiboat.com", url: `${SITE}/` },
+  breadcrumb: {
+    "@type": "BreadcrumbList",
+    itemListElement: [
+      { "@type": "ListItem", position: 1, name: "shouldiboat.com", item: `${SITE}/` },
+      { "@type": "ListItem", position: 2, name: region.title, item: `${SITE}/${region.slug}` },
+    ],
+  },
+});
+
 // Per-page <head> content for an SEO-relevant path, or null to serve the shell
 // unchanged (real asset pages like /about and /legal carry their own meta).
 export function seoForPath(pathname) {
@@ -45,8 +62,21 @@ export function seoForPath(pathname) {
     return {
       url: `${SITE}/`,
       title: "Should I boat today? Live Great Lakes boating conditions · shouldiboat.com",
-      description: "A clear GO / CAUTION / NO-GO call for boating across the Great Lakes — live NOAA wind, waves, gusts, an hour-by-hour risk timeline, marine warnings, weather maps and live webcams for 30+ launch spots.",
+      description: "A clear GO / CAUTION / NO-GO call for boating across the Great Lakes, from live NOAA wind, waves, gusts, an hour-by-hour risk timeline, marine warnings, weather maps and live webcams for 30+ launch spots.",
       jsonld: websiteJsonld(),
+    };
+  }
+  // Region subpages (/greatlakes, /chesapeake, …) — each an indexable page for
+  // its water bodies, so the site ranks beyond "Great Lakes" as coverage grows.
+  const rm = pathname.match(/^\/([a-z0-9-]{2,40})\/?$/);
+  const region = rm && regionBySlug(rm[1]);
+  if (region) {
+    const count = Object.values(SPOTS).filter((s) => (region.lakes || []).includes(s.lake || "Lake Erie")).length;
+    return {
+      url: `${SITE}/${region.slug}`,
+      title: `${region.title} boating conditions · GO / CAUTION / NO-GO · shouldiboat.com`,
+      description: `Live boating conditions for ${region.title}: a clear GO / CAUTION / NO-GO call for ${count} launch spots, from NOAA wind, waves, gusts, an hour-by-hour risk timeline, marine warnings and live webcams.`,
+      jsonld: regionJsonld(region, count),
     };
   }
   const m = pathname.match(/^\/spot\/([a-z0-9-]{1,40})\/?$/);
@@ -56,11 +86,27 @@ export function seoForPath(pathname) {
     return {
       url: `${SITE}/spot/${m[1]}`,
       title: `Should I boat at ${s.name} today? Live conditions · shouldiboat.com`,
-      description: `Live GO / CAUTION / NO-GO boating conditions for ${s.name} on ${lake} — NOAA wind, waves, gusts, an hour-by-hour risk timeline, marine warnings and live webcams.`,
+      description: `Live GO / CAUTION / NO-GO boating conditions for ${s.name} on ${lake}, from NOAA wind, waves, gusts, an hour-by-hour risk timeline, marine warnings and live webcams.`,
       jsonld: spotJsonld(m[1], s, lake),
     };
   }
   return null;
+}
+
+// A user-built /spot/<slug> page (KV). Indexable meta once an admin features it;
+// otherwise a noindex shell so pending pages stay out of search. null = unknown.
+export async function seoForBuiltSpot(env, slug) {
+  if (!env?.USERS) return null;
+  const b = await env.USERS.get(`builtspot:${slug}`, "json").catch(() => null);
+  if (!b || b.disabled) return null;
+  const lake = b.lake || "the water";
+  return {
+    url: `${SITE}/spot/${slug}`,
+    title: `Should I boat at ${b.name} today? Live conditions · shouldiboat.com`,
+    description: `Live GO / CAUTION / NO-GO boating conditions for ${b.name} on ${lake}, from NOAA wind, waves, an hour-by-hour risk timeline and marine warnings.`,
+    jsonld: spotJsonld(slug, b, lake),
+    noindex: !b.featured,
+  };
 }
 
 // Targeted single-purpose rewrites of the shell's existing head tags, so this
@@ -77,11 +123,11 @@ export function injectSeo(html, meta) {
     .replace(/(<meta property="og:url" content=")[^"]*(")/, `$1${u}$2`)
     .replace(/(<meta name="twitter:title" content=")[^"]*(")/, `$1${t}$2`)
     .replace(/(<meta name="twitter:description" content=")[^"]*(")/, `$1${d}$2`)
-    .replace("</head>", `${ld}</head>`);
+    .replace("</head>", `${meta.noindex ? '<meta name="robots" content="noindex,follow">' : ""}${ld}</head>`);
 }
 
 export function robotsTxt() {
-  return `User-agent: *\nAllow: /\nDisallow: /account\nDisallow: /admin\nDisallow: /api/\nDisallow: /auth/\n\nSitemap: ${SITE}/sitemap.xml\n`;
+  return `User-agent: *\nAllow: /\nDisallow: /account\nDisallow: /admin\nDisallow: /api/\nDisallow: /auth/\nDisallow: /preview\n\nSitemap: ${SITE}/sitemap.xml\n`;
 }
 
 // Editorial guides (static content pages under /guides). Listed explicitly so
@@ -96,10 +142,20 @@ const GUIDES = [
   "before-you-launch",
 ];
 
-export function sitemapXml() {
+export async function sitemapXml(env) {
+  // Admin-featured user-built pages join the sitemap; pending ones stay out.
+  let built = [];
+  try {
+    if (env?.USERS) {
+      const list = await env.USERS.list({ prefix: "builtspot:", limit: 1000 });
+      for (const k of list.keys) { const b = await env.USERS.get(k.name, "json").catch(() => null); if (b && b.featured && !b.disabled) built.push(b.slug); }
+    }
+  } catch (e) { built = []; }
   const urls = [
     { loc: `${SITE}/`, freq: "hourly", priority: "1.0" },
+    ...REGIONS.map((r) => ({ loc: `${SITE}/${r.slug}`, freq: "hourly", priority: "0.9" })),
     ...Object.keys(SPOTS).map((id) => ({ loc: `${SITE}/spot/${id}`, freq: "hourly", priority: "0.8" })),
+    ...built.map((slug) => ({ loc: `${SITE}/spot/${slug}`, freq: "hourly", priority: "0.7" })),
     { loc: `${SITE}/guides/`, freq: "weekly", priority: "0.6" },
     ...GUIDES.map((slug) => ({ loc: `${SITE}/guides/${slug}`, freq: "monthly", priority: "0.5" })),
     { loc: `${SITE}/about`, freq: "monthly", priority: "0.3" },

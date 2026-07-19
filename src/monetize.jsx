@@ -11,9 +11,11 @@ export const ADSENSE = {
   // copy its 10-digit slot ID here. Empty means that placement renders nothing,
   // so you can switch them on one at a time. See MONETIZATION.md.
   slots: {
-    detailTop: "9841170882", // spot page, right under the current-conditions row (every /spot visitor sees it — highest value)
-    detailMid: "8915670243", // spot page, lower in the toolkit
-    landing: "3032908319",   // homepage, under the port directory
+    detailTop: "9841170882",  // spot page, right under the current-conditions row (every /spot visitor sees it — highest value)
+    detailMid: "8915670243",  // spot page, lower in the toolkit
+    landing: "3032908319",    // homepage, under the port directory
+    landingTop: "1882789819", // homepage, high up (under the join strip)
+    footerSticky: "",         // ← paste slot ID to turn on the dismissible sticky footer ad (site-wide)
   },
 };
 export const AMAZON_TAG = "shouldiboat-20"; // Amazon Associates tag (lights up the Gear block)
@@ -41,6 +43,15 @@ export function useAnalytics(enabled) {
 
 export const ADSENSE_ENABLED = /^ca-pub-\d{6,}$/.test(ADSENSE.client) && ADSENSE.client !== "ca-pub-0000000000000000";
 
+// Test mode: visiting any page with ?adtest=1 makes Google serve *sample* ads
+// (data-adtest="on") instead of real ones. Impressions aren't counted and it
+// won't trip invalid-traffic protection, so it's the safe way for the owner to
+// confirm units render end-to-end even though live ads are suppressed on their
+// own device. Real visitors never hit this unless they hand-craft the URL.
+function adTestOn() {
+  try { return new URLSearchParams(window.location.search).get("adtest") === "1"; } catch (e) { return false; }
+}
+
 export function getConsent() {
   try { return localStorage.getItem("sib.consent"); } catch (e) { return null; }
 }
@@ -57,15 +68,18 @@ export function updateConsentMode(choice) {
   gtag("consent", "update", { ad_storage: v, ad_user_data: v, ad_personalization: v, analytics_storage: v });
 }
 
-// Inject the AdSense library once — only when configured AND the user consented.
+// Inject the AdSense library once when ads are allowed (not ad-free).
+// Consent Mode (index.html) still controls personalization; denied consent gets
+// limited non-personalized ads, matching the privacy policy. The library is also
+// loaded from index.html for site review — this is a backup for shells that omit it.
 export function useAdsense(enabled) {
   useEffect(() => {
-    if (!enabled || !ADSENSE_ENABLED || document.querySelector("script[data-adsbygoogle]")) return;
+    if (!enabled || !ADSENSE_ENABLED || document.querySelector("script[data-sib-ads],script[src*='adsbygoogle.js']")) return;
     const s = document.createElement("script");
     s.async = true;
     s.src = `https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=${ADSENSE.client}`;
     s.crossOrigin = "anonymous";
-    s.setAttribute("data-adsbygoogle", "1");
+    s.setAttribute("data-sib-ads", "1");
     document.head.appendChild(s);
   }, [enabled]);
 }
@@ -87,7 +101,33 @@ export function AdSlot({ name = "detailTop" }) {
       <span className="adlabel">Advertisement</span>
       <ins className="adsbygoogle" style={{ display: "block" }}
         data-ad-client={ADSENSE.client} data-ad-slot={slot}
-        data-ad-format="auto" data-full-width-responsive="true" />
+        data-ad-format="auto" data-full-width-responsive="true"
+        {...(adTestOn() ? { "data-adtest": "on" } : {})} />
+    </div>
+  );
+}
+
+// Dismissible sticky footer (anchor) ad, shown site-wide. Idle-safe: renders
+// nothing until ADSENSE.slots.footerSticky is filled. Consent-gated and hidden
+// for ad-free subscribers via the `enabled` prop. Google's Better Ads policy
+// requires an easy way to close an overlay ad, so it carries a close button and
+// stays dismissed for the rest of the session.
+export function StickyFooterAd({ enabled }) {
+  const slot = ADSENSE.slots.footerSticky || "";
+  const [closed, setClosed] = useState(false);
+  const ready = ADSENSE_ENABLED && !!slot && !!enabled && !closed;
+  useEffect(() => {
+    if (!ready) return;
+    try { (window.adsbygoogle = window.adsbygoogle || []).push({}); } catch (e) { /* ignore */ }
+  }, [ready]);
+  if (!ready) return null;
+  return (
+    <div className="sticky-ad" role="complementary" aria-label="Advertisement">
+      <button className="sticky-ad-close" aria-label="Close ad" onClick={() => setClosed(true)}>×</button>
+      <ins className="adsbygoogle" style={{ display: "block", width: "100%", height: "100%" }}
+        data-ad-client={ADSENSE.client} data-ad-slot={slot}
+        data-ad-format="horizontal" data-full-width-responsive="true"
+        {...(adTestOn() ? { "data-adtest": "on" } : {})} />
     </div>
   );
 }

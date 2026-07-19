@@ -7,7 +7,7 @@
 import { onRequest } from "./functions/marine/conditions.js";
 import { handleAuth } from "./functions/auth.js";
 import { runScheduled } from "./functions/digest.js";
-import { robotsTxt, sitemapXml, seoForPath, injectSeo } from "./functions/seo.js";
+import { robotsTxt, sitemapXml, seoForPath, seoForBuiltSpot, injectSeo } from "./functions/seo.js";
 
 // Baseline security headers applied to every response. These are intentionally
 // conservative: no script/style CSP directives, so the Google Ads/Analytics/
@@ -18,12 +18,12 @@ import { robotsTxt, sitemapXml, seoForPath, injectSeo } from "./functions/seo.js
 // reports, tighten the allowlist, then promote this to an enforced policy.
 const CSP_REPORT_ONLY = [
   "default-src 'self'",
-  "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://pagead2.googlesyndication.com https://*.googlesyndication.com https://www.googletagmanager.com https://www.google-analytics.com https://*.google-analytics.com https://securepubads.g.doubleclick.net https://*.doubleclick.net https://www.googletagservices.com https://js.stripe.com https://adservice.google.com https://fundingchoicesmessages.google.com https://static.cloudflareinsights.com",
+  "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://pagead2.googlesyndication.com https://*.googlesyndication.com https://www.googletagmanager.com https://www.google-analytics.com https://*.google-analytics.com https://securepubads.g.doubleclick.net https://*.doubleclick.net https://www.googletagservices.com https://js.stripe.com https://adservice.google.com https://fundingchoicesmessages.google.com https://ep1.adtrafficquality.google https://ep2.adtrafficquality.google https://*.adtrafficquality.google https://static.cloudflareinsights.com",
   "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
   "img-src 'self' data: https:",
   "font-src 'self' data: https://fonts.gstatic.com",
-  "connect-src 'self' https://*.google-analytics.com https://*.analytics.google.com https://*.doubleclick.net https://pagead2.googlesyndication.com https://*.googlesyndication.com https://api.stripe.com https://region1.google-analytics.com",
-  "frame-src 'self' https://googleads.g.doubleclick.net https://tpc.googlesyndication.com https://*.doubleclick.net https://*.googlesyndication.com https://js.stripe.com https://*.stripe.com https://www.google.com https://fundingchoicesmessages.google.com",
+  "connect-src 'self' https://*.google-analytics.com https://*.analytics.google.com https://*.doubleclick.net https://pagead2.googlesyndication.com https://*.googlesyndication.com https://ep1.adtrafficquality.google https://ep2.adtrafficquality.google https://*.adtrafficquality.google https://api.stripe.com https://region1.google-analytics.com",
+  "frame-src 'self' https://googleads.g.doubleclick.net https://tpc.googlesyndication.com https://*.doubleclick.net https://*.googlesyndication.com https://ep1.adtrafficquality.google https://ep2.adtrafficquality.google https://*.adtrafficquality.google https://js.stripe.com https://*.stripe.com https://www.google.com https://fundingchoicesmessages.google.com https://embed.windy.com https://*.windy.com https://*.ozolio.com",
   "frame-ancestors 'self'",
   "base-uri 'self'",
   "object-src 'none'",
@@ -36,7 +36,9 @@ function withSecurityHeaders(resp) {
   h.set("X-Content-Type-Options", "nosniff");
   h.set("X-Frame-Options", "SAMEORIGIN");
   h.set("Referrer-Policy", "strict-origin-when-cross-origin");
-  h.set("Permissions-Policy", "geolocation=(), microphone=(), camera=()");
+  // Allow first-party geolocation (the "find the nearest launch" button); still
+  // deny mic/camera. (self) means our own origin may prompt, third parties can't.
+  h.set("Permissions-Policy", "geolocation=(self), microphone=(), camera=()");
   h.set("Content-Security-Policy", "frame-ancestors 'self'; base-uri 'self'; object-src 'none'");
   h.set("Content-Security-Policy-Report-Only", CSP_REPORT_ONLY);
   return new Response(resp.body, { status: resp.status, statusText: resp.statusText, headers: h });
@@ -54,14 +56,20 @@ async function route(request, env, ctx) {
   if (p.startsWith("/auth/") || p.startsWith("/api/") || p.startsWith("/stripe/") || p === "/unsubscribe") return handleAuth(request, env, url, ctx);
   // SEO endpoints (see functions/seo.js).
   if (p === "/robots.txt") return new Response(robotsTxt(), { headers: { "Content-Type": "text/plain; charset=utf-8", "Cache-Control": "public, max-age=86400" } });
-  if (p === "/sitemap.xml") return new Response(sitemapXml(), { headers: { "Content-Type": "application/xml; charset=utf-8", "Cache-Control": "public, max-age=3600" } });
+  if (p === "/sitemap.xml") return new Response(await sitemapXml(env), { headers: { "Content-Type": "application/xml; charset=utf-8", "Cache-Control": "public, max-age=3600" } });
   // With run_worker_first (wrangler.jsonc) the Worker fronts every request so
   // the www redirect above applies to page loads, not just API calls — which
   // means assets must be served here instead of by the assets-first layer.
   if ((request.method === "GET" || request.method === "HEAD") && env.ASSETS) {
     // SEO pages (home + /spot/<id>): serve the shell with per-page <head> meta
-    // so each spot is its own indexable result, not one generic SPA page.
-    const seo = seoForPath(p);
+    // so each spot is its own indexable result, not one generic SPA page. A
+    // /spot/<slug> that isn't a curated spot may be a user-built page (KV) —
+    // indexable once featured, otherwise served noindex.
+    let seo = seoForPath(p);
+    if (!seo) {
+      const bm = p.match(/^\/spot\/([a-z0-9-]{1,60})\/?$/);
+      if (bm) seo = await seoForBuiltSpot(env, bm[1]);
+    }
     if (seo) {
       const shellUrl = new URL(request.url);
       shellUrl.pathname = "/index.html";

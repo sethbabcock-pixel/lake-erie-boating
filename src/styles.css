@@ -115,6 +115,15 @@ svg.ico { vertical-align: -0.15em; flex: 0 0 auto; }
 .locpick-item:hover { background: var(--surface-sunk); }
 .locpick-item.active { background: color-mix(in srgb, var(--accent) 14%, transparent); color: var(--accent); font-weight: var(--fw-semibold); }
 .locpick-item .check { color: var(--accent); font-weight: var(--fw-bold); }
+.locpick-none { padding: 10px 12px; color: var(--text-muted); font-size: var(--fs-sm); }
+/* "Build a page" footer: the escape hatch when the query isn't a covered spot. */
+.locpick-build { border-top: 1px solid var(--border); padding: 6px; }
+.locpick-buildbtn { display: block; width: 100%; text-align: left; padding: 10px 8px; min-height: 44px;
+  background: none; border: none; border-radius: var(--r-sm); color: var(--accent);
+  font-family: var(--font-sans); font-size: var(--fs-sm); font-weight: var(--fw-semibold); cursor: pointer; }
+.locpick-buildbtn:hover { background: var(--surface-sunk); }
+.locpick-buildbtn:disabled { opacity: 0.6; cursor: wait; }
+.locpick-err { padding: 0 8px 8px; color: var(--danger); font-size: var(--fs-xs); }
 
 /* Structured nearshore forecast */
 .mlist { display: flex; flex-direction: column; }
@@ -134,8 +143,17 @@ svg.ico { vertical-align: -0.15em; flex: 0 0 auto; }
 @media (max-width: 620px) {
   .wm-tag { display: none; }
   .wm-name { font-size: var(--fs-lg); }
-  .locpick-btn { max-width: 60vw; }
-  .controls { width: 100%; }
+  /* Use the full header width on phones instead of hugging the right edge:
+     the location picker stretches across the row beside the theme toggle, and
+     the two auth buttons split an equal, full-width row beneath it. */
+  .controls { width: 100%; justify-content: flex-start; row-gap: var(--s2); }
+  /* flex-basis 0 so line-wrapping ignores the picker's text width: it shares a
+     row with the theme toggle (signed-out) or the toggle + avatar (signed-in)
+     and grows to fill, instead of taking a full row and pushing them to wrap. */
+  .controls .locpick { flex: 1 1 0; min-width: 0; }
+  .locpick-btn { width: 100%; max-width: none; }
+  .controls .auth-ctas { flex: 1 1 100%; width: 100%; justify-content: stretch; }
+  .auth-ctas .signin-btn { flex: 1 1 0; min-width: 0; display: flex; align-items: center; justify-content: center; }
   .sel.locsel { flex: 1 1 auto; }
 }
 
@@ -322,6 +340,17 @@ details.card[open] > summary { margin-bottom: var(--s3); }
 .gear-cta { font-size: var(--fs-xs); color: var(--accent); font-weight: var(--fw-semibold); margin-top: 2px; }
 .adwrap { margin-bottom: var(--s4); text-align: center; min-height: 1px; }
 .adlabel { display: block; font-size: 10px; text-transform: uppercase; letter-spacing: var(--tracking-wide); color: var(--text-faint); margin-bottom: 4px; }
+/* Sticky footer (anchor) ad — pinned bottom, above the fold-line, dismissible. */
+.sticky-ad { position: fixed; left: 0; right: 0; bottom: 0; z-index: 90;
+  height: 60px; background: var(--surface); border-top: 1px solid var(--border-strong);
+  box-shadow: var(--shadow-lg); display: flex; align-items: center; justify-content: center; overflow: hidden; }
+.sticky-ad .adsbygoogle { max-width: 970px; }
+.sticky-ad-close { position: absolute; top: -11px; right: 8px; z-index: 1;
+  width: 22px; height: 22px; border-radius: 50%; border: 1px solid var(--border-strong);
+  background: var(--surface); color: var(--text-muted); font-size: 15px; line-height: 1; cursor: pointer;
+  display: flex; align-items: center; justify-content: center; box-shadow: var(--shadow-lg); }
+.sticky-ad-close:hover { color: var(--text); border-color: var(--accent); }
+@media (min-width: 720px) { .sticky-ad { height: 90px; } }
 .consent { position: fixed; left: 50%; bottom: var(--s3); transform: translateX(-50%); z-index: 100;
   width: min(680px, calc(100% - 24px)); display: flex; align-items: center; gap: var(--s4); flex-wrap: wrap;
   justify-content: space-between; background: var(--surface); border: 1px solid var(--border-strong);
@@ -630,6 +659,61 @@ body.has-takeover .app { background: var(--bg); border-radius: var(--r-lg) var(-
 
 .directory { padding-top: var(--s5); }
 .directory-title { font-size: var(--fs-xl); font-weight: var(--fw-bold); margin: 0 0 var(--s4); color: var(--text); }
+.directory-blurb { margin: calc(-1 * var(--s3)) 0 var(--s4); color: var(--text-muted); font-size: var(--fs-sm); max-width: 60ch; }
+.region-nav { display: flex; flex-wrap: wrap; gap: var(--s2); margin: 0 0 var(--s4); }
+.region-chip { display: inline-flex; align-items: center; padding: 6px 14px; border-radius: 999px; border: 1px solid var(--border);
+  background: var(--surface); color: var(--text-muted); font-size: var(--fs-sm); font-weight: var(--fw-semibold); text-decoration: none;
+  white-space: nowrap; transition: background .15s, color .15s, border-color .15s; }
+.region-chip:hover { color: var(--text); border-color: var(--text-faint); }
+.region-chip.on { background: var(--accent); border-color: var(--accent); color: #fff; }
+/* Request-a-location card */
+.reqloc { margin-top: var(--s5); border: 1px solid var(--border); border-radius: var(--r-lg); background: var(--surface); padding: var(--s4) var(--s5); }
+/* Collapsed one-liner (default): an invitation, not a second feature card. */
+.reqloc-slim { background: transparent; border: none; padding: var(--s2) 0; text-align: center; }
+.reqloc-line { margin: 0; color: var(--text-muted); font-size: var(--fs-sm); }
+.reqloc-line .linklike { font-size: var(--fs-sm); font-weight: var(--fw-semibold); }
+.reqloc-head { display: flex; align-items: center; justify-content: space-between; gap: var(--s4); flex-wrap: wrap; }
+.reqloc-head .cbtn { white-space: nowrap; }
+.reqloc-form { margin-top: var(--s4); }
+.reqloc-form textarea.field { min-height: 64px; padding: 10px 13px; resize: vertical; line-height: 1.4; }
+.reqloc-actions { margin-top: var(--s2); }
+.reqloc .opt { font-weight: var(--fw-regular); color: var(--text-faint); text-transform: none; letter-spacing: 0; }
+.reqloc .req-star { color: var(--danger); font-style: normal; }
+.reqloc-done { color: var(--text); font-size: var(--fs-base); }
+/* Nearest-launch finder (near me / ZIP) */
+.nearby-finder { margin: var(--s5) 0 0; border: 1px solid var(--border); border-radius: var(--r-lg); background: var(--surface); padding: var(--s5); }
+/* Search-first control row: the place/ZIP bar dominates (input flexes to fill
+   the card), with "Use my location" as a compact secondary beside it. All
+   controls match the input's 44px height for consistent touch targets. */
+.nf-controls { display: flex; align-items: center; gap: var(--s3); flex-wrap: wrap; margin-top: var(--s4); }
+.nf-bar { display: flex; align-items: center; gap: var(--s2); flex: 1 1 320px; min-width: 0; }
+.nf-q { flex: 1 1 auto; width: auto; min-width: 0; margin-bottom: 0; }
+.nf-go { min-height: 44px; padding: 0 22px; flex: 0 0 auto; }
+.nf-locbtn { min-height: 44px; display: inline-flex; align-items: center; justify-content: center; gap: 6px; white-space: nowrap; flex: 0 0 auto; }
+.nf-nocover { margin-top: var(--s3); }
+.nf-nocover p { margin: 0 0 var(--s3); color: var(--text-muted); }
+.nf-actions { display: flex; gap: var(--s2); flex-wrap: wrap; }
+.nf-results .loc-grid { margin-top: var(--s2); }
+@media (max-width: 620px) {
+  .nearby-finder { padding: var(--s4); }
+  .nf-bar { flex: 1 1 100%; }
+  .nf-locbtn { flex: 1 1 100%; }
+  /* Request-a-location card: stack the copy and give the CTA a full-width,
+     44px touch target instead of a right-aligned wrap. */
+  .reqloc-head { flex-direction: column; align-items: stretch; }
+  .reqloc-head .cbtn { width: 100%; min-height: 44px; }
+}
+/* Preview (build-a-page) banner + not-marine card */
+.preview-banner { margin: var(--s4) 0 calc(-1 * var(--s2)); padding: var(--s3) var(--s4); border: 1px solid var(--accent);
+  border-radius: var(--r-md); background: color-mix(in srgb, var(--accent) 10%, transparent); color: var(--text); font-size: var(--fs-sm);
+  display: flex; align-items: center; justify-content: space-between; gap: var(--s4); flex-wrap: wrap; }
+.preview-banner .cbtn { white-space: nowrap; }
+.notmarine { margin: var(--s5) 0; padding: var(--s5); border: 1px solid var(--border); border-radius: var(--r-lg); background: var(--surface); text-align: center; }
+.notmarine h2 { margin: 0 0 var(--s2); color: var(--text); }
+.notmarine p { margin: 0 0 var(--s4); color: var(--text-muted); }
+.built-actions { display: flex; gap: var(--s3); margin-top: 4px; }
+.built-actions .linklike { font-size: var(--fs-sm); }
+.built-actions .danger-link { color: var(--danger); }
 .region { border: 1px solid var(--border); border-radius: var(--r-lg); margin-bottom: var(--s3); overflow: hidden; background: var(--surface); }
 .region-skel { height: 116px; animation: skelpulse 1.6s ease-in-out infinite; }
 @keyframes skelpulse { 0%, 100% { opacity: .5; } 50% { opacity: .8; } }

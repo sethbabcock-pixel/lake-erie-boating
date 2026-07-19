@@ -133,7 +133,8 @@ export const camKind = (c) => (c && c.img ? "photo" : "video");
 export const camKindLabel = (c) => (c && c.img ? "Refreshing photo" : "Live video");
 
 export const camSrc = (c) =>
-  c.angelcam ? `https://v.angelcam.com/iframe?v=${c.angelcam}&autoplay=1`
+  c.embed ? c.embed // ready-made embed URL (e.g. a Windy webcam player)
+    : c.angelcam ? `https://v.angelcam.com/iframe?v=${c.angelcam}&autoplay=1`
     : c.wetmet ? `https://api.wetmet.net/widgets/stream/frame.php?uid=${c.wetmet}`
       : c.ipcamlive ? `https://www.ipcamlive.com/player/player.php?alias=${c.ipcamlive}&autoplay=1&disablehd=0`
         : c.ozolio ? `https://relay.ozolio.com/pub.api?cmd=embed&oid=${c.ozolio}`
@@ -142,6 +143,7 @@ export const camSrc = (c) =>
 
 export const camLink = (c) =>
   c.img ? (c.link || c.img)
+    : c.embed ? (c.link || c.embed)
     : c.angelcam ? `https://v.angelcam.com/${c.angelcam}`
       : c.wetmet ? `https://api.wetmet.net/widgets/stream/frame.php?uid=${c.wetmet}`
         : c.ipcamlive ? `https://www.ipcamlive.com/${c.ipcamlive}`

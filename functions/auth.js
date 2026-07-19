@@ -28,6 +28,8 @@
 // Email/password needs only the USERS KV namespace. Google sign-in also needs
 // GOOGLE_CLIENT_ID + GOOGLE_CLIENT_SECRET secrets.
 
+import { resolveMarineContext } from "./marine/conditions.js";
+
 const SESSION_DAYS = 30;
 const enc = new TextEncoder();
 
@@ -45,10 +47,12 @@ function timingSafeEqual(a, b) {
   return m === 0;
 }
 
-// PBKDF2 work factor. Raised from the original 100k; existing hashes record
-// their own iteration count (passIter) and are transparently re-hashed to this
-// value on the user's next successful login.
-const PBKDF2_ITERATIONS = 300000;
+// PBKDF2 work factor. Capped at 100k because Cloudflare Workers' Web Crypto
+// rejects PBKDF2 iteration counts above 100000 ("iteration counts above 100000
+// are not supported") — a higher value throws and breaks signup + login.
+// Existing hashes record their own iteration count (passIter) and are
+// transparently re-hashed to this value on the user's next successful login.
+const PBKDF2_ITERATIONS = 100000;
 const LEGACY_PBKDF2_ITERATIONS = 100000;
 async function pbkdf2(password, saltHex, iterations = PBKDF2_ITERATIONS) {
   const salt = hexToBuf(saltHex);
@@ -294,14 +298,14 @@ async function adminEmails(env) {
 // Footer for non-essential (relationship/marketing) email only — NOT for
 // transactional mail like verification, password reset, or receipts.
 export const emailFooter = (unsubUrl) => unsubUrl ? `<p style="color:#99a;font-size:12px;margin-top:24px;font-family:system-ui,sans-serif">You're receiving this because you have a shouldiboat.com account. <a href="${unsubUrl}" style="color:#99a">Unsubscribe from non-essential emails</a>.</p>` : "";
-const welcomeHtml = (unsubUrl) => `<div style="font-family:system-ui,sans-serif"><h2>Welcome aboard</h2><p>Thanks for joining <b>shouldiboat.com</b> — your quick GO / CAUTION / NO-GO call for Great Lakes boating.</p><ul><li>Save your favorite launch spots</li><li>Set comfort limits tuned to your boat</li><li>Go ad-free anytime for $2.99/mo</li></ul><p><a href="https://shouldiboat.com" style="display:inline-block;background:#008BA8;color:#fff;padding:10px 18px;border-radius:8px;text-decoration:none">Open shouldiboat.com</a></p></div>${emailFooter(unsubUrl)}`;
-const adFreeHtml = () => `<div style="font-family:system-ui,sans-serif"><h2>You're ad-free</h2><p>Thanks for supporting shouldiboat.com — your subscription is active and the ads are gone. You can manage or cancel anytime from your <a href="https://shouldiboat.com/account">account</a>.</p></div>`;
+const welcomeHtml = (unsubUrl) => `<div style="font-family:system-ui,sans-serif"><h2>Welcome aboard</h2><p>Thanks for joining <b>shouldiboat.com</b>, your quick GO / CAUTION / NO-GO call for boating conditions.</p><ul><li>Save your favorite launch spots</li><li>Set comfort limits tuned to your boat</li><li>Go ad-free anytime for $2.99/mo</li></ul><p><a href="https://shouldiboat.com" style="display:inline-block;background:#008BA8;color:#fff;padding:10px 18px;border-radius:8px;text-decoration:none">Open shouldiboat.com</a></p></div>${emailFooter(unsubUrl)}`;
+const adFreeHtml = () => `<div style="font-family:system-ui,sans-serif"><h2>You're ad-free</h2><p>Thanks for supporting shouldiboat.com. Your subscription is active and the ads are gone. You can manage or cancel anytime from your <a href="https://shouldiboat.com/account">account</a>.</p></div>`;
 const verifyHtml = (link) => `<div style="font-family:system-ui,-apple-system,sans-serif;max-width:520px;color:#1a2b38">
   <h2 style="margin:0 0 10px">Confirm your email address</h2>
-  <p style="line-height:1.55;margin:0 0 14px">Thanks for creating a <b>shouldiboat.com</b> account — the quick GO / CAUTION / NO-GO call for boating conditions across the Great Lakes. To finish setting up your account, please confirm this is your email address.</p>
+  <p style="line-height:1.55;margin:0 0 14px">Thanks for creating a <b>shouldiboat.com</b> account, the quick GO / CAUTION / NO-GO call for boating conditions. To finish setting up your account, please confirm this is your email address.</p>
   <p style="margin:18px 0"><a href="${link}" style="display:inline-block;background:#008BA8;color:#fff;padding:12px 22px;border-radius:8px;text-decoration:none;font-weight:600">Confirm my email</a></p>
   <p style="line-height:1.5;color:#5b6b78;font-size:14px;margin:0 0 12px">Or paste this link into your browser:<br><a href="${link}" style="color:#008BA8;word-break:break-all">${link}</a></p>
-  <p style="line-height:1.5;color:#5b6b78;font-size:14px;margin:0">This link expires in 24 hours. If you didn't create a shouldiboat.com account, you can safely ignore this email — no account is activated without confirmation.</p>
+  <p style="line-height:1.5;color:#5b6b78;font-size:14px;margin:0">This link expires in 24 hours. If you didn't create a shouldiboat.com account, you can safely ignore this email. No account is activated without confirmation.</p>
   <hr style="border:none;border-top:1px solid #e3e9ee;margin:22px 0">
   <p style="color:#8a99a6;font-size:12px;margin:0"><a href="https://shouldiboat.com" style="color:#8a99a6">shouldiboat.com</a> · Great Lakes boating conditions</p>
 </div>`;
@@ -457,7 +461,7 @@ export async function handleAuth(request, env, url, ctx) {
           to: e, subject: "Confirm your email · shouldiboat.com",
           html: verifyHtml(link), ttlDays: 7,
         });
-        if (!r.emailSent) return json({ error: "We couldn't send the email just now — please try again in a moment." }, 502);
+        if (!r.emailSent) return json({ error: "We couldn't send the email just now. Please try again in a moment." }, 502);
       }
     }
     return json({ ok: true }); // don't reveal whether the account exists/needs it
@@ -533,7 +537,7 @@ export async function handleAuth(request, env, url, ctx) {
     const hash = await pbkdf2(password, user.salt, iter);
     if (!timingSafeEqual(hash, user.pass)) return json({ error: "Invalid email or password." }, 401);
     if (user.emailVerified === false) // explicit false = newer unverified account (old accounts grandfathered)
-      return json({ error: "Please confirm your email first — check your inbox for the verification link.", needsVerification: true, email: user.email }, 403);
+      return json({ error: "Please confirm your email first. Check your inbox for the verification link.", needsVerification: true, email: user.email }, 403);
     // Transparently upgrade the password hash to the current work factor.
     if (iter < PBKDF2_ITERATIONS) {
       user.salt = randHex(16);
@@ -611,6 +615,168 @@ export async function handleAuth(request, env, url, ctx) {
     for (const k of recent) { const n = await env.USERS.get(k.name, "json"); if (n) notifications.push(n); }
     notifications.sort((a, b) => (b.timestamp || "").localeCompare(a.timestamp || ""));
     return json({ notifications: notifications.slice(0, 100) });
+  }
+
+  // ---- public: request a new location (demand signal for expansion) ----
+  // Anyone can ask for a launch we don't cover yet, and optionally hand us the
+  // local webcam URL (the part we can't automate). Stored as a demand list and
+  // pinged to admins so we know where to expand next.
+  if (path === "/api/request-location" && request.method === "POST") {
+    if (!(await rateLimit(env, request, "locreq", 8, 3600))) return json({ error: "Too many requests. Try again later." }, 429);
+    const body = await request.json().catch(() => ({}));
+    const clean = (v, max) => String(v ?? "").replace(/[\u0000-\u001f]+/g, " ").trim().slice(0, max);
+    const location = clean(body.location, 120);
+    if (location.length < 2) return json({ error: "Please enter a location." }, 400);
+    const webcam = clean(body.webcam, 300);
+    const note = clean(body.note, 500);
+    const u = await userFromRequest(env, request).catch(() => null);
+    let email = clean(body.email, 254);
+    if (email && !validEmail(email)) email = ""; // keep the request, drop a bad address
+    email = email || (u && u.email) || "";
+    const rec = { location, email, webcam, note, from: (u && u.email) || null, at: new Date().toISOString() };
+    const ts = Date.now();
+    try { await env.USERS.put(`locreq:${ts}:${randHex(3)}`, JSON.stringify(rec), { expirationTtl: 180 * 86400 }); } catch (e) { /* ignore */ }
+    // KV-log always (shows in the admin notifications feed) + email admins if configured.
+    const esc = (s) => String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+    const rows = [["Location", location], ["From", email || "(not given)"], ["Webcam", webcam || "(none)"], ["Note", note || "(none)"]]
+      .map(([k, v]) => `<tr><td style="padding:2px 12px 2px 0;color:#5b6b78">${k}</td><td><b>${esc(v)}</b></td></tr>`).join("");
+    const html = `<div style="font-family:system-ui,sans-serif;color:#1a2b38"><h2 style="margin:0 0 8px">New location request</h2><table style="border-collapse:collapse;font-size:14px">${rows}</table></div>`;
+    const to = (await adminEmails(env))[0];
+    runBg(ctx, notify(env, "location_request", { location, email, webcam }, to ? { to, subject: `Location request: ${location}`, html, ttlDays: 60 } : null));
+    return json({ ok: true });
+  }
+
+  // ---- public: geocode a US ZIP or a place name -> lat/lon ----
+  // ZIP via the key-less Zippopotam service; a place name ("Annapolis, MD") via
+  // OpenStreetMap Nominatim. Both cached in KV so repeat lookups are instant and
+  // we stay gentle on the upstreams. Fails soft — the UI just shows a note.
+  if (path === "/api/geocode" && request.method === "GET") {
+    if (!(await rateLimit(env, request, "geocode", 40, 3600))) return json({ error: "Too many lookups. Try again later." }, 429);
+    const zip = (url.searchParams.get("zip") || "").trim();
+    const q = (url.searchParams.get("q") || "").trim().slice(0, 120);
+    if (zip) {
+      if (!/^\d{5}$/.test(zip)) return json({ error: "Enter a 5-digit US ZIP code." }, 400);
+      const cacheKey = `geo:zip:${zip}`;
+      const cached = await env.USERS.get(cacheKey, "json").catch(() => null);
+      if (cached) return json(cached);
+      try {
+        const resp = await fetch(`https://api.zippopotam.us/us/${zip}`, { signal: AbortSignal.timeout(6000), headers: { "User-Agent": "shouldiboat.com" } });
+        if (!resp.ok) return json({ error: "That ZIP code wasn't found." }, 404);
+        const d = await resp.json();
+        const p = (d.places || [])[0];
+        const lat = p && parseFloat(p.latitude), lon = p && parseFloat(p.longitude);
+        if (!p || Number.isNaN(lat) || Number.isNaN(lon)) return json({ error: "That ZIP code wasn't found." }, 404);
+        const place = `${p["place name"] || ""}, ${p["state abbreviation"] || p.state || ""}`.replace(/^,\s*|,\s*$/g, "");
+        const out = { zip, lat, lon, place };
+        await env.USERS.put(cacheKey, JSON.stringify(out), { expirationTtl: 30 * 86400 }).catch(() => {});
+        return json(out);
+      } catch (e) {
+        return json({ error: "Couldn't look up that ZIP right now." }, 502);
+      }
+    }
+    if (q.length >= 2) {
+      const cacheKey = `geo:q:${q.toLowerCase()}`;
+      const cached = await env.USERS.get(cacheKey, "json").catch(() => null);
+      if (cached) return json(cached);
+      try {
+        const u = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(q)}&format=jsonv2&limit=1&countrycodes=us&addressdetails=1`;
+        const resp = await fetch(u, { signal: AbortSignal.timeout(6000), headers: { "User-Agent": "shouldiboat.com (seth.babcock@gmail.com)" } });
+        if (!resp.ok) return json({ error: "Couldn't look up that place right now." }, 502);
+        const arr = await resp.json();
+        const p = Array.isArray(arr) ? arr[0] : null;
+        const lat = p && parseFloat(p.lat), lon = p && parseFloat(p.lon);
+        if (!p || Number.isNaN(lat) || Number.isNaN(lon)) return json({ error: "No match for that place. Try a nearby town, or a ZIP." }, 404);
+        const a = p.address || {};
+        const town = a.city || a.town || a.village || a.hamlet || a.county || (p.display_name || "").split(",")[0];
+        const st = a.state_code || a.state || "";
+        const place = [town, st].filter(Boolean).join(", ") || q;
+        const out = { q, lat, lon, place };
+        await env.USERS.put(cacheKey, JSON.stringify(out), { expirationTtl: 30 * 86400 }).catch(() => {});
+        return json(out);
+      } catch (e) {
+        return json({ error: "Couldn't look up that place right now." }, 502);
+      }
+    }
+    return json({ error: "Enter a place or a 5-digit ZIP." }, 400);
+  }
+
+  // ---- admin: location-request demand list (newest first) ----
+  if (path === "/api/admin/location-requests" && request.method === "GET") {
+    const u = await userFromRequest(env, request);
+    if (!u) return json({ error: "Not signed in." }, 401);
+    if (!isAdmin(env, u)) return json({ error: "Forbidden — not an admin account." }, 403);
+    const list = await env.USERS.list({ prefix: "locreq:", limit: 1000 });
+    const recent = list.keys.slice(-200).reverse(); // keys sort ascending by ts → newest last
+    const requests = [];
+    for (const k of recent) { const r = await env.USERS.get(k.name, "json"); if (r) requests.push(r); }
+    requests.sort((a, b) => (b.at || "").localeCompare(a.at || ""));
+    return json({ requests: requests.slice(0, 150) });
+  }
+
+  // ---- public: build a page for a point (self-serve publish) ----
+  // Resolves the marine context server-side (never trusts client-supplied
+  // zone/office), stores it as a builtspot:<slug>, and returns the /spot slug.
+  // Published pages are live + shareable immediately but stay noindex and out of
+  // the directory until an admin features them (and an admin can disable/delete).
+  if (path === "/api/build-page" && request.method === "POST") {
+    if (!(await rateLimit(env, request, "buildpage", 10, 3600))) return json({ error: "Too many pages built just now. Try again later." }, 429);
+    const body = await request.json().catch(() => ({}));
+    const lat = Math.round(parseFloat(body.lat) * 1e4) / 1e4, lon = Math.round(parseFloat(body.lon) * 1e4) / 1e4;
+    if (!Number.isFinite(lat) || !Number.isFinite(lon) || Math.abs(lat) > 90 || Math.abs(lon) > 180) return json({ error: "Invalid coordinates." }, 400);
+    let name = String(body.name ?? "").replace(/[\u0000-\u001f]+/g, " ").trim().slice(0, 80);
+    let mctx;
+    try { mctx = await resolveMarineContext(lat, lon); } catch (e) { mctx = null; }
+    if (!mctx) return json({ error: "That spot isn't on boatable water we can forecast." }, 422);
+    if (!name) name = mctx.relName || `${lat}, ${lon}`;
+    // Reuse an existing page for the same ~1 km cell instead of making duplicates.
+    const cellKey = `builtcell:${Math.round(lat * 100) / 100},${Math.round(lon * 100) / 100}`;
+    const existing = await env.USERS.get(cellKey);
+    if (existing) {
+      const rec = await env.USERS.get(`builtspot:${existing}`, "json").catch(() => null);
+      if (rec && !rec.disabled) return json({ slug: existing, url: `/spot/${existing}`, existed: true });
+    }
+    const base = (name.toLowerCase().normalize("NFKD").replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 40)) || "spot";
+    const slug = `${base}-${randHex(2)}`;
+    const u = await userFromRequest(env, request).catch(() => null);
+    const rec = {
+      slug, name, lat, lon,
+      zone: mctx.zone, zoneName: mctx.zoneName, office: mctx.office, product: mctx.product,
+      lake: mctx.lake, buoys: [],
+      featured: false, disabled: false,
+      createdAt: new Date().toISOString(), createdBy: (u && u.email) || null,
+    };
+    await env.USERS.put(`builtspot:${slug}`, JSON.stringify(rec));
+    await env.USERS.put(cellKey, slug, { expirationTtl: 400 * 86400 });
+    runBg(ctx, notify(env, "page_built", { name, slug, lake: mctx.lake }, null));
+    return json({ slug, url: `/spot/${slug}` });
+  }
+
+  // ---- admin: built pages (feature / disable / delete) ----
+  if (path === "/api/admin/built-spots" && request.method === "GET") {
+    const u = await userFromRequest(env, request);
+    if (!u) return json({ error: "Not signed in." }, 401);
+    if (!isAdmin(env, u)) return json({ error: "Forbidden — not an admin account." }, 403);
+    const list = await env.USERS.list({ prefix: "builtspot:", limit: 1000 });
+    const spots = [];
+    for (const k of list.keys) { const b = await env.USERS.get(k.name, "json"); if (b) spots.push(b); }
+    spots.sort((a, b) => (b.createdAt || "").localeCompare(a.createdAt || ""));
+    return json({ spots });
+  }
+  if (path === "/api/admin/built-spot" && request.method === "POST") {
+    const u = await userFromRequest(env, request);
+    if (!u) return json({ error: "Not signed in." }, 401);
+    if (!isAdmin(env, u)) return json({ error: "Forbidden — not an admin account." }, 403);
+    const { slug, action } = await request.json().catch(() => ({}));
+    const rec = slug ? await env.USERS.get(`builtspot:${slug}`, "json").catch(() => null) : null;
+    if (!rec) return json({ error: "Page not found." }, 404);
+    if (action === "delete") { await env.USERS.delete(`builtspot:${slug}`); return json({ ok: true, deleted: true }); }
+    if (action === "feature") rec.featured = true;
+    else if (action === "unfeature") rec.featured = false;
+    else if (action === "disable") rec.disabled = true;
+    else if (action === "enable") rec.disabled = false;
+    else return json({ error: "Unknown action." }, 400);
+    await env.USERS.put(`builtspot:${slug}`, JSON.stringify(rec));
+    return json({ ok: true, spot: rec });
   }
 
   // ---- first-party hit beacon (public, cookieless): counts visits/visitors ----
@@ -695,7 +861,7 @@ export async function handleAuth(request, env, url, ctx) {
     // POST: either email a password-reset link, or toggle account flags.
     const body = await request.json().catch(() => ({}));
     if (body.action === "sendReset") {
-      if (!target.pass) return json({ error: "This user signs in with Google — no password to reset." }, 400);
+      if (!target.pass) return json({ error: "This user signs in with Google, so there's no password to reset." }, 400);
       const token = randHex(20);
       await env.USERS.put(`reset:${token}`, target.email, { expirationTtl: 3600 });
       const link = `${siteBase(env, url)}/?reset=${token}`;
@@ -732,7 +898,7 @@ export async function handleAuth(request, env, url, ctx) {
     const buf = await request.arrayBuffer();
     if (!buf.byteLength) return json({ error: "Empty upload." }, 400);
     const cap = isVideo ? 12 * 1024 * 1024 : 4 * 1024 * 1024;
-    if (buf.byteLength > cap) return json({ error: isVideo ? "Video too large — max 12 MB (use a short, compressed loop, or host on Cloudflare Stream)." : "Image too large — max 4 MB." }, 413);
+    if (buf.byteLength > cap) return json({ error: isVideo ? "Video too large: max 12 MB (use a short, compressed loop, or host on Cloudflare Stream)." : "Image too large: max 4 MB." }, 413);
     const id = randHex(8);
     await env.USERS.put(`asset:${id}`, buf);
     await env.USERS.put(`asset:${id}:ct`, ct);

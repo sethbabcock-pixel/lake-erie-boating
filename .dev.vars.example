@@ -3,3 +3,6 @@
 BREVO_API_KEY=xkeysib-xxxxxxxxxxxxxxxxxxxxxxxx
 # Optional: override the verified from-address (defaults to noreply@shouldiboat.com).
 # EMAIL_FROM=noreply@shouldiboat.com
+# Optional: Windy Webcams API key. When set, spots without a curated cam
+# (built pages, coastal spots) auto-show the nearest Windy webcam.
+# WINDY_WEBCAMS_KEY=xxxxxxxxxxxxxxxxxxxxxxxx

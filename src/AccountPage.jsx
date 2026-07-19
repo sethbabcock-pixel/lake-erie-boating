@@ -40,10 +40,10 @@ function SubscriptionCard({ auth }) {
     return (
       <section className="card acct-sec">
         <h2>Subscription</h2>
-        <p className="acct-lead">You're on the <b>free plan</b> — the site is ad-supported.</p>
+        <p className="acct-lead">You're on the <b>free plan</b>, so the site is ad-supported.</p>
         <p className="acct-note">Go ad-free for $2.99/month. Cancel anytime; you keep ad-free access through the end of the period you paid for.</p>
         <button className="cbtn" disabled={busy} onClick={async () => { track("event", "subscribe_click", { where: "account_page" }); setBusy(true); setErr(""); try { await auth.checkout(); } catch (e) { setErr(e.message); setBusy(false); } }}>
-          {busy ? "…" : "Go ad-free — $2.99/mo"}
+          {busy ? "…" : "Go ad-free · $2.99/mo"}
         </button>
         {err && <div className="modal-err" style={{ marginTop: 8 }}>{err}</div>}
       </section>
@@ -62,7 +62,7 @@ function SubscriptionCard({ auth }) {
 
       {sub && !sub.cancelAtPeriodEnd && (
         <>
-          <p className="acct-lead">{price ? `${price}/${sub.interval || "month"}` : "Ad-free plan"} — active.</p>
+          <p className="acct-lead">{price ? `${price}/${sub.interval || "month"}` : "Ad-free plan"}, active.</p>
           {through && <p className="acct-note">Renews on <b>{through}</b>.</p>}
         </>
       )}
@@ -124,16 +124,16 @@ function EmailCard({ auth }) {
         <>
           <label className="acct-toggle">
             <input type="checkbox" checked={!!prefs.dailyEmail} disabled={busy} onChange={(e) => setPref("dailyEmail", e.target.checked)} />
-            <span><b>Daily verdict email</b> — every starred port's GO / CAUTION / NO-GO, 6am ET.</span>
+            <span><b>Daily verdict email</b>: every starred port's GO / CAUTION / NO-GO, 6am ET.</span>
           </label>
           <label className="acct-toggle">
             <input type="checkbox" checked={!!prefs.alertEmails} disabled={busy} onChange={(e) => setPref("alertEmails", e.target.checked)} />
-            <span><b>NO-GO alerts</b> — a heads-up when a starred port turns rough. One per port per day, daytime only.</span>
+            <span><b>NO-GO alerts</b>: a heads-up when a starred port turns rough. One per port per day, daytime only.</span>
           </label>
           <p className="acct-note">
             {favCount
               ? `Covers your ${favCount} starred port${favCount > 1 ? "s" : ""}.`
-              : "Star a port first (tap the star on any port page) — these emails cover your starred ports."}
+              : "Star a port first (tap the star on any port page); these emails cover your starred ports."}
           </p>
         </>
       )}
@@ -226,7 +226,7 @@ function BoatCard({ auth }) {
         </label>
       </div>
       {mode === "recommended" && !rec && (
-        <p className="acct-note">Pick a boat type above to use recommended limits — or choose "Set my own limits."</p>
+        <p className="acct-note">Pick a boat type above to use recommended limits, or choose "Set my own limits."</p>
       )}
       <div className="acct-field-row">
         <label className="acct-field acct-field-sm">
@@ -242,7 +242,7 @@ function BoatCard({ auth }) {
       </div>
       <p className="acct-note">
         {eff.maxWaveFt == null && eff.maxWindKt == null
-          ? "No limits set — we won't add a personal comfort flag to the call."
+          ? "No limits set, so we won't add a personal comfort flag to the call."
           : <>On the main call we'll flag conditions above {eff.maxWaveFt != null ? <b>{eff.maxWaveFt} ft waves</b> : "—"}{eff.maxWaveFt != null && eff.maxWindKt != null ? " or " : ""}{eff.maxWindKt != null ? <b>{eff.maxWindKt} kt wind</b> : ""}.</>}
       </p>
 

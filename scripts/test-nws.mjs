@@ -32,6 +32,13 @@ for (const spot of ["cleveland", "chicago", "toledo"]) {
     check(`${spot}: daylight plausible`, daylightH > 8 && daylightH < 17, `${daylightH.toFixed(1)}h`);
   }
   check(`${spot}: current waves resolved`, d.waves.ft != null, `${d.waves.ft} ft (${d.waves.source})`);
+  // The headline "current" wave must match the first hour of the strip when the
+  // grid supplied it (source "forecast" with a grid hour-0 value), so the banner
+  // never disagrees with the hour-by-hour table below it.
+  if (d.waves.source === "forecast" && d.hourly[0]?.waveFt != null) {
+    check(`${spot}: headline wave matches hourly strip`, d.waves.ft === d.hourly[0].waveFt,
+      `headline ${d.waves.ft} ft vs strip[0] ${d.hourly[0].waveFt} ft`);
+  }
   check(`${spot}: verdict computed`, ["GO", "CAUTION", "NO-GO"].includes(d.recommendation?.level), d.recommendation?.level);
 }
 
@@ -46,21 +53,70 @@ for (const s of summary.spots) {
   console.log(`   ${String(s.level ?? "—").padEnd(7)} ${String(s.windKt ?? "—").padStart(3)}kt g${String(s.gustKt ?? "—").padStart(3)} ${String(s.waveFt ?? "—").padStart(4)}ft  ${s.name}`);
 }
 
-// Inland lake (Buckeye Lake, OH): NWS models no waves/marine-zone/buoy here, so
-// it must still return a full land forecast (wind, gusts, temps, rain, hourly,
-// week, verdict) without erroring — waves are expected blank.
-{
-  const resp = await onRequest({ request: new Request("https://shouldiboat.com/marine/conditions?spot=buckeye-lake") });
+// Beyond the Great Lakes: coastal / tidal spots must still return a full land
+// forecast + verdict off the same pipeline (waves optional — some estuary/river
+// cells aren't wave-modeled, which is expected to degrade gracefully, not error).
+for (const spot of ["middle-river", "bath-nc"]) {
+  const resp = await onRequest({ request: new Request(`https://shouldiboat.com/marine/conditions?spot=${spot}`) });
   const d = await resp.json();
-  check("buckeye: responds 200", resp.status === 200, `status ${resp.status}`);
-  check("buckeye: hourly rows", (d.hourly?.length || 0) >= 24, `${d.hourly?.length} rows`);
-  check("buckeye: hourly has wind", d.hourly?.filter((h) => h.windKt != null).length >= 12, `${d.hourly?.filter((h) => h.windKt != null).length} rows`);
-  check("buckeye: week outlook days", (d.week?.length || 0) >= 5, `${d.week?.length} days`);
-  check("buckeye: week has wind", d.week?.every((w) => w.windKt != null));
-  check("buckeye: verdict computed", ["GO", "CAUTION", "NO-GO"].includes(d.recommendation?.level), d.recommendation?.level);
-  check("buckeye: no marine zone text", Array.isArray(d.marineForecast) && d.marineForecast.length === 0, `${d.marineForecast?.length} periods`);
-  check("buckeye: sun present", !!(d.sun && d.sun.sunrise && d.sun.sunset), `${d.sun?.sunrise} → ${d.sun?.sunset}`);
-  console.log(`   buckeye verdict ${d.recommendation?.level}: ${(d.recommendation?.reasons || []).slice(0, 3).join("; ")}`);
+  check(`${spot}: responds 200`, resp.status === 200, `status ${resp.status}`);
+  check(`${spot}: hourly rows`, (d.hourly?.length || 0) >= 24, `${d.hourly?.length} rows`);
+  check(`${spot}: hourly has wind`, (d.hourly?.filter((h) => h.windKt != null).length || 0) >= 12, `${d.hourly?.filter((h) => h.windKt != null).length} rows`);
+  check(`${spot}: verdict computed`, ["GO", "CAUTION", "NO-GO"].includes(d.recommendation?.level), d.recommendation?.level);
+  check(`${spot}: sun present`, !!(d.sun && d.sun.sunrise && d.sun.sunset), `${d.sun?.sunrise} → ${d.sun?.sunset}`);
+  console.log(`   ${spot}: ${d.recommendation?.level} · waves ${d.waves?.ft ?? "—"}ft (${d.waves?.source ?? "none"}) · marine periods ${d.marineForecast?.length ?? 0}`);
+}
+
+// Coordinate-driven engine: build a full page for an ARBITRARY point (no curated
+// spot), and guard non-marine inland points. This is the foundation for location
+// search + "build a page".
+for (const [label, lat, lon, marine] of [
+  ["Annapolis, MD (Chesapeake)", 38.98, -76.49, true],
+  ["Grand Haven, MI (Lake Michigan)", 43.06, -86.24, true],
+  ["Columbus, OH (inland, non-marine)", 39.96, -83.00, false],
+]) {
+  const resp = await onRequest({ request: new Request(`https://shouldiboat.com/marine/conditions?lat=${lat}&lon=${lon}`) });
+  const d = await resp.json();
+  if (marine) {
+    check(`point ${label}: resolves ad-hoc`, resp.status === 200 && d.spot?.adHoc === true, `status ${resp.status}, zone ${d.spot?.zone}`);
+    check(`point ${label}: verdict computed`, ["GO", "CAUTION", "NO-GO"].includes(d.recommendation?.level), d.recommendation?.level);
+    console.log(`   ${label}: ${d.recommendation?.level} · ${d.spot?.zone} (${d.spot?.lake}) · waves ${d.waves?.ft ?? "—"}ft · periods ${d.marineForecast?.length ?? 0}`);
+  } else {
+    check(`point ${label}: guarded non-marine`, resp.status === 422 && d.notMarine === true, `status ${resp.status}`);
+  }
+}
+
+// Resolution cache: with a KV binding, a point's marine context is cached by
+// snapped coords, so a second lookup reuses it instead of re-hitting NWS.
+{
+  const store = new Map();
+  const env = { USERS: {
+    get: async (k, t) => { const v = store.get(k); return v == null ? null : (t === "json" ? JSON.parse(v) : v); },
+    put: async (k, v) => { store.set(k, v); },
+  } };
+  const req = () => new Request("https://shouldiboat.com/marine/conditions?lat=38.98&lon=-76.49");
+  const a = await (await onRequest({ request: req(), env })).json();
+  const keys = [...store.keys()].filter((k) => k.startsWith("geoctx:"));
+  const b = await (await onRequest({ request: req(), env })).json();
+  check("geoctx: context cached after first resolve", keys.length >= 1, keys.join(","));
+  check("geoctx: same zone served from cache", !!a.spot?.zone && a.spot.zone === b.spot?.zone, `${a.spot?.zone} vs ${b.spot?.zone}`);
+}
+
+// Wave floor / temps / alert-dedup diagnostic (Erie PA — an Eastern-basin spot
+// with no live buoy, where the grid reads low and the nearshore is authoritative).
+{
+  const resp = await onRequest({ request: new Request("https://shouldiboat.com/marine/conditions?spot=erie") });
+  const d = await resp.json();
+  const strip = (d.hourly || []).slice(0, 12).map((h) => h.waveFt ?? "—").join(",");
+  console.log(`   erie headline waves: ${d.waves?.ft ?? "—"}ft (${d.waves?.source})`);
+  console.log(`   erie hourly[0..12] waves: ${strip}`);
+  console.log(`   erie nearshore periods: ${(d.marineForecast || []).map((p) => p.name).join(" | ")}`);
+  console.log(`   erie temps: water ${d.temps?.waterF ?? "—"}°F (${d.temps?.waterSource ?? "none"}), air ${d.temps?.airF ?? "—"}°F (${d.temps?.airSource ?? "none"})`);
+  const events = (d.alerts || []).map((a) => a.event);
+  console.log(`   erie alerts (${events.length}): ${events.join(" | ") || "none"}`);
+  check("erie: no duplicate alert events", new Set(events.map((e) => (e || "").toLowerCase())).size === events.length, events.join(", "));
+  check("erie: headline wave matches strip[0]", d.waves?.source !== "forecast" || d.hourly?.[0]?.waveFt == null || d.waves.ft === d.hourly[0].waveFt,
+    `headline ${d.waves?.ft} vs strip0 ${d.hourly?.[0]?.waveFt}`);
 }
 
 // Digest "best GO window today" per port.

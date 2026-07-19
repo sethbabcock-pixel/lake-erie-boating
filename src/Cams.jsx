@@ -118,7 +118,8 @@ export default function Cams({ lat, lon, spotName, lake }) {
   useEffect(() => {
     let abort = false;
     setStatus(null); setFailed({}); setServerCams(null);
-    fetch(`/marine/cams?lake=${encodeURIComponent(lake || "Lake Erie")}`)
+    const pt = (lat != null && lon != null) ? `&lat=${lat}&lon=${lon}` : "";
+    fetch(`/marine/cams?lake=${encodeURIComponent(lake || "Lake Erie")}${pt}`)
       .then((r) => r.json())
       .then((d) => {
         if (abort) return;
@@ -128,7 +129,7 @@ export default function Cams({ lat, lon, spotName, lake }) {
       .catch(() => { if (!abort) setStatus({}); });
     const t = setTimeout(() => { if (!abort) setStatus((s) => s ?? {}); }, 8000);
     return () => { abort = true; clearTimeout(t); };
-  }, [lake]);
+  }, [lake, lat, lon]);
 
   // Hide cams confirmed offline (server) or reported dead (player). Fall back to
   // the full list if that would leave nothing, so the section is never empty.
@@ -178,7 +179,7 @@ export default function Cams({ lat, lon, spotName, lake }) {
     return (
       <section className="card">
         <div className="card-head"><h2>Live cams</h2></div>
-        <div className="camempty">No live webcams for this lake right now — they come and go. Check the directory links below or your local harbor cam.</div>
+        <div className="camempty">No live webcams for this lake right now; they come and go. Check the directory links below or your local harbor cam.</div>
         <CamLinks lake={lake} />
       </section>
     );
@@ -225,8 +226,8 @@ export default function Cams({ lat, lon, spotName, lake }) {
       <CamLinks cam={cam} lake={lake} />
       <div className="hint">
         {camIsImage(cam)
-          ? "Still image — refreshes every 15 seconds."
-          : "Live video — some players need a tap to start."}
+          ? "Still image, refreshes every 15 seconds."
+          : "Live video. Some players need a tap to start."}
         {hiddenCount > 0 && ` ${hiddenCount} offline cam${hiddenCount > 1 ? "s" : ""} hidden.`}
       </div>
     </section>

@@ -45,10 +45,10 @@ function digestHtml(favSpots, unsubUrl) {
 function alertHtml(nogoSpots, unsubUrl) {
   return `<div style="font-family:system-ui,-apple-system,sans-serif;max-width:520px;color:#1a2b38">
     <h2 style="margin:0 0 10px">NO-GO at your port${nogoSpots.length > 1 ? "s" : ""}</h2>
-    <p style="margin:0 0 14px;color:#5b6b78">Conditions have turned rough — before you tow the boat, take a look:</p>
+    <p style="margin:0 0 14px;color:#5b6b78">Conditions have turned rough. Before you tow the boat, take a look:</p>
     <table cellspacing="0" cellpadding="0" style="border-collapse:collapse">${nogoSpots.map(portRow).join("")}</table>
     <p style="margin:18px 0 0"><a href="${SITE}" style="display:inline-block;background:#C0392B;color:#fff;padding:10px 18px;border-radius:8px;text-decoration:none;font-weight:600">See when it clears</a></p>
-    <p style="color:#8a99a6;font-size:12px;margin:18px 0 0">NO-GO alerts are on in your <a href="${SITE}/account" style="color:#8a99a6">account settings</a> — one email per port per day, daytime only.</p>
+    <p style="color:#8a99a6;font-size:12px;margin:18px 0 0">NO-GO alerts are on in your <a href="${SITE}/account" style="color:#8a99a6">account settings</a>: one email per port per day, daytime only.</p>
   </div>${emailFooter(unsubUrl)}`;
 }
 
