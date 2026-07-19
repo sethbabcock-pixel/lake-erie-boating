@@ -64,6 +64,32 @@ The "Gear for the water" block (PFDs, VHF radios, anchors, cold-water layers)
 immediately starts carrying your tag and the "As an Amazon Associate…"
 disclosure. Terms already disclose affiliate links.
 
+### Upgrade a category to a specific "Our pick" (optional)
+
+Each gear item links to that category's **top-rated** results by default (Amazon
+search sorted by customer review). To promote one to a hand-picked product,
+paste its **ASIN** — the 10-character ID in any product URL
+(`amazon.com/dp/B0ABC12345` → `B0ABC12345`) — into `GEAR` in `src/monetize.jsx`:
+
+```js
+pfd: { icon: "🦺", label: "Life jacket (PFD)", q: "coast guard approved life jacket", why: "Required gear", asin: "B0ABC12345" },
+```
+
+That card then reads **"Our pick"** and links straight to that product. Leave
+`asin: ""` to keep the top-rated fallback. **Never guess an ASIN** — a wrong one
+links to the wrong item; copy it from the real product page.
+
+### Storefront shelf (optional)
+
+Build an **Idea List / Storefront** in Amazon Associates, then paste its URL into
+`AMAZON_STOREFRONT`. A "Shop all our recommended gear →" link appears under the
+rail. Empty = hidden.
+
+> **Live prices, photos & star ratings** need Amazon's **Product Advertising
+> API (PA-API 5.0)**, which unlocks only after your account's first ~3 qualifying
+> sales. Don't hardcode prices — that violates the Operating Agreement. The gear
+> cards are built to accept live PA-API data once it's available.
+
 ## 3. Stripe subscription — already live
 
 The $2.99/mo ad-free plan is wired (`STRIPE_PRICE` in `functions/auth.js`).
