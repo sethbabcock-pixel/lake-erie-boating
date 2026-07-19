@@ -1138,32 +1138,48 @@ async function handleCamStatus(url, env) {
 // Lightweight GO/CAUTION/NO-GO + wind/wave for every spot, for the homepage
 // directory. Per-spot NWS grid fetches through a small pool; /points lookups
 // are edge-cached a day and the whole result ~10 min, so the API isn't hammered.
+// One directory/email tile (verdict + wind/wave) from a spot and its grid.
+function summaryTile(id, s, g, nowH) {
+  const windKt = round(sampleNear(g?.windKt, nowH), 0);
+  const gustKt = round(sampleNear(g?.gustKt, nowH), 0);
+  const dirDeg = sampleNear(g?.windDirDeg, nowH);
+  const dir = dirDeg == null ? null : degToCompass(dirDeg);
+  const waveFt = round(sampleNear(g?.waveFt, nowH), 1);
+  const periodSec = round(sampleNear(g?.periodSec, nowH), 0);
+  // Storm-aware verdict: precip + thunder from the grid, so a calm-wind
+  // thunderstorm evening doesn't show a wall of GO tiles while the detail
+  // page (correctly) says NO-GO. Same "now or imminent" window as the detail
+  // verdict: this hour or the next.
+  const precipPct = Math.max(g?.precipPct.get(nowH) ?? 0, g?.precipPct.get(nowH + 1) ?? 0);
+  const thunder = g?.thunder.get(nowH) === true || g?.thunder.get(nowH + 1) === true;
+  const level = windKt == null && waveFt == null ? null : hourRisk(windKt, precipPct, thunder ? "thunderstorms" : "", waveFt);
+  // lat/lon travel with each spot so the homepage can find the nearest launch
+  // from a ZIP or the browser's location without a second request.
+  return { id, name: s.name, lake: s.lake || "Lake Erie", lat: s.lat, lon: s.lon, level, windKt, gustKt, dir, waveFt, periodSec };
+}
+
+// Lightweight GO/CAUTION/NO-GO + wind/wave for every spot, for the homepage
+// directory. Per-spot NWS grid fetches through a small pool; /points lookups
+// are edge-cached a day and the whole result ~10 min, so the API isn't hammered.
 export async function fetchSummary(env) {
   // Curated spots + admin-featured user-built pages (both render in the directory).
   const built = await listFeaturedBuiltSpots(env);
   const entries = [...Object.entries(SPOTS), ...built.map((b) => [b.slug, { name: b.name, lat: b.lat, lon: b.lon, zone: b.zone, office: b.office, product: b.product, lake: b.lake, buoys: b.buoys || [] }])];
   const grids = await pooled(entries, 8, ([, s]) => fetchSpotGrid(s));
   const nowH = Math.floor(Date.now() / 3600000);
-  const spots = entries.map(([id, s], i) => {
-    const g = grids[i];
-    const windKt = round(sampleNear(g?.windKt, nowH), 0);
-    const gustKt = round(sampleNear(g?.gustKt, nowH), 0);
-    const dirDeg = sampleNear(g?.windDirDeg, nowH);
-    const dir = dirDeg == null ? null : degToCompass(dirDeg);
-    const waveFt = round(sampleNear(g?.waveFt, nowH), 1);
-    const periodSec = round(sampleNear(g?.periodSec, nowH), 0);
-    // Storm-aware verdict: precip + thunder from the grid, so a calm-wind
-    // thunderstorm evening doesn't show a wall of GO tiles while the detail
-    // page (correctly) says NO-GO. Same "now or imminent" window as the
-    // detail verdict: this hour or the next.
-    const precipPct = Math.max(g?.precipPct.get(nowH) ?? 0, g?.precipPct.get(nowH + 1) ?? 0);
-    const thunder = g?.thunder.get(nowH) === true || g?.thunder.get(nowH + 1) === true;
-    const level = windKt == null && waveFt == null ? null : hourRisk(windKt, precipPct, thunder ? "thunderstorms" : "", waveFt);
-    // lat/lon travel with each spot so the homepage can find the nearest launch
-    // from a ZIP or the browser's location without a second request.
-    return { id, name: s.name, lake: s.lake || "Lake Erie", lat: s.lat, lon: s.lon, level, windKt, gustKt, dir, waveFt, periodSec };
-  });
+  const spots = entries.map(([id, s], i) => summaryTile(id, s, grids[i], nowH));
   return { spots, updatedAt: new Date().toISOString() };
+}
+
+// Summary tiles for specific user-built pages by slug — so the daily digest /
+// alert emails can cover a member's built page even before it's featured.
+export async function fetchBuiltSummaries(env, slugs) {
+  const resolved = [];
+  for (const slug of [...new Set(slugs)]) { const b = await getBuiltSpot(env, slug); if (b) resolved.push([slug, b]); }
+  if (!resolved.length) return [];
+  const grids = await pooled(resolved, 8, ([, s]) => fetchSpotGrid(s));
+  const nowH = Math.floor(Date.now() / 3600000);
+  return resolved.map(([id, s], i) => summaryTile(id, s, grids[i], nowH));
 }
 
 // Today's best GO window for every port (for the daily digest email): per-spot

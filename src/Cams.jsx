@@ -41,6 +41,48 @@ function CamLinks({ cam, lake }) {
   );
 }
 
+// "These cams are wrong / not working" → suggest a better one for this spot.
+// Auto-nearest webcams (e.g. Windy) can surface the wrong view (a highway, not
+// the water), so let boaters point us at the right feed; it lands in /admin.
+function CamSuggest({ spotName, lat, lon, current }) {
+  const [open, setOpen] = useState(false);
+  const [webcam, setWebcam] = useState("");
+  const [note, setNote] = useState("");
+  const [email, setEmail] = useState("");
+  const [state, setState] = useState("idle");
+  const [err, setErr] = useState("");
+  const submit = async (e) => {
+    e.preventDefault();
+    if (!webcam.trim() && !note.trim()) { setErr("Add a webcam link or a note."); return; }
+    setState("sending"); setErr("");
+    try {
+      const r = await fetch("/api/request-cam", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ spot: spotName, lat, lon, webcam, note, email, current }),
+      });
+      const d = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(d.error || "Something went wrong.");
+      setState("done");
+    } catch (e2) { setErr(e2.message); }
+  };
+  if (state === "done") return <div className="camsuggest-done">Thanks — we'll take a look and get the right cam in.</div>;
+  return (
+    <div className="camsuggest">
+      {!open ? (
+        <button className="linklike" onClick={() => setOpen(true)}>Cams wrong or not working? Suggest a better one →</button>
+      ) : (
+        <form className="camsuggest-form" onSubmit={submit}>
+          <input className="field" value={webcam} onChange={(e) => setWebcam(e.target.value)} placeholder="Link to a better webcam (harbor, marina, beach cam)" maxLength={300} />
+          <textarea className="field" value={note} onChange={(e) => setNote(e.target.value)} rows={2} maxLength={500} placeholder="Or tell us what's wrong (e.g. these show the highway, not the water)" />
+          <input className="field" type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="Your email (optional)" maxLength={254} />
+          {err && <div className="modal-err">{err}</div>}
+          <button className="cbtn" type="submit" disabled={state === "sending"}>{state === "sending" ? "Sending…" : "Send suggestion"}</button>
+        </form>
+      )}
+    </div>
+  );
+}
+
 // Load the YouTube IFrame Player API once. The player reports real errors
 // (ended stream / "recording not available" / embedding disabled) that a plain
 // iframe's onLoad can't — that's how we catch dead YouTube cams client-side,
@@ -179,8 +221,9 @@ export default function Cams({ lat, lon, spotName, lake }) {
     return (
       <section className="card">
         <div className="card-head"><h2>Live cams</h2></div>
-        <div className="camempty">No live webcams for this lake right now; they come and go. Check the directory links below or your local harbor cam.</div>
+        <div className="camempty">No live webcams for this spot right now; they come and go. Check the directory links below, or point us at one.</div>
         <CamLinks lake={lake} />
+        <CamSuggest spotName={spotName} lat={lat} lon={lon} current="" />
       </section>
     );
   }
@@ -230,6 +273,7 @@ export default function Cams({ lat, lon, spotName, lake }) {
           : "Live video. Some players need a tap to start."}
         {hiddenCount > 0 && ` ${hiddenCount} offline cam${hiddenCount > 1 ? "s" : ""} hidden.`}
       </div>
+      <CamSuggest spotName={spotName} lat={lat} lon={lon} current={cams.map((c) => c.name).join(", ")} />
     </section>
   );
 }

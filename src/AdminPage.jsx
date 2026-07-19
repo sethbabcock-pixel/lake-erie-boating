@@ -585,6 +585,45 @@ function LocationRequestsPanel() {
   );
 }
 
+// Webcam suggestions from spot pages ("these cams are wrong / here's a better
+// one"). Add the winners via the Live cams panel above.
+function CamRequestsPanel() {
+  const [items, setItems] = useState(null);
+  const [err, setErr] = useState("");
+  const load = async () => {
+    setErr("");
+    try {
+      const r = await fetch("/api/admin/cam-requests");
+      const d = await r.json();
+      if (!r.ok) throw new Error(d.error || "Could not load.");
+      setItems(d.requests);
+    } catch (e) { setErr(e.message); }
+  };
+  useEffect(() => { load(); }, []);
+  return (
+    <section className="card acct-sec">
+      <div className="card-head">
+        <h2>Webcam suggestions</h2>
+        {items && <button className="linklike" onClick={load}>↻ refresh</button>}
+      </div>
+      <p className="acct-note" style={{ marginTop: 0 }}>Better-cam suggestions from spot pages. Add the good ones through the Live cams panel above.</p>
+      {err && <div className="modal-err">{err}</div>}
+      {items && items.length === 0 && <p className="acct-note">No suggestions yet.</p>}
+      {items && items.map((r, i) => (
+        <div className="admin-notif-row" key={i}>
+          <div className="acct-kv admin-notif">
+            <span><b>{r.spot}</b>{r.email ? ` · ${r.email}` : ""}</span>
+            <b className="notif-off">{fmtDate(r.at)}</b>
+          </div>
+          {r.webcam && <div className="acct-note" style={{ margin: "2px 0 0" }}>📷 <a href={r.webcam} target="_blank" rel="noopener noreferrer nofollow">{r.webcam}</a></div>}
+          {r.note && <div className="acct-note" style={{ margin: "2px 0 0" }}>{r.note}</div>}
+          {r.current && <div className="acct-note" style={{ margin: "2px 0 0", color: "var(--text-faint)" }}>was showing: {r.current}</div>}
+        </div>
+      ))}
+    </section>
+  );
+}
+
 // User-built pages (self-serve "build a page"). Feature to index + list them in
 // the directory; disable to hide; delete to remove. Pending pages are live by
 // direct link but stay noindex and out of the directory until featured.
@@ -778,6 +817,8 @@ export default function AdminPage() {
             <CspPanel />
 
             <BuiltPagesPanel />
+
+            <CamRequestsPanel />
 
             <LocationRequestsPanel />
 

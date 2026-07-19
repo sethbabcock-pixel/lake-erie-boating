@@ -442,6 +442,13 @@ details.card[open] > summary { margin-bottom: var(--s3); }
 .modal-switch button { background: none; border: none; color: var(--accent); font: inherit; font-weight: var(--fw-semibold); cursor: pointer; }
 .camempty { padding: var(--s6) var(--s4); text-align: center; color: var(--text-muted); font-size: var(--fs-sm);
   background: var(--surface-sunk); border-radius: var(--r-md); }
+.camsuggest { margin-top: var(--s3); }
+.camsuggest > .linklike { font-size: var(--fs-xs); color: var(--text-faint); }
+.camsuggest-form { margin-top: var(--s2); display: flex; flex-direction: column; gap: var(--s2); }
+.camsuggest-form textarea.field { min-height: 52px; padding: 8px 13px; resize: vertical; line-height: 1.4; margin-bottom: 0; }
+.camsuggest-form .field { margin-bottom: 0; }
+.camsuggest-form .cbtn { align-self: flex-start; }
+.camsuggest-done { margin-top: var(--s3); font-size: var(--fs-sm); color: var(--success); }
 
 /* ---------- Footer / states ---------- */
 .meta { font-size: var(--fs-xs); color: var(--text-faint); text-align: center; margin-top: var(--s5); }

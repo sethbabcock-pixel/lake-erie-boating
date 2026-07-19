@@ -11,7 +11,7 @@
 // the same summary data the homepage directory shows (pooled NWS grid calls
 // for all ports, with cached /points lookups — cheap enough to run hourly).
 import { sendEmail, ensureUnsubToken, notify, emailFooter } from "./auth.js";
-import { fetchSummary, fetchTodayWindows } from "./marine/conditions.js";
+import { fetchSummary, fetchTodayWindows, fetchBuiltSummaries } from "./marine/conditions.js";
 
 const SITE = "https://shouldiboat.com";
 export const DIGEST_UTC_HOUR = 10; // 6am ET / 5am CT
@@ -73,14 +73,20 @@ export async function runScheduled(env, utcHour) {
   const isAlertWindow = utcHour >= ALERT_UTC_FROM && utcHour <= ALERT_UTC_TO;
   if (!isDigestRun && !isAlertWindow) return { skipped: "outside windows" };
 
-  const summary = await fetchSummary();
+  const users = await allUsers(env);
+  const summary = await fetchSummary(env); // curated + featured built pages
   const byId = Object.fromEntries((summary.spots || []).map((s) => [s.id, s]));
+  // Favorited user-built pages that aren't already covered (not featured yet):
+  // resolve them so members get emails for their own built spots too.
+  const missing = [...new Set(users.flatMap((u) => u.favorites || []))].filter((id) => !byId[id]);
+  if (missing.length) {
+    for (const t of await fetchBuiltSummaries(env, missing).catch(() => [])) byId[t.id] = t;
+  }
   // Today's best GO window per port — digest runs only (pooled NWS grid calls).
   const windows = isDigestRun ? await fetchTodayWindows().catch(() => ({})) : {};
   const today = new Date().toISOString().slice(0, 10);
 
   let digests = 0, alerts = 0, failures = 0;
-  const users = await allUsers(env);
   for (const u of users) {
     try {
       if (u.emailOptOut || u.emailVerified === false) continue;
