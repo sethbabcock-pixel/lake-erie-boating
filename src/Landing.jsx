@@ -327,6 +327,37 @@ function MyPorts({ summary, favorites, onSelect }) {
   );
 }
 
+// Editorial hub teaser — genuine written content on the homepage, and the entry
+// point to the /guides library (static, indexable articles). A few featured
+// guides plus a link to the full set.
+const FEATURED_GUIDES = [
+  { href: "/guides/reading-a-marine-forecast", title: "How to read a marine forecast", blurb: "Wind, gusts, wave height and the wave-period number most boaters miss." },
+  { href: "/guides/cold-water-safety", title: "Cold-water safety", blurb: "Cold shock, the 1-10-1 rule, and why the water can be the real danger." },
+  { href: "/guides/wind-direction-and-fetch", title: "Wind direction & fetch", blurb: "Why the same wind speed is flat one day and a beating the next." },
+];
+function GuidesTeaser() {
+  return (
+    <section className="directory guides-teaser">
+      <h2 className="directory-title">Learn the water</h2>
+      <p className="guides-teaser-lede">
+        The Great Lakes make their own weather — short steep chop, cold water most of the year, and a
+        wind that's harmless off one shore and dangerous off another. Our plain-English
+        {" "}<a href="/guides/" target="_blank" rel="noopener">boating guides</a> explain how to read the
+        conditions — and every number on a spot page — so you can make a good call before you tow the boat.
+      </p>
+      <div className="loc-grid">
+        {FEATURED_GUIDES.map((g) => (
+          <a className="loc-card guide-teaser-card" key={g.href} href={g.href} target="_blank" rel="noopener">
+            <div className="loc-card-top"><span className="loc-name">{g.title}</span></div>
+            <div className="loc-card-meta">{g.blurb}</div>
+          </a>
+        ))}
+      </div>
+      <a className="guides-all-link" href="/guides/" target="_blank" rel="noopener">Browse all boating guides →</a>
+    </section>
+  );
+}
+
 export default function Landing({ adFree, onSelect, favorites, onCookieSettings, onJoin, onSignIn, signedIn, nudge, region, onRegion, userEmail, onPreview }) {
   const [summary, setSummary] = useState(null);
   const [q, setQ] = useState("");
@@ -371,11 +402,13 @@ export default function Landing({ adFree, onSelect, favorites, onCookieSettings,
         {!adFree && <AdSlot name="landingTop" />}
         {signedIn && <MyPorts summary={summary} favorites={favorites} onSelect={onSelect} />}
         <RegionDirectory summary={summary} q={q} onSelect={onSelect} deepLake={region ? null : deepLake} region={region} onRegion={onRegion} />
+        <GuidesTeaser />
         <RequestLocation userEmail={userEmail} openToken={reqToken} prefill={reqPrefill} />
         {!adFree && <AdSlot name="landing" />}
         <footer className="meta">
           Live data from NOAA/NWS &amp; NDBC buoys, maps by Windy. A planning aid, not an official forecast or a navigation tool.
           <div className="footlinks">
+            <a href="/guides/" target="_blank" rel="noopener">Guides</a>
             <a href="/about" target="_blank" rel="noopener">About</a>
             <a href="/legal#terms" target="_blank" rel="noopener">Terms</a>
             <a href="/legal#privacy" target="_blank" rel="noopener">Privacy</a>

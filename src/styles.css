@@ -749,6 +749,16 @@ body.has-takeover .app { background: var(--bg); border-radius: var(--r-lg) var(-
 .loc-status.nogo { background: var(--danger); }
 .loc-status.unknown { background: var(--surface); color: var(--text-faint); border: 1px solid var(--border); }
 
+/* ---------- Guides teaser (homepage) + spot-page learn link ---------- */
+.guides-teaser { margin-top: var(--s5); }
+.guides-teaser-lede { color: var(--text-muted); font-size: var(--fs-sm); line-height: var(--lh-normal); margin: 0 0 var(--s4); max-width: 70ch; }
+.guide-teaser-card { text-decoration: none; color: inherit; }
+.guide-teaser-card .loc-card-meta { font-family: inherit; line-height: var(--lh-snug); }
+.guides-all-link { display: inline-block; margin: var(--s3) 0 0 var(--s4); font-size: var(--fs-sm); font-weight: var(--fw-semibold); color: var(--accent); text-decoration: none; }
+.guides-all-link:hover { text-decoration: underline; }
+.learn-line { font-size: var(--fs-xs); color: var(--text-muted); margin: calc(-1 * var(--s2)) 0 var(--s1); }
+.learn-line a { color: var(--accent); }
+
 @media (max-width: 640px) {
   .hero-splash { min-height: 76vh; }
   .splash-search { min-height: 48px; }
