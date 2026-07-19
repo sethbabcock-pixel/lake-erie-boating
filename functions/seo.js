@@ -62,15 +62,33 @@ const regionJsonld = (region, count) => ({
 // own crawlable <h1> + summary + links. React's createRoot() clears #root on
 // mount, so users still get the full live app — this is only the pre-hydration
 // view (a faithful summary, not cloaked/different content).
-function ssrBody({ h1, description, body, links }) {
-  const l = (links || []).map((x) => `<a href="${x.href}" style="color:#008BA8;text-decoration:none">${esc(x.text)}</a>`).join(" · ");
+function ssrBody({ h1, description, body, links, nearby }) {
+  const row = (arr) => (arr || []).map((x) => `<a href="${x.href}" style="color:#008BA8;text-decoration:none">${esc(x.text)}</a>`).join(" · ");
+  const l = row(links);
+  const n = nearby && (nearby.links || []).length
+    ? `<p style="margin:8px 0 0"><strong>${esc(nearby.label)}:</strong> ${row(nearby.links)}</p>` : "";
   return `<div style="max-width:680px;margin:0 auto;padding:40px 20px;font-family:system-ui,-apple-system,'Segoe UI',Roboto,sans-serif;line-height:1.6;color:#27323d">`
     + `<h1 style="font-size:1.7rem;line-height:1.2;color:#004777;margin:0 0 10px">${esc(h1)}</h1>`
     + `<p style="margin:0 0 12px">${esc(description)}</p>`
     + (body ? `<p style="margin:0 0 12px">${esc(body)}</p>` : "")
     + (l ? `<p style="margin:0;font-weight:600">${l}</p>` : "")
+    + n
     + `</div>`;
 }
+
+// Internal-link helpers: give each page crawlable paths to sibling spot pages,
+// so Google can reach and prioritize the launch pages (fixes "Discovered –
+// currently not indexed"), and so each page's content is genuinely distinct.
+const sameLakeSpots = (excludeId, lake, limit = 6) =>
+  Object.entries(SPOTS)
+    .filter(([id, s]) => id !== excludeId && lakeOf(s) === lake)
+    .slice(0, limit)
+    .map(([id, s]) => ({ href: `/spot/${id}`, text: s.name }));
+const regionSpots = (region, limit = 14) =>
+  Object.entries(SPOTS)
+    .filter(([, s]) => (region.lakes || []).includes(lakeOf(s)))
+    .slice(0, limit)
+    .map(([id, s]) => ({ href: `/spot/${id}`, text: s.name }));
 
 // Per-page <head> content for an SEO-relevant path, or null to serve the shell
 // unchanged (real asset pages like /about and /legal carry their own meta).
@@ -107,6 +125,7 @@ export function seoForPath(pathname) {
         description,
         body: `Live GO / CAUTION / NO-GO verdicts for ${count} launch spots across ${region.title}, from NOAA wind, gusts and wave data, marine warnings and live webcams. Loading live conditions…`,
         links: [{ href: "/", text: "All waters" }, { href: "/guides/", text: "Boating guides" }],
+        nearby: { label: "Launches", links: regionSpots(region) },
       }),
     };
   }
@@ -115,6 +134,8 @@ export function seoForPath(pathname) {
     const s = SPOTS[m[1]];
     const lake = lakeOf(s);
     const description = `Live GO / CAUTION / NO-GO boating conditions for ${s.name} on ${lake}, from NOAA wind, waves, gusts, an hour-by-hour risk timeline, marine warnings and live webcams.`;
+    const nearby = sameLakeSpots(m[1], lake);
+    const nearNames = nearby.slice(0, 3).map((x) => x.text).join(", ");
     return {
       url: `${SITE}/spot/${m[1]}`,
       title: `Should I boat at ${s.name} today? Live conditions · shouldiboat.com`,
@@ -123,8 +144,9 @@ export function seoForPath(pathname) {
       bodyHtml: ssrBody({
         h1: `Should I boat at ${s.name} today?`,
         description,
-        body: `${s.name} on ${lake}. Live GO / CAUTION / NO-GO verdict from NOAA/NWS wind, gusts and wave height, an hour-by-hour risk timeline, marine warnings, a weather map and live webcams. Loading live conditions…`,
+        body: `${s.name} is a ${lake} boating launch${nearNames ? `, near ${nearNames}` : ""}. Get a live GO / CAUTION / NO-GO verdict from NOAA/NWS wind, gusts and wave height, an hour-by-hour risk timeline, marine warnings, a weather map and live webcams. Loading live conditions…`,
         links: [{ href: "/", text: "All Great Lakes launches" }, { href: "/guides/reading-a-marine-forecast", text: "How to read a marine forecast" }, { href: "/guides/", text: "Boating guides" }],
+        nearby: nearby.length ? { label: `Nearby launches on ${lake}`, links: nearby } : null,
       }),
     };
   }
