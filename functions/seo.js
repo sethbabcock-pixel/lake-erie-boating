@@ -55,15 +55,39 @@ const regionJsonld = (region, count) => ({
   },
 });
 
+// A minimal, UNIQUE server-rendered body for each SPA page. Without this every
+// spot/region/home page shipped the same empty `<div id="root">`, so Googlebot's
+// first fetch saw byte-identical bodies and clustered them as "Duplicate without
+// user-selected canonical" (only the <head> differed). This gives each URL its
+// own crawlable <h1> + summary + links. React's createRoot() clears #root on
+// mount, so users still get the full live app — this is only the pre-hydration
+// view (a faithful summary, not cloaked/different content).
+function ssrBody({ h1, description, body, links }) {
+  const l = (links || []).map((x) => `<a href="${x.href}" style="color:#008BA8;text-decoration:none">${esc(x.text)}</a>`).join(" · ");
+  return `<div style="max-width:680px;margin:0 auto;padding:40px 20px;font-family:system-ui,-apple-system,'Segoe UI',Roboto,sans-serif;line-height:1.6;color:#27323d">`
+    + `<h1 style="font-size:1.7rem;line-height:1.2;color:#004777;margin:0 0 10px">${esc(h1)}</h1>`
+    + `<p style="margin:0 0 12px">${esc(description)}</p>`
+    + (body ? `<p style="margin:0 0 12px">${esc(body)}</p>` : "")
+    + (l ? `<p style="margin:0;font-weight:600">${l}</p>` : "")
+    + `</div>`;
+}
+
 // Per-page <head> content for an SEO-relevant path, or null to serve the shell
 // unchanged (real asset pages like /about and /legal carry their own meta).
 export function seoForPath(pathname) {
   if (pathname === "/" || pathname === "") {
+    const description = "A clear GO / CAUTION / NO-GO call for boating across the Great Lakes, from live NOAA wind, waves, gusts, an hour-by-hour risk timeline, marine warnings, weather maps and live webcams for 30+ launch spots.";
     return {
       url: `${SITE}/`,
       title: "Should I boat today? Live Great Lakes boating conditions · shouldiboat.com",
-      description: "A clear GO / CAUTION / NO-GO call for boating across the Great Lakes, from live NOAA wind, waves, gusts, an hour-by-hour risk timeline, marine warnings, weather maps and live webcams for 30+ launch spots.",
+      description,
       jsonld: websiteJsonld(),
+      bodyHtml: ssrBody({
+        h1: "Should I boat today? Live Great Lakes boating conditions",
+        description,
+        body: "Choose your launch for a live GO / CAUTION / NO-GO verdict from NOAA wind, gusts and wave data, an hour-by-hour risk timeline, marine warnings, weather maps and live webcams. Loading live conditions…",
+        links: [{ href: "/greatlakes", text: "Great Lakes" }, { href: "/guides/", text: "Boating guides" }, { href: "/about", text: "About" }],
+      }),
     };
   }
   // Region subpages (/greatlakes, /chesapeake, …) — each an indexable page for
@@ -72,22 +96,36 @@ export function seoForPath(pathname) {
   const region = rm && regionBySlug(rm[1]);
   if (region) {
     const count = Object.values(SPOTS).filter((s) => (region.lakes || []).includes(s.lake || "Lake Erie")).length;
+    const description = `Live boating conditions for ${region.title}: a clear GO / CAUTION / NO-GO call for ${count} launch spots, from NOAA wind, waves, gusts, an hour-by-hour risk timeline, marine warnings and live webcams.`;
     return {
       url: `${SITE}/${region.slug}`,
       title: `${region.title} boating conditions · GO / CAUTION / NO-GO · shouldiboat.com`,
-      description: `Live boating conditions for ${region.title}: a clear GO / CAUTION / NO-GO call for ${count} launch spots, from NOAA wind, waves, gusts, an hour-by-hour risk timeline, marine warnings and live webcams.`,
+      description,
       jsonld: regionJsonld(region, count),
+      bodyHtml: ssrBody({
+        h1: `${region.title} boating conditions`,
+        description,
+        body: `Live GO / CAUTION / NO-GO verdicts for ${count} launch spots across ${region.title}, from NOAA wind, gusts and wave data, marine warnings and live webcams. Loading live conditions…`,
+        links: [{ href: "/", text: "All waters" }, { href: "/guides/", text: "Boating guides" }],
+      }),
     };
   }
   const m = pathname.match(/^\/spot\/([a-z0-9-]{1,40})\/?$/);
   if (m && SPOTS[m[1]]) {
     const s = SPOTS[m[1]];
     const lake = lakeOf(s);
+    const description = `Live GO / CAUTION / NO-GO boating conditions for ${s.name} on ${lake}, from NOAA wind, waves, gusts, an hour-by-hour risk timeline, marine warnings and live webcams.`;
     return {
       url: `${SITE}/spot/${m[1]}`,
       title: `Should I boat at ${s.name} today? Live conditions · shouldiboat.com`,
-      description: `Live GO / CAUTION / NO-GO boating conditions for ${s.name} on ${lake}, from NOAA wind, waves, gusts, an hour-by-hour risk timeline, marine warnings and live webcams.`,
+      description,
       jsonld: spotJsonld(m[1], s, lake),
+      bodyHtml: ssrBody({
+        h1: `Should I boat at ${s.name} today?`,
+        description,
+        body: `${s.name} on ${lake}. Live GO / CAUTION / NO-GO verdict from NOAA/NWS wind, gusts and wave height, an hour-by-hour risk timeline, marine warnings, a weather map and live webcams. Loading live conditions…`,
+        links: [{ href: "/", text: "All Great Lakes launches" }, { href: "/guides/reading-a-marine-forecast", text: "How to read a marine forecast" }, { href: "/guides/", text: "Boating guides" }],
+      }),
     };
   }
   return null;
@@ -100,12 +138,19 @@ export async function seoForBuiltSpot(env, slug) {
   const b = await env.USERS.get(`builtspot:${slug}`, "json").catch(() => null);
   if (!b || b.disabled) return null;
   const lake = b.lake || "the water";
+  const description = `Live GO / CAUTION / NO-GO boating conditions for ${b.name} on ${lake}, from NOAA wind, waves, an hour-by-hour risk timeline and marine warnings.`;
   return {
     url: `${SITE}/spot/${slug}`,
     title: `Should I boat at ${b.name} today? Live conditions · shouldiboat.com`,
-    description: `Live GO / CAUTION / NO-GO boating conditions for ${b.name} on ${lake}, from NOAA wind, waves, an hour-by-hour risk timeline and marine warnings.`,
+    description,
     jsonld: spotJsonld(slug, b, lake),
     noindex: !b.featured,
+    bodyHtml: ssrBody({
+      h1: `Should I boat at ${b.name} today?`,
+      description,
+      body: `${b.name} on ${lake}. Live GO / CAUTION / NO-GO verdict from NOAA/NWS wind, gusts and wave height, an hour-by-hour risk timeline and marine warnings. Loading live conditions…`,
+      links: [{ href: "/", text: "All launches" }, { href: "/guides/", text: "Boating guides" }],
+    }),
   };
 }
 
@@ -115,6 +160,8 @@ export function injectSeo(html, meta) {
   const t = esc(meta.title), d = esc(meta.description), u = esc(meta.url);
   const ld = `<script type="application/ld+json">${JSON.stringify(meta.jsonld)}</script>`;
   return html
+    // Seed #root with unique, crawlable content (React clears it on mount).
+    .replace(/<div id="root">\s*<\/div>/, `<div id="root">${meta.bodyHtml || ""}</div>`)
     .replace(/<title>[\s\S]*?<\/title>/, `<title>${t}</title>`)
     .replace(/(<meta name="description" content=")[^"]*(")/, `$1${d}$2`)
     .replace(/(<link rel="canonical" href=")[^"]*(")/, `$1${u}$2`)
