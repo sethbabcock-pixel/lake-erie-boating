@@ -19,6 +19,11 @@ export const ADSENSE = {
   },
 };
 export const AMAZON_TAG = "shouldiboat-20"; // Amazon Associates tag (lights up the Gear block)
+// Optional: your Amazon Storefront / Idea List URL. When set, the gear block
+// shows a "Shop all our recommended gear →" link to your curated shelf. Build
+// one in Amazon Associates → Your Storefront / Idea Lists, then paste the URL.
+// Leave empty to hide the link. Example: "https://www.amazon.com/shop/shouldiboat"
+export const AMAZON_STOREFRONT = "";
 export const GA_ID = "G-D2199LJV2T"; // GA4 Measurement ID (loads only after cookie consent)
 
 // Lightweight GA4 event push, shared across the app. No-op until analytics is
@@ -138,21 +143,35 @@ export function StickyFooterAd({ enabled }) {
 // so it shows each visitor what's relevant now. Links are tagged Amazon
 // searches (a real product carousel with photos/prices needs Amazon's Product
 // Advertising API, which unlocks after the account's first qualifying sales).
+// Each item can become a specific "Our pick" once you fill in its `asin` (the
+// 10-char product ID from any Amazon product URL, e.g. amazon.com/dp/B0ABC12345
+// → "B0ABC12345"). Until then it links to that category's top-rated results
+// (Amazon search sorted by customer review), so every link is useful today and
+// upgrades to a hand-picked product the moment you paste an ASIN — no code
+// change. (Live price/photo/star rating require Amazon's PA-API, which unlocks
+// after the account's first qualifying sales; the card is structured for them.)
 const GEAR = {
-  pfd:    { icon: "🦺", label: "Life jacket (PFD)", q: "coast guard approved life jacket", why: "Required gear" },
-  vhf:    { icon: "📻", label: "Handheld VHF radio", q: "floating handheld marine VHF radio", why: "Reach help anywhere" },
-  anchor: { icon: "⚓", label: "Anchor kit", q: "boat anchor kit with rode", why: "Hold your spot" },
-  aid:    { icon: "🧰", label: "Marine first-aid kit", q: "marine first aid kit", why: "On-water essentials" },
-  dry:    { icon: "🎒", label: "Dry bag", q: "waterproof dry bag", why: "Keep phone & keys dry" },
-  cold:   { icon: "🥶", label: "Cold-water layer", q: "neoprene wetsuit top", why: "Cold-shock protection" },
-  bail:   { icon: "🪣", label: "Bilge / bailing pump", q: "portable bilge pump boat", why: "For a sloppy day" },
-  cooler: { icon: "🧊", label: "Cooler", q: "marine cooler", why: "Long day on the water" },
-  tube:   { icon: "🛟", label: "Towable tube", q: "towable tube for boating", why: "Flat-water fun" },
-  sun:    { icon: "🧴", label: "Reef-safe sunscreen", q: "reef safe sport sunscreen", why: "Sunny & calm" },
-  rod:    { icon: "🎣", label: "Rod & tackle", q: "fishing rod reel combo", why: "Bite's on" },
+  pfd:    { icon: "🦺", label: "Life jacket (PFD)", q: "coast guard approved life jacket", why: "Required gear", asin: "" },
+  vhf:    { icon: "📻", label: "Handheld VHF radio", q: "floating handheld marine VHF radio", why: "Reach help anywhere", asin: "" },
+  anchor: { icon: "⚓", label: "Anchor kit", q: "boat anchor kit with rode", why: "Hold your spot", asin: "" },
+  aid:    { icon: "🧰", label: "Marine first-aid kit", q: "marine first aid kit", why: "On-water essentials", asin: "" },
+  dry:    { icon: "🎒", label: "Dry bag", q: "waterproof dry bag", why: "Keep phone & keys dry", asin: "" },
+  cold:   { icon: "🥶", label: "Cold-water layer", q: "neoprene wetsuit top", why: "Cold-shock protection", asin: "" },
+  bail:   { icon: "🪣", label: "Bilge / bailing pump", q: "portable bilge pump boat", why: "For a sloppy day", asin: "" },
+  cooler: { icon: "🧊", label: "Cooler", q: "marine cooler", why: "Long day on the water", asin: "" },
+  tube:   { icon: "🛟", label: "Towable tube", q: "towable tube for boating", why: "Flat-water fun", asin: "" },
+  sun:    { icon: "🧴", label: "Reef-safe sunscreen", q: "reef safe sport sunscreen", why: "Sunny & calm", asin: "" },
+  rod:    { icon: "🎣", label: "Rod & tackle", q: "fishing rod reel combo", why: "Bite's on", asin: "" },
 };
+const isAsin = (a) => /^[A-Z0-9]{10}$/.test(a || "");
+// A specific product page when we have an ASIN ("Our pick"); otherwise the
+// category's top-rated results (Amazon's own review-rank sort). Both carry the
+// affiliate tag. Never fabricate an ASIN — a wrong one links to the wrong item.
+function gearUrl(it) {
+  if (isAsin(it.asin)) return `https://www.amazon.com/dp/${it.asin}${AMAZON_TAG ? `?tag=${AMAZON_TAG}` : ""}`;
+  return `https://www.amazon.com/s?k=${encodeURIComponent(it.q)}&s=review-rank${AMAZON_TAG ? `&tag=${AMAZON_TAG}` : ""}`;
+}
 export function GearBlock({ waterTempF, airTempF, windKt, level }) {
-  const url = (q) => `https://www.amazon.com/s?k=${encodeURIComponent(q)}${AMAZON_TAG ? `&tag=${AMAZON_TAG}` : ""}`;
   const cold = waterTempF != null && waterTempF < 60;
   const rough = level === "NO-GO" || level === "CAUTION" || (windKt != null && windKt >= 15);
   const nice = level === "GO" && (windKt == null || windKt < 12) && (airTempF == null || airTempF >= 72);
@@ -168,15 +187,24 @@ export function GearBlock({ waterTempF, airTempF, windKt, level }) {
     <section className="card gear">
       <div className="card-head"><h2>{heading}</h2><span className="legend">picked for today's conditions</span></div>
       <div className="gear-rail">
-        {items.map((it) => (
-          <a key={it.q} className="gear-card" href={url(it.q)} target="_blank" rel="sponsored nofollow noopener">
-            <span className="gear-ic" aria-hidden="true">{it.icon}</span>
-            <span className="gear-label">{it.label}</span>
-            <span className="gear-why">{it.why}</span>
-            <span className="gear-cta">Shop on Amazon ↗</span>
-          </a>
-        ))}
+        {items.map((it) => {
+          const pick = isAsin(it.asin);
+          return (
+            <a key={it.q} className={`gear-card${pick ? " ourpick" : ""}`} href={gearUrl(it)} target="_blank" rel="sponsored nofollow noopener">
+              <span className={`gear-tag ${pick ? "pick" : "top"}`}>{pick ? "Our pick" : "Top rated"}</span>
+              <span className="gear-ic" aria-hidden="true">{it.icon}</span>
+              <span className="gear-label">{it.label}</span>
+              <span className="gear-why">{it.why}</span>
+              <span className="gear-cta">{pick ? "See it on Amazon ↗" : "Top-rated on Amazon ↗"}</span>
+            </a>
+          );
+        })}
       </div>
+      {AMAZON_STOREFRONT && (
+        <a className="gear-storefront" href={AMAZON_STOREFRONT} target="_blank" rel="sponsored nofollow noopener">
+          Shop all our recommended gear on Amazon →
+        </a>
+      )}
       {AMAZON_TAG && <div className="hint">As an Amazon Associate, shouldiboat.com earns from qualifying purchases.</div>}
     </section>
   );

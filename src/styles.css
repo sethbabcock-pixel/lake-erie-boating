@@ -338,6 +338,14 @@ details.card[open] > summary { margin-bottom: var(--s3); }
 .gear-label { font-weight: var(--fw-semibold); font-size: var(--fs-sm); }
 .gear-why { font-size: var(--fs-xs); color: var(--text-muted); flex: 1 1 auto; }
 .gear-cta { font-size: var(--fs-xs); color: var(--accent); font-weight: var(--fw-semibold); margin-top: 2px; }
+.gear-tag { align-self: flex-start; font-size: 10px; font-weight: var(--fw-extrabold); text-transform: uppercase;
+  letter-spacing: var(--tracking-wide); padding: 2px 7px; border-radius: var(--r-pill); }
+.gear-tag.pick { background: color-mix(in srgb, var(--success) 18%, transparent); color: var(--success); }
+.gear-tag.top { background: color-mix(in srgb, var(--accent) 14%, transparent); color: var(--accent); }
+.gear-card.ourpick { border-color: color-mix(in srgb, var(--success) 45%, var(--border)); }
+.gear-storefront { display: inline-block; margin-top: var(--s3); font-size: var(--fs-sm); font-weight: var(--fw-semibold);
+  color: var(--accent); text-decoration: none; }
+.gear-storefront:hover { text-decoration: underline; }
 .adwrap { margin-bottom: var(--s4); text-align: center; min-height: 1px; }
 .adlabel { display: block; font-size: 10px; text-transform: uppercase; letter-spacing: var(--tracking-wide); color: var(--text-faint); margin-bottom: 4px; }
 /* Sticky footer (anchor) ad — pinned bottom, above the fold-line, dismissible. */
