@@ -889,6 +889,12 @@ export default function App() {
   const buildThisPage = async () => {
     const s = data?.spot;
     if (!s?.adHoc || building) return;
+    if (!auth.user) { // building requires an account
+      setBuildErr("");
+      track("event", "signup_gate_click", { spot: "preview", action: "register" });
+      setGateAuth("register");
+      return;
+    }
     setBuilding(true); setBuildErr("");
     try {
       const r = await fetch("/api/build-page", {
@@ -971,7 +977,7 @@ export default function App() {
               <b>Preview</b> · live conditions for {spot.name}{spot.zoneName ? ` (${spot.zoneName})` : ""}. This page isn't saved yet.
               {buildErr && <div className="modal-err" style={{ marginTop: 6 }}>{buildErr}</div>}
             </div>
-            <button className="cbtn" onClick={buildThisPage} disabled={building}>{building ? "Building…" : "Build this page"}</button>
+            <button className="cbtn" onClick={buildThisPage} disabled={building}>{building ? "Building…" : auth.user ? "Build this page" : "Sign in to build this page"}</button>
           </div>
         )}
 
@@ -984,7 +990,7 @@ export default function App() {
                 <div className="call-top">
                   <span className="call-spot">
                     {spot.name}
-                    {auth.user && !spot.adHoc && (
+                    {auth.user && !(spot.adHoc && !spot.built) && (
                       <button
                         className={`favstar call-fav ${(auth.user.favorites || []).includes(active) ? "on" : ""}`}
                         title={(auth.user.favorites || []).includes(active) ? "Remove from my ports" : "Add to my ports: front and center on the homepage + morning email"}

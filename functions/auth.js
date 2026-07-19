@@ -713,12 +713,49 @@ export async function handleAuth(request, env, url, ctx) {
     return json({ requests: requests.slice(0, 150) });
   }
 
+  // ---- public: report bad cams / suggest a better one for a spot ----
+  if (path === "/api/request-cam" && request.method === "POST") {
+    if (!(await rateLimit(env, request, "camreq", 12, 3600))) return json({ error: "Too many suggestions just now. Try again later." }, 429);
+    const body = await request.json().catch(() => ({}));
+    const clean = (v, max) => String(v ?? "").replace(/[\u0000-\u001f]+/g, " ").trim().slice(0, max);
+    const spot = clean(body.spot, 120);
+    const webcam = clean(body.webcam, 300);
+    const note = clean(body.note, 500);
+    if (!spot || (!webcam && !note)) return json({ error: "Add a webcam link or a note." }, 400);
+    const u = await userFromRequest(env, request).catch(() => null);
+    let email = clean(body.email, 254); if (email && !validEmail(email)) email = "";
+    email = email || (u && u.email) || "";
+    const lat = Number(body.lat), lon = Number(body.lon);
+    const rec = { spot, lat: Number.isFinite(lat) ? lat : null, lon: Number.isFinite(lon) ? lon : null, webcam, note, current: clean(body.current, 300), email, at: new Date().toISOString() };
+    const ts = Date.now();
+    try { await env.USERS.put(`camreq:${ts}:${randHex(3)}`, JSON.stringify(rec), { expirationTtl: 180 * 86400 }); } catch (e) { /* ignore */ }
+    const esc = (s) => String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+    const rows = [["Spot", spot], ["Suggested cam", webcam || "(none)"], ["Note", note || "(none)"], ["Currently showing", rec.current || "(unknown)"], ["From", email || "(not given)"]]
+      .map(([k, v]) => `<tr><td style="padding:2px 12px 2px 0;color:#5b6b78">${k}</td><td><b>${esc(v)}</b></td></tr>`).join("");
+    const html = `<div style="font-family:system-ui,sans-serif;color:#1a2b38"><h2 style="margin:0 0 8px">Webcam suggestion</h2><table style="border-collapse:collapse;font-size:14px">${rows}</table></div>`;
+    const to = (await adminEmails(env))[0];
+    runBg(ctx, notify(env, "cam_request", { spot, webcam }, to ? { to, subject: `Webcam suggestion: ${spot}`, html, ttlDays: 60 } : null));
+    return json({ ok: true });
+  }
+  if (path === "/api/admin/cam-requests" && request.method === "GET") {
+    const u = await userFromRequest(env, request);
+    if (!u) return json({ error: "Not signed in." }, 401);
+    if (!isAdmin(env, u)) return json({ error: "Forbidden — not an admin account." }, 403);
+    const list = await env.USERS.list({ prefix: "camreq:", limit: 1000 });
+    const requests = [];
+    for (const k of list.keys.slice(-200).reverse()) { const r = await env.USERS.get(k.name, "json"); if (r) requests.push(r); }
+    requests.sort((a, b) => (b.at || "").localeCompare(a.at || ""));
+    return json({ requests: requests.slice(0, 150) });
+  }
+
   // ---- public: build a page for a point (self-serve publish) ----
   // Resolves the marine context server-side (never trusts client-supplied
   // zone/office), stores it as a builtspot:<slug>, and returns the /spot slug.
   // Published pages are live + shareable immediately but stay noindex and out of
   // the directory until an admin features them (and an admin can disable/delete).
   if (path === "/api/build-page" && request.method === "POST") {
+    const u = await userFromRequest(env, request).catch(() => null);
+    if (!u) return json({ error: "Please sign in to build a page.", needsAuth: true }, 401);
     if (!(await rateLimit(env, request, "buildpage", 10, 3600))) return json({ error: "Too many pages built just now. Try again later." }, 429);
     const body = await request.json().catch(() => ({}));
     const lat = Math.round(parseFloat(body.lat) * 1e4) / 1e4, lon = Math.round(parseFloat(body.lon) * 1e4) / 1e4;
@@ -737,13 +774,12 @@ export async function handleAuth(request, env, url, ctx) {
     }
     const base = (name.toLowerCase().normalize("NFKD").replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 40)) || "spot";
     const slug = `${base}-${randHex(2)}`;
-    const u = await userFromRequest(env, request).catch(() => null);
     const rec = {
       slug, name, lat, lon,
       zone: mctx.zone, zoneName: mctx.zoneName, office: mctx.office, product: mctx.product,
       lake: mctx.lake, buoys: [],
       featured: false, disabled: false,
-      createdAt: new Date().toISOString(), createdBy: (u && u.email) || null,
+      createdAt: new Date().toISOString(), createdBy: u.email,
     };
     await env.USERS.put(`builtspot:${slug}`, JSON.stringify(rec));
     await env.USERS.put(cellKey, slug, { expirationTtl: 400 * 86400 });
