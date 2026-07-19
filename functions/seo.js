@@ -211,6 +211,13 @@ const GUIDES = [
   "before-you-launch",
 ];
 
+// Date the page templates / on-page content last changed materially. Google
+// uses <lastmod> (far more than changefreq/priority) to decide what to recrawl,
+// but only trusts it when it's accurate — so BUMP THIS when you ship a change
+// that alters what's on the pages (new content, layout, copy), not on every
+// deploy. W3C date format (YYYY-MM-DD).
+const CONTENT_UPDATED = "2026-07-19";
+
 export async function sitemapXml(env) {
   // Admin-featured user-built pages join the sitemap; pending ones stay out.
   let built = [];
@@ -231,7 +238,7 @@ export async function sitemapXml(env) {
     { loc: `${SITE}/legal`, freq: "yearly", priority: "0.2" },
   ];
   const body = urls
-    .map((x) => `  <url><loc>${x.loc}</loc><changefreq>${x.freq}</changefreq><priority>${x.priority}</priority></url>`)
+    .map((x) => `  <url><loc>${x.loc}</loc><lastmod>${CONTENT_UPDATED}</lastmod><changefreq>${x.freq}</changefreq><priority>${x.priority}</priority></url>`)
     .join("\n");
   return `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${body}\n</urlset>\n`;
 }
