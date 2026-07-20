@@ -651,23 +651,40 @@ body.has-takeover .app { background: var(--bg); border-radius: var(--r-lg) var(-
 .hero-house .hero-inner, .hero-sponsor .hero-inner { position: relative; z-index: 2; }
 .hero-splash-slot { padding-top: 0 !important; }
 
-.splash-pick { margin-top: var(--s5); max-width: 560px; }
-.splash-search { width: 100%; min-height: 52px; padding: 0 18px; border-radius: var(--r-pill);
+.splash-pick { position: relative; margin-top: var(--s5); max-width: 580px; }
+.splash-bar { display: flex; gap: var(--s2); }
+.splash-search { flex: 1 1 auto; min-width: 0; min-height: 52px; padding: 0 18px; border-radius: var(--r-pill);
   border: 1px solid rgba(255,255,255,0.5); background: rgba(255,255,255,0.94); color: #10202E;
   font-family: var(--font-sans); font-size: var(--fs-base); font-weight: var(--fw-medium); outline: none; }
 .splash-search::placeholder { color: #50616F; }
 .splash-search:focus { box-shadow: 0 0 0 4px rgba(43,180,212,0.4); }
-.splash-matches { margin-top: var(--s2); background: var(--surface); border: 1px solid var(--border-strong);
-  border-radius: var(--r-md); overflow: hidden; box-shadow: var(--shadow-lg); }
-.splash-match { display: flex; align-items: center; justify-content: space-between; gap: var(--s3); width: 100%;
-  padding: 11px 14px; border: none; border-bottom: 1px solid var(--border); background: none; color: var(--text);
-  font: inherit; font-size: var(--fs-sm); font-weight: var(--fw-semibold); cursor: pointer; }
-.splash-match:last-child { border-bottom: none; }
-.splash-match:hover { background: var(--surface-sunk); }
-.splash-favs { display: flex; flex-wrap: wrap; gap: var(--s2); margin-top: var(--s3); }
-.splash-fav { padding: 8px 14px; border-radius: var(--r-pill); border: 1px solid rgba(255,255,255,0.4);
-  background: rgba(255,255,255,0.16); color: #fff; font: inherit; font-size: var(--fs-sm); font-weight: var(--fw-semibold); cursor: pointer; }
-.splash-fav:hover { background: rgba(255,255,255,0.26); }
+.splash-go { flex: 0 0 auto; min-height: 52px; padding: 0 24px; border-radius: var(--r-pill); border: none;
+  background: var(--accent); color: var(--accent-contrast, #04121e); font: inherit; font-size: var(--fs-base);
+  font-weight: var(--fw-bold); cursor: pointer; }
+.splash-go:disabled { opacity: 0.6; cursor: default; }
+.splash-hint { margin: var(--s2) 0 0; color: #d3ebf9; font-size: var(--fs-sm); font-weight: var(--fw-medium); }
+
+/* Type-ahead options window: one surface for jump / locate / build / request. */
+.splash-panel { margin-top: var(--s3); background: var(--surface); border: 1px solid var(--border-strong);
+  border-radius: var(--r-md); overflow: hidden; box-shadow: var(--shadow-lg); text-align: left; }
+.splash-phead { display: flex; align-items: center; gap: 6px; padding: 10px 14px 4px; color: var(--text-muted);
+  font-size: var(--fs-xs); font-weight: var(--fw-bold); text-transform: uppercase; letter-spacing: 0.04em; }
+.splash-opt { display: flex; align-items: center; justify-content: space-between; gap: var(--s3); width: 100%;
+  padding: 11px 14px; border: none; border-top: 1px solid var(--border); background: none; color: var(--text);
+  font: inherit; font-size: var(--fs-sm); font-weight: var(--fw-semibold); cursor: pointer; text-align: left; }
+.splash-opt:first-child { border-top: none; }
+.splash-opt:hover { background: var(--surface-sunk); }
+.splash-opt-main { display: flex; align-items: baseline; gap: 8px; min-width: 0; }
+.splash-lake, .splash-mi { color: var(--text-muted); font-weight: var(--fw-medium); font-size: var(--fs-xs); }
+.splash-loc { color: var(--accent); font-weight: var(--fw-bold); }
+.splash-build { color: var(--accent); font-weight: var(--fw-bold); }
+.splash-note { padding: 11px 14px; border-top: 1px solid var(--border); color: var(--text-muted); font-size: var(--fs-sm); }
+.splash-note:first-child { border-top: none; }
+.splash-err { padding: 10px 14px; border-top: 1px solid var(--border); color: var(--danger); font-size: var(--fs-sm); }
+.splash-req { display: block; width: 100%; padding: 11px 14px; border: none; border-top: 1px solid var(--border);
+  background: var(--surface-sunk); color: var(--text-muted); font: inherit; font-size: var(--fs-sm);
+  font-weight: var(--fw-semibold); cursor: pointer; text-align: left; }
+.splash-req:hover { color: var(--text); }
 .splash-scroll { display: inline-block; margin-top: var(--s4); color: #bfe6fb; font-weight: var(--fw-semibold);
   font-size: var(--fs-sm); text-decoration: none; }
 .splash-scroll:hover { text-decoration: underline; }

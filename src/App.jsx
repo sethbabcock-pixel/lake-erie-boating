@@ -272,7 +272,7 @@ function LocationPicker({ byLake, active, activeName, onSelect, favorites = [], 
         <svg className="pin" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
           <path d="M12 21s7-5.7 7-11a7 7 0 1 0-14 0c0 5.3 7 11 7 11z" /><circle cx="12" cy="10" r="2.4" />
         </svg>
-        <span className="locpick-cur">{activeName || "Choose a spot"}</span>
+        <span className="locpick-cur">{activeName || "Find a spot"}</span>
         <svg className="chev" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 12 15 18 9" /></svg>
       </button>
       {open && (
@@ -920,9 +920,13 @@ export default function App() {
   const spotOptions = spots.length ? spots : (spot ? [{ ...spot, lake: "Lake Erie" }] : [{ id: active, name: "Loading…", lake: "Lake Erie" }]);
   const byLake = {};
   spotOptions.forEach((s) => { (byLake[s.lake || "Lake Erie"] ||= []).push(s); });
-  const activeName = preview
-    ? (data?.spot?.name || preview.name || "Preview")
-    : (spots.find((s) => s.id === active) || data?.spot || {}).name;
+  // On the homepage the header picker is a generic "find a spot" affordance —
+  // don't surface whatever port was last visited as if it's selected.
+  const activeName = landing
+    ? ""
+    : preview
+      ? (data?.spot?.name || preview.name || "Preview")
+      : (spots.find((s) => s.id === active) || data?.spot || {}).name;
 
   return (
     <>
