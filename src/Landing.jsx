@@ -3,7 +3,7 @@ import Takeover from "./Takeover.jsx";
 import { IconStar } from "./icons.jsx";
 import { fmtWaves } from "./units.js";
 import { AdSlot } from "./monetize.jsx";
-import { REGIONS, LAKE_ORDER } from "./regions.js";
+import { REGIONS, LAKE_ORDER, NEAR_METROS } from "./regions.js";
 
 const vclass = (v) => (v === "NO-GO" ? "nogo" : v === "CAUTION" ? "caution" : v === "GO" ? "go" : "unknown");
 
@@ -14,7 +14,44 @@ const haversineMi = (a, b) => {
   const s = Math.sin(dLat / 2) ** 2 + Math.cos(toRad(a.lat)) * Math.cos(toRad(b.lat)) * Math.sin(dLon / 2) ** 2;
   return 2 * R * Math.asin(Math.sqrt(s));
 };
-const COVERAGE_MI = 75; // beyond this, we treat the area as "not covered yet"
+const COVERAGE_MI = 90;  // beyond this we treat the area as "not covered yet"
+const NEAR_SHOW = 5;     // how many ranked launches to surface
+
+// Straight-line miles undersell a drive: roads wander (~1.25x) and you average
+// ~42 mph door-to-water once town driving is in. Deliberately fuzzy — this is
+// to set expectations ("~40 min"), not to route.
+const driveMin = (mi) => Math.max(5, Math.round((mi * 1.25) / 42 * 60));
+const fmtDrive = (mi) => {
+  const m = driveMin(mi);
+  if (m < 60) return `~${Math.round(m / 5) * 5} min`;
+  const h = Math.floor(m / 60), r = Math.round((m % 60) / 15) * 15;
+  return r === 60 ? `~${h + 1} hr` : r ? `~${h} hr ${r} min` : `~${h} hr`;
+};
+const fmtDist = (mi) => `${Math.round(mi)} mi · ${fmtDrive(mi)} drive`;
+
+// Rank covered launches from a point, nearest first (used by the search panel,
+// the "best bets near you" section, and the /near/<metro> pages).
+const rankSpots = (summary, pt, limit = NEAR_SHOW) =>
+  (summary || [])
+    .filter((s) => s.lat != null && s.lon != null)
+    .map((s) => ({ s, mi: haversineMi(pt, s) }))
+    .sort((a, b) => a.mi - b.mi)
+    .filter((r) => r.mi <= COVERAGE_MI)
+    .slice(0, limit);
+
+// GO first, then CAUTION, then NO-GO, then unknown — for "best bets".
+const LEVEL_RANK = { GO: 0, CAUTION: 1, "NO-GO": 2 };
+const byVerdictThenDistance = (a, b) =>
+  (LEVEL_RANK[a.s.level] ?? 3) - (LEVEL_RANK[b.s.level] ?? 3) || a.mi - b.mi;
+
+// Compare a spot's live numbers against a signed-in boater's comfort limits.
+const comfortFlag = (prefs, s) => {
+  if (!prefs || (prefs.maxWaveFt == null && prefs.maxWindKt == null)) return null;
+  const over = [];
+  if (prefs.maxWaveFt != null && s.waveFt != null && s.waveFt > prefs.maxWaveFt) over.push("waves");
+  if (prefs.maxWindKt != null && s.windKt != null && s.windKt > prefs.maxWindKt) over.push("wind");
+  return over.length ? { ok: false, text: `Over your ${over.join(" & ")} limit` } : { ok: true, text: "Within your limits" };
+};
 
 function StatusChip({ level }) {
   return <span className={`loc-status ${level ? vclass(level) : "unknown"}`}>{level || "—"}</span>;
@@ -38,7 +75,7 @@ function LocCard({ s, onSelect }) {
 // location" to rank the nearest launches, and — when nothing's covered — build
 // a live NOAA page for that exact place (routing through the account gate).
 // Absorbs what used to be a second "find or build" card lower on the page.
-function SplashSearch({ summary, favorites, onSelect, onPreview, onRequest }) {
+function SplashSearch({ summary, favorites, onSelect, onPreview, onRequest, onLocate }) {
   const [q, setQ] = useState("");
   const [focused, setFocused] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -66,10 +103,13 @@ function SplashSearch({ summary, favorites, onSelect, onPreview, onRequest }) {
   useEffect(() => { if (ql) setNear(null); }, [ql]);
 
   const rankFrom = (lat, lon, label) => {
-    const ranked = withCoords.map((s) => ({ s, mi: haversineMi({ lat, lon }, s) })).sort((a, b) => a.mi - b.mi);
-    const list = ranked.filter((r) => r.mi <= COVERAGE_MI).slice(0, 3);
+    const pt = { lat, lon };
+    const ranked = withCoords.map((s) => ({ s, mi: haversineMi(pt, s) })).sort((a, b) => a.mi - b.mi);
+    const list = ranked.filter((r) => r.mi <= COVERAGE_MI).slice(0, NEAR_SHOW);
     setErr("");
-    setNear({ label, pt: { lat, lon }, list, covered: list.length > 0, nearest: ranked[0] || null });
+    setNear({ label, pt, list, covered: list.length > 0, nearest: ranked[0] || null });
+    // Remember where the boater is so the homepage can lead with it next time.
+    if (onLocate) onLocate({ lat, lon, label });
   };
   const useMyLocation = () => {
     setNear(null); setFocused(true);
@@ -136,7 +176,7 @@ function SplashSearch({ summary, favorites, onSelect, onPreview, onRequest }) {
                 <div className="splash-phead">Closest covered launches to {label}</div>
                 {near.list.map(({ s, mi }) => (
                   <button key={s.id} className="splash-opt" onClick={() => onSelect(s.id)}>
-                    <span className="splash-opt-main">{s.name} <em className="splash-mi">{Math.round(mi)} mi</em></span>
+                    <span className="splash-opt-main">{s.name} <em className="splash-mi">{fmtDist(mi)}</em></span>
                     <StatusChip level={s.level} />
                   </button>
                 ))}
@@ -151,7 +191,7 @@ function SplashSearch({ summary, favorites, onSelect, onPreview, onRequest }) {
                 <div className="splash-note">No covered launch within {COVERAGE_MI} miles of {label}.</div>
                 {near.nearest && (
                   <button className="splash-opt" onClick={() => onSelect(near.nearest.s.id)}>
-                    <span className="splash-opt-main">{near.nearest.s.name} <em className="splash-mi">{Math.round(near.nearest.mi)} mi — nearest we cover</em></span>
+                    <span className="splash-opt-main">{near.nearest.s.name} <em className="splash-mi">{fmtDist(near.nearest.mi)} — nearest we cover</em></span>
                     <StatusChip level={near.nearest.s.level} />
                   </button>
                 )}
@@ -396,6 +436,61 @@ function MyPorts({ summary, favorites, onSelect }) {
   );
 }
 
+// A launch card with distance + drive time, and (signed in) a comfort flag.
+function NearCard({ s, mi, prefs, onSelect }) {
+  const flag = comfortFlag(prefs, s);
+  return (
+    <button className="loc-card" onClick={() => onSelect(s.id)}>
+      <div className="loc-card-top"><span className="loc-name">{s.name}</span><StatusChip level={s.level} /></div>
+      <div className="loc-card-meta">
+        {fmtDist(mi)}
+        {s.windKt != null ? <> · {s.windKt} kt{s.dir ? ` ${s.dir}` : ""}</> : null}
+        {s.waveFt != null ? <> · {fmtWaves(s.waveFt, s.periodSec)}</> : null}
+      </div>
+      {flag && <div className={`nearflag ${flag.ok ? "ok" : "over"}`}>{flag.ok ? "✓ " : "⚠ "}{flag.text}</div>}
+    </button>
+  );
+}
+
+// "Best bets near you" — reachable launches ranked by verdict (GO first), then
+// distance. Fed by the remembered search / geolocation point (persisted across
+// visits) or a /near/<metro> page. Signed-in boaters also see each launch
+// flagged against their comfort limits. Only renders when there's a point and
+// something reachable, so it never adds clutter to a cold homepage.
+function NearYou({ summary, pt, prefs, onSelect, heading }) {
+  if (!pt || summary == null) return null;
+  const reachable = rankSpots(summary, pt, 6);
+  if (!reachable.length) return null;
+  const best = [...reachable].sort(byVerdictThenDistance);
+  const label = pt.label && pt.label !== "your location" ? pt.label : "you";
+  return (
+    <section className="directory nearyou">
+      <h2 className="directory-title">📍 {heading || <>Best bets near {label}</>}</h2>
+      <p className="directory-blurb" style={{ margin: "0 0 var(--s3)" }}>
+        Reachable launches, best conditions first{prefs && (prefs.maxWaveFt != null || prefs.maxWindKt != null) ? ", flagged against your comfort limits" : ""}.
+      </p>
+      <div className="loc-grid">
+        {best.map(({ s, mi }) => <NearCard key={s.id} s={s} mi={mi} prefs={prefs} onSelect={onSelect} />)}
+      </div>
+    </section>
+  );
+}
+
+// Crawlable internal links to the /near/<metro> pages, so people (and Google)
+// can reach the city landing pages. Real <a href> for SEO; the SPA intercepts
+// the click for a no-reload nav.
+function NearbyCities({ onCity }) {
+  return (
+    <nav className="nearby-cities" aria-label="Boating near a city">
+      <span className="nearby-cities-lede">Boating near a city:</span>
+      {NEAR_METROS.map((m) => (
+        <a key={m.slug} href={`/near/${m.slug}`} className="nearby-city"
+          onClick={(e) => { if (onCity) { e.preventDefault(); onCity(m.slug); } }}>{m.name.replace(/, [A-Z]{2}$/, "")}</a>
+      ))}
+    </nav>
+  );
+}
+
 // Editorial hub teaser — genuine written content on the homepage, and the entry
 // point to the /guides library (static, indexable articles). A few featured
 // guides plus a link to the full set.
@@ -427,10 +522,24 @@ function GuidesTeaser() {
   );
 }
 
-export default function Landing({ adFree, onSelect, favorites, onCookieSettings, onJoin, onSignIn, signedIn, nudge, region, onRegion, userEmail, onPreview }) {
+// Remembered "near me" point — the last place the boater searched or located
+// from, so a returning inland visitor gets their launches without re-typing.
+const NEARPT_KEY = "boating.nearpt";
+const loadNearPt = () => { try { return JSON.parse(localStorage.getItem(NEARPT_KEY) || "null"); } catch (e) { return null; } };
+
+export default function Landing({ adFree, onSelect, favorites, onCookieSettings, onJoin, onSignIn, signedIn, nudge, region, onRegion, userEmail, onPreview, prefs, metro, onCity }) {
   const [summary, setSummary] = useState(null);
   const [reqToken, setReqToken] = useState(0);
   const [reqPrefill, setReqPrefill] = useState("");
+  // A /near/<metro> page pins the reference point; otherwise use the remembered
+  // one. Searching/locating updates and persists it (see rememberPt).
+  const [nearPt, setNearPt] = useState(() => (metro ? { lat: metro.lat, lon: metro.lon, label: metro.name } : loadNearPt()));
+  useEffect(() => { if (metro) setNearPt({ lat: metro.lat, lon: metro.lon, label: metro.name }); }, [metro && metro.slug]);
+  const rememberPt = (g) => {
+    if (metro) return; // don't overwrite the pinned metro point from a search
+    setNearPt(g);
+    try { localStorage.setItem(NEARPT_KEY, JSON.stringify(g)); } catch (e) { /* ignore */ }
+  };
   const openRequest = (name = "") => {
     setReqPrefill(name);
     setReqToken((n) => n + 1);
@@ -449,9 +558,15 @@ export default function Landing({ adFree, onSelect, favorites, onCookieSettings,
     <>
       <Takeover splash adFree={adFree} signedIn={signedIn} onJoin={onJoin}>
         <SplashSearch summary={summary} favorites={favorites}
-          onSelect={onSelect} onPreview={onPreview} onRequest={openRequest} />
+          onSelect={onSelect} onPreview={onPreview} onRequest={openRequest} onLocate={rememberPt} />
       </Takeover>
       <main className="app">
+        {metro && (
+          <p className="metro-intro">
+            The nearest launches we cover to <b>{metro.name}</b>, ranked by distance and drive time — with a live
+            GO / CAUTION / NO-GO call for each from NOAA wind, waves and warnings. Search your exact ZIP above for a tighter list.
+          </p>
+        )}
         {onJoin && (
           <div className="joinstrip">
             <span><b>Every port's verdict is below, free.</b> Create an account for the hour-by-hour picture, live cams &amp; “be back in by” times.</span>
@@ -468,10 +583,13 @@ export default function Landing({ adFree, onSelect, favorites, onCookieSettings,
         )}
         {nudge}
         {!adFree && <AdSlot name="landingTop" />}
+        <NearYou summary={summary} pt={nearPt} prefs={prefs} onSelect={onSelect}
+          heading={metro ? <>Closest launches to {metro.name}</> : null} />
         {signedIn && <MyPorts summary={summary} favorites={favorites} onSelect={onSelect} />}
         <RegionDirectory summary={summary} q="" onSelect={onSelect} deepLake={region ? null : deepLake} region={region} onRegion={onRegion} />
         <GuidesTeaser />
         <RequestLocation userEmail={userEmail} openToken={reqToken} prefill={reqPrefill} />
+        <NearbyCities onCity={onCity} />
         {!adFree && <AdSlot name="landing" />}
         <footer className="meta">
           Live data from NOAA/NWS &amp; NDBC buoys, maps by Windy. A planning aid, not an official forecast or a navigation tool.

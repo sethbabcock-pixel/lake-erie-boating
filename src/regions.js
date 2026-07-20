@@ -42,3 +42,32 @@ export const regionFromPath = (pathname) => {
   const seg = String(pathname || "").replace(/^\/+|\/+$/g, "").toLowerCase();
   return seg && !seg.includes("/") ? regionBySlug(seg) : null;
 };
+
+// "Near a city" landing pages: /near/<slug>. These serve people who search
+// where they *live* (an inland metro) rather than a lakeside town — the page
+// ranks the nearest covered launches by distance. Each is a curated, crawlable
+// URL (finite set, so it stays indexable). Coords are the metro centroid; keep
+// to cities within a reasonable drive of covered water so the page has value.
+export const NEAR_METROS = [
+  { slug: "cleveland", name: "Cleveland, OH", lat: 41.4993, lon: -81.6944 },
+  { slug: "akron", name: "Akron, OH", lat: 41.0814, lon: -81.519 },
+  { slug: "columbus", name: "Columbus, OH", lat: 39.9612, lon: -82.9988 },
+  { slug: "toledo", name: "Toledo, OH", lat: 41.6528, lon: -83.5379 },
+  { slug: "buffalo", name: "Buffalo, NY", lat: 42.8864, lon: -78.8784 },
+  { slug: "rochester-ny", name: "Rochester, NY", lat: 43.1566, lon: -77.6088 },
+  { slug: "detroit", name: "Detroit, MI", lat: 42.3314, lon: -83.0458 },
+  { slug: "grand-rapids", name: "Grand Rapids, MI", lat: 42.9634, lon: -85.6681 },
+  { slug: "chicago", name: "Chicago, IL", lat: 41.8781, lon: -87.6298 },
+  { slug: "milwaukee", name: "Milwaukee, WI", lat: 43.0389, lon: -87.9065 },
+  { slug: "pittsburgh", name: "Pittsburgh, PA", lat: 40.4406, lon: -79.9959 },
+  { slug: "baltimore", name: "Baltimore, MD", lat: 39.2904, lon: -76.6122 },
+];
+
+export const nearMetroBySlug = (slug) =>
+  NEAR_METROS.find((m) => m.slug === String(slug || "").toLowerCase()) || null;
+
+// A "/near/<slug>" path → its metro object, or null.
+export const nearMetroFromPath = (pathname) => {
+  const m = String(pathname || "").match(/^\/near\/([a-z0-9-]{2,40})\/?$/i);
+  return m ? nearMetroBySlug(m[1]) : null;
+};

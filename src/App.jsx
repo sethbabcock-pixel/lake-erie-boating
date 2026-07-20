@@ -7,7 +7,7 @@ import { useAuth, Account, AuthModal } from "./auth.jsx";
 import Takeover from "./Takeover.jsx";
 import Landing from "./Landing.jsx";
 import { fmtWaves, waveFeel, compassToDeg } from "./units.js";
-import { regionBySlug, regionFromPath } from "./regions.js";
+import { regionBySlug, regionFromPath, nearMetroBySlug, nearMetroFromPath } from "./regions.js";
 
 const fmt = (v, unit) => (v == null ? "—" : `${v}${unit || ""}`);
 const verdictClass = (lvl) => (lvl === "NO-GO" ? "nogo" : lvl === "CAUTION" ? "caution" : "go");
@@ -773,6 +773,7 @@ export default function App() {
   const [preview, setPreview] = useState(() => urlPreview());
   const [landing, setLanding] = useState(() => !urlSpot() && !urlPreview()); // bare "/" = splash; ?spot / /preview = detail
   const [region, setRegion] = useState(() => regionFromPath(window.location.pathname)); // /greatlakes etc.
+  const [nearMetro, setNearMetro] = useState(() => nearMetroFromPath(window.location.pathname)); // /near/cleveland etc.
   const [resetToken, setResetToken] = useState(() => new URLSearchParams(window.location.search).get("reset") || ""); // password-reset email link
   const [verifyToken, setVerifyToken] = useState(() => new URLSearchParams(window.location.search).get("verify") || ""); // email-confirmation link
   const [gateAuth, setGateAuth] = useState(null); // signup-gate modal: "register" | "login" | null
@@ -792,11 +793,24 @@ export default function App() {
     setActive(id);
     setLanding(false);
     setRegion(null);
+    setNearMetro(null);
     setPreview(null);
     window.scrollTo(0, 0);
   };
   const goLanding = () => {
     window.history.pushState({}, "", "/");
+    setLanding(true);
+    setRegion(null);
+    setNearMetro(null);
+    setPreview(null);
+    window.scrollTo(0, 0);
+  };
+  // "Boating near <city>" landing page (/near/<slug>) — crawlable, no reload.
+  const goCity = (slug) => {
+    const m = nearMetroBySlug(slug);
+    if (!m) return goLanding();
+    window.history.pushState({}, "", `/near/${m.slug}`);
+    setNearMetro(m);
     setLanding(true);
     setRegion(null);
     setPreview(null);
@@ -810,6 +824,7 @@ export default function App() {
     setPreview({ lat: +pt.lat, lon: +pt.lon, name: pt.name || "" });
     setLanding(false);
     setRegion(null);
+    setNearMetro(null);
     window.scrollTo(0, 0);
   };
   // Region subpage nav (slug or null for "all waters"); keeps the URL crawlable.
@@ -817,6 +832,7 @@ export default function App() {
     const r = slug ? regionBySlug(slug) : null;
     window.history.pushState({}, "", r ? `/${r.slug}` : "/");
     setRegion(r);
+    setNearMetro(null);
     setLanding(true);
     setPreview(null);
     window.scrollTo(0, 0);
@@ -829,6 +845,7 @@ export default function App() {
       setLanding(!sp && !pv);
       if (sp) setActive(sp);
       setRegion(sp || pv ? null : regionFromPath(window.location.pathname));
+      setNearMetro(sp || pv ? null : nearMetroFromPath(window.location.pathname));
     };
     window.addEventListener("popstate", onPop);
     return () => window.removeEventListener("popstate", onPop);
@@ -953,6 +970,7 @@ export default function App() {
           onCookieSettings={() => chooseConsent(null)}
           signedIn={!!auth.user}
           region={region} onRegion={goRegion} onPreview={goPreview}
+          metro={nearMetro} onCity={goCity} prefs={auth.user?.prefs}
           userEmail={auth.user ? auth.user.email : ""}
           nudge={auth.user ? <EmailNudge auth={auth} /> : null}
           onJoin={gated ? () => { track("event", "signup_gate_click", { spot: "landing", action: "register" }); setGateAuth("register"); } : null}
