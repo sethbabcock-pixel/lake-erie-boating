@@ -38,7 +38,7 @@ function LocCard({ s, onSelect }) {
 // location" to rank the nearest launches, and — when nothing's covered — build
 // a live NOAA page for that exact place (routing through the account gate).
 // Absorbs what used to be a second "find or build" card lower on the page.
-function SplashSearch({ summary, favorites, signedIn, onSelect, onPreview, onRequest }) {
+function SplashSearch({ summary, favorites, onSelect, onPreview, onRequest }) {
   const [q, setQ] = useState("");
   const [focused, setFocused] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -81,15 +81,19 @@ function SplashSearch({ summary, favorites, signedIn, onSelect, onPreview, onReq
       { timeout: 8000, maximumAge: 300000 },
     );
   };
-  const buildFrom = async (term, label) => {
-    if (!onPreview || term.length < 2) return;
-    setBusy(true); setErr("");
+  // Geocode a typed place / ZIP, then rank the nearest covered launches by
+  // distance — the "radius" search. Most people search where they *live*
+  // (inland), so the useful answer is "here are the closest launches", not
+  // "that spot isn't on the water". Build-a-page stays available underneath.
+  const geocodeSearch = async (term) => {
+    if (term.length < 2) return;
+    setBusy(true); setErr(""); setNear(null);
     try {
       const param = /^\d{5}$/.test(term) ? `zip=${term}` : `q=${encodeURIComponent(term)}`;
       const r = await fetch(`/api/geocode?${param}`);
       const d = await r.json();
       if (!r.ok) throw new Error(d.error || "Couldn't find that place.");
-      onPreview({ lat: d.lat, lon: d.lon, name: d.place || label || term });
+      rankFrom(d.lat, d.lon, d.place || term);
     } catch (e) { setErr(e.message); } finally { setBusy(false); }
   };
   // Build straight from coordinates we already have (geolocation / geocoded pt) —
@@ -97,10 +101,18 @@ function SplashSearch({ summary, favorites, signedIn, onSelect, onPreview, onReq
   const buildPoint = () => onPreview && near?.pt && onPreview({ ...near.pt, name: near.label === "your location" ? "" : near.label });
   const submit = (e) => {
     e.preventDefault();
-    // Enter: jump to an exact-ish covered match if we have one, else build it.
+    // Enter: jump to an exact-ish covered match if we have one, else run the
+    // radius search on whatever was typed (town or ZIP).
     if (matches.length) { onSelect(matches[0].id); return; }
-    if (canBuild) buildFrom(q.trim());
+    if (canBuild) geocodeSearch(q.trim());
   };
+  // A complete 5-digit ZIP rarely matches a spot name, so people expect it to
+  // "just work" — auto-run the radius search (debounced) the moment it's whole.
+  useEffect(() => {
+    if (!/^\d{5}$/.test(ql)) return;
+    const t = setTimeout(() => geocodeSearch(ql), 450);
+    return () => clearTimeout(t);
+  }, [ql]);
   const openPanel = focused && loaded;
   const label = near ? (near.label === "your location" ? "you" : near.label) : "";
 
@@ -136,10 +148,16 @@ function SplashSearch({ summary, favorites, signedIn, onSelect, onPreview, onReq
               </>
             ) : (
               <>
-                <div className="splash-note">No covered launch within {COVERAGE_MI} miles{near.nearest ? ` (closest: ${near.nearest.s.name}, ${Math.round(near.nearest.mi)} mi)` : ""}.</div>
+                <div className="splash-note">No covered launch within {COVERAGE_MI} miles of {label}.</div>
+                {near.nearest && (
+                  <button className="splash-opt" onClick={() => onSelect(near.nearest.s.id)}>
+                    <span className="splash-opt-main">{near.nearest.s.name} <em className="splash-mi">{Math.round(near.nearest.mi)} mi — nearest we cover</em></span>
+                    <StatusChip level={near.nearest.s.level} />
+                  </button>
+                )}
                 {onPreview && (
                   <button className="splash-opt splash-build" onClick={buildPoint}>
-                    🌊 Build a live page for {label} →
+                    🌊 Or build a live page for {label} straight from NOAA →
                   </button>
                 )}
               </>
@@ -152,14 +170,14 @@ function SplashSearch({ summary, favorites, signedIn, onSelect, onPreview, onReq
                   <StatusChip level={s.level} />
                 </button>
               ))}
-              {onPreview && canBuild && (
-                <button className="splash-opt splash-build" onClick={() => buildFrom(q.trim())} disabled={busy}>
-                  🌊 Build a live page for “{q.trim()}” →
+              {canBuild && (
+                <button className="splash-opt splash-build" onClick={() => geocodeSearch(q.trim())} disabled={busy}>
+                  {busy ? "Searching…" : <>📍 Find the closest launches to “{q.trim()}” →</>}
                 </button>
               )}
-              {matches.length === 0 && (
+              {matches.length === 0 && !busy && (
                 <div className="splash-note">
-                  No covered spot matches yet — build one straight from NOAA above{signedIn ? "." : ". Publishing takes a free account."}
+                  No spot named “{q.trim()}” yet — search it and we'll rank the nearest launches by distance.
                 </div>
               )}
             </>
@@ -430,7 +448,7 @@ export default function Landing({ adFree, onSelect, favorites, onCookieSettings,
   return (
     <>
       <Takeover splash adFree={adFree} signedIn={signedIn} onJoin={onJoin}>
-        <SplashSearch summary={summary} favorites={favorites} signedIn={signedIn}
+        <SplashSearch summary={summary} favorites={favorites}
           onSelect={onSelect} onPreview={onPreview} onRequest={openRequest} />
       </Takeover>
       <main className="app">
