@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useRef } from "react";
 import Takeover from "./Takeover.jsx";
 import { IconStar } from "./icons.jsx";
 import { fmtWaves } from "./units.js";
@@ -34,28 +34,164 @@ function LocCard({ s, onSelect }) {
   );
 }
 
-function SplashSelector({ q, setQ, summary, onSelect, favorites }) {
+// One search to rule the homepage: type-ahead over covered spots, "use my
+// location" to rank the nearest launches, and — when nothing's covered — build
+// a live NOAA page for that exact place (routing through the account gate).
+// Absorbs what used to be a second "find or build" card lower on the page.
+function SplashSearch({ summary, favorites, signedIn, onSelect, onPreview, onRequest }) {
+  const [q, setQ] = useState("");
+  const [focused, setFocused] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState("");
+  const [near, setNear] = useState(null); // { label, pt, list:[{s,mi}], covered, nearest } from geolocation
+  const ref = useRef(null);
   const ql = q.trim().toLowerCase();
-  const matches = ql ? (summary || []).filter((s) => s.name.toLowerCase().includes(ql)).slice(0, 6) : [];
+  const loaded = summary != null;
+  const withCoords = (summary || []).filter((s) => s.lat != null && s.lon != null);
+  const matches = ql
+    ? (summary || []).filter((s) => s.name.toLowerCase().includes(ql) || (s.lake || "").toLowerCase().includes(ql)).slice(0, 6)
+    : [];
   const favCards = (favorites || []).map((id) => (summary || []).find((x) => x.id === id)).filter(Boolean).slice(0, 4);
+  const canBuild = ql.length >= 2;
+
+  useEffect(() => {
+    if (!focused) return;
+    const onDoc = (e) => { if (ref.current && !ref.current.contains(e.target)) setFocused(false); };
+    const onKey = (e) => { if (e.key === "Escape") setFocused(false); };
+    document.addEventListener("mousedown", onDoc);
+    document.addEventListener("keydown", onKey);
+    return () => { document.removeEventListener("mousedown", onDoc); document.removeEventListener("keydown", onKey); };
+  }, [focused]);
+  // Typing again clears a stale "use my location" result set.
+  useEffect(() => { if (ql) setNear(null); }, [ql]);
+
+  const rankFrom = (lat, lon, label) => {
+    const ranked = withCoords.map((s) => ({ s, mi: haversineMi({ lat, lon }, s) })).sort((a, b) => a.mi - b.mi);
+    const list = ranked.filter((r) => r.mi <= COVERAGE_MI).slice(0, 3);
+    setErr("");
+    setNear({ label, pt: { lat, lon }, list, covered: list.length > 0, nearest: ranked[0] || null });
+  };
+  const useMyLocation = () => {
+    setNear(null); setFocused(true);
+    if (!navigator.geolocation) { setErr("Your browser can't share location. Type a place or ZIP instead."); return; }
+    setBusy(true); setErr("");
+    navigator.geolocation.getCurrentPosition(
+      (pos) => { setBusy(false); rankFrom(pos.coords.latitude, pos.coords.longitude, "your location"); },
+      (e) => { setBusy(false); setErr(e.code === 1 ? "Location permission denied. Type a place or ZIP instead." : "Couldn't get your location. Type a place or ZIP."); },
+      { timeout: 8000, maximumAge: 300000 },
+    );
+  };
+  const buildFrom = async (term, label) => {
+    if (!onPreview || term.length < 2) return;
+    setBusy(true); setErr("");
+    try {
+      const param = /^\d{5}$/.test(term) ? `zip=${term}` : `q=${encodeURIComponent(term)}`;
+      const r = await fetch(`/api/geocode?${param}`);
+      const d = await r.json();
+      if (!r.ok) throw new Error(d.error || "Couldn't find that place.");
+      onPreview({ lat: d.lat, lon: d.lon, name: d.place || label || term });
+    } catch (e) { setErr(e.message); } finally { setBusy(false); }
+  };
+  // Build straight from coordinates we already have (geolocation / geocoded pt) —
+  // no need to round-trip the geocoder again.
+  const buildPoint = () => onPreview && near?.pt && onPreview({ ...near.pt, name: near.label === "your location" ? "" : near.label });
+  const submit = (e) => {
+    e.preventDefault();
+    // Enter: jump to an exact-ish covered match if we have one, else build it.
+    if (matches.length) { onSelect(matches[0].id); return; }
+    if (canBuild) buildFrom(q.trim());
+  };
+  const openPanel = focused && loaded;
+  const label = near ? (near.label === "your location" ? "you" : near.label) : "";
+
   return (
-    <div className="splash-pick">
-      <input className="splash-search" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Find your launch, search a spot…" aria-label="Search spots" />
-      {matches.length > 0 && (
-        <div className="splash-matches">
-          {matches.map((s) => (
-            <button key={s.id} className="splash-match" onClick={() => onSelect(s.id)}>
-              <span>{s.name}</span><StatusChip level={s.level} />
+    <div className="splash-pick" ref={ref}>
+      <form className="splash-bar" onSubmit={submit} role="search">
+        <input className="splash-search" value={q} onFocus={() => setFocused(true)}
+          onChange={(e) => setQ(e.target.value)} aria-label="Search a lake, town, marina, or ZIP"
+          placeholder="Search a lake, town, marina, or ZIP…" />
+        <button className="splash-go" type="submit" disabled={busy}>{busy ? "…" : "Search"}</button>
+      </form>
+      <p className="splash-hint">Jump to any covered spot, or build a live NOAA page for any coast, lake, bay, or river.</p>
+
+      {openPanel && (
+        <div className="splash-panel">
+          {near ? (
+            // "Use my location" / geocoded result set: nearest covered launches,
+            // plus the option to build a page for that exact point.
+            near.covered ? (
+              <>
+                <div className="splash-phead">Closest covered launches to {label}</div>
+                {near.list.map(({ s, mi }) => (
+                  <button key={s.id} className="splash-opt" onClick={() => onSelect(s.id)}>
+                    <span className="splash-opt-main">{s.name} <em className="splash-mi">{Math.round(mi)} mi</em></span>
+                    <StatusChip level={s.level} />
+                  </button>
+                ))}
+                {onPreview && (
+                  <button className="splash-opt splash-build" onClick={buildPoint}>
+                    🌊 Or build a live page for this exact spot →
+                  </button>
+                )}
+              </>
+            ) : (
+              <>
+                <div className="splash-note">No covered launch within {COVERAGE_MI} miles{near.nearest ? ` (closest: ${near.nearest.s.name}, ${Math.round(near.nearest.mi)} mi)` : ""}.</div>
+                {onPreview && (
+                  <button className="splash-opt splash-build" onClick={buildPoint}>
+                    🌊 Build a live page for {label} →
+                  </button>
+                )}
+              </>
+            )
+          ) : ql ? (
+            <>
+              {matches.map((s) => (
+                <button key={s.id} className="splash-opt" onClick={() => onSelect(s.id)}>
+                  <span className="splash-opt-main">{s.name} <em className="splash-lake">{s.lake}</em></span>
+                  <StatusChip level={s.level} />
+                </button>
+              ))}
+              {onPreview && canBuild && (
+                <button className="splash-opt splash-build" onClick={() => buildFrom(q.trim())} disabled={busy}>
+                  🌊 Build a live page for “{q.trim()}” →
+                </button>
+              )}
+              {matches.length === 0 && (
+                <div className="splash-note">
+                  No covered spot matches yet — build one straight from NOAA above{signedIn ? "." : ". Publishing takes a free account."}
+                </div>
+              )}
+            </>
+          ) : (
+            <>
+              <button className="splash-opt splash-loc" onClick={useMyLocation} disabled={busy}>📍 Use my location</button>
+              {favCards.length > 0 ? (
+                <>
+                  <div className="splash-phead"><IconStar filled /> Your ports</div>
+                  {favCards.map((s) => (
+                    <button key={s.id} className="splash-opt" onClick={() => onSelect(s.id)}>
+                      <span className="splash-opt-main">{s.name} <em className="splash-lake">{s.lake}</em></span>
+                      <StatusChip level={s.level} />
+                    </button>
+                  ))}
+                </>
+              ) : (
+                <div className="splash-note">Try “Erie”, “Sandusky”, “Chesapeake Bay”, or a 5-digit ZIP.</div>
+              )}
+            </>
+          )}
+
+          {err && <div className="splash-err">{err}</div>}
+          {onRequest && (
+            <button className="splash-req" onClick={() => onRequest(near && near.label !== "your location" ? near.label : (ql ? q.trim() : ""))}>
+              Don't see your water? Request a location →
             </button>
-          ))}
+          )}
         </div>
       )}
-      {!ql && favCards.length > 0 && (
-        <div className="splash-favs">
-          {favCards.map((s) => <button key={s.id} className="splash-fav" onClick={() => onSelect(s.id)}><IconStar filled /> {s.name}</button>)}
-        </div>
-      )}
-      <a className="splash-scroll" href="#all-locations">Browse all locations ↓</a>
+
+      <a className="splash-scroll" href="#all-locations">Browse all covered locations ↓</a>
     </div>
   );
 }
@@ -153,91 +289,6 @@ function RegionDirectory({ summary, q, onSelect, deepLake, region, onRegion }) {
           </details>
         );
       })}
-    </section>
-  );
-}
-
-// Search a town/lake/ZIP (or use the browser's location): point to the nearest
-// covered launch, and offer to build a live page for that exact spot from NOAA
-// data. No coverage nearby → build a page and/or request a curated spot.
-function NearestFinder({ summary, onSelect, onRequest, onPreview }) {
-  const [q, setQ] = useState("");
-  const [busy, setBusy] = useState(false);
-  const [err, setErr] = useState("");
-  const [result, setResult] = useState(null); // { label, pt:{lat,lon}, near:[{s,mi}], covered, nearest }
-  const withCoords = (summary || []).filter((s) => s.lat != null && s.lon != null);
-  const findFrom = (lat, lon, label) => {
-    const pt = { lat, lon };
-    const ranked = withCoords.map((s) => ({ s, mi: haversineMi({ lat, lon }, s) })).sort((a, b) => a.mi - b.mi);
-    const near = ranked.filter((r) => r.mi <= COVERAGE_MI).slice(0, 3);
-    setErr("");
-    setResult({ label, pt, near, covered: near.length > 0, nearest: ranked[0] || null });
-  };
-  const useMyLocation = () => {
-    if (!navigator.geolocation) { setErr("Your browser can't share location. Type a place or ZIP instead."); return; }
-    setBusy(true); setErr("");
-    navigator.geolocation.getCurrentPosition(
-      (pos) => { setBusy(false); findFrom(pos.coords.latitude, pos.coords.longitude, "your location"); },
-      (e) => { setBusy(false); setErr(e.code === 1 ? "Location permission denied. Type a place or ZIP instead." : "Couldn't get your location. Type a place or ZIP."); },
-      { timeout: 8000, maximumAge: 300000 },
-    );
-  };
-  const lookup = async (e) => {
-    e.preventDefault();
-    const term = q.trim();
-    if (term.length < 2) { setErr("Type a town, lake, or 5-digit ZIP."); return; }
-    setBusy(true); setErr("");
-    try {
-      const param = /^\d{5}$/.test(term) ? `zip=${term}` : `q=${encodeURIComponent(term)}`;
-      const r = await fetch(`/api/geocode?${param}`);
-      const d = await r.json();
-      if (!r.ok) throw new Error(d.error || "Couldn't look up that place.");
-      findFrom(d.lat, d.lon, d.place || term);
-    } catch (e2) { setErr(e2.message); } finally { setBusy(false); }
-  };
-  const label = result ? (result.label === "your location" ? "your spot" : result.label) : "";
-  const buildPage = () => onPreview && result?.pt && onPreview({ ...result.pt, name: result.label === "your location" ? "" : result.label });
-  return (
-    <section className="nearby-finder">
-      <h2 className="directory-title" style={{ margin: 0 }}>Find or build a page for any spot</h2>
-      <p className="directory-blurb" style={{ margin: "4px 0 0" }}>Search a town, lake, or ZIP. We'll point you at the nearest covered launch, or build a live page for that exact spot straight from NOAA.</p>
-      {/* Search-first: the type-a-place bar is the primary action and grows to
-          fill the card; geolocation is the compact secondary beside it (its own
-          full-width row on phones). */}
-      <div className="nf-controls">
-        <form className="nf-bar" onSubmit={lookup}>
-          <input className="field nf-q" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Town, lake, or ZIP" aria-label="Search a place or ZIP" />
-          <button className="cbtn nf-go" type="submit" disabled={busy}>{busy ? "…" : "Search"}</button>
-        </form>
-        <button className="cbtn ghost nf-locbtn" type="button" onClick={useMyLocation} disabled={busy}>📍 Use my location</button>
-      </div>
-      {err && <div className="modal-err" style={{ marginTop: 8 }}>{err}</div>}
-      {result && (
-        <div className="nf-results">
-          {result.covered ? (
-            <>
-              <p className="acct-note" style={{ margin: "10px 0 6px" }}>Closest covered launches to {label}:</p>
-              <div className="loc-grid">
-                {result.near.map(({ s, mi }) => (
-                  <button key={s.id} className="loc-card" onClick={() => onSelect(s.id)}>
-                    <div className="loc-card-top"><span className="loc-name">{s.name}</span><StatusChip level={s.level} /></div>
-                    <div className="loc-card-meta">{Math.round(mi)} mi away · {s.lake}</div>
-                  </button>
-                ))}
-              </div>
-              {onPreview && <p className="acct-note" style={{ margin: "8px 0 0" }}>Or <button className="linklike" onClick={buildPage}>build a live page for {label} →</button></p>}
-            </>
-          ) : (
-            <div className="nf-nocover">
-              <p>No covered launch within {COVERAGE_MI} miles{result.nearest ? ` (closest is ${result.nearest.s.name}, ${Math.round(result.nearest.mi)} mi)` : ""}. Build a live page for {label} straight from NOAA data:</p>
-              <div className="nf-actions">
-                {onPreview && <button className="cbtn" onClick={buildPage}>Build this page</button>}
-                <button className="cbtn ghost" onClick={() => onRequest(result.label === "your location" ? "" : result.label)}>Request a curated spot</button>
-              </div>
-            </div>
-          )}
-        </div>
-      )}
     </section>
   );
 }
@@ -360,7 +411,6 @@ function GuidesTeaser() {
 
 export default function Landing({ adFree, onSelect, favorites, onCookieSettings, onJoin, onSignIn, signedIn, nudge, region, onRegion, userEmail, onPreview }) {
   const [summary, setSummary] = useState(null);
-  const [q, setQ] = useState("");
   const [reqToken, setReqToken] = useState(0);
   const [reqPrefill, setReqPrefill] = useState("");
   const openRequest = (name = "") => {
@@ -380,10 +430,10 @@ export default function Landing({ adFree, onSelect, favorites, onCookieSettings,
   return (
     <>
       <Takeover splash adFree={adFree} signedIn={signedIn} onJoin={onJoin}>
-        <SplashSelector q={q} setQ={setQ} summary={summary} onSelect={onSelect} favorites={favorites} />
+        <SplashSearch summary={summary} favorites={favorites} signedIn={signedIn}
+          onSelect={onSelect} onPreview={onPreview} onRequest={openRequest} />
       </Takeover>
       <main className="app">
-        <NearestFinder summary={summary} onSelect={onSelect} onRequest={openRequest} onPreview={onPreview} />
         {onJoin && (
           <div className="joinstrip">
             <span><b>Every port's verdict is below, free.</b> Create an account for the hour-by-hour picture, live cams &amp; “be back in by” times.</span>
@@ -401,7 +451,7 @@ export default function Landing({ adFree, onSelect, favorites, onCookieSettings,
         {nudge}
         {!adFree && <AdSlot name="landingTop" />}
         {signedIn && <MyPorts summary={summary} favorites={favorites} onSelect={onSelect} />}
-        <RegionDirectory summary={summary} q={q} onSelect={onSelect} deepLake={region ? null : deepLake} region={region} onRegion={onRegion} />
+        <RegionDirectory summary={summary} q="" onSelect={onSelect} deepLake={region ? null : deepLake} region={region} onRegion={onRegion} />
         <GuidesTeaser />
         <RequestLocation userEmail={userEmail} openToken={reqToken} prefill={reqPrefill} />
         {!adFree && <AdSlot name="landing" />}
