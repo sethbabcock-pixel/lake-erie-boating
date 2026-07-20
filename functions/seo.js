@@ -8,10 +8,25 @@
 //     result ("Should I boat at <spot> today?") with canonical + JSON-LD.
 // The client reads /spot/<id> from the path (App.jsx) and renders normally.
 import { SPOTS } from "./marine/conditions.js";
-import { REGIONS, regionBySlug } from "../src/regions.js";
+import { REGIONS, regionBySlug, NEAR_METROS, nearMetroBySlug } from "../src/regions.js";
 
 const SITE = "https://shouldiboat.com";
 const lakeOf = (s) => s.lake || "Lake Erie";
+
+// Great-circle miles — for ranking the nearest launches to a /near/<metro>.
+const haversineMi = (a, b) => {
+  const R = 3958.8, toRad = (d) => (d * Math.PI) / 180;
+  const dLat = toRad(b.lat - a.lat), dLon = toRad(b.lon - a.lon);
+  const s = Math.sin(dLat / 2) ** 2 + Math.cos(toRad(a.lat)) * Math.cos(toRad(b.lat)) * Math.sin(dLon / 2) ** 2;
+  return 2 * R * Math.asin(Math.sqrt(s));
+};
+const nearestSpotLinks = (pt, limit = 8) =>
+  Object.entries(SPOTS)
+    .filter(([, s]) => s.lat != null && s.lon != null)
+    .map(([id, s]) => ({ id, s, mi: haversineMi(pt, s) }))
+    .sort((a, b) => a.mi - b.mi)
+    .slice(0, limit)
+    .map(({ id, s, mi }) => ({ href: `/spot/${id}`, text: `${s.name} (${Math.round(mi)} mi)` }));
 const esc = (s) => String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 
 const websiteJsonld = () => ({
@@ -129,6 +144,43 @@ export function seoForPath(pathname) {
       }),
     };
   }
+  // "Boating near <city>" pages (/near/<slug>) — a landing page for people who
+  // search their inland metro rather than a lakeside town. Ranks the nearest
+  // covered launches so the page is genuinely useful and its content unique.
+  const nm = pathname.match(/^\/near\/([a-z0-9-]{2,40})\/?$/);
+  const metro = nm && nearMetroBySlug(nm[1]);
+  if (metro) {
+    const nearby = nearestSpotLinks(metro);
+    const nearNames = nearby.slice(0, 3).map((x) => x.text.replace(/\s*\(.*\)$/, "")).join(", ");
+    const description = `The closest boating launches to ${metro.name}, ranked by distance and drive time, each with a live GO / CAUTION / NO-GO call from NOAA wind, waves, gusts and marine warnings${nearNames ? ` — ${nearNames} and more` : ""}.`;
+    return {
+      url: `${SITE}/near/${metro.slug}`,
+      title: `Boating near ${metro.name} — where can I launch today? · shouldiboat.com`,
+      description,
+      jsonld: {
+        "@context": "https://schema.org",
+        "@type": "WebPage",
+        name: `Boating near ${metro.name}`,
+        url: `${SITE}/near/${metro.slug}`,
+        about: `Nearest boating launches to ${metro.name} with live conditions`,
+        isPartOf: { "@type": "WebSite", name: "shouldiboat.com", url: `${SITE}/` },
+        breadcrumb: {
+          "@type": "BreadcrumbList",
+          itemListElement: [
+            { "@type": "ListItem", position: 1, name: "shouldiboat.com", item: `${SITE}/` },
+            { "@type": "ListItem", position: 2, name: `Near ${metro.name}`, item: `${SITE}/near/${metro.slug}` },
+          ],
+        },
+      },
+      bodyHtml: ssrBody({
+        h1: `Boating near ${metro.name}`,
+        description,
+        body: `Don't live on the water? These are the closest launches we cover to ${metro.name}, ranked by distance and drive time, each with a live GO / CAUTION / NO-GO verdict from NOAA wind, gusts and wave data, an hour-by-hour risk timeline and marine warnings. Loading live conditions…`,
+        links: [{ href: "/", text: "All launches" }, { href: "/guides/", text: "Boating guides" }],
+        nearby: nearby.length ? { label: `Closest launches to ${metro.name}`, links: nearby } : null,
+      }),
+    };
+  }
   const m = pathname.match(/^\/spot\/([a-z0-9-]{1,40})\/?$/);
   if (m && SPOTS[m[1]]) {
     const s = SPOTS[m[1]];
@@ -216,7 +268,7 @@ const GUIDES = [
 // but only trusts it when it's accurate — so BUMP THIS when you ship a change
 // that alters what's on the pages (new content, layout, copy), not on every
 // deploy. W3C date format (YYYY-MM-DD).
-const CONTENT_UPDATED = "2026-07-19";
+const CONTENT_UPDATED = "2026-07-20";
 
 export async function sitemapXml(env) {
   // Admin-featured user-built pages join the sitemap; pending ones stay out.
@@ -230,6 +282,7 @@ export async function sitemapXml(env) {
   const urls = [
     { loc: `${SITE}/`, freq: "hourly", priority: "1.0" },
     ...REGIONS.map((r) => ({ loc: `${SITE}/${r.slug}`, freq: "hourly", priority: "0.9" })),
+    ...NEAR_METROS.map((m) => ({ loc: `${SITE}/near/${m.slug}`, freq: "daily", priority: "0.6" })),
     ...Object.keys(SPOTS).map((id) => ({ loc: `${SITE}/spot/${id}`, freq: "hourly", priority: "0.8" })),
     ...built.map((slug) => ({ loc: `${SITE}/spot/${slug}`, freq: "hourly", priority: "0.7" })),
     { loc: `${SITE}/guides/`, freq: "weekly", priority: "0.6" },
