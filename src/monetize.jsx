@@ -70,12 +70,11 @@ export function useAdsense(enabled) {
   const ads = cfg && cfg.ads;
   useEffect(() => {
     if (!enabled || !ads || !ads.enabled || !isPubId(ads.client)) return;
-    if (document.querySelector("script[data-sib-ads],script[src*='adsbygoogle.js']")) return;
+    if (document.querySelector("script[src*='adsbygoogle.js']")) return;
     const s = document.createElement("script");
     s.async = true;
     s.src = `https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=${ads.client}`;
     s.crossOrigin = "anonymous";
-    s.setAttribute("data-sib-ads", "1");
     document.head.appendChild(s);
   }, [enabled, ads]);
 }
