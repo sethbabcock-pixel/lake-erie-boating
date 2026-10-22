@@ -310,11 +310,12 @@ function RegionDirectory({ summary, q, onSelect, deepLake, region, onRegion }) {
       {summary == null && (
         // Reserve the directory's height with skeleton cards so the footer
         // doesn't jump when live conditions load (kills the homepage CLS).
-        <div className="region-skeletons" aria-hidden="true">
-          {["Erie", "Ontario", "Huron", "Michigan", "Superior"].map((k) => <div className="region region-skel" key={k} />)}
+        <div className="region-skeletons region-list" aria-hidden="true">
+          {["Erie", "Ontario", "Huron", "Michigan", "Superior", "Chesapeake"].map((k) => <div className="region region-skel" key={k} />)}
         </div>
       )}
       {summary != null && lakes.length === 0 && <p className="acct-note">{ql ? <>No spots match “{q}”.</> : "No spots here yet."}</p>}
+      <div className="region-list">
       {lakes.map((lake) => {
         const list = byLake[lake];
         const c = tally(list);
@@ -347,6 +348,7 @@ function RegionDirectory({ summary, q, onSelect, deepLake, region, onRegion }) {
           </details>
         );
       })}
+      </div>
     </section>
   );
 }

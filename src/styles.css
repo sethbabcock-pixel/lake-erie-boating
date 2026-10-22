@@ -594,14 +594,18 @@ body.has-takeover .app { background: var(--bg); border-radius: var(--r-lg) var(-
   .hero-sponsor .hero-logo { height: 30px; }
 }
 @media (min-width: 1000px) {
-  .hero-house.has-photo .hero-inner { min-height: 400px; }
+  .hero-house.has-photo .hero-inner { min-height: 300px; }
 }
-
-/* Admin page */
-
-/* Admin: live cams manager */
-
-/* Admin image upload */
+/* Spot pages: the verdict card right below is the headline, so the hero is a
+   compact title band, not a second billboard. On phones the verdict chip and
+   eyebrow drop out (the call card repeats both) to get the call above the fold. */
+.hero-house.has-photo:not(.hero-splash) .hero-inner { min-height: 0; padding-top: clamp(var(--s5), 3.5vw, var(--s7)); padding-bottom: clamp(var(--s5), 3.5vw, var(--s7)); }
+@media (max-width: 640px) {
+  .hero-house:not(.hero-splash) .hero-eyebrow,
+  .hero-house:not(.hero-splash) .hero-verdict { display: none; }
+  .hero-house:not(.hero-splash) .hero-title { font-size: clamp(var(--fs-xl), 6.5vw, var(--fs-2xl)); }
+  .hero-house:not(.hero-splash) .hero-housecta { margin-top: var(--s2); font-size: var(--fs-sm); }
+}
 
 /* Mobile: dropdowns must never overflow the viewport edge.
    The location panel is anchored to the right of a mid-screen button, so on a
@@ -613,7 +617,7 @@ body.has-takeover .app { background: var(--bg); border-radius: var(--r-lg) var(-
 }
 
 /* ---------- Full-screen splash + location directory ---------- */
-.hero-splash { position: relative; min-height: 82vh; display: flex; align-items: center; }
+.hero-splash { position: relative; min-height: min(56vh, 480px); display: flex; align-items: center; }
 .hero-splash .hero-inner { width: 100%; }
 .hero-video { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; z-index: 0; }
 .hero-video-scrim { position: absolute; inset: 0; z-index: 1; background: linear-gradient(180deg, rgba(7,24,43,0.4), rgba(7,24,43,0.72)); }
@@ -732,6 +736,14 @@ body.has-takeover .app { background: var(--bg); border-radius: var(--r-lg) var(-
 .notmarine h2 { margin: 0 0 var(--s2); color: var(--text); }
 .notmarine p { margin: 0 0 var(--s4); color: var(--text-muted); }
 .region { border: 1px solid var(--border); border-radius: var(--r-lg); margin-bottom: var(--s3); overflow: hidden; background: var(--surface); }
+/* Wide screens: lakes sit two-up; an opened lake takes the full row. */
+@media (min-width: 900px) {
+  .region-list { display: grid; grid-template-columns: 1fr 1fr; gap: var(--s3); align-items: start; }
+  .region-list > .region { margin-bottom: 0; }
+  .region-list > .region[open] { grid-column: 1 / -1; }
+  .region-list { margin-bottom: var(--s3); }
+}
+.region-head:hover .region-name { color: var(--accent); }
 .region-skel { height: 116px; animation: skelpulse 1.6s ease-in-out infinite; }
 @keyframes skelpulse { 0%, 100% { opacity: .5; } 50% { opacity: .8; } }
 .region-head { display: flex; align-items: center; justify-content: space-between; gap: var(--s3); padding: var(--s4);
@@ -761,6 +773,12 @@ body.has-takeover .app { background: var(--bg); border-radius: var(--r-lg) var(-
 
 /* ---------- Guides teaser (homepage) + spot-page learn link ---------- */
 .guides-teaser { margin-top: var(--s5); }
+.guides-teaser .loc-grid { grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); padding: 0; margin-bottom: var(--s4); }
+.guide-teaser-card { display: flex; flex-direction: column; gap: 6px; padding: var(--s4); text-decoration: none; }
+.guide-teaser-card:hover { text-decoration: none; }
+.guide-teaser-card .loc-name { font-size: var(--fs-base); }
+.guide-teaser-card .loc-card-meta { font-family: var(--font-sans); font-size: var(--fs-sm); line-height: var(--lh-snug); }
+.guide-teaser-card::after { content: "Read the guide →"; margin-top: auto; padding-top: var(--s2); font-size: var(--fs-xs); font-weight: var(--fw-semibold); color: var(--accent); }
 .guides-teaser-lede { color: var(--text-muted); font-size: var(--fs-sm); line-height: var(--lh-normal); margin: 0 0 var(--s4); max-width: 70ch; }
 .guide-teaser-card { text-decoration: none; color: inherit; }
 .guide-teaser-card .loc-card-meta { font-family: inherit; line-height: var(--lh-snug); }
@@ -770,7 +788,9 @@ body.has-takeover .app { background: var(--bg); border-radius: var(--r-lg) var(-
 .learn-line a { color: var(--accent); }
 
 @media (max-width: 640px) {
-  .hero-splash { min-height: 76vh; }
+  /* Phones: size the homepage hero to its content so the directory shows sooner. */
+  .hero-splash { min-height: 0; }
+  .hero-splash .hero-inner { padding-top: var(--s7); padding-bottom: var(--s6); }
   .splash-search { min-height: 48px; }
   .loc-grid { grid-template-columns: 1fr 1fr; gap: var(--s2); padding: var(--s3); }
   .region .region-head { flex-direction: column; align-items: flex-start; gap: var(--s2); }
