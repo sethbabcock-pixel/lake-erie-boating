@@ -4,7 +4,7 @@
 // so the canonical-host redirect and security headers cover page loads too;
 // static assets are served through the ASSETS binding in route(). Keeping
 // conditions.js as a module means the same code also works as a Pages Function.
-import { onRequest } from "./functions/marine/conditions.js";
+import { onRequest, cachedSummary } from "./functions/marine/conditions.js";
 import { handleAuth } from "./functions/auth.js";
 import { runScheduled } from "./functions/digest.js";
 import { robotsTxt, sitemapXml, seoForPath, seoForBuiltSpot, injectSeo } from "./functions/seo.js";
@@ -29,6 +29,19 @@ const CSP_REPORT_ONLY = [
   "object-src 'none'",
   "report-uri /api/csp-report",
 ].join("; ");
+
+// Today's verdicts for server-rendered pages, from the edge-cached directory
+// summary. Capped at 1.5s so a cold cache never stalls a page load; the fetch
+// keeps running in the background (waitUntil) and warms the cache for the
+// next request. null = render without live data.
+async function liveSummary(env, ctx) {
+  const p = cachedSummary(env).catch(() => null);
+  if (ctx && ctx.waitUntil) ctx.waitUntil(p);
+  return Promise.race([p, new Promise((r) => setTimeout(() => r(null), 1500))]);
+}
+
+// Client-side routes the SPA serves that have no server-rendered SEO page.
+const SPA_ROUTES = /^\/(preview|account)\/?$/;
 
 function withSecurityHeaders(resp) {
   const h = new Headers(resp.headers);
@@ -66,6 +79,7 @@ async function route(request, env, ctx) {
     // /spot/<slug> that isn't a curated spot may be a user-built page (KV) —
     // indexable once featured, otherwise served noindex.
     let seo = seoForPath(p);
+    if (seo && !seo.noindex) seo = seoForPath(p, await liveSummary(env, ctx));
     if (!seo) {
       const bm = p.match(/^\/spot\/([a-z0-9-]{1,60})\/?$/);
       if (bm) seo = await seoForBuiltSpot(env, bm[1]);
@@ -87,15 +101,21 @@ async function route(request, env, ctx) {
       shellUrl.pathname = "/index.html";
       return env.ASSETS.fetch(new Request(shellUrl, { headers: request.headers }));
     };
-    // Unknown /spot/* (e.g. a stale link) is still an SPA route — serve the app
-    // shell so the client can handle it, not the assets layer's 307/404.
-    if (p.startsWith("/spot/")) return fetchShell();
+    // A real 404 for pages that don't exist (unknown /spot/ slugs, made-up
+    // paths). The body is still the app shell, so a visitor lands on the
+    // homepage UI, but the status tells crawlers there's no page here — a 200
+    // with an empty body reads as a thin "soft 404".
+    const notFound = async () => {
+      const shell = await fetchShell();
+      const html = request.method === "HEAD" ? null : (await shell.text()).replace("</head>", '<meta name="robots" content="noindex"></head>');
+      return new Response(html, { status: 404, headers: { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "public, max-age=300" } });
+    };
+    if (p.startsWith("/spot/")) return notFound();
     const asset = await env.ASSETS.fetch(request);
     if (asset.status !== 404) return asset;
-    // SPA fallback: a non-asset, non-API navigation (e.g. /account) should serve
-    // the app shell so client-side routing and direct refreshes work, not 404.
-    // Real asset 404s (paths with a file extension) still 404.
-    if (!/\.[a-z0-9]+$/i.test(p)) return fetchShell();
+    // Known client-only routes still get the app shell with a 200.
+    if (SPA_ROUTES.test(p)) return fetchShell();
+    if (!/\.[a-z0-9]+$/i.test(p)) return notFound();
     return asset;
   }
   // Not an API route and not a servable static asset.

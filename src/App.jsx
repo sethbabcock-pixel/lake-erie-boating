@@ -366,7 +366,7 @@ const Trend = ({ t }) => (t ? <span className={`trend ${t.cls}`}>{t.glyph} {t.wo
 
 // Same-lake pivot: every other port on this lake with its live verdict.
 // "This launch is rough — where's it calmer?" answered without leaving the page.
-function NearbyPorts({ lake, current, onSelect }) {
+function NearbyPorts({ lake, current, from, onSelect }) {
   const [sum, setSum] = useState(null);
   useEffect(() => {
     let ok = true;
@@ -377,6 +377,12 @@ function NearbyPorts({ lake, current, onSelect }) {
     return () => { ok = false; };
   }, []);
   const order = { GO: 0, CAUTION: 1, "NO-GO": 2 };
+  const milesTo = (a, b) => {
+    if (!a || a.lat == null || b.lat == null) return "";
+    const R = 3958.8, rad = (d) => (d * Math.PI) / 180;
+    const h = Math.sin(rad(b.lat - a.lat) / 2) ** 2 + Math.cos(rad(a.lat)) * Math.cos(rad(b.lat)) * Math.sin(rad(b.lon - a.lon) / 2) ** 2;
+    return ` · ${Math.round(2 * R * Math.asin(Math.sqrt(h)))} mi`;
+  };
   const near = (sum || [])
     .filter((s) => (s.lake || "Lake Erie") === lake && s.id !== current)
     .sort((a, b) => (order[a.level] ?? 3) - (order[b.level] ?? 3));
@@ -389,9 +395,45 @@ function NearbyPorts({ lake, current, onSelect }) {
           <button key={s.id} className="nearby-chip" onClick={() => onSelect(s.id)}>
             <span className={`ndot ${verdictClass(s.level)}`} />
             <span className="nname">{s.name}</span>
-            <small>{s.windKt != null ? `${s.windKt}kt` : "—"}{s.waveFt != null ? ` · ${s.waveFt}ft${s.periodSec ? `@${s.periodSec}s` : ""}` : ""}</small>
+            <small>{s.windKt != null ? `${s.windKt}kt` : "—"}{s.waveFt != null ? ` · ${s.waveFt}ft${s.periodSec ? `@${s.periodSec}s` : ""}` : ""}{milesTo(from, s)}</small>
           </button>
         ))}
+      </div>
+    </section>
+  );
+}
+
+// Launch facts: which NWS zone and NDBC stations feed this page and how each
+// wind direction plays at this shore. The server renders the same facts into
+// the page HTML (functions/seo.js), so visitors and crawlers see one page.
+function LaunchNotes({ spot, facts }) {
+  if (!facts) return null;
+  const e = facts.exposure || {};
+  const row = (label, sub, dirs, cls) => (dirs && dirs.length ? (
+    <div className={`ln-row ${cls}`}>
+      <div className="ln-k"><b>{label}</b><small>{sub}</small></div>
+      <div className="ln-dirs">{dirs.map((d) => <span key={d}>{d}</span>)}</div>
+    </div>
+  ) : null);
+  return (
+    <section className="card launchnotes">
+      <div className="card-head"><h2>About {spot.name}</h2><span className="legend">{facts.lake}</span></div>
+      <div className="ln-facts">
+        {facts.zone && <span>NWS marine zone <b>{facts.zone}</b></span>}
+        {facts.buoys && facts.buoys.length
+          ? <span>Live data: {facts.buoys.map((b, i) => <React.Fragment key={b}>{i ? ", " : ""}<a href={`https://www.ndbc.noaa.gov/station_page.php?station=${b.toLowerCase()}`} target="_blank" rel="noopener">NDBC {b}</a></React.Fragment>)}</span>
+          : <span>No buoy close by: wind and waves come from the NWS forecast</span>}
+        <span>{facts.lat.toFixed(3)}, {facts.lon.toFixed(3)}</span>
+      </div>
+      <div className="ln-exposure">
+        {row("Onshore", "waves pile up at the launch", e.onshore, "on")}
+        {row("Offshore", "calm at the ramp, rougher out, pushes you off", e.offshore, "off")}
+        {row("Cross-shore", "moderate; watch the trend", e.cross, "cross")}
+        {row("Roughest here", "the directions that build the worst chop at this shore", e.roughest, "rough")}
+      </div>
+      <div className="hint">
+        How each wind direction plays at this shore. <a href="/guides/wind-direction-and-fetch" target="_blank" rel="noopener">Why direction matters →</a>
+        {facts.lake === "Lake Erie" && <> · <a href="/guides/boating-lake-erie" target="_blank" rel="noopener">Boating Lake Erie guide →</a></>}
       </div>
     </section>
   );
@@ -1119,7 +1161,9 @@ export default function App() {
                 </div>
 
                 {/* ── Same-lake pivot ── */}
-                <NearbyPorts lake={spot.lake || "Lake Erie"} current={active} onSelect={selectLocation} />
+                <NearbyPorts lake={spot.lake || "Lake Erie"} current={active} from={spot} onSelect={selectLocation} />
+
+                <LaunchNotes spot={spot} facts={data.facts} />
 
                 {/* ── Details ── */}
                 <div className="dash2">
