@@ -50,9 +50,9 @@
   </script>
   <!-- Google AdSense — library load (enables site review + ad serving). Ad units
        are still React-controlled and never render for ad-free subscribers. -->
-  <!-- data-sib-ads marks our load so React doesn't inject a second copy.
-       Do not use data-adsbygoogle — AdSense warns that attribute is unsupported on the head tag. -->
-  <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-9213366013949616" crossorigin="anonymous" data-sib-ads="1"></script>
+  <!-- No custom attributes on this tag: AdSense warns about any it doesn't
+       know. monetize.jsx detects this load by its src and won't add a second copy. -->
+  <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-9213366013949616" crossorigin="anonymous"></script>
 </head>
 <body>
   <div id="root"></div>

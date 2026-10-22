@@ -14,6 +14,8 @@
 //   GET/PUT /api/admin/config       -> admin-only site config (hero, takeovers)
 //   GET  /api/admin/notifications   -> admin-only email/notification log
 //   POST /api/hit                   -> public cookieless visit/visitor beacon
+//   POST /api/adstat                -> public sampled ad fill beacon
+//   GET  /api/admin/adstats         -> admin-only ad fill rates by placement/day
 //   GET  /api/admin/stats           -> admin-only account/traffic stats
 //   GET  /api/admin/users           -> admin-only user search
 //   GET/POST /api/admin/user        -> admin-only user detail + flag toggle
@@ -29,6 +31,7 @@
 // GOOGLE_CLIENT_ID + GOOGLE_CLIENT_SECRET secrets.
 
 import { resolveMarineContext } from "./marine/conditions.js";
+import { ADSENSE_DEFAULTS, AD_PLACEMENTS, sanitizeAds } from "../src/ads-config.js";
 
 const SESSION_DAYS = 30;
 const enc = new TextEncoder();
@@ -113,6 +116,7 @@ const DEFAULT_SITE_CONFIG = {
   gam: { networkCode: "" },
   notifyEmails: [], // recipients for admin notices (signups etc.); empty → owner default
   cams: { disabled: [], custom: [] }, // live-cam overrides: built-ins turned off + admin-added feeds
+  ads: ADSENSE_DEFAULTS, // AdSense on/off, publisher ID, slot IDs (src/ads-config.js)
 };
 // Site owner — admin by default so /admin works with no Cloudflare setup.
 // Override (or add more admins) with the ADMIN_EMAIL env var.
@@ -154,6 +158,7 @@ function sanitizeSiteConfig(input) {
     },
     takeovers,
     gam: { networkCode: str(gam.networkCode, 30) },
+    ads: sanitizeAds(c.ads),
     notifyEmails: (Array.isArray(c.notifyEmails) ? c.notifyEmails : []).slice(0, 20)
       .map((e) => str(e, 200).trim().toLowerCase()).filter((e) => /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(e)),
     cams: (() => {
@@ -568,7 +573,7 @@ export async function handleAuth(request, env, url, ctx) {
     const cfg = sanitizeSiteConfig({ ...DEFAULT_SITE_CONFIG, ...stored });
     const today = isoDay();
     const takeover = cfg.takeovers.find((t) => t.start && t.start <= today && today <= (t.end || t.start)) || null;
-    return json({ hero: cfg.hero, takeover, gam: cfg.gam });
+    return json({ hero: cfg.hero, takeover, gam: cfg.gam, ads: cfg.ads });
   }
 
   // ---- admin: read / write full site config ----
@@ -827,6 +832,41 @@ export async function handleAuth(request, env, url, ctx) {
       if (url.searchParams.get("v") === "1") await bump(`uv:${today}`); // a new daily visitor
     }
     return new Response(null, { status: 204 });
+  }
+
+  // ---- sampled ad fill beacon (public, cookieless) ----
+  // Body {r:[{p:placement, s:status}]}; one batched request per sampled page
+  // load. Aggregated per UTC day under ad:<day> so /admin can show fill rates.
+  if (path === "/api/adstat" && request.method === "POST") {
+    if (env.USERS) {
+      const body = await request.json().catch(() => null);
+      const rows = (body && Array.isArray(body.r) ? body.r : []).slice(0, 10)
+        .filter((x) => x && AD_PLACEMENTS.some((p) => p.key === x.p) && ["filled", "unfilled", "noresponse"].includes(x.s));
+      if (rows.length) {
+        const key = `ad:${isoDay()}`;
+        const cur = (await env.USERS.get(key, "json").catch(() => null)) || {};
+        for (const { p, s } of rows) {
+          cur[p] = cur[p] || { filled: 0, unfilled: 0, noresponse: 0 };
+          cur[p][s] = (cur[p][s] || 0) + 1;
+        }
+        await env.USERS.put(key, JSON.stringify(cur), { expirationTtl: 70 * 86400 });
+      }
+    }
+    return new Response(null, { status: 204 });
+  }
+
+  // ---- admin: ad fill rates, last 14 days ----
+  if (path === "/api/admin/adstats" && request.method === "GET") {
+    const u = await userFromRequest(env, request);
+    if (!u) return json({ error: "Not signed in." }, 401);
+    if (!isAdmin(env, u)) return json({ error: "Forbidden — not an admin account." }, 403);
+    const DAY = 86400000, now = Date.now();
+    const days = [];
+    for (let i = 13; i >= 0; i--) {
+      const d = isoDay(new Date(now - i * DAY));
+      days.push({ date: d, byPlacement: (await env.USERS.get(`ad:${d}`, "json").catch(() => null)) || {} });
+    }
+    return json({ days, sampleRate: 0.25 });
   }
 
   // ---- admin: account/traffic stats (cached ~5 min) ----

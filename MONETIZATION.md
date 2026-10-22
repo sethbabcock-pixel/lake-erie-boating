@@ -7,38 +7,43 @@ deploy rebuilds automatically).
 
 | Stream | Status | What to do |
 |---|---|---|
-| Display ads (AdSense) | Publisher + slots wired (`detailTop` / `detailMid` / `landing` / `landingTop`) | Confirm site is **Ready** in AdSense; fill can lag 24–48h |
+| Display ads (AdSense) | Live; managed at `/admin#ads` with fill telemetry | Check the Ads health panel; confirm site is **Ready** in AdSense |
 | Affiliate (Amazon) | Wired; **tag empty** | Paste your Associates tag (below) |
 | Subscription (Stripe) | Live — $2.99/mo ad-free | Test a real checkout end-to-end |
 | Direct sponsorships | Wired (admin UI) | Sell a takeover, enter it at `/admin` |
-| Programmatic (GAM) | Wired; **network code empty** | Optional; paste GAM network code |
+| Programmatic (GAM) | Wired; **network code empty** | Optional; paste the network code at `/admin#ads` |
 | Analytics (GA4) | Live (consent-gated) | Nothing — funnel events already fire |
 
 ---
 
-## 1. AdSense display ads — `src/monetize.jsx`
+## 1. AdSense display ads — `/admin#ads` (no code)
 
-First get your AdSense account **approved** (it's under review once the site is
-live). Then in AdSense: **Ads → By ad unit → Display → create a unit**, and copy
-its 10-digit **slot ID**. Paste into `ADSENSE.slots`:
+Everything is managed in **/admin → Ads**, saved to KV, live on save — no
+redeploy:
 
-```js
-export const ADSENSE = {
-  client: "ca-pub-9213366013949616", // already set
-  slots: {
-    detailTop: "9841170882",  // spot page, under the conditions row (highest traffic)
-    detailMid: "8915670243",  // spot page, lower down
-    landing: "3032908319",    // homepage, under the port directory
-    landingTop: "1882789819", // homepage, high up
-    footerSticky: "",         // paste a slot ID to enable the sticky footer ad
-  },
-};
-```
+- **Master switch** and a **per-placement on/off** (pausing keeps the slot ID).
+- **Slot IDs** for each placement. In AdSense: **Ads → By ad unit → Display →
+  create a unit**, copy its 10-digit slot ID, paste it next to the placement.
+- **Health check**: publisher ID, `ads.txt` (fetched live), placements, and a
+  plain-language diagnosis of real fill.
+- **Fill rates**: 1 in 4 real page loads report, per placement, whether Google
+  *filled*, returned *unfilled* (no ad — an account-side status), or got
+  *blocked* (ad blocker). This answers "is it my code or my account?" with
+  production data. 0% fill with plenty of *unfilled* = check AdSense Sites
+  (must say **Ready**) and Policy center.
+- **Live render test** (embeds `/adtest.html`) and an AdSense account checklist
+  with deep links.
 
-Each placement renders **nothing** until its slot ID is set. `ads.txt` is
-correct. Placements show for free visitors (Consent Mode serves limited
-non-personalized ads until Accept; personalized after Accept) and never for
-ad-free subscribers.
+Built-in defaults live in `src/ads-config.js` and apply until the admin saves.
+Placements: `detailTop` (spot page, under the verdict), `detailMid` (spot
+page, after gear), `landingTop` (homepage, after the directory), `landing`
+(homepage, after the guides), `footerSticky` (off until it has a slot).
+
+A placement renders nothing until it has a slot ID, shows its "Advertisement"
+label only once Google fills it, and collapses entirely when unfilled or
+blocked — no empty labeled boxes. Ads show for free visitors (Consent Mode
+serves limited non-personalized ads until Accept) and never for ad-free
+subscribers.
 
 ### Diagnose: https://shouldiboat.com/adtest
 
@@ -50,7 +55,8 @@ Standalone page (no consent / React / ad-free). Expect:
 | **UNFILLED** | Code OK; Google returned no creative — check Sites → **Ready**, unit Active, wait for inventory |
 | **NO RESPONSE** | Script blocked (ad blocker / privacy DNS) |
 
-Owner preview on the real app: add `?adtest=1` (sample ads, no real impressions).
+Owner preview on the real app: add `?adtest=1` (sample ads, no real
+impressions); each placement then shows its fill status in its label.
 
 ## 2. Amazon affiliate — `src/monetize.jsx`
 
@@ -103,9 +109,10 @@ hyperlocal boating audience (marinas, charters, dealers, bait shops). Sign in as
 the admin account, go to **/admin → Sponsor takeovers**, and enter the sponsor
 name, logo, link, and run dates. It shows automatically during the window.
 
-## 5. Programmatic (Google Ad Manager) — `src/sponsor.js` (optional)
+## 5. Programmatic (Google Ad Manager) — `/admin#ads` (optional)
 
-If you later run GAM, set `GAM.networkCode`. Leave empty to stay on AdSense only.
+If you later run GAM, paste the network code under **Ads → Programmatic
+takeover**. Leave empty to stay on AdSense only.
 
 ## Measuring it (GA4)
 

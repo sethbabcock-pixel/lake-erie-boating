@@ -348,6 +348,11 @@ details.card[open] > summary { margin-bottom: var(--s3); }
 .gear-storefront:hover { text-decoration: underline; }
 .adwrap { margin-bottom: var(--s4); text-align: center; min-height: 1px; }
 .adlabel { display: block; font-size: 10px; text-transform: uppercase; letter-spacing: var(--tracking-wide); color: var(--text-faint); margin-bottom: 4px; }
+/* The label shows only once Google fills the unit; an unfilled or blocked unit
+   collapses (AdSlot tracks data-ad-status). ?adtest=1 keeps everything visible. */
+.adwrap.is-pending .adlabel { visibility: hidden; }
+.adwrap.is-unfilled:not(.is-test), .adwrap.is-noresponse:not(.is-test),
+.sticky-ad.is-unfilled:not(.is-test), .sticky-ad.is-noresponse:not(.is-test) { display: none; }
 /* Sticky footer (anchor) ad — pinned bottom, above the fold-line, dismissible. */
 .sticky-ad { position: fixed; left: 0; right: 0; bottom: 0; z-index: 90;
   height: 60px; background: var(--surface); border-top: 1px solid var(--border-strong);
@@ -589,48 +594,18 @@ body.has-takeover .app { background: var(--bg); border-radius: var(--r-lg) var(-
   .hero-sponsor .hero-logo { height: 30px; }
 }
 @media (min-width: 1000px) {
-  .hero-house.has-photo .hero-inner { min-height: 400px; }
+  .hero-house.has-photo .hero-inner { min-height: 300px; }
 }
-
-/* Admin page */
-.admin-main { max-width: 760px; padding-bottom: 96px; }
-.admin-campaign { border-left: 3px solid var(--accent); }
-.admin-camp-head { display: flex; align-items: center; justify-content: space-between; gap: var(--s3); margin-bottom: var(--s3); }
-.admin-camp-head h3 { margin: 0; font-size: var(--fs-base); display: flex; align-items: center; gap: var(--s2); }
-.admin-colors .acct-field { flex: 0 0 auto; }
-.admin-color { width: 56px; min-height: 40px; padding: 2px; cursor: pointer; }
-.admin-check { display: flex; align-items: center; gap: 8px; font-size: var(--fs-sm); color: var(--text-muted); margin-top: var(--s3); cursor: pointer; }
-.admin-check input { accent-color: var(--accent); width: 16px; height: 16px; }
-.admin-savebar { position: sticky; bottom: 0; display: flex; align-items: center; gap: var(--s3); flex-wrap: wrap;
-  margin-top: var(--s5); padding: var(--s4) 0; background: linear-gradient(to top, var(--bg) 70%, transparent); }
-.admin-main code { font-family: var(--font-mono); font-size: 0.9em; background: var(--surface-sunk); padding: 1px 5px; border-radius: var(--r-sm); }
-
-/* Admin: live cams manager */
-.admin-camgroup { margin-top: var(--s4); }
-.admin-camgroup-head { display: flex; align-items: center; justify-content: space-between; gap: var(--s3);
-  padding-bottom: 6px; border-bottom: 1px solid var(--border); margin-bottom: var(--s2); }
-.admin-camgroup-head h3 { margin: 0; font-size: var(--fs-sm); text-transform: uppercase; letter-spacing: var(--tracking-wide); color: var(--text-muted); }
-.admin-camrow { display: flex; align-items: center; gap: var(--s2); padding: 7px 0; font-size: var(--fs-sm); }
-.admin-camrow.off .admin-camname, .admin-camrow.off .admin-cambadge { opacity: 0.45; }
-.admin-camname { flex: 1 1 auto; min-width: 0; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.admin-cambadge { flex: 0 0 auto; font-size: var(--fs-xs); color: var(--text-faint); background: var(--surface-sunk);
-  border: 1px solid var(--border); border-radius: var(--r-pill); padding: 1px 8px; white-space: nowrap; }
-.admin-cambadge.custom { color: var(--accent); border-color: color-mix(in srgb, var(--accent) 40%, transparent); background: color-mix(in srgb, var(--accent) 10%, transparent); }
-.admin-camtoggle { margin-top: 0; flex: 0 0 auto; font-size: var(--fs-xs); }
-.cam-dot { flex: 0 0 auto; width: 9px; height: 9px; border-radius: 50%; background: var(--border-strong); }
-.cam-dot.live { background: var(--success); }
-.cam-dot.offline { background: var(--danger); }
-.admin-campreview { position: relative; aspect-ratio: 16 / 9; margin: var(--s2) 0 var(--s3); border-radius: var(--r-md);
-  overflow: hidden; border: 1px solid var(--border); background: var(--surface-sunk); }
-.admin-campreview iframe, .admin-campreview img { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; object-fit: cover; }
-.admin-camedit { margin: var(--s3) 0; padding: var(--s3); border: 1px dashed var(--border-strong); border-radius: var(--r-md); }
-.admin-camedit .acct-actions { display: flex; gap: var(--s2); flex-wrap: wrap; margin-top: var(--s2); }
-
-/* Admin image upload */
-.admin-upload { display: flex; gap: var(--s2); align-items: stretch; }
-.admin-upload .field { margin-bottom: 0; }
-.admin-uploadbtn { flex: 0 0 auto; display: inline-flex; align-items: center; min-height: 44px; cursor: pointer; white-space: nowrap; position: relative; }
-.admin-thumb { margin-top: var(--s3); max-height: 120px; max-width: 100%; border-radius: var(--r-md); border: 1px solid var(--border); display: block; object-fit: cover; }
+/* Spot pages: the verdict card right below is the headline, so the hero is a
+   compact title band, not a second billboard. On phones the verdict chip and
+   eyebrow drop out (the call card repeats both) to get the call above the fold. */
+.hero-house.has-photo:not(.hero-splash) .hero-inner { min-height: 0; padding-top: clamp(var(--s5), 3.5vw, var(--s7)); padding-bottom: clamp(var(--s5), 3.5vw, var(--s7)); }
+@media (max-width: 640px) {
+  .hero-house:not(.hero-splash) .hero-eyebrow,
+  .hero-house:not(.hero-splash) .hero-verdict { display: none; }
+  .hero-house:not(.hero-splash) .hero-title { font-size: clamp(var(--fs-xl), 6.5vw, var(--fs-2xl)); }
+  .hero-house:not(.hero-splash) .hero-housecta { margin-top: var(--s2); font-size: var(--fs-sm); }
+}
 
 /* Mobile: dropdowns must never overflow the viewport edge.
    The location panel is anchored to the right of a mid-screen button, so on a
@@ -642,7 +617,7 @@ body.has-takeover .app { background: var(--bg); border-radius: var(--r-lg) var(-
 }
 
 /* ---------- Full-screen splash + location directory ---------- */
-.hero-splash { position: relative; min-height: 82vh; display: flex; align-items: center; }
+.hero-splash { position: relative; min-height: min(56vh, 480px); display: flex; align-items: center; }
 .hero-splash .hero-inner { width: 100%; }
 .hero-video { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; z-index: 0; }
 .hero-video-scrim { position: absolute; inset: 0; z-index: 1; background: linear-gradient(180deg, rgba(7,24,43,0.4), rgba(7,24,43,0.72)); }
@@ -760,10 +735,15 @@ body.has-takeover .app { background: var(--bg); border-radius: var(--r-lg) var(-
 .notmarine { margin: var(--s5) 0; padding: var(--s5); border: 1px solid var(--border); border-radius: var(--r-lg); background: var(--surface); text-align: center; }
 .notmarine h2 { margin: 0 0 var(--s2); color: var(--text); }
 .notmarine p { margin: 0 0 var(--s4); color: var(--text-muted); }
-.built-actions { display: flex; gap: var(--s3); margin-top: 4px; }
-.built-actions .linklike { font-size: var(--fs-sm); }
-.built-actions .danger-link { color: var(--danger); }
 .region { border: 1px solid var(--border); border-radius: var(--r-lg); margin-bottom: var(--s3); overflow: hidden; background: var(--surface); }
+/* Wide screens: lakes sit two-up; an opened lake takes the full row. */
+@media (min-width: 900px) {
+  .region-list { display: grid; grid-template-columns: 1fr 1fr; gap: var(--s3); align-items: start; }
+  .region-list > .region { margin-bottom: 0; }
+  .region-list > .region[open] { grid-column: 1 / -1; }
+  .region-list { margin-bottom: var(--s3); }
+}
+.region-head:hover .region-name { color: var(--accent); }
 .region-skel { height: 116px; animation: skelpulse 1.6s ease-in-out infinite; }
 @keyframes skelpulse { 0%, 100% { opacity: .5; } 50% { opacity: .8; } }
 .region-head { display: flex; align-items: center; justify-content: space-between; gap: var(--s3); padding: var(--s4);
@@ -793,6 +773,12 @@ body.has-takeover .app { background: var(--bg); border-radius: var(--r-lg) var(-
 
 /* ---------- Guides teaser (homepage) + spot-page learn link ---------- */
 .guides-teaser { margin-top: var(--s5); }
+.guides-teaser .loc-grid { grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); padding: 0; margin-bottom: var(--s4); }
+.guide-teaser-card { display: flex; flex-direction: column; gap: 6px; padding: var(--s4); text-decoration: none; }
+.guide-teaser-card:hover { text-decoration: none; }
+.guide-teaser-card .loc-name { font-size: var(--fs-base); }
+.guide-teaser-card .loc-card-meta { font-family: var(--font-sans); font-size: var(--fs-sm); line-height: var(--lh-snug); }
+.guide-teaser-card::after { content: "Read the guide →"; margin-top: auto; padding-top: var(--s2); font-size: var(--fs-xs); font-weight: var(--fw-semibold); color: var(--accent); }
 .guides-teaser-lede { color: var(--text-muted); font-size: var(--fs-sm); line-height: var(--lh-normal); margin: 0 0 var(--s4); max-width: 70ch; }
 .guide-teaser-card { text-decoration: none; color: inherit; }
 .guide-teaser-card .loc-card-meta { font-family: inherit; line-height: var(--lh-snug); }
@@ -802,7 +788,9 @@ body.has-takeover .app { background: var(--bg); border-radius: var(--r-lg) var(-
 .learn-line a { color: var(--accent); }
 
 @media (max-width: 640px) {
-  .hero-splash { min-height: 76vh; }
+  /* Phones: size the homepage hero to its content so the directory shows sooner. */
+  .hero-splash { min-height: 0; }
+  .hero-splash .hero-inner { padding-top: var(--s7); padding-bottom: var(--s6); }
   .splash-search { min-height: 48px; }
   .loc-grid { grid-template-columns: 1fr 1fr; gap: var(--s2); padding: var(--s3); }
   .region .region-head { flex-direction: column; align-items: flex-start; gap: var(--s2); }
@@ -816,31 +804,8 @@ body.has-takeover .app { background: var(--bg); border-radius: var(--r-lg) var(-
 }
 
 /* Admin user management */
-.admin-userlist { display: flex; flex-direction: column; gap: 6px; }
-.admin-userrow { display: flex; align-items: center; justify-content: space-between; gap: var(--s3); width: 100%;
-  padding: 10px 12px; border: 1px solid var(--border); border-radius: var(--r-md); background: var(--surface-sunk);
-  color: var(--text); font: inherit; font-size: var(--fs-sm); cursor: pointer; text-align: left; }
-.admin-userrow:hover { border-color: var(--accent); }
-.admin-useremail { font-weight: var(--fw-semibold); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.admin-userdetail .acct-kv:first-of-type { margin-top: var(--s2); }
-.admin-toggles { margin-top: var(--s4); padding-top: var(--s3); border-top: 1px solid var(--border); }
 
 /* Admin stats dashboard */
-.stat-cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(110px, 1fr)); gap: var(--s2); margin-bottom: var(--s4); }
-.stat-card { background: var(--surface-sunk); border: 1px solid var(--border); border-radius: var(--r-md); padding: var(--s3) var(--s4); }
-.stat-card-v { font-family: var(--font-mono); font-size: var(--fs-2xl); font-weight: var(--fw-bold); color: var(--text); line-height: 1.1; }
-.stat-card-k { font-size: var(--fs-xs); color: var(--text-muted); margin-top: 2px; }
-.stat-chart-head { font-size: var(--fs-xs); text-transform: uppercase; letter-spacing: var(--tracking-wide); color: var(--text-muted); font-weight: var(--fw-semibold); margin-bottom: var(--s2); }
-.stat-chart { display: flex; align-items: flex-end; gap: 2px; height: 110px; padding: 4px; background: var(--surface-sunk); border: 1px solid var(--border); border-radius: var(--r-md); }
-.stat-bar-wrap { flex: 1 1 0; height: 100%; display: flex; align-items: flex-end; }
-.stat-bar { width: 100%; min-height: 2px; background: var(--accent); border-radius: 2px 2px 0 0; transition: height var(--dur) var(--ease); }
-.stat-bar:hover { background: var(--brand-hover); }
-.stat-chart-x { display: flex; justify-content: space-between; font-size: 10px; color: var(--text-faint); margin-top: 4px; font-family: var(--font-mono); }
-.stat-bar.visitors { background: var(--success); }
-.stat-bar.visitors:hover { filter: brightness(1.1); }
-.admin-notif .notif-ok { color: var(--success); }
-.admin-notif .notif-off { color: var(--text-faint); }
-.admin-notif-err { font-size: var(--fs-xs); color: var(--danger); margin: 2px 0 6px; word-break: break-word; }
 
 /* ── Signup gate (detail page, signed-out) ─────────────────────────────────── */
 .gate { position: relative; margin: var(--s5) 0; }

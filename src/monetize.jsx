@@ -1,23 +1,13 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
+import { isPubId } from "./ads-config.js";
+import { useSiteConfig } from "./siteConfig.js";
 
 /* ============================================================================
-   Monetization config — FILL THESE IN, then redeploy.
-   Until the AdSense client is a real "ca-pub-…", no ad code loads (the site
-   stays clean). Affiliate links work as soon as AMAZON_TAG is set.
+   Monetization config.
+   AdSense publisher ID + slot IDs live in src/ads-config.js as defaults and are
+   editable at runtime in /admin → Ads (stored in KV), so no redeploy is needed
+   to turn a placement on/off or swap a slot. Affiliate + analytics IDs below.
    ============================================================================ */
-export const ADSENSE = {
-  client: "ca-pub-9213366013949616", // AdSense publisher ID (set)
-  // Ad-unit slot IDs. In AdSense: Ads → By ad unit → Display → create a unit →
-  // copy its 10-digit slot ID here. Empty means that placement renders nothing,
-  // so you can switch them on one at a time. See MONETIZATION.md.
-  slots: {
-    detailTop: "9841170882",  // spot page, right under the current-conditions row (every /spot visitor sees it — highest value)
-    detailMid: "8915670243",  // spot page, lower in the toolkit
-    landing: "3032908319",    // homepage, under the port directory
-    landingTop: "1882789819", // homepage, high up (under the join strip)
-    footerSticky: "",         // ← paste slot ID to turn on the dismissible sticky footer ad (site-wide)
-  },
-};
 export const AMAZON_TAG = "shouldiboat-20"; // Amazon Associates tag (lights up the Gear block)
 // Optional: your Amazon Storefront / Idea List URL. When set, the gear block
 // shows a "Shop all our recommended gear →" link to your curated shelf. Build
@@ -45,8 +35,6 @@ export function useAnalytics(enabled) {
     gtag("config", GA_ID);
   }, [enabled]);
 }
-
-export const ADSENSE_ENABLED = /^ca-pub-\d{6,}$/.test(ADSENSE.client) && ADSENSE.client !== "ca-pub-0000000000000000";
 
 // Test mode: visiting any page with ?adtest=1 makes Google serve *sample* ads
 // (data-adtest="on") instead of real ones. Impressions aren't counted and it
@@ -78,59 +66,114 @@ export function updateConsentMode(choice) {
 // limited non-personalized ads, matching the privacy policy. The library is also
 // loaded from index.html for site review — this is a backup for shells that omit it.
 export function useAdsense(enabled) {
+  const cfg = useSiteConfig();
+  const ads = cfg && cfg.ads;
   useEffect(() => {
-    if (!enabled || !ADSENSE_ENABLED || document.querySelector("script[data-sib-ads],script[src*='adsbygoogle.js']")) return;
+    if (!enabled || !ads || !ads.enabled || !isPubId(ads.client)) return;
+    if (document.querySelector("script[src*='adsbygoogle.js']")) return;
     const s = document.createElement("script");
     s.async = true;
-    s.src = `https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=${ADSENSE.client}`;
+    s.src = `https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=${ads.client}`;
     s.crossOrigin = "anonymous";
-    s.setAttribute("data-sib-ads", "1");
     document.head.appendChild(s);
-  }, [enabled]);
+  }, [enabled, ads]);
 }
 
-// A responsive in-content ad unit for a named placement (see ADSENSE.slots).
-// Renders nothing until that placement's slot ID is filled — so unconfigured
-// placements stay fully invisible (no blank boxes), and you enable each by
-// pasting one slot ID.
-export function AdSlot({ name = "detailTop" }) {
-  const slot = ADSENSE.slots[name] || "";
-  const ready = ADSENSE_ENABLED && !!slot;
+// ── Fill telemetry ────────────────────────────────────────────────────────────
+// Each placement reports how Google answered on real visitors' devices —
+// filled, unfilled (Google had no ad), or noresponse (script blocked / never
+// ran) — so /admin can show live fill rates without AdSense access. Sampled
+// (1 in 4 page loads) and batched into one request per page to keep KV writes
+// low; skipped in ?adtest=1 mode so test ads never skew the numbers.
+const AD_SAMPLE = Math.random() < 0.25 && !adTestOn();
+let adBuf = [];
+let adTimer = null;
+function reportAd(placement, status) {
+  if (!AD_SAMPLE) return;
+  adBuf.push({ p: placement, s: status });
+  clearTimeout(adTimer);
+  adTimer = setTimeout(() => {
+    const body = JSON.stringify({ r: adBuf });
+    adBuf = [];
+    try {
+      if (navigator.sendBeacon) navigator.sendBeacon("/api/adstat", new Blob([body], { type: "application/json" }));
+      else fetch("/api/adstat", { method: "POST", body, keepalive: true, headers: { "Content-Type": "application/json" } }).catch(() => {});
+    } catch (e) { /* never let telemetry break the page */ }
+  }, 2500);
+}
+
+// Pushes one <ins> to AdSense and tracks Google's answer. Returns the status:
+// "pending" → "filled" | "unfilled" | "noresponse".
+function useAdUnit(ref, slot, placement) {
+  const [status, setStatus] = useState("pending");
   useEffect(() => {
-    if (!ready) return;
+    const ins = ref.current;
+    if (!slot || !ins) return;
+    setStatus("pending");
     try { (window.adsbygoogle = window.adsbygoogle || []).push({}); } catch (e) { /* ignore */ }
-  }, [ready]);
-  if (!ready) return null;
+    let done = false;
+    const finish = (s) => { if (done) return; done = true; setStatus(s); reportAd(placement, s); };
+    const read = () => {
+      const s = ins.getAttribute("data-ad-status");
+      if (s === "filled" || s === "unfilled") finish(s);
+    };
+    const mo = new MutationObserver(read);
+    mo.observe(ins, { attributes: true, attributeFilter: ["data-ad-status"] });
+    read();
+    // No answer in 12s: the library was blocked (ad blocker, privacy DNS) or
+    // never ran. Collapse the placement so it doesn't leave a hole.
+    const t = setTimeout(() => finish("noresponse"), 12000);
+    return () => { mo.disconnect(); clearTimeout(t); };
+  }, [slot, placement]);
+  return status;
+}
+
+function useAdSlotId(name) {
+  const cfg = useSiteConfig();
+  const ads = cfg && cfg.ads;
+  if (!ads || !ads.enabled || !isPubId(ads.client)) return { client: "", slot: "" };
+  if ((ads.off || []).includes(name)) return { client: "", slot: "" };
+  return { client: ads.client, slot: ads.slots[name] || "" };
+}
+
+// A responsive in-content ad unit for a named placement (see ads-config.js).
+// Renders nothing until that placement has a slot ID. The "Advertisement"
+// label appears only once Google actually fills it; an unfilled or blocked
+// unit collapses entirely, so the page never shows an empty labeled box.
+// In ?adtest=1 mode the label always shows with the fill status, for testing.
+export function AdSlot({ name = "detailTop" }) {
+  const { client, slot } = useAdSlotId(name);
+  const ref = useRef(null);
+  const status = useAdUnit(ref, slot, name);
+  if (!slot) return null;
+  const test = adTestOn();
   return (
-    <div className="adwrap">
-      <span className="adlabel">Advertisement</span>
-      <ins className="adsbygoogle" style={{ display: "block" }}
-        data-ad-client={ADSENSE.client} data-ad-slot={slot}
+    <div className={`adwrap is-${status}${test ? " is-test" : ""}`}>
+      <span className="adlabel">Advertisement{test ? ` · ${status}` : ""}</span>
+      <ins ref={ref} className="adsbygoogle" style={{ display: "block" }}
+        data-ad-client={client} data-ad-slot={slot}
         data-ad-format="auto" data-full-width-responsive="true"
-        {...(adTestOn() ? { "data-adtest": "on" } : {})} />
+        {...(test ? { "data-adtest": "on" } : {})} />
     </div>
   );
 }
 
-// Dismissible sticky footer (anchor) ad, shown site-wide. Idle-safe: renders
-// nothing until ADSENSE.slots.footerSticky is filled. Consent-gated and hidden
-// for ad-free subscribers via the `enabled` prop. Google's Better Ads policy
-// requires an easy way to close an overlay ad, so it carries a close button and
-// stays dismissed for the rest of the session.
+// Dismissible sticky footer (anchor) ad, shown site-wide. Renders nothing until
+// the footerSticky placement has a slot ID. Hidden for ad-free subscribers via
+// `enabled`. Google's Better Ads policy requires an easy way to close an overlay
+// ad, so it carries a close button and stays dismissed for the session.
 export function StickyFooterAd({ enabled }) {
-  const slot = ADSENSE.slots.footerSticky || "";
+  const { client, slot } = useAdSlotId("footerSticky");
   const [closed, setClosed] = useState(false);
-  const ready = ADSENSE_ENABLED && !!slot && !!enabled && !closed;
-  useEffect(() => {
-    if (!ready) return;
-    try { (window.adsbygoogle = window.adsbygoogle || []).push({}); } catch (e) { /* ignore */ }
-  }, [ready]);
-  if (!ready) return null;
+  const ref = useRef(null);
+  const live = !!slot && !!enabled && !closed;
+  const status = useAdUnit(ref, live ? slot : "", "footerSticky");
+  if (!live) return null;
   return (
-    <div className="sticky-ad" role="complementary" aria-label="Advertisement">
+    <div className={`sticky-ad is-${status}${adTestOn() ? " is-test" : ""}`} role="complementary" aria-label="Advertisement">
       <button className="sticky-ad-close" aria-label="Close ad" onClick={() => setClosed(true)}>×</button>
-      <ins className="adsbygoogle" style={{ display: "block", width: "100%", height: "100%" }}
-        data-ad-client={ADSENSE.client} data-ad-slot={slot}
+      <ins ref={ref} className="adsbygoogle" style={{ display: "block", width: "100%", height: "100%" }}
+        data-ad-client={client} data-ad-slot={slot}
         data-ad-format="horizontal" data-full-width-responsive="true"
         {...(adTestOn() ? { "data-adtest": "on" } : {})} />
     </div>
