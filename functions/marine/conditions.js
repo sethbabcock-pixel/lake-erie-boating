@@ -815,6 +815,37 @@ function windReadFor(spot, dirCompass) {
     advice: `${dirCompass} runs along the shoreline here: moderate chop; watch whether it trends onshore through the day.` };
 }
 
+// How each of the 16 wind directions plays at a launch, grouped the same way
+// the live wind read describes it (windReadFor), so the launch-notes card and
+// the server-rendered page never disagree with the live call. Lake Erie uses
+// the curated south-shore table; other waters use the shoreline geometry.
+export function windExposure(spot) {
+  const out = { onshore: [], offshore: [], cross: [], roughest: [] };
+  for (const d of COMPASS_16) {
+    const r = windReadFor(spot, d);
+    if (!r) continue;
+    // The short label decides; only a label with no direction word (a few
+    // curated Erie entries, e.g. "NE long fetch") falls back to the advice.
+    const kind = (t) => (/\bcross[- ]?shore|cross\//.test(t) ? "cross" : /\bonshore/.test(t) ? "onshore" : /\boffshore/.test(t) ? "offshore" : null);
+    out[kind(r.short.toLowerCase()) || kind((r.advice || "").toLowerCase()) || "cross"].push(d);
+    if (r.tone === "bad") out.roughest.push(d);
+  }
+  return out;
+}
+
+// Static, verifiable facts about a launch: which NWS marine zone forecasts it,
+// which NDBC stations feed it, and its wind exposure. Shown on the spot page
+// and server-rendered into its HTML.
+export function spotFacts(spot) {
+  return {
+    lake: spot.lake || "Lake Erie",
+    lat: spot.lat, lon: spot.lon,
+    zone: spot.zone || null,
+    buoys: (spot.buoys || []).filter(Boolean),
+    exposure: windExposure(spot),
+  };
+}
+
 // ---- Hourly risk timeline ----
 // Per-hour GO/CAUTION/NO-GO from the NWS hourly forecast + grid (wind or gusts,
 // whichever is stronger — same treatment as the headline verdict — plus precip
@@ -1234,6 +1265,13 @@ async function handleSummary(env) {
   return resp;
 }
 
+// The edge-cached directory summary as an object (same cache as the homepage
+// fetch). Server-rendered pages use it to put today's real verdicts in their
+// HTML; null on failure.
+export async function cachedSummary(env) {
+  try { return await (await handleSummary(env)).json(); } catch (e) { return null; }
+}
+
 export async function onRequest(context) {
   const url = new URL(context.request.url);
 
@@ -1355,6 +1393,7 @@ export async function onRequest(context) {
     waves,
     temps,
     windRead: read,
+    facts: spotFacts(spot),
     hourly,
     outlook,
     week,
