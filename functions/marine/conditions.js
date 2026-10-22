@@ -936,14 +936,24 @@ function buildRecommendation({ buoy, alerts, wind, waves, read, hours }) {
     reasons.push("Thunderstorms later, watch the hourly timeline");
   }
 
-  if (reasons.length === 0) reasons.push("Calm conditions reported");
-  if (!buoy) reasons.push("No live buoy here; using the NWS forecast, so verify before launch");
+  // No wind AND no waves means the upstream feeds failed (NOAA outage, timeout),
+  // not that it's calm. Never call GO on missing data — fail to CAUTION and
+  // say why, so a blank page can't read as "looks good".
+  const noData = wv == null && wind?.speedKt == null && wind?.gustKt == null;
+  if (noData) {
+    bump("CAUTION", "Live wind and wave data are unavailable right now. Check the NWS marine forecast before you launch");
+  } else if (reasons.length === 0) {
+    reasons.push("Calm conditions reported");
+  }
+  if (!buoy && !noData) reasons.push("No live buoy here; using the NWS forecast, so verify before launch");
 
-  const summary = {
-    GO: "Looks good to boat.",
-    CAUTION: "Boatable with caution. Small boats take care.",
-    "NO-GO": "Not recommended. Stay in.",
-  }[level];
+  const summary = noData
+    ? "No live data right now. Check before you go."
+    : {
+        GO: "Looks good to boat.",
+        CAUTION: "Boatable with caution. Small boats take care.",
+        "NO-GO": "Not recommended. Stay in.",
+      }[level];
 
   // Collapse duplicates (e.g. three concurrent Air Quality Alerts) so the
   // reason list stays clean instead of repeating the same line.

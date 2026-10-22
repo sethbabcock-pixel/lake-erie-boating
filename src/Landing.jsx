@@ -527,7 +527,7 @@ function GuidesTeaser() {
 const NEARPT_KEY = "boating.nearpt";
 const loadNearPt = () => { try { return JSON.parse(localStorage.getItem(NEARPT_KEY) || "null"); } catch (e) { return null; } };
 
-export default function Landing({ adFree, onSelect, favorites, onCookieSettings, onJoin, onSignIn, signedIn, nudge, region, onRegion, userEmail, onPreview, prefs, metro, onCity }) {
+export default function Landing({ adFree, showAds, onSelect, favorites, onCookieSettings, onJoin, onSignIn, signedIn, nudge, region, onRegion, userEmail, onPreview, prefs, metro, onCity }) {
   const [summary, setSummary] = useState(null);
   const [reqToken, setReqToken] = useState(0);
   const [reqPrefill, setReqPrefill] = useState("");
@@ -582,15 +582,17 @@ export default function Landing({ adFree, onSelect, favorites, onCookieSettings,
           </div>
         )}
         {nudge}
-        {!adFree && <AdSlot name="landingTop" />}
         <NearYou summary={summary} pt={nearPt} prefs={prefs} onSelect={onSelect}
           heading={metro ? <>Closest launches to {metro.name}</> : null} />
         {signedIn && <MyPorts summary={summary} favorites={favorites} onSelect={onSelect} />}
         <RegionDirectory summary={summary} q="" onSelect={onSelect} deepLake={region ? null : deepLake} region={region} onRegion={onRegion} />
+        {/* Ads sit after real content (the directory, then the guides), never
+            above it — AdSense's "ads on screens without publisher content". */}
+        {showAds && <AdSlot name="landingTop" />}
         <GuidesTeaser />
+        {showAds && <AdSlot name="landing" />}
         <RequestLocation userEmail={userEmail} openToken={reqToken} prefill={reqPrefill} />
         <NearbyCities onCity={onCity} />
-        {!adFree && <AdSlot name="landing" />}
         <footer className="meta">
           Live data from NOAA/NWS &amp; NDBC buoys, maps by Windy. A planning aid, not an official forecast or a navigation tool.
           <div className="footlinks">

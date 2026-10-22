@@ -1,694 +1,57 @@
 import React, { useEffect, useState } from "react";
 import { useAuth, AuthModal } from "./auth.jsx";
-import { CAMS, CAM_KINDS, camSrc, camIsImage, normalizeCustomCam } from "./cams.js";
+import { Icon } from "./admin/ui.jsx";
+import OverviewPage from "./admin/OverviewPage.jsx";
+import AdsPage from "./admin/AdsPage.jsx";
+import SponsorsPage, { HomepagePage, campaignState } from "./admin/SponsorsPage.jsx";
+import CamsPage from "./admin/CamsPage.jsx";
+import { UsersPage, BuiltPagesPage, InboxPage, SystemPage } from "./admin/ManagePages.jsx";
 
-const todayISO = () => new Date().toISOString().slice(0, 10);
-const blankCampaign = () => ({
-  id: "", sponsor: "", start: todayISO(), end: todayISO(),
-  eyebrow: "Today's forecast brought to you by", headline: "", sub: "",
-  cta: "Learn more", href: "", logo: "", bgImage: "",
-  bg: "#304CB2", fg: "#ffffff", accent: "#f9b612", accentFg: "#11151c", hideForAdFree: false,
-});
+// Admin console. Sections are hash-routed (#ads, #users…) so a refresh or a
+// bookmarked link lands on the same page. Everything stored in the site config
+// (ads, sponsors, hero, cams, recipients) is edited locally and saved with one
+// button; users/pages/inbox act immediately through their own endpoints.
+const NAV = [
+  { id: "overview", label: "Overview", icon: "overview" },
+  { group: "Revenue" },
+  { id: "ads", label: "Ads", icon: "ads" },
+  { id: "sponsors", label: "Sponsors", icon: "sponsors" },
+  { group: "Site" },
+  { id: "homepage", label: "Homepage hero", icon: "home" },
+  { id: "cams", label: "Live cams", icon: "cams" },
+  { id: "pages", label: "Built pages", icon: "pages", count: "pages" },
+  { group: "People" },
+  { id: "users", label: "Users", icon: "users" },
+  { id: "inbox", label: "Inbox", icon: "inbox", count: "inbox" },
+  { id: "system", label: "Settings", icon: "settings" },
+];
+const IDS = NAV.filter((n) => n.id).map((n) => n.id);
+const routeFromHash = () => { const h = window.location.hash.slice(1); return IDS.includes(h) ? h : "overview"; };
 
-function Field({ label, hint, children }) {
+function Gate({ title, children }) {
   return (
-    <label className="acct-field">
-      <span>{label}{hint && <em> {hint}</em>}</span>
-      {children}
-    </label>
-  );
-}
-
-// Text URL + an "Upload" button that stores the file and fills in its URL.
-// kind: "image" (default) or "video".
-function ImageField({ label, hint, value, onChange, kind = "image" }) {
-  const [busy, setBusy] = useState(false);
-  const [err, setErr] = useState("");
-  const isVideo = kind === "video";
-  const onFile = async (e) => {
-    const f = e.target.files && e.target.files[0];
-    e.target.value = "";
-    if (!f) return;
-    setBusy(true); setErr("");
-    try {
-      const r = await fetch("/api/admin/upload", { method: "POST", headers: { "Content-Type": f.type }, body: f });
-      const d = await r.json();
-      if (!r.ok) throw new Error(d.error || "Upload failed.");
-      onChange(d.url);
-    } catch (ex) { setErr(ex.message); } finally { setBusy(false); }
-  };
-  return (
-    <div className="acct-field">
-      <span>{label}{hint && <em> {hint}</em>}</span>
-      <div className="admin-upload">
-        <input className="field" value={value || ""} onChange={(e) => onChange(e.target.value)} placeholder="/path, https://…, or upload →" />
-        <label className="cbtn ghost admin-uploadbtn">{busy ? "Uploading…" : "Upload"}
-          <input type="file" accept={isVideo ? "video/*" : "image/*"} onChange={onFile} hidden disabled={busy} />
-        </label>
-      </div>
-      {value && !isVideo && <img className="admin-thumb" src={value} alt="" onError={(e) => { e.target.style.display = "none"; }} />}
-      {value && isVideo && <video className="admin-thumb" src={value} muted loop autoPlay playsInline onError={(e) => { e.target.style.display = "none"; }} />}
-      {err && <div className="modal-err" style={{ marginTop: 6 }}>{err}</div>}
-    </div>
-  );
-}
-
-function CampaignCard({ c, onChange, onRemove, idx }) {
-  const set = (k, v) => onChange({ ...c, [k]: v });
-  const liveNow = c.start && c.start <= todayISO() && todayISO() <= (c.end || c.start);
-  return (
-    <div className="card acct-sec admin-campaign">
-      <div className="admin-camp-head">
-        <h3>{c.sponsor || c.headline || `Campaign ${idx + 1}`} {liveNow && <span className="acct-badge ok">Live today</span>}</h3>
-        <button className="cbtn ghost" onClick={onRemove}>Remove</button>
-      </div>
-      <div className="acct-field-row">
-        <Field label="Sponsor name"><input className="field" value={c.sponsor} onChange={(e) => set("sponsor", e.target.value)} placeholder="Southwest Airlines" /></Field>
-        <Field label="Start date"><input className="field" type="date" value={c.start} onChange={(e) => set("start", e.target.value)} /></Field>
-        <Field label="End date"><input className="field" type="date" value={c.end} onChange={(e) => set("end", e.target.value)} /></Field>
-      </div>
-      <Field label="Eyebrow" hint="(small text above headline)"><input className="field" value={c.eyebrow} onChange={(e) => set("eyebrow", e.target.value)} /></Field>
-      <Field label="Headline"><input className="field" value={c.headline} onChange={(e) => set("headline", e.target.value)} placeholder="Fly Southwest to your next lake weekend" /></Field>
-      <Field label="Subtext"><input className="field" value={c.sub} onChange={(e) => set("sub", e.target.value)} /></Field>
-      <div className="acct-field-row">
-        <Field label="CTA button text"><input className="field" value={c.cta} onChange={(e) => set("cta", e.target.value)} placeholder="Book a flight" /></Field>
-        <Field label="CTA / click URL"><input className="field" value={c.href} onChange={(e) => set("href", e.target.value)} placeholder="https://…" /></Field>
-      </div>
-      <div className="acct-field-row">
-        <ImageField label="Sponsor logo" hint="(upload or URL)" value={c.logo} onChange={(v) => set("logo", v)} />
-        <ImageField label="Hero photo" hint="(optional)" value={c.bgImage} onChange={(v) => set("bgImage", v)} />
-      </div>
-      <div className="acct-field-row admin-colors">
-        <Field label="Background"><input className="field admin-color" type="color" value={c.bg} onChange={(e) => set("bg", e.target.value)} /></Field>
-        <Field label="Text"><input className="field admin-color" type="color" value={c.fg} onChange={(e) => set("fg", e.target.value)} /></Field>
-        <Field label="CTA color"><input className="field admin-color" type="color" value={c.accent} onChange={(e) => set("accent", e.target.value)} /></Field>
-        <Field label="CTA text"><input className="field admin-color" type="color" value={c.accentFg} onChange={(e) => set("accentFg", e.target.value)} /></Field>
-      </div>
-      <label className="admin-check">
-        <input type="checkbox" checked={!!c.hideForAdFree} onChange={(e) => set("hideForAdFree", e.target.checked)} />
-        Hide this takeover from ad-free subscribers
-      </label>
-    </div>
-  );
-}
-
-const fmtDate = (s) => (s ? new Date(s).toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" }) : "—");
-
-// ── Live cams manager ────────────────────────────────────────────────────────
-const LAKES = ["Lake Erie", "Lake Michigan", "Lake Huron", "Lake Ontario", "Lake Superior"];
-const camKindOf = (c) => (c.img ? "img" : c.yt ? "yt" : c.ytChannel ? "ytChannel" : c.angelcam ? "angelcam" : c.wetmet ? "wetmet" : c.ipcamlive ? "ipcamlive" : c.ozolio ? "ozolio" : "");
-const camKindLabelOf = (c) => (CAM_KINDS.find((k) => k.kind === camKindOf(c)) || {}).label || "—";
-const blankCustomCam = () => ({ name: "", lake: "Lake Erie", lat: "", lon: "", kind: "yt", id: "", link: "" });
-
-function StatusDot({ state }) {
-  const label = state === "live" ? "live" : state === "offline" ? "offline" : "unchecked";
-  return <span className={`cam-dot ${state || "unknown"}`} title={label} aria-label={label} />;
-}
-
-function CamPreview({ cam }) {
-  if (!cam) return null;
-  return (
-    <div className="admin-campreview">
-      {camIsImage(cam)
-        ? <img src={cam.img} alt={cam.name} />
-        : <iframe title={cam.name} src={camSrc(cam)} allow="autoplay; fullscreen; encrypted-media" />}
-    </div>
-  );
-}
-
-// Add/edit form for a custom cam. Values stay as strings while typing;
-// normalizeCustomCam validates the finished entry (and powers the preview).
-function CamEditor({ initial, onSave, onCancel }) {
-  const [e, setE] = useState(initial);
-  const [preview, setPreview] = useState(false);
-  const set = (k, v) => { setE((p) => ({ ...p, [k]: v })); setPreview(false); };
-  const cam = normalizeCustomCam(e);
-  const hint = (CAM_KINDS.find((k) => k.kind === e.kind) || {}).hint;
-  return (
-    <div className="admin-camedit">
-      <div className="acct-field-row">
-        <Field label="Cam name" hint="(shown in the picker)"><input className="field" value={e.name} onChange={(ev) => set("name", ev.target.value)} placeholder="Port Clinton · Waterfront" /></Field>
-        <Field label="Lake">
-          <select className="field" value={e.lake} onChange={(ev) => set("lake", ev.target.value)}>
-            {LAKES.map((l) => <option key={l} value={l}>{l}</option>)}
-          </select>
-        </Field>
-      </div>
-      <div className="acct-field-row">
-        <Field label="Latitude"><input className="field" value={e.lat} onChange={(ev) => set("lat", ev.target.value)} placeholder="41.512" inputMode="decimal" /></Field>
-        <Field label="Longitude"><input className="field" value={e.lon} onChange={(ev) => set("lon", ev.target.value)} placeholder="-82.937" inputMode="decimal" /></Field>
-      </div>
-      <div className="acct-field-row">
-        <Field label="Provider">
-          <select className="field" value={e.kind} onChange={(ev) => set("kind", ev.target.value)}>
-            {CAM_KINDS.map((k) => <option key={k.kind} value={k.kind}>{k.label}</option>)}
-          </select>
-        </Field>
-        <Field label={e.kind === "img" ? "Image URL" : "Cam ID"} hint={hint ? `(${hint})` : undefined}>
-          <input className="field" value={e.id} onChange={(ev) => set("id", ev.target.value)} />
-        </Field>
-      </div>
-      {e.kind === "img" && (
-        <Field label="Source page URL" hint="(optional — where “Open this cam” goes)">
-          <input className="field" value={e.link} onChange={(ev) => set("link", ev.target.value)} placeholder="https://…" />
-        </Field>
-      )}
-      {preview && cam && <CamPreview cam={cam} />}
-      <div className="acct-actions">
-        <button className="cbtn" disabled={!cam} onClick={() => onSave(e)}>{cam ? "Done" : "Fill in name, coordinates & ID"}</button>
-        <button className="cbtn ghost" disabled={!cam} onClick={() => setPreview((p) => !p)}>{preview ? "Hide preview" : "Preview"}</button>
-        <button className="cbtn ghost" onClick={onCancel}>Cancel</button>
+    <div className="adm-gate">
+      <div className="adm-gate-card">
+        <img src="/boat-mark-white.png" alt="" width="124" height="41" />
+        <h1>{title}</h1>
+        {children}
       </div>
     </div>
-  );
-}
-
-function CamsPanel({ cfg, setCfg }) {
-  const camCfg = cfg.cams || { disabled: [], custom: [] };
-  const disabled = new Set(camCfg.disabled || []);
-  const custom = camCfg.custom || [];
-  const setCams = (next) => setCfg((c) => ({ ...c, cams: { disabled: [...disabled], custom, ...next } }));
-
-  const toggleBuiltin = (name, on) => {
-    const d = new Set(disabled);
-    if (on) d.delete(name); else d.add(name);
-    setCams({ disabled: [...d] });
-  };
-  const saveCustom = (idx, entry) => {
-    const next = idx == null ? [...custom, entry] : custom.map((c, i) => (i === idx ? entry : c));
-    setCams({ custom: next });
-    setEditing(null); setAdding(false);
-  };
-  const removeCustom = (idx) => { setCams({ custom: custom.filter((_, i) => i !== idx) }); setEditing(null); };
-
-  // Per-lake live check against the SAVED config (the same endpoint the
-  // homepage uses, cache bypassed) — save first, then check.
-  const [stat, setStat] = useState({}); // lake -> { busy, status }
-  const check = async (lake) => {
-    setStat((s) => ({ ...s, [lake]: { busy: true, status: s[lake]?.status } }));
-    try {
-      const r = await fetch(`/marine/cams?lake=${encodeURIComponent(lake)}&fresh=1`);
-      const d = await r.json();
-      setStat((s) => ({ ...s, [lake]: { busy: false, status: d.status || {} } }));
-    } catch {
-      setStat((s) => ({ ...s, [lake]: { busy: false, status: s[lake]?.status } }));
-    }
-  };
-
-  const [preview, setPreview] = useState(null); // cam name currently previewed
-  const [editing, setEditing] = useState(null); // index into custom[]
-  const [adding, setAdding] = useState(false);
-
-  const row = (cam, extra) => {
-    const st = stat[cam.lake || "Lake Erie"]?.status?.[cam.name];
-    const open = preview === cam.name;
-    return (
-      <div className="admin-camrow-wrap" key={cam.name}>
-        <div className={`admin-camrow ${disabled.has(cam.name) ? "off" : ""}`}>
-          <StatusDot state={st} />
-          <span className="admin-camname">{cam.name}</span>
-          <span className="admin-cambadge">{camKindLabelOf(cam)}</span>
-          <button className="linklike" onClick={() => setPreview(open ? null : cam.name)}>{open ? "hide" : "preview"}</button>
-          {extra}
-        </div>
-        {open && <CamPreview cam={cam} />}
-      </div>
-    );
-  };
-
-  return (
-    <section className="card acct-sec">
-      <h2>Live cams</h2>
-      <p className="acct-note" style={{ marginTop: 0 }}>
-        Every feed the site can show, grouped by lake (each spot picks the nearest ones automatically).
-        Turn off a dead feed and it disappears from the site; add your own below. Changes apply when you hit <b>Save changes</b>;
-        “Check now” tests the saved list, and green/red dots mean live/offline (gray = can’t verify — YouTube blocks server checks).
-      </p>
-      {LAKES.map((lake) => {
-        const builtIns = CAMS.filter((c) => (c.lake || "Lake Erie") === lake);
-        const customHere = custom.map((e, i) => [e, i]).filter(([e]) => (e.lake || "Lake Erie") === lake);
-        if (!builtIns.length && !customHere.length) return null;
-        const s = stat[lake];
-        return (
-          <div className="admin-camgroup" key={lake}>
-            <div className="admin-camgroup-head">
-              <h3>{lake}</h3>
-              <button className="linklike" disabled={s?.busy} onClick={() => check(lake)}>{s?.busy ? "checking…" : "↻ Check now"}</button>
-            </div>
-            {builtIns.map((cam) =>
-              row(cam, (
-                <label className="admin-check admin-camtoggle" title={disabled.has(cam.name) ? "Hidden from the site" : "Shown on the site"}>
-                  <input type="checkbox" checked={!disabled.has(cam.name)} onChange={(e) => toggleBuiltin(cam.name, e.target.checked)} />
-                  On
-                </label>
-              ))
-            )}
-            {customHere.map(([e, i]) =>
-              editing === i ? (
-                <CamEditor key={`edit-${i}`} initial={e} onSave={(entry) => saveCustom(i, entry)} onCancel={() => setEditing(null)} />
-              ) : (
-                row({ ...(normalizeCustomCam(e) || { name: e.name || `Custom cam ${i + 1}` }) }, (
-                  <>
-                    <span className="admin-cambadge custom">custom</span>
-                    <button className="linklike" onClick={() => { setEditing(i); setAdding(false); }}>edit</button>
-                    <button className="linklike" onClick={() => removeCustom(i)}>remove</button>
-                  </>
-                ))
-              )
-            )}
-          </div>
-        );
-      })}
-      {adding
-        ? <CamEditor initial={blankCustomCam()} onSave={(entry) => saveCustom(null, entry)} onCancel={() => setAdding(false)} />
-        : <button className="cbtn ghost" onClick={() => { setAdding(true); setEditing(null); }}>+ Add a cam</button>}
-    </section>
-  );
-}
-
-function StatsPanel() {
-  const [s, setS] = useState(null);
-  const [err, setErr] = useState("");
-  const load = async (fresh) => {
-    setErr("");
-    try {
-      const r = await fetch(`/api/admin/stats${fresh ? "?fresh=1" : ""}`);
-      const d = await r.json();
-      if (!r.ok) throw new Error(d.error || "Could not load stats.");
-      setS(d.stats);
-    } catch (e) { setErr(e.message); }
-  };
-  useEffect(() => { load(false); }, []);
-
-  const days = (s && s.signupsByDay) || [];
-  const visitors = (s && s.visitorsByDay) || [];
-  const max = Math.max(1, ...days.map((d) => d.count));
-  const vmax = Math.max(1, ...visitors.map((d) => d.count));
-  const cards = s ? [
-    { k: "Total users", v: s.totalUsers },
-    { k: "Ad-free", v: s.adFree },
-    { k: "Conversion", v: `${s.conversionPct ?? 0}%` },
-    { k: "Active sessions", v: s.activeSessions },
-    { k: "Visitors today", v: s.visitorsToday ?? 0 },
-    { k: "Visitors · 30d", v: s.visitors30 ?? 0 },
-    { k: "New today", v: s.newToday },
-    { k: "New · 30 days", v: s.new30d },
-  ] : [];
-
-  return (
-    <section className="card acct-sec">
-      <div className="card-head">
-        <h2>Traffic &amp; accounts</h2>
-        {s && <button className="linklike" onClick={() => load(true)}>↻ refresh</button>}
-      </div>
-      {err && <div className="modal-err">{err}</div>}
-      {!s && !err && <p className="acct-note" style={{ marginTop: 0 }}>Loading stats…</p>}
-      {s && (
-        <>
-          <div className="stat-cards">
-            {cards.map((c) => <div className="stat-card" key={c.k}><div className="stat-card-v">{c.v}</div><div className="stat-card-k">{c.k}</div></div>)}
-          </div>
-          <div className="stat-chart-head">New signups · last 30 days</div>
-          <div className="stat-chart" role="img" aria-label="Signups per day, last 30 days">
-            {days.map((d) => (
-              <div className="stat-bar-wrap" key={d.date} title={`${d.date}: ${d.count}`}>
-                <div className="stat-bar" style={{ height: `${Math.round((d.count / max) * 100)}%` }} />
-              </div>
-            ))}
-          </div>
-          <div className="stat-chart-x"><span>{days[0]?.date.slice(5)}</span><span>today</span></div>
-
-          <div className="stat-chart-head" style={{ marginTop: "var(--s4)" }}>Daily visitors · last 30 days <span style={{ color: "var(--text-faint)", textTransform: "none", letterSpacing: 0, fontWeight: "var(--fw-regular)" }}>· first-party, {s.visits30 ?? 0} visits/30d</span></div>
-          <div className="stat-chart" role="img" aria-label="Visitors per day, last 30 days">
-            {visitors.map((d) => (
-              <div className="stat-bar-wrap" key={d.date} title={`${d.date}: ${d.count}`}>
-                <div className="stat-bar visitors" style={{ height: `${Math.round((d.count / vmax) * 100)}%` }} />
-              </div>
-            ))}
-          </div>
-          <div className="stat-chart-x"><span>{visitors[0]?.date.slice(5)}</span><span>today</span></div>
-
-          <p className="acct-note">
-            Sign-in: <b>{s.via.google} Google</b> · <b>{s.via.password} email</b> · <b>{s.withBoat}</b> with a boat profile.
-            {s.capped ? " (user counts capped at 1,000 — paginate for more.)" : ""}
-          </p>
-          <p className="acct-note" style={{ marginTop: 0 }}>
-            Visitors are first-party &amp; cookieless (counts everyone, even cookie-decliners). For full traffic breakdowns
-            (sources, geography, pages) see Google Analytics — also wired in.
-          </p>
-        </>
-      )}
-    </section>
-  );
-}
-
-function UsersPanel() {
-  const [q, setQ] = useState("");
-  const [results, setResults] = useState(null);
-  const [sel, setSel] = useState(null); // detailed user view
-  const [busy, setBusy] = useState(false);
-  const [err, setErr] = useState("");
-
-  const search = async () => {
-    setBusy(true); setErr(""); setSel(null);
-    try {
-      const r = await fetch(`/api/admin/users?q=${encodeURIComponent(q.trim())}`);
-      const d = await r.json();
-      if (!r.ok) throw new Error(d.error || "Search failed.");
-      setResults(d.users);
-    } catch (e) { setErr(e.message); } finally { setBusy(false); }
-  };
-  const open = async (email) => {
-    setBusy(true); setErr("");
-    try {
-      const r = await fetch(`/api/admin/user?email=${encodeURIComponent(email)}`);
-      const d = await r.json();
-      if (!r.ok) throw new Error(d.error || "Could not load user.");
-      setSel(d.user);
-    } catch (e) { setErr(e.message); } finally { setBusy(false); }
-  };
-  const setFlag = async (patch) => {
-    if (!sel) return;
-    setBusy(true); setErr("");
-    try {
-      const r = await fetch("/api/admin/user", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ email: sel.email, ...patch }) });
-      const d = await r.json();
-      if (!r.ok) throw new Error(d.error || "Update failed.");
-      setSel(d.user);
-      setResults((rs) => rs && rs.map((u) => (u.email === d.user.email ? { ...u, adFree: d.user.adFree } : u)));
-    } catch (e) { setErr(e.message); } finally { setBusy(false); }
-  };
-  const [resetMsg, setResetMsg] = useState("");
-  const sendReset = async () => {
-    if (!sel) return;
-    setBusy(true); setErr(""); setResetMsg("");
-    try {
-      const r = await fetch("/api/admin/user", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ email: sel.email, action: "sendReset" }) });
-      const d = await r.json();
-      if (!r.ok) throw new Error(d.error || "Could not send.");
-      setResetMsg(d.emailSent ? "Reset link emailed ✓" : `Logged, but email not sent (${d.emailError || "BREVO_API_KEY not set"}).`);
-    } catch (e) { setErr(e.message); } finally { setBusy(false); }
-  };
-
-  const p = (sel && sel.prefs) || {};
-  return (
-    <section className="card acct-sec">
-      <h2>Users</h2>
-      <div className="admin-upload" style={{ marginBottom: "var(--s3)" }}>
-        <input className="field" value={q} placeholder="Search by email (blank = recent users)"
-          onChange={(e) => setQ(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") search(); }} />
-        <button className="cbtn admin-uploadbtn" disabled={busy} onClick={search}>{busy ? "…" : "Search"}</button>
-      </div>
-      {err && <div className="modal-err">{err}</div>}
-
-      {results && !sel && (
-        results.length === 0 ? <p className="acct-note">No users found.</p> : (
-          <div className="admin-userlist">
-            {results.map((u) => (
-              <button key={u.email} className="admin-userrow" onClick={() => open(u.email)}>
-                <span className="admin-useremail">{u.email}</span>
-                <span className={`acct-pill ${u.adFree ? "ok" : ""}`}>{u.adFree ? "Ad-free" : "Free"}</span>
-              </button>
-            ))}
-          </div>
-        )
-      )}
-
-      {sel && (
-        <div className="admin-userdetail">
-          <button className="linklike" onClick={() => setSel(null)}>← back to results</button>
-          <div className="acct-kv"><span>Email</span><b>{sel.email}</b></div>
-          <div className="acct-kv"><span>Member since</span><b>{fmtDate(sel.created)}</b></div>
-          <div className="acct-kv"><span>Sign-in</span><b>{sel.via === "google" ? "Google" : "Email & password"}</b></div>
-          <div className="acct-kv"><span>Plan</span><b>{sel.adFree ? "Ad-free" : "Free"}</b></div>
-          <div className="acct-kv"><span>Stripe subscription</span><b>{sel.hasSubscription ? "Active sub on file" : "—"}</b></div>
-          <div className="acct-kv"><span>Stripe customer</span><b>{sel.hasStripeCustomer ? "Yes" : "—"}</b></div>
-          <div className="acct-kv"><span>Boat</span><b>{p.boatName || p.boatType || "—"}</b></div>
-          <div className="acct-kv"><span>Comfort limits</span><b>{[p.maxWaveFt != null ? `${p.maxWaveFt} ft` : null, p.maxWindKt != null ? `${p.maxWindKt} kt` : null].filter(Boolean).join(" · ") || "—"}</b></div>
-          <div className="acct-kv"><span>Favorite spots</span><b>{(sel.favoriteSpots || []).length}</b></div>
-
-          <div className="admin-toggles">
-            <label className="admin-check">
-              <input type="checkbox" checked={!!sel.adFree} disabled={busy} onChange={(e) => setFlag({ adFree: e.target.checked })} />
-              Ad-free (manual override)
-            </label>
-            <p className="acct-note" style={{ marginTop: 0 }}>Grants/revokes ad-free directly. This is a manual flag — it doesn't start or cancel Stripe billing.</p>
-            <div className="acct-actions" style={{ marginTop: "var(--s3)" }}>
-              <button className="cbtn ghost" disabled={busy || sel.via === "google"} onClick={sendReset}>Email password reset link</button>
-              {sel.via === "google" && <span className="acct-note">Google account — no password to reset.</span>}
-              {resetMsg && <span className={resetMsg.includes("✓") ? "acct-saved" : "acct-note"}>{resetMsg}</span>}
-            </div>
-          </div>
-        </div>
-      )}
-    </section>
-  );
-}
-
-function DiagnosticsPanel() {
-  const [data, setData] = useState(null);
-  const [err, setErr] = useState("");
-  const load = async () => {
-    setErr("");
-    try {
-      const r = await fetch("/api/billing-status");
-      const d = await r.json();
-      if (!r.ok) throw new Error(d.error || "Could not load.");
-      setData(d);
-    } catch (e) { setErr(e.message); }
-  };
-  useEffect(() => { load(); }, []);
-  const Dot = ({ ok }) => <b className={ok ? "notif-ok" : "notif-off"}>{ok ? "✓ configured" : "✕ not set"}</b>;
-  return (
-    <section className="card acct-sec">
-      <div className="card-head">
-        <h2>Diagnostics</h2>
-        {data && <button className="linklike" onClick={load}>↻ refresh</button>}
-      </div>
-      <p className="acct-note" style={{ marginTop: 0 }}>Live check of the secrets this Worker can see. Set them in Cloudflare → Worker → Settings → Variables and Secrets.</p>
-      {err && <div className="modal-err">{err}</div>}
-      {data && (
-        <>
-          <div className="acct-kv"><span>Email ({data.email?.provider || "brevo"})</span><Dot ok={data.email?.present} /></div>
-          <div className="acct-kv"><span>Stripe secret key{data.secretKey?.present ? ` · ${data.secretKey.mode}` : ""}</span><Dot ok={data.secretKey?.present} /></div>
-          <div className="acct-kv"><span>Stripe webhook secret</span><Dot ok={data.webhookSecret?.present} /></div>
-        </>
-      )}
-    </section>
-  );
-}
-
-function CspPanel() {
-  const [data, setData] = useState(null);
-  const [err, setErr] = useState("");
-  const load = async () => {
-    setErr("");
-    try {
-      const r = await fetch("/api/admin/csp-reports");
-      const d = await r.json();
-      if (!r.ok) throw new Error(d.error || "Could not load.");
-      setData(d.reports);
-    } catch (e) { setErr(e.message); }
-  };
-  useEffect(() => { load(); }, []);
-  return (
-    <section className="card acct-sec">
-      <div className="card-head">
-        <h2>CSP report-only violations</h2>
-        {data && <button className="linklike" onClick={load}>↻ refresh</button>}
-      </div>
-      <p className="acct-note" style={{ marginTop: 0 }}>What a stricter Content-Security-Policy <em>would</em> block (nothing is blocked yet). Use this to tighten the allowlist before enforcing.</p>
-      {err && <div className="modal-err">{err}</div>}
-      {data && data.length === 0 && <p className="acct-note">No violations reported.</p>}
-      {data && data.map((r, i) => (
-        <div className="acct-kv admin-notif" key={i}>
-          <span><b>{r.directive}</b> · {r.blocked || "inline"}</span>
-          <b className="notif-off">{fmtDate(r.timestamp)}</b>
-        </div>
-      ))}
-    </section>
-  );
-}
-
-function NotificationsPanel() {
-  const [items, setItems] = useState(null);
-  const [err, setErr] = useState("");
-  const load = async () => {
-    setErr("");
-    try {
-      const r = await fetch("/api/admin/notifications");
-      const d = await r.json();
-      if (!r.ok) throw new Error(d.error || "Could not load.");
-      setItems(d.notifications);
-    } catch (e) { setErr(e.message); }
-  };
-  useEffect(() => { load(); }, []);
-  return (
-    <section className="card acct-sec">
-      <div className="card-head">
-        <h2>Notifications</h2>
-        {items && <button className="linklike" onClick={load}>↻ refresh</button>}
-      </div>
-      <p className="acct-note" style={{ marginTop: 0 }}>Recent email events (signups, password resets). Logged even if email delivery is off.</p>
-      {err && <div className="modal-err">{err}</div>}
-      {items && items.length === 0 && <p className="acct-note">No notifications yet.</p>}
-      {items && items.map((n, i) => (
-        <div className="admin-notif-row" key={i}>
-          <div className="acct-kv admin-notif">
-            <span><b>{n.type}</b>{n.email ? ` · ${n.email}` : ""}</span>
-            <b className={n.emailSent ? "notif-ok" : "notif-off"}>
-              {n.emailSent ? "sent" : "logged"} · {fmtDate(n.timestamp)}
-            </b>
-          </div>
-          {!n.emailSent && n.emailError && <div className="admin-notif-err">⚠ {n.emailError}</div>}
-        </div>
-      ))}
-    </section>
-  );
-}
-
-// Demand list from the homepage "Request a location" form: where boaters want
-// coverage next, and any webcam URLs they handed us (the un-automatable part).
-function LocationRequestsPanel() {
-  const [items, setItems] = useState(null);
-  const [err, setErr] = useState("");
-  const load = async () => {
-    setErr("");
-    try {
-      const r = await fetch("/api/admin/location-requests");
-      const d = await r.json();
-      if (!r.ok) throw new Error(d.error || "Could not load.");
-      setItems(d.requests);
-    } catch (e) { setErr(e.message); }
-  };
-  useEffect(() => { load(); }, []);
-  return (
-    <section className="card acct-sec">
-      <div className="card-head">
-        <h2>Location requests</h2>
-        {items && <button className="linklike" onClick={load}>↻ refresh</button>}
-      </div>
-      <p className="acct-note" style={{ marginTop: 0 }}>Where boaters have asked for coverage. Use it to prioritize new spots and to collect local webcam URLs.</p>
-      {err && <div className="modal-err">{err}</div>}
-      {items && items.length === 0 && <p className="acct-note">No requests yet.</p>}
-      {items && items.map((r, i) => (
-        <div className="admin-notif-row" key={i}>
-          <div className="acct-kv admin-notif">
-            <span><b>{r.location}</b>{r.email ? ` · ${r.email}` : ""}</span>
-            <b className="notif-off">{fmtDate(r.at)}</b>
-          </div>
-          {r.webcam && <div className="acct-note" style={{ margin: "2px 0 0" }}>📷 <a href={r.webcam} target="_blank" rel="noopener noreferrer nofollow">{r.webcam}</a></div>}
-          {r.note && <div className="acct-note" style={{ margin: "2px 0 0" }}>{r.note}</div>}
-        </div>
-      ))}
-    </section>
-  );
-}
-
-// Webcam suggestions from spot pages ("these cams are wrong / here's a better
-// one"). Add the winners via the Live cams panel above.
-function CamRequestsPanel() {
-  const [items, setItems] = useState(null);
-  const [err, setErr] = useState("");
-  const load = async () => {
-    setErr("");
-    try {
-      const r = await fetch("/api/admin/cam-requests");
-      const d = await r.json();
-      if (!r.ok) throw new Error(d.error || "Could not load.");
-      setItems(d.requests);
-    } catch (e) { setErr(e.message); }
-  };
-  useEffect(() => { load(); }, []);
-  return (
-    <section className="card acct-sec">
-      <div className="card-head">
-        <h2>Webcam suggestions</h2>
-        {items && <button className="linklike" onClick={load}>↻ refresh</button>}
-      </div>
-      <p className="acct-note" style={{ marginTop: 0 }}>Better-cam suggestions from spot pages. Add the good ones through the Live cams panel above.</p>
-      {err && <div className="modal-err">{err}</div>}
-      {items && items.length === 0 && <p className="acct-note">No suggestions yet.</p>}
-      {items && items.map((r, i) => (
-        <div className="admin-notif-row" key={i}>
-          <div className="acct-kv admin-notif">
-            <span><b>{r.spot}</b>{r.email ? ` · ${r.email}` : ""}</span>
-            <b className="notif-off">{fmtDate(r.at)}</b>
-          </div>
-          {r.webcam && <div className="acct-note" style={{ margin: "2px 0 0" }}>📷 <a href={r.webcam} target="_blank" rel="noopener noreferrer nofollow">{r.webcam}</a></div>}
-          {r.note && <div className="acct-note" style={{ margin: "2px 0 0" }}>{r.note}</div>}
-          {r.current && <div className="acct-note" style={{ margin: "2px 0 0", color: "var(--text-faint)" }}>was showing: {r.current}</div>}
-        </div>
-      ))}
-    </section>
-  );
-}
-
-// User-built pages (self-serve "build a page"). Feature to index + list them in
-// the directory; disable to hide; delete to remove. Pending pages are live by
-// direct link but stay noindex and out of the directory until featured.
-function BuiltPagesPanel() {
-  const [items, setItems] = useState(null);
-  const [err, setErr] = useState("");
-  const [busy, setBusy] = useState("");
-  const load = async () => {
-    setErr("");
-    try {
-      const r = await fetch("/api/admin/built-spots");
-      const d = await r.json();
-      if (!r.ok) throw new Error(d.error || "Could not load.");
-      setItems(d.spots);
-    } catch (e) { setErr(e.message); }
-  };
-  useEffect(() => { load(); }, []);
-  const act = async (slug, action) => {
-    if (action === "delete" && !window.confirm("Delete this page for good?")) return;
-    setBusy(slug + action); setErr("");
-    try {
-      const r = await fetch("/api/admin/built-spot", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ slug, action }) });
-      const d = await r.json();
-      if (!r.ok) throw new Error(d.error || "Action failed.");
-      await load();
-    } catch (e) { setErr(e.message); } finally { setBusy(""); }
-  };
-  return (
-    <section className="card acct-sec">
-      <div className="card-head">
-        <h2>Built pages</h2>
-        {items && <button className="linklike" onClick={load}>↻ refresh</button>}
-      </div>
-      <p className="acct-note" style={{ marginTop: 0 }}>Pages visitors built for their own spots. <b>Feature</b> to index + show in the directory; <b>disable</b> to hide; <b>delete</b> to remove. Un-featured pages work by direct link but stay out of search.</p>
-      {err && <div className="modal-err">{err}</div>}
-      {items && items.length === 0 && <p className="acct-note">No built pages yet.</p>}
-      {items && items.map((b) => (
-        <div className="admin-notif-row" key={b.slug}>
-          <div className="acct-kv admin-notif">
-            <span>
-              <a href={`/spot/${b.slug}`} target="_blank" rel="noopener noreferrer"><b>{b.name}</b></a>
-              {" · "}{b.lake}{b.zone ? ` (${b.zone})` : ""}
-              {b.featured && <span className="acct-badge ok" style={{ marginLeft: 6 }}>Featured</span>}
-              {b.disabled && <span className="acct-badge" style={{ marginLeft: 6 }}>Disabled</span>}
-            </span>
-            <b className="notif-off">{fmtDate(b.createdAt)}</b>
-          </div>
-          <div className="built-actions">
-            <button className="linklike" disabled={!!busy} onClick={() => act(b.slug, b.featured ? "unfeature" : "feature")}>{b.featured ? "Unfeature" : "Feature"}</button>
-            <button className="linklike" disabled={!!busy} onClick={() => act(b.slug, b.disabled ? "enable" : "disable")}>{b.disabled ? "Enable" : "Disable"}</button>
-            <button className="linklike danger-link" disabled={!!busy} onClick={() => act(b.slug, "delete")}>Delete</button>
-          </div>
-        </div>
-      ))}
-    </section>
   );
 }
 
 export default function AdminPage() {
   const auth = useAuth();
   const [cfg, setCfg] = useState(null);
+  const [saved, setSaved] = useState("");
   const [status, setStatus] = useState("loading"); // loading | ok | unauth | forbidden | error
   const [msg, setMsg] = useState("");
   const [saving, setSaving] = useState(false);
+  const [toast, setToast] = useState("");
   const [modal, setModal] = useState(false);
+  const [route, setRoute] = useState(routeFromHash);
+  const [navOpen, setNavOpen] = useState(false);
+  const [counts, setCounts] = useState({ pages: 0, inbox: 0 });
 
   const load = async () => {
     try {
@@ -696,7 +59,7 @@ export default function AdminPage() {
       if (r.status === 401) { setStatus("unauth"); return; }
       if (r.status === 403) { const d = await r.json().catch(() => ({})); setMsg(d.error || "Forbidden."); setStatus("forbidden"); return; }
       const d = await r.json();
-      setCfg(d.config); setStatus("ok");
+      setCfg(d.config); setSaved(JSON.stringify(d.config)); setStatus("ok");
     } catch { setStatus("error"); }
   };
   useEffect(() => {
@@ -705,132 +68,119 @@ export default function AdminPage() {
     load();
   }, [auth.user]);
 
+  // Badge counts for the sidebar, fetched once; the pages refresh them on visit.
+  useEffect(() => {
+    if (status !== "ok") return;
+    const get = (u, f) => fetch(u).then((r) => (r.ok ? r.json() : null)).then(f).catch(() => 0);
+    get("/api/admin/built-spots", (d) => (d?.spots || []).filter((b) => !b.featured && !b.disabled).length).then((n) => setCounts((c) => ({ ...c, pages: n || 0 })));
+    Promise.all([get("/api/admin/location-requests", (d) => (d?.requests || []).length), get("/api/admin/cam-requests", (d) => (d?.requests || []).length)])
+      .then(([a, b]) => setCounts((c) => ({ ...c, inbox: (a || 0) + (b || 0) })));
+  }, [status]);
+
+  useEffect(() => {
+    const on = () => { setRoute(routeFromHash()); setNavOpen(false); window.scrollTo(0, 0); };
+    window.addEventListener("hashchange", on);
+    return () => window.removeEventListener("hashchange", on);
+  }, []);
+  const go = (id) => { window.location.hash = id; };
+
+  const dirty = cfg && JSON.stringify(cfg) !== saved;
+  useEffect(() => {
+    if (!dirty) return;
+    const warn = (e) => { e.preventDefault(); e.returnValue = ""; };
+    window.addEventListener("beforeunload", warn);
+    return () => window.removeEventListener("beforeunload", warn);
+  }, [dirty]);
+
   const save = async () => {
-    setSaving(true); setMsg("");
+    setSaving(true); setToast("");
     try {
       const r = await fetch("/api/admin/config", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ config: cfg }) });
       const d = await r.json();
       if (!r.ok) throw new Error(d.error || "Save failed.");
-      setCfg(d.config); setMsg("Saved ✓ — live on the homepage now.");
-    } catch (e) { setMsg(e.message); } finally { setSaving(false); }
+      setCfg(d.config); setSaved(JSON.stringify(d.config));
+      setToast("Saved. Live on the site now.");
+      setTimeout(() => setToast(""), 3500);
+    } catch (e) { setToast(e.message); } finally { setSaving(false); }
   };
+  const discard = () => { setCfg(JSON.parse(saved)); setToast(""); };
+  // Cmd/Ctrl+S saves.
+  useEffect(() => {
+    const k = (e) => { if ((e.metaKey || e.ctrlKey) && e.key === "s" && dirty) { e.preventDefault(); save(); } };
+    window.addEventListener("keydown", k);
+    return () => window.removeEventListener("keydown", k);
+  });
 
-  const setHero = (k, v) => setCfg((c) => ({ ...c, hero: { ...c.hero, [k]: v } }));
-  const setCampaign = (i, next) => setCfg((c) => ({ ...c, takeovers: c.takeovers.map((t, j) => (j === i ? next : t)) }));
-  const addCampaign = () => setCfg((c) => ({ ...c, takeovers: [...c.takeovers, blankCampaign()] }));
-  const removeCampaign = (i) => setCfg((c) => ({ ...c, takeovers: c.takeovers.filter((_, j) => j !== i) }));
+  if (status === "loading") return <Gate title="Admin"><p className="adm-muted">Loading…</p></Gate>;
+  if (status === "unauth") return (
+    <Gate title="Sign in to admin">
+      <p>Use the owner account.</p>
+      <button className="adm-btn" onClick={() => setModal(true)}>Sign in</button>
+      <a className="adm-gate-back" href="/">← Back to shouldiboat.com</a>
+      {modal && <AuthModal auth={auth} onClose={() => setModal(false)} />}
+    </Gate>
+  );
+  if (status === "forbidden") return (
+    <Gate title="Not authorized">
+      <p>{msg || "This account isn't the admin."}</p>
+      <p className="adm-muted">Signed in as {auth.user?.email}. The admin is set by the <code>ADMIN_EMAIL</code> variable on the Worker.</p>
+      <a className="adm-gate-back" href="/">← Back to shouldiboat.com</a>
+    </Gate>
+  );
+  if (status === "error" || !cfg) return <Gate title="Couldn't load admin"><button className="adm-btn" onClick={load}>Retry</button></Gate>;
+
+  const liveSponsor = cfg.takeovers.some((t) => campaignState(t) === "live");
+  const props = { cfg, setCfg, go, counts };
+  const page = {
+    overview: <OverviewPage {...props} />,
+    ads: <AdsPage {...props} />,
+    sponsors: <SponsorsPage {...props} />,
+    homepage: <HomepagePage {...props} />,
+    cams: <CamsPage {...props} />,
+    pages: <BuiltPagesPage onCount={(n) => setCounts((c) => ({ ...c, pages: n }))} />,
+    users: <UsersPage />,
+    inbox: <InboxPage onCount={(n) => setCounts((c) => ({ ...c, inbox: n }))} />,
+    system: <SystemPage {...props} />,
+  }[route];
 
   return (
-    <div className="acctpage">
-      <header className="acctpage-header">
-        <a className="acctpage-back" href="/">← Back to site</a>
-        <a className="acctpage-brand" href="/"><img className="logo" width="248" height="82" src="/boat-mark-white.png" alt="" /><span>shouldiboat.com · Admin</span></a>
-      </header>
+    <div className={`adm${navOpen ? " nav-open" : ""}`}>
+      <aside className="adm-side">
+        <div className="adm-brand">
+          <a href="/" aria-label="shouldiboat.com home"><img src="/boat-mark-white.png" alt="" width="88" height="29" /></a>
+          <div><b>shouldiboat</b><span>Admin</span></div>
+          <button className="adm-navtoggle" onClick={() => setNavOpen((o) => !o)} aria-label="Menu" aria-expanded={navOpen}><Icon name={navOpen ? "x" : "menu"} size={20} /></button>
+        </div>
+        <nav className="adm-nav">
+          {NAV.map((n, i) => n.group ? <div key={i} className="adm-nav-group">{n.group}</div> : (
+            <a key={n.id} href={`#${n.id}`} className={route === n.id ? "on" : ""} aria-current={route === n.id ? "page" : undefined}>
+              <Icon name={n.icon} size={17} />
+              <span>{n.label}</span>
+              {n.id === "sponsors" && liveSponsor && <i className="adm-nav-live" title="A sponsor is live today" />}
+              {n.count && counts[n.count] > 0 && <em>{counts[n.count]}</em>}
+            </a>
+          ))}
+        </nav>
+        <div className="adm-side-foot">
+          <a href="/" target="_blank" rel="noopener"><Icon name="external" size={14} /> View site</a>
+          <span title={auth.user?.email}>{auth.user?.email}</span>
+        </div>
+      </aside>
 
-      <main className="acctpage-main admin-main">
-        <h1 className="acctpage-title">Site admin</h1>
-
-        {status === "loading" && <p className="acct-note">Loading…</p>}
-
-        {status === "unauth" && (
-          <section className="card acct-sec">
-            <h2>Sign in</h2>
-            <p className="acct-lead">Sign in with the admin account to manage the homepage.</p>
-            <button className="cbtn" onClick={() => setModal(true)}>Sign in</button>
-            {modal && <AuthModal auth={auth} onClose={() => { setModal(false); }} />}
-          </section>
-        )}
-
-        {status === "forbidden" && (
-          <section className="card acct-sec">
-            <h2>Not authorized</h2>
-            <p className="acct-lead">{msg || "This account isn't the admin."}</p>
-            <p className="acct-note">The admin is set by the <code>ADMIN_EMAIL</code> environment variable on the Worker.</p>
-          </section>
-        )}
-
-        {status === "error" && <section className="card acct-sec"><p className="acct-lead">Couldn't load admin config. <button className="linklike" onClick={load}>Retry</button></p></section>}
-
-        {status === "ok" && cfg && (
-          <>
-            <StatsPanel />
-
-            {/* Hero */}
-            <section className="card acct-sec">
-              <h2>Homepage hero</h2>
-              <p className="acct-note" style={{ marginTop: 0 }}>Shown when no sponsor takeover is running.</p>
-              <ImageField label="Background image" hint="(upload a photo, or /hero-sunset.svg)" value={cfg.hero.image} onChange={(v) => setHero("image", v)} />
-              <p className="acct-note" style={{ marginTop: 0 }}>Tip: a wide landscape photo works best — text sits over a darkened left edge.</p>
-              <ImageField label="Background video" hint="(optional — overrides the image; muted loop. ≤12 MB upload, or a Stream/R2/hosted URL)" value={cfg.hero.video} onChange={(v) => setHero("video", v)} kind="video" />
-              <p className="acct-note" style={{ marginTop: 0 }}>The image above is used as the poster/fallback (mobile data-saver & iOS Low Power won't autoplay video).</p>
-              <Field label="Headline" hint="(use {spot} to insert the chosen spot)">
-                <input className="field" value={cfg.hero.headline} onChange={(e) => setHero("headline", e.target.value)} />
-              </Field>
-              <Field label="Subtext" hint="(shown when no live verdict)">
-                <input className="field" value={cfg.hero.sub} onChange={(e) => setHero("sub", e.target.value)} />
-              </Field>
-              <label className="admin-check">
-                <input type="checkbox" checked={cfg.hero.showVerdict !== false} onChange={(e) => setHero("showVerdict", e.target.checked)} />
-                Show the live GO / CAUTION / NO-GO verdict in the hero
-              </label>
-            </section>
-
-            <CamsPanel cfg={cfg} setCfg={setCfg} />
-
-            {/* Takeovers */}
-            <section className="card acct-sec">
-              <h2>Sponsor takeovers</h2>
-              <p className="acct-note" style={{ marginTop: 0 }}>The campaign whose date range includes today takes over the homepage (full-page skin + hero). First match wins.</p>
-            </section>
-            {cfg.takeovers.map((c, i) => (
-              <CampaignCard key={c.id || i} c={c} idx={i} onChange={(next) => setCampaign(i, next)} onRemove={() => removeCampaign(i)} />
-            ))}
-            <button className="cbtn ghost" onClick={addCampaign}>+ Add takeover campaign</button>
-
-            {/* GAM */}
-            <section className="card acct-sec" style={{ marginTop: "var(--s5)" }}>
-              <h2>Programmatic ads (Google Ad Manager)</h2>
-              <p className="acct-note" style={{ marginTop: 0 }}>Fallback takeover when no direct campaign is live. Leave blank to keep off. Hidden from ad-free subscribers.</p>
-              <Field label="GAM network code" hint="(digits only)">
-                <input className="field" value={cfg.gam.networkCode} onChange={(e) => setCfg((c) => ({ ...c, gam: { ...c.gam, networkCode: e.target.value } }))} placeholder="e.g. 23001234567" />
-              </Field>
-            </section>
-
-            {/* Notification recipients */}
-            <section className="card acct-sec" style={{ marginTop: "var(--s5)" }}>
-              <h2>Notification recipients</h2>
-              <p className="acct-note" style={{ marginTop: 0 }}>Who gets emailed on new signups and other admin notices. Comma-separated. Leave blank to default to the owner account.</p>
-              <Field label="Recipient emails" hint="(comma-separated)">
-                <input
-                  className="field"
-                  value={(cfg.notifyEmails || []).join(", ")}
-                  onChange={(e) => setCfg((c) => ({ ...c, notifyEmails: e.target.value.split(",").map((s) => s.trim()).filter(Boolean) }))}
-                  placeholder="you@example.com, ops@example.com"
-                />
-              </Field>
-            </section>
-
-            <UsersPanel />
-
-            <DiagnosticsPanel />
-
-            <CspPanel />
-
-            <BuiltPagesPanel />
-
-            <CamRequestsPanel />
-
-            <LocationRequestsPanel />
-
-            <NotificationsPanel />
-
-            <div className="admin-savebar">
-              <button className="cbtn" disabled={saving} onClick={save}>{saving ? "Saving…" : "Save changes"}</button>
-              {msg && <span className={msg.includes("✓") ? "acct-saved" : "modal-err"}>{msg}</span>}
-            </div>
-          </>
-        )}
+      <main className="adm-main">
+        {page}
       </main>
+
+      <div className={`adm-savebar${dirty || toast ? " show" : ""}${toast && !dirty ? " done" : ""}`} role="status">
+        {dirty ? (
+          <>
+            <span><i className="adm-dirty-dot" /> Unsaved changes</span>
+            <button className="adm-btn ghost sm" onClick={discard} disabled={saving}>Discard</button>
+            <button className="adm-btn sm" onClick={save} disabled={saving}>{saving ? "Saving…" : "Save changes"}</button>
+          </>
+        ) : <span>{toast}</span>}
+        {dirty && toast && <span className="adm-error">{toast}</span>}
+      </div>
     </div>
   );
 }

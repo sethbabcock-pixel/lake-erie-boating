@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { activeTakeover, GAM } from "./sponsor.js";
+import { loadSiteConfig } from "./siteConfig.js";
 
 const vclass = (v) => (v === "NO-GO" ? "nogo" : v === "CAUTION" ? "caution" : "go");
 const DEFAULT_HERO = { image: "/hero-sunset.svg", video: "", headline: "Should I boat{spot} today?", sub: "", showVerdict: true };
@@ -123,10 +124,11 @@ export default function Takeover({ adFree, spotName, verdict, splash = false, ch
   const [cfg, setCfg] = useState({ hero: DEFAULT_HERO, takeover: null, gam: { networkCode: "" }, loaded: false });
   useEffect(() => {
     let alive = true;
-    fetch("/api/site-config")
-      .then((r) => (r.ok ? r.json() : null))
-      .then((d) => { if (alive && d) setCfg({ hero: { ...DEFAULT_HERO, ...(d.hero || {}) }, takeover: d.takeover || null, gam: d.gam || {}, loaded: true }); })
-      .catch(() => { if (alive) setCfg((c) => ({ ...c, takeover: activeTakeover(), loaded: true })); });
+    loadSiteConfig().then((d) => {
+      if (!alive) return;
+      if (d.ok) setCfg({ hero: { ...DEFAULT_HERO, ...(d.hero || {}) }, takeover: d.takeover || null, gam: d.gam || {}, loaded: true });
+      else setCfg((c) => ({ ...c, takeover: activeTakeover(), loaded: true }));
+    });
     return () => { alive = false; };
   }, []);
 
