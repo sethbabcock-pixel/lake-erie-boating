@@ -269,3 +269,26 @@ select.adm-input { padding-right: 28px; }
   .adm-row { flex-wrap: wrap; }
   .adm-row-btn { flex-wrap: nowrap; }
 }
+
+/* Sponsor targeting */
+.adm-target { display: flex; flex-direction: column; gap: var(--s3); padding: var(--s4); border: 1px solid var(--border); border-radius: var(--r-md); background: var(--bg); }
+.adm-seg { display: inline-flex; align-self: flex-start; border: 1px solid var(--border-strong); border-radius: var(--r-pill); padding: 3px; gap: 2px; flex-wrap: wrap; }
+.adm-seg button { background: none; border: 0; border-radius: var(--r-pill); padding: 6px 14px; font: inherit; font-size: var(--fs-sm); font-weight: var(--fw-medium); color: var(--text-muted); cursor: pointer; }
+.adm-seg button.on { background: var(--brand); color: #fff; }
+[data-theme="dark"] .adm-seg button.on { color: #04121f; }
+.adm-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.adm-chip { display: inline-flex; align-items: center; gap: 6px; padding: 5px 12px; border-radius: var(--r-pill); border: 1px solid var(--border-strong);
+  background: var(--surface); color: var(--text-muted); font: inherit; font-size: var(--fs-xs); font-weight: var(--fw-semibold); cursor: pointer; }
+.adm-chip.on { border-color: var(--accent); color: var(--text); background: color-mix(in srgb, var(--accent) 16%, var(--surface)); }
+.adm-chip button { background: none; border: 0; color: inherit; font-size: 15px; line-height: 1; cursor: pointer; padding: 0 0 1px; }
+.adm-launchpick { position: relative; max-width: 460px; }
+.adm-launchlist { position: absolute; top: calc(100% + 4px); left: 0; right: 0; z-index: 5; background: var(--surface); border: 1px solid var(--border-strong);
+  border-radius: var(--r-md); box-shadow: var(--shadow-lg); overflow: hidden; }
+.adm-launchlist button { display: flex; justify-content: space-between; gap: var(--s3); width: 100%; text-align: left; background: none; border: 0;
+  border-top: 1px solid var(--border); padding: 9px 12px; font: inherit; font-size: var(--fs-sm); color: var(--text); cursor: pointer; }
+.adm-launchlist button:first-child { border-top: 0; }
+.adm-launchlist button:hover, .adm-launchlist button:focus-visible { background: color-mix(in srgb, var(--accent) 10%, transparent); }
+.adm-launchlist small { color: var(--text-faint); }
+.adm-warnbox { padding: 10px 14px; border-radius: var(--r-md); font-size: var(--fs-sm); color: var(--text);
+  background: color-mix(in srgb, var(--warning) 14%, transparent); border: 1px solid color-mix(in srgb, var(--warning) 40%, transparent); }
+.adm-campstats { max-width: 420px; margin-top: 6px; }

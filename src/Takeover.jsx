@@ -1,6 +1,17 @@
 import React, { useEffect, useState } from "react";
 import { activeTakeover, GAM } from "./sponsor.js";
 import { loadSiteConfig } from "./siteConfig.js";
+import { pickCampaign } from "./sponsor-target.js";
+
+// Sponsor reporting: one view per page shown, one click per click-through.
+// Cookieless; counts land in KV per campaign per day (admin → Sponsors).
+function sponsorHit(id, k) {
+  try {
+    const body = JSON.stringify({ id, k });
+    if (navigator.sendBeacon) navigator.sendBeacon("/api/sponsor-hit", new Blob([body], { type: "application/json" }));
+    else fetch("/api/sponsor-hit", { method: "POST", body, keepalive: true, headers: { "Content-Type": "application/json" } }).catch(() => {});
+  } catch (e) { /* reporting never breaks the page */ }
+}
 
 const vclass = (v) => (v === "NO-GO" ? "nogo" : v === "CAUTION" ? "caution" : "go");
 const DEFAULT_HERO = { image: "/hero-sunset.svg", video: "", headline: "Should I boat{spot} today?", sub: "", showVerdict: true };
@@ -43,7 +54,7 @@ function SponsorSkin({ s }) {
   }, []);
   const bg = s.bgImage ? `${s.bg || "#102036"} url(${s.bgImage}) center/cover no-repeat` : s.bg;
   return (
-    <a className="takeover-skin" href={s.href} target="_blank" rel="sponsored noopener"
+    <a className="takeover-skin" href={s.href} target="_blank" rel="sponsored noopener" onClick={() => sponsorHit(s.id, "c")}
       aria-label={`${s.sponsor} sponsor`} style={{ background: bg }} />
   );
 }
@@ -55,7 +66,7 @@ function SponsorHero({ s, splash, children }) {
     : s.bg;
   return (
     <section className={`hero hero-sponsor${splash ? " hero-splash" : ""}`} style={{ background, color: fg }}>
-      <a className="hero-inner hero-sponsor-link" href={s.href} target="_blank" rel="sponsored noopener" style={{ color: fg }}>
+      <a className="hero-inner hero-sponsor-link" href={s.href} target="_blank" rel="sponsored noopener" style={{ color: fg }} onClick={() => sponsorHit(s.id, "c")}>
         <div className="hero-text">
           <div className="hero-eyebrow">{s.eyebrow || "Sponsored"}</div>
           {s.logo && <img className="hero-logo" src={s.logo} alt={s.sponsor} />}
@@ -120,20 +131,26 @@ function HouseHero({ hero, spotName, verdict, adFree, splash, children, signedIn
 }
 
 // ── Public entry ──────────────────────────────────────────────────────────────
-export default function Takeover({ adFree, spotName, verdict, splash = false, children = null, signedIn = true, onJoin = null }) {
-  const [cfg, setCfg] = useState({ hero: DEFAULT_HERO, takeover: null, gam: { networkCode: "" }, loaded: false });
+// spot / region: where this hero sits (a launch id, a REGIONS slug), so a
+// targeted campaign shows on its own pages (see src/sponsor-target.js).
+export default function Takeover({ adFree, spotName, verdict, splash = false, children = null, signedIn = true, onJoin = null, spot = null, region = null }) {
+  const [cfg, setCfg] = useState({ hero: DEFAULT_HERO, takeovers: [], gam: { networkCode: "" }, loaded: false });
   useEffect(() => {
     let alive = true;
     loadSiteConfig().then((d) => {
       if (!alive) return;
-      if (d.ok) setCfg({ hero: { ...DEFAULT_HERO, ...(d.hero || {}) }, takeover: d.takeover || null, gam: d.gam || {}, loaded: true });
-      else setCfg((c) => ({ ...c, takeover: activeTakeover(), loaded: true }));
+      if (d.ok) setCfg({ hero: { ...DEFAULT_HERO, ...(d.hero || {}) }, takeovers: d.takeovers || (d.takeover ? [d.takeover] : []), gam: d.gam || {}, loaded: true });
+      else { const t = activeTakeover(); setCfg((c) => ({ ...c, takeovers: t ? [t] : [], loaded: true })); }
     });
     return () => { alive = false; };
   }, []);
 
-  const sponsor = cfg.takeover;
+  // region === undefined means "not known yet": hold the house hero.
+  const sponsor = region === undefined ? null : pickCampaign(cfg.takeovers, { spot, region });
   const showSponsor = sponsor && (!adFree || !sponsor.hideForAdFree);
+  // One view per campaign per page (a new launch or region counts again).
+  const viewKey = showSponsor && sponsor.id ? `${sponsor.id}|${spot || ""}|${region || ""}` : "";
+  useEffect(() => { if (viewKey) sponsorHit(sponsor.id, "v"); }, [viewKey]);
   const code = (cfg.gam && cfg.gam.networkCode) || "";
   const showGam = !sponsor && !adFree && /^\d{5,}$/.test(code);
   useGPT(showGam ? code : "");
