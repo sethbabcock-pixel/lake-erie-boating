@@ -782,7 +782,7 @@ export async function handleAuth(request, env, url, ctx) {
     const rec = {
       slug, name, lat, lon,
       zone: mctx.zone, zoneName: mctx.zoneName, office: mctx.office, product: mctx.product,
-      lake: mctx.lake, buoys: [],
+      lake: mctx.lake, buoys: [], water: mctx.water || null, sea: mctx.sea ?? null,
       featured: false, disabled: false,
       createdAt: new Date().toISOString(), createdBy: u.email,
     };
