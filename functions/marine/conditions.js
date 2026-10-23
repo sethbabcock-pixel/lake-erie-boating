@@ -403,11 +403,15 @@ function seawardPoint(spot, stepDeg) {
 }
 const isOpenWater = (spot) => spot.sea != null || !!WATER_CENTERS[spot.lake || "Lake Erie"];
 const GRID_STEPS = [0.035, 0.1, 0.22];
+// Ocean launches are rated on the sea outside the inlet, not the harbor: the
+// first cell off Port Canaveral reads 0-1 ft while 4-6 ft runs offshore. Start
+// ~4 mi out (still well inside the NWS 0-20 NM coastal zone).
+const OCEAN_GRID_STEPS = [0.06, 0.1, 0.22];
 async function fetchSpotGrid(spot) {
   // Open water (lakes, bays, sounds, ocean): nudge seaward until we hit a
   // marine cell that carries waves. Inland waters have no wave grid, so just
   // sample the point once (wind/gusts/precip/temp exist on land; waves blank).
-  const steps = isOpenWater(spot) ? GRID_STEPS : [0];
+  const steps = !isOpenWater(spot) ? [0] : waterProfile(spot) === "ocean" ? OCEAN_GRID_STEPS : GRID_STEPS;
   // Remember which step reached a wave cell, so steady state costs one grid
   // fetch per spot instead of up to three (the directory summary fetches every
   // spot in one request, and Workers cap subrequests per request).
@@ -987,6 +991,8 @@ export function spotFacts(spot) {
     zone: spot.zone || null,
     buoys: (spot.buoys || []).filter(Boolean),
     exposure: windExposure(spot),
+    coastal: !!spot.water && spot.water !== "lake",
+    water: waterProfile(spot),
   };
 }
 
@@ -1148,8 +1154,12 @@ function buildRecommendation({ buoy, alerts, wind, waves, read, hours, profile =
 
   // Wave STEEPNESS — period matters as much as height. Short-period chop is
   // the Great Lakes' signature misery; long-period rollers ride far easier.
+  // On the ocean the scale shifts: anything ~10 s+ is swell, <=6 s is steep.
   const periodSec = waves?.periodSec ?? hours?.[0]?.periodSec ?? null;
-  if (wv != null && wv >= 2 && periodSec) {
+  if (wv != null && wv >= 2 && periodSec && profile === "ocean") {
+    if (periodSec <= 6) reasons.push(`Steep seas: ${wv} ft every ${periodSec}s feels rougher than the number`);
+    else if (periodSec >= 10) reasons.push(`Long-period swell (${periodSec}s): a smoother ride than ${wv} ft suggests, but watch inlets on the ebb`);
+  } else if (wv != null && wv >= 2 && periodSec) {
     if (periodSec <= wv * 2) reasons.push(`Short-period chop: ${wv} ft at ${periodSec}s feels rougher than the number`);
     else if (periodSec >= wv * 3) reasons.push(`Longer-period waves (${periodSec}s): smoother ride than ${wv} ft suggests`);
   }
@@ -1408,11 +1418,28 @@ function summaryTile(id, s, g, nowH) {
 // Lightweight GO/CAUTION/NO-GO + wind/wave for every spot, for the homepage
 // directory. Per-spot NWS grid fetches through a small pool; /points lookups
 // are edge-cached a day and the whole result ~10 min, so the API isn't hammered.
+// Floor each spot's grid waves at its zone's official NWS text forecast (one
+// NSH/CWF fetch per office, not per spot) — the same correction the spot page
+// applies, so a directory tile can't say 1 ft while the spot page says 6.
+async function floorWithMarineText(entries, grids) {
+  const offices = [...new Set(entries.map(([, s]) => `${s.office || "CLE"}|${s.product || "NSH"}`))];
+  const texts = Object.fromEntries(await pooled(offices, 6, async (k) => {
+    const [office, product] = k.split("|");
+    const t = await fetchMarineText(office, product).catch(() => null);
+    return [k, t && t.text];
+  }));
+  entries.forEach(([, s], i) => {
+    const text = texts[`${s.office || "CLE"}|${s.product || "NSH"}`];
+    if (grids[i] && text && s.zone) applyMarineWaveFloor(grids[i], nshPeriodsForZone(text, s.zone));
+  });
+}
+
 export async function fetchSummary(env) {
   // Curated spots + admin-featured user-built pages (both render in the directory).
   const built = await listFeaturedBuiltSpots(env);
   const entries = [...Object.entries(SPOTS), ...built.map((b) => [b.slug, { name: b.name, lat: b.lat, lon: b.lon, zone: b.zone, office: b.office, product: b.product, lake: b.lake, buoys: b.buoys || [], water: b.water || waterFromZone(b.zone, b.zoneName), sea: b.sea ?? null }])];
   const grids = await pooled(entries, 8, ([, s]) => fetchSpotGrid(s));
+  await floorWithMarineText(entries, grids);
   const nowH = Math.floor(Date.now() / 3600000);
   const spots = entries.map(([id, s], i) => summaryTile(id, s, grids[i], nowH));
   return { spots, updatedAt: new Date().toISOString() };

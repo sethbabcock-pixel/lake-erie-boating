@@ -312,7 +312,7 @@ const verifyHtml = (link) => `<div style="font-family:system-ui,-apple-system,sa
   <p style="line-height:1.5;color:#5b6b78;font-size:14px;margin:0 0 12px">Or paste this link into your browser:<br><a href="${link}" style="color:#008BA8;word-break:break-all">${link}</a></p>
   <p style="line-height:1.5;color:#5b6b78;font-size:14px;margin:0">This link expires in 24 hours. If you didn't create a shouldiboat.com account, you can safely ignore this email. No account is activated without confirmation.</p>
   <hr style="border:none;border-top:1px solid #e3e9ee;margin:22px 0">
-  <p style="color:#8a99a6;font-size:12px;margin:0"><a href="https://shouldiboat.com" style="color:#8a99a6">shouldiboat.com</a> · Great Lakes boating conditions</p>
+  <p style="color:#8a99a6;font-size:12px;margin:0"><a href="https://shouldiboat.com" style="color:#8a99a6">shouldiboat.com</a> · Live boating conditions</p>
 </div>`;
 
 // Stable per-user unsubscribe token + reverse index (created lazily, never expires).

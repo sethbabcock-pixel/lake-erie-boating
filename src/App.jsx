@@ -434,6 +434,7 @@ function LaunchNotes({ spot, facts }) {
       <div className="hint">
         How each wind direction plays at this shore. <a href="/guides/wind-direction-and-fetch" target="_blank" rel="noopener">Why direction matters →</a>
         {facts.lake === "Lake Erie" && <> · <a href="/guides/boating-lake-erie" target="_blank" rel="noopener">Boating Lake Erie guide →</a></>}
+        {facts.coastal && <> · <a href="/guides/boating-the-coast" target="_blank" rel="noopener">Boating the coast guide →</a></>}
       </div>
     </section>
   );
@@ -1099,7 +1100,7 @@ export default function App() {
                 <div className="sub">
                   {(() => {
                     const sec = wv.periodSec ?? data.hourly?.[0]?.periodSec ?? null;
-                    const feel = waveFeel(wv.ft, sec);
+                    const feel = waveFeel(wv.ft, sec, data.facts && data.facts.water);
                     return (
                       <>
                         {sec ? `@ ${sec}s between waves` : (wv.source || "—")}
