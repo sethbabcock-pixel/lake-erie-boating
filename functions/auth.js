@@ -15,6 +15,8 @@
 //   GET  /api/admin/notifications   -> admin-only email/notification log
 //   POST /api/hit                   -> public cookieless visit/visitor beacon
 //   POST /api/adstat                -> public sampled ad fill beacon
+//   POST /api/sponsor-hit           -> public sponsor view/click beacon
+//   GET  /api/admin/sponsor-stats   -> admin-only sponsor views/clicks
 //   GET  /api/admin/adstats         -> admin-only ad fill rates by placement/day
 //   GET  /api/admin/stats           -> admin-only account/traffic stats
 //   GET  /api/admin/users           -> admin-only user search
@@ -32,6 +34,7 @@
 
 import { resolveMarineContext } from "./marine/conditions.js";
 import { ADSENSE_DEFAULTS, AD_PLACEMENTS, sanitizeAds } from "../src/ads-config.js";
+import { REGIONS } from "../src/regions.js";
 
 const SESSION_DAYS = 30;
 const enc = new TextEncoder();
@@ -135,6 +138,7 @@ const adminUserView = (u) => ({
   prefs: u.prefs || {},
   favoriteSpots: u.favorites || [],
 });
+const safeUrl = (u) => (/^(https?:\/\/|\/(?!\/))/i.test(u || "") ? u : "");
 function sanitizeSiteConfig(input) {
   const c = input && typeof input === "object" ? input : {};
   const str = (v, n) => (typeof v === "string" ? v.slice(0, n) : "");
@@ -147,7 +151,12 @@ function sanitizeSiteConfig(input) {
     cta: str(t.cta, 40), href: str(t.href, 400), logo: str(t.logo, 400), bgImage: str(t.bgImage, 400),
     bg: str(t.bg, 40), fg: str(t.fg, 40), accent: str(t.accent, 40), accentFg: str(t.accentFg, 40),
     hideForAdFree: !!t.hideForAdFree,
-  })).filter((t) => t.sponsor || t.headline);
+    // Targeting (src/sponsor-target.js): empty both = everywhere.
+    regions: (Array.isArray(t.regions) ? t.regions : []).filter((r) => REGIONS.some((x) => x.slug === r)),
+    spots: [...new Set((Array.isArray(t.spots) ? t.spots : []).map((x) => str(x, 60)).filter((x) => /^[a-z0-9-]{1,60}$/.test(x)))].slice(0, 200),
+  })).filter((t) => t.sponsor || t.headline)
+    // Links render as <a href> for every visitor: only web or site-relative URLs.
+    .map((t) => ({ ...t, href: safeUrl(t.href), logo: safeUrl(t.logo), bgImage: safeUrl(t.bgImage) }));
   return {
     hero: {
       image: str(hero.image, 400) || DEFAULT_SITE_CONFIG.hero.image,
@@ -572,8 +581,12 @@ export async function handleAuth(request, env, url, ctx) {
     const stored = (await env.USERS.get("site:config", "json")) || {};
     const cfg = sanitizeSiteConfig({ ...DEFAULT_SITE_CONFIG, ...stored });
     const today = isoDay();
-    const takeover = cfg.takeovers.find((t) => t.start && t.start <= today && today <= (t.end || t.start)) || null;
-    return json({ hero: cfg.hero, takeover, gam: cfg.gam, ads: cfg.ads });
+    // Every campaign live today; the page picks the most specific match for
+    // its launch/region (src/sponsor-target.js). `takeover` stays for any
+    // cached older client: the first everywhere campaign.
+    const takeovers = cfg.takeovers.filter((t) => t.start && t.start <= today && today <= (t.end || t.start));
+    const takeover = takeovers.find((t) => !t.regions.length && !t.spots.length) || null;
+    return json({ hero: cfg.hero, takeover, takeovers, gam: cfg.gam, ads: cfg.ads });
   }
 
   // ---- admin: read / write full site config ----
@@ -832,6 +845,52 @@ export async function handleAuth(request, env, url, ctx) {
       if (url.searchParams.get("v") === "1") await bump(`uv:${today}`); // a new daily visitor
     }
     return new Response(null, { status: 204 });
+  }
+
+  // ---- sponsor view/click beacon (public, cookieless) ----
+  // Body {id, k:"v"|"c"}. Counts per campaign per UTC day under sp:<id>:<day>
+  // so admin can report views and clicks to the sponsor. Only campaigns that
+  // exist are counted (keeps stray ids from creating keys). Read-modify-write,
+  // so a burst of simultaneous hits can undercount slightly.
+  if (path === "/api/sponsor-hit" && request.method === "POST") {
+    if (env.USERS) {
+      const body = await request.json().catch(() => null);
+      const id = body && typeof body.id === "string" ? body.id.slice(0, 60) : "";
+      const k = body && body.k === "c" ? "c" : "v";
+      const cfg = (await env.USERS.get("site:config", "json").catch(() => null)) || {};
+      if (id && (cfg.takeovers || []).some((t) => t.id === id)) {
+        const key = `sp:${id}:${isoDay()}`;
+        const cur = (await env.USERS.get(key, "json").catch(() => null)) || { v: 0, c: 0 };
+        cur[k] = (cur[k] || 0) + 1;
+        await env.USERS.put(key, JSON.stringify(cur), { expirationTtl: 400 * 86400 });
+      }
+    }
+    return new Response(null, { status: 204 });
+  }
+
+  // ---- admin: sponsor views/clicks per campaign over its run (max 120 days) ----
+  if (path === "/api/admin/sponsor-stats" && request.method === "GET") {
+    const u = await userFromRequest(env, request);
+    if (!u) return json({ error: "Not signed in." }, 401);
+    if (!isAdmin(env, u)) return json({ error: "Forbidden — not an admin account." }, 403);
+    const cfg = sanitizeSiteConfig({ ...DEFAULT_SITE_CONFIG, ...((await env.USERS.get("site:config", "json")) || {}) });
+    const today = isoDay(), DAY = 86400000;
+    const out = {};
+    for (const t of cfg.takeovers) {
+      if (!t.start || t.start > today) { out[t.id] = { views: 0, clicks: 0, days: [] }; continue; }
+      const end = (t.end || t.start) < today ? (t.end || t.start) : today;
+      let d = Date.parse(`${t.start}T00:00:00Z`);
+      const stop = Date.parse(`${end}T00:00:00Z`);
+      if (stop - d > 120 * DAY) d = stop - 120 * DAY;
+      const days = [];
+      for (; d <= stop; d += DAY) {
+        const day = isoDay(new Date(d));
+        const c = (await env.USERS.get(`sp:${t.id}:${day}`, "json").catch(() => null)) || { v: 0, c: 0 };
+        days.push({ date: day, views: c.v || 0, clicks: c.c || 0 });
+      }
+      out[t.id] = { views: days.reduce((a, x) => a + x.views, 0), clicks: days.reduce((a, x) => a + x.clicks, 0), days };
+    }
+    return json({ stats: out });
   }
 
   // ---- sampled ad fill beacon (public, cookieless) ----

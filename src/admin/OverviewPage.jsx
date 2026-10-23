@@ -10,7 +10,11 @@ export default function OverviewPage({ cfg, go, counts }) {
   const s = st.data;
 
   const today = todayISO();
-  const liveCampaign = cfg.takeovers.find((t) => t.start && t.start <= today && today <= (t.end || t.start));
+  const live = cfg.takeovers.filter((t) => t.start && t.start <= today && today <= (t.end || t.start));
+  const isEverywhere = (t) => !(t.regions || []).length && !(t.spots || []).length;
+  // The homepage shows only an everywhere campaign; targeted ones show on their own pages.
+  const liveCampaign = live.find(isEverywhere);
+  const targetedLive = live.filter((t) => !isEverywhere(t)).length;
   const nextCampaign = cfg.takeovers.filter((t) => t.start > today).sort((a, b) => a.start.localeCompare(b.start))[0];
   const liveAds = AD_PLACEMENTS.filter((p) => isSlotId(cfg.ads.slots[p.key]) && !(cfg.ads.off || []).includes(p.key)).length;
 
@@ -66,6 +70,7 @@ export default function OverviewPage({ cfg, go, counts }) {
           </Panel>
           <Panel title="Homepage right now">
             <div className="adm-kv"><span>Hero</span><b>{liveCampaign ? `Sponsor: ${liveCampaign.sponsor || liveCampaign.headline}` : cfg.gam.networkCode ? "Ad Manager takeover" : "House hero"}</b></div>
+            <div className="adm-kv"><span>Targeted sponsors live</span><b>{targetedLive || "None"}</b></div>
             <div className="adm-kv"><span>Next sponsor</span><b>{nextCampaign ? `${nextCampaign.sponsor || nextCampaign.headline} · ${nextCampaign.start}` : "None booked"}</b></div>
             <div className="adm-kv"><span>Ad placements</span><b>{liveAds} live</b></div>
             <div className="adm-kv"><span>Cams hidden</span><b>{(cfg.cams.disabled || []).length}</b></div>
