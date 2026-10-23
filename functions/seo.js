@@ -8,7 +8,7 @@
 //     result ("Should I boat at <spot> today?") with canonical + JSON-LD.
 // The client reads /spot/<id> from the path (App.jsx) and renders normally.
 import { SPOTS, spotFacts } from "./marine/conditions.js";
-import { REGIONS, regionBySlug, nearMetroBySlug } from "../src/regions.js";
+import { REGIONS, regionBySlug, nearMetroBySlug, seasonalRegions } from "../src/regions.js";
 
 const SITE = "https://shouldiboat.com";
 const lakeOf = (s) => s.lake || "Lake Erie";
@@ -34,7 +34,7 @@ const websiteJsonld = () => ({
   "@type": "WebSite",
   name: "shouldiboat.com",
   url: `${SITE}/`,
-  description: "Live GO / CAUTION / NO-GO boating conditions for the Great Lakes.",
+  description: "Live GO / CAUTION / NO-GO boating conditions for the Great Lakes and the warm-water coasts.",
 });
 const spotJsonld = (id, s, lake) => ({
   "@context": "https://schema.org",
@@ -48,7 +48,7 @@ const spotJsonld = (id, s, lake) => ({
   breadcrumb: {
     "@type": "BreadcrumbList",
     itemListElement: [
-      { "@type": "ListItem", position: 1, name: "Great Lakes", item: `${SITE}/` },
+      { "@type": "ListItem", position: 1, name: "shouldiboat.com", item: `${SITE}/` },
       { "@type": "ListItem", position: 2, name: s.name, item: `${SITE}/spot/${id}` },
     ],
   },
@@ -198,18 +198,18 @@ export function seoForPath(pathname, live = null) {
   const tiles = ((live && live.spots) || []).filter((t) => t && t.level);
   const asOf = live && live.updatedAt ? ` as of ${fmtET(live.updatedAt)}` : "";
   if (pathname === "/" || pathname === "") {
-    const description = "A clear GO / CAUTION / NO-GO call for boating across the Great Lakes, from live NOAA wind, waves, gusts, an hour-by-hour risk timeline, marine warnings, weather maps and live webcams for 30+ launch spots.";
+    const description = "A clear GO / CAUTION / NO-GO call for boating on the Great Lakes and the warm-water coasts: Florida, the Gulf, the Carolinas, Southern California, Hawaii and Puerto Rico. Built from live NOAA wind, waves, swell, marine warnings, an hour-by-hour timeline, maps and webcams.";
     return {
       url: `${SITE}/`,
-      title: "Should I boat today? Live Great Lakes boating conditions · shouldiboat.com",
+      title: "Should I boat today? Live boating conditions · shouldiboat.com",
       description,
       jsonld: websiteJsonld(),
       bodyHtml: ssrPage({
-        h1: "Should I boat today? Live Great Lakes boating conditions",
+        h1: "Should I boat today? Live boating conditions",
         lede: `${description} Every launch gets its own page with the verdict, the numbers behind it, how the wind direction plays at that shore, and an hour-by-hour timeline.`,
         sections: tiles.length
           ? [{ h2: `Today's verdicts${asOf}`, html: `<p style="margin:0">${esc(tally(tiles))} across ${tiles.length} launches.</p>` },
-             ...lakeSections(tiles, REGIONS.flatMap((r) => r.lakes))]
+             ...lakeSections(tiles, seasonalRegions().flatMap((r) => r.lakes))]
           : [{ h2: "Launches", html: `<p style="margin:0">${Object.entries(SPOTS).map(([id, s]) => link(`/spot/${id}`, s.name)).join(" · ")}</p>` }],
         links: [{ href: "/guides/", text: "Boating guides" }, { href: "/about", text: "About" }],
       }),
@@ -302,6 +302,7 @@ export function seoForPath(pathname, live = null) {
         sections: out,
         links: [{ href: "/", text: "All launches" },
           ...(lake === "Lake Erie" ? [{ href: "/guides/boating-lake-erie", text: "Boating Lake Erie guide" }] : []),
+          ...(s.water ? [{ href: "/guides/boating-the-coast", text: "Boating the coast guide" }] : []),
           { href: "/guides/reading-a-marine-forecast", text: "How to read a marine forecast" }, { href: "/guides/go-caution-nogo-explained", text: "What GO / CAUTION / NO-GO means" }],
       }),
     };
@@ -366,6 +367,7 @@ const GUIDES = [
   "safety-gear-checklist",
   "before-you-launch",
   "boating-lake-erie",
+  "boating-the-coast",
 ];
 
 // Date the page templates / on-page content last changed materially. Google

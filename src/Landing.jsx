@@ -3,7 +3,7 @@ import Takeover from "./Takeover.jsx";
 import { IconStar } from "./icons.jsx";
 import { fmtWaves } from "./units.js";
 import { AdSlot } from "./monetize.jsx";
-import { REGIONS, LAKE_ORDER, NEAR_METROS } from "./regions.js";
+import { LAKE_ORDER, NEAR_METROS, seasonalRegions, seasonalLakeOrder } from "./regions.js";
 
 const vclass = (v) => (v === "NO-GO" ? "nogo" : v === "CAUTION" ? "caution" : v === "GO" ? "go" : "unknown");
 
@@ -270,7 +270,7 @@ function RegionNav({ region, onRegion }) {
     <nav className="region-nav" aria-label="Regions">
       <a href="/" className={`region-chip ${!region ? "on" : ""}`}
         onClick={(e) => { if (onRegion) { e.preventDefault(); onRegion(null); } }}>All waters</a>
-      {REGIONS.map((r) => (
+      {seasonalRegions().map((r) => (
         <a key={r.slug} href={`/${r.slug}`} className={`region-chip ${region?.slug === r.slug ? "on" : ""}`}
           onClick={(e) => { if (onRegion) { e.preventDefault(); onRegion(r.slug); } }}>{r.title}</a>
       ))}
@@ -288,7 +288,8 @@ function RegionDirectory({ summary, q, onSelect, deepLake, region, onRegion }) {
     (byLake[s.lake || "Lake Erie"] ||= []).push(s);
   });
   const lakes = Object.keys(byLake).sort((a, b) => {
-    const ia = LAKE_ORDER.indexOf(a), ib = LAKE_ORDER.indexOf(b);
+    const order = seasonalLakeOrder();
+    const ia = order.indexOf(a), ib = order.indexOf(b);
     return (ia < 0 ? 99 : ia) - (ib < 0 ? 99 : ib);
   });
   // Deep-linked lake: scroll its section into view once conditions render.
@@ -497,17 +498,18 @@ function NearbyCities({ onCity }) {
 // point to the /guides library (static, indexable articles). A few featured
 // guides plus a link to the full set.
 const FEATURED_GUIDES = [
+  { href: "/guides/boating-the-coast", title: "Boating the coast", blurb: "Swell vs. chop, inlets on an outgoing tide, the afternoon sea breeze and storm season." },
   { href: "/guides/reading-a-marine-forecast", title: "How to read a marine forecast", blurb: "Wind, gusts, wave height and the wave-period number most boaters miss." },
   { href: "/guides/cold-water-safety", title: "Cold-water safety", blurb: "Cold shock, the 1-10-1 rule, and why the water can be the real danger." },
-  { href: "/guides/wind-direction-and-fetch", title: "Wind direction & fetch", blurb: "Why the same wind speed is flat one day and a beating the next." },
 ];
 function GuidesTeaser() {
   return (
     <section className="directory guides-teaser">
       <h2 className="directory-title">Learn the water</h2>
       <p className="guides-teaser-lede">
-        The Great Lakes make their own weather — short steep chop, cold water most of the year, and a
-        wind that's harmless off one shore and dangerous off another. Our plain-English
+        Every water makes its own trouble: short steep chop and cold water on the Great Lakes, swell,
+        inlets and afternoon storms on the coast, and a wind that's harmless off one shore and dangerous
+        off another. Our plain-English
         {" "}<a href="/guides/" target="_blank" rel="noopener">boating guides</a> explain how to read the
         conditions — and every number on a spot page — so you can make a good call before you tow the boat.
       </p>

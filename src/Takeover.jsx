@@ -74,7 +74,7 @@ function SponsorHero({ s, splash, children }) {
   );
 }
 
-// ── House hero (brand band over the Great Lakes photo or video) ───────────────
+// ── House hero (brand band over the hero photo or video) ─────────────────────
 function HouseHero({ hero, spotName, verdict, adFree, splash, children, signedIn, onJoin }) {
   const h = { ...DEFAULT_HERO, ...(hero || {}) };
   const photo = h.image;
@@ -94,7 +94,7 @@ function HouseHero({ hero, spotName, verdict, adFree, splash, children, signedIn
         </>
       )}
       <div className="hero-inner">
-        <div className="hero-eyebrow">Live Great Lakes boating conditions</div>
+        <div className="hero-eyebrow">Live boating conditions from NOAA</div>
         <h1 className="hero-title">
           {parts[0]}
           {parts.length > 1 && spotName ? <> at <span className="hero-spot">{spotName}</span></> : ""}

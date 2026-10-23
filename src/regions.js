@@ -13,6 +13,41 @@ export const REGIONS = [
     lakes: ["Lake Erie", "Lake Ontario", "Lake Huron", "Lake Michigan", "Lake Superior"],
   },
   {
+    slug: "florida",
+    title: "Florida",
+    warm: true,
+    blurb: "GO / CAUTION / NO-GO calls for Florida's Atlantic inlets, Biscayne Bay, the Keys and the Gulf coast, rated for ocean swell, not just height.",
+    lakes: ["Florida Atlantic Coast", "Florida Keys", "Florida Gulf Coast"],
+  },
+  {
+    slug: "gulf-coast",
+    title: "Gulf Coast",
+    warm: true,
+    blurb: "GO / CAUTION / NO-GO calls from Orange Beach and Mobile Bay to Galveston and South Padre Island.",
+    lakes: ["Alabama & Mississippi Coast", "Louisiana & Texas Coast"],
+  },
+  {
+    slug: "southeast",
+    title: "Georgia & the Carolinas",
+    warm: true,
+    blurb: "GO / CAUTION / NO-GO calls for the Georgia and Carolina coast, from St. Simons Island to the Outer Banks.",
+    lakes: ["Georgia & South Carolina Coast", "North Carolina Coast"],
+  },
+  {
+    slug: "socal",
+    title: "Southern California",
+    warm: true,
+    blurb: "GO / CAUTION / NO-GO calls for Southern California harbors, from San Diego to Santa Barbara.",
+    lakes: ["Southern California Coast"],
+  },
+  {
+    slug: "islands",
+    title: "Hawaii & Puerto Rico",
+    warm: true,
+    blurb: "GO / CAUTION / NO-GO calls for harbors on Oahu, Maui and the Big Island, and around Puerto Rico.",
+    lakes: ["Hawaii", "Puerto Rico"],
+  },
+  {
     slug: "chesapeake",
     title: "Chesapeake Bay",
     blurb: "GO / CAUTION / NO-GO calls for the Chesapeake Bay and its tidal rivers.",
@@ -26,8 +61,18 @@ export const REGIONS = [
   },
 ];
 
+// Off-season for the northern waters (mid-October to mid-April): warm-water
+// regions lead the directory and region chips; in season the Great Lakes do.
+export const isNorthernOffSeason = (d = new Date()) => {
+  const m = d.getMonth(), day = d.getDate();
+  return (m > 9 || (m === 9 && day >= 15)) || (m < 3 || (m === 3 && day < 15));
+};
+export const seasonalRegions = (d = new Date()) =>
+  isNorthernOffSeason(d) ? [...REGIONS.filter((r) => r.warm), ...REGIONS.filter((r) => !r.warm)] : REGIONS;
+
 // Every water body in display order (was the hard-coded list in Landing).
 export const LAKE_ORDER = REGIONS.flatMap((r) => r.lakes);
+export const seasonalLakeOrder = (d = new Date()) => seasonalRegions(d).flatMap((r) => r.lakes);
 
 export const regionBySlug = (slug) =>
   REGIONS.find((r) => r.slug === String(slug || "").toLowerCase()) || null;
