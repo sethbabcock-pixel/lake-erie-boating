@@ -560,7 +560,7 @@ export default function Landing({ adFree, showAds, onSelect, favorites, onCookie
   }, []);
   return (
     <>
-      <Takeover splash adFree={adFree} signedIn={signedIn} onJoin={onJoin}>
+      <Takeover splash adFree={adFree} signedIn={signedIn} onJoin={onJoin} region={region ? region.slug : null}>
         <SplashSearch summary={summary} favorites={favorites}
           onSelect={onSelect} onPreview={onPreview} onRequest={openRequest} onLocate={rememberPt} />
       </Takeover>

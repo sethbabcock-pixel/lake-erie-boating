@@ -7,7 +7,7 @@ import { useAuth, Account, AuthModal } from "./auth.jsx";
 import Takeover from "./Takeover.jsx";
 import Landing from "./Landing.jsx";
 import { fmtWaves, waveFeel, compassToDeg } from "./units.js";
-import { regionBySlug, regionFromPath, nearMetroBySlug, nearMetroFromPath } from "./regions.js";
+import { regionBySlug, regionFromPath, regionForLake, nearMetroBySlug, nearMetroFromPath } from "./regions.js";
 
 const fmt = (v, unit) => (v == null ? "—" : `${v}${unit || ""}`);
 const verdictClass = (lvl) => (lvl === "NO-GO" ? "nogo" : lvl === "CAUTION" ? "caution" : "go");
@@ -985,6 +985,11 @@ export default function App() {
   spotOptions.forEach((s) => { (byLake[s.lake || "Lake Erie"] ||= []).push(s); });
   // On the homepage the header picker is a generic "find a spot" affordance —
   // don't surface whatever port was last visited as if it's selected.
+  // The launch's region for sponsor targeting; undefined until we know the
+  // launch's water (spot list or conditions loaded) so the hero doesn't flash
+  // a site-wide sponsor and then swap to the region's.
+  const activeLake = (spot && spot.lake) || ((spots || []).find((s) => s.id === active) || {}).lake;
+  const sponsorRegion = activeLake ? ((regionForLake(activeLake) || {}).slug || null) : undefined;
   const activeName = landing
     ? ""
     : preview
@@ -1024,7 +1029,8 @@ export default function App() {
       ) : (
       <>
       {/* FlightAware-style hero: sponsor takeover when sold, else house hero. */}
-      <Takeover adFree={adFree} spotName={activeName} verdict={rec?.level} signedIn={!gated} onJoin={() => setGateAuth("register")} />
+      <Takeover adFree={adFree} spotName={activeName} verdict={rec?.level} signedIn={!gated} onJoin={() => setGateAuth("register")}
+        spot={spot && spot.adHoc && !spot.built ? null : active} region={sponsorRegion} />
 
       <main className="app">
         {auth.user && <EmailNudge auth={auth} />}
