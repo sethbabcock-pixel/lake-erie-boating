@@ -3,7 +3,7 @@ import Takeover from "./Takeover.jsx";
 import { IconStar } from "./icons.jsx";
 import { fmtWaves } from "./units.js";
 import { AdSlot } from "./monetize.jsx";
-import { LAKE_ORDER, NEAR_METROS, seasonalRegions, seasonalLakeOrder } from "./regions.js";
+import { LAKE_ORDER, NEAR_METROS, seasonalRegions, seasonalLakeOrder, regionBySlug } from "./regions.js";
 
 const vclass = (v) => (v === "NO-GO" ? "nogo" : v === "CAUTION" ? "caution" : v === "GO" ? "go" : "unknown");
 
@@ -15,12 +15,20 @@ const haversineMi = (a, b) => {
   return 2 * R * Math.asin(Math.sqrt(s));
 };
 const COVERAGE_MI = 90;  // beyond this we treat the area as "not covered yet"
+// City pages reach further: people in Columbus or Pittsburgh do drive ~2 hours
+// to Lake Erie, and the card's drive time keeps it honest.
+const METRO_MI = 160;
 const NEAR_SHOW = 5;     // how many ranked launches to surface
 
-// Straight-line miles undersell a drive: roads wander (~1.25x) and you average
-// ~42 mph door-to-water once town driving is in. Deliberately fuzzy — this is
-// to set expectations ("~40 min"), not to route.
-const driveMin = (mi) => Math.max(5, Math.round((mi * 1.25) / 42 * 60));
+// Straight-line miles undersell a drive: roads wander (~1.2x). The first ~20
+// road miles are town driving (~42 mph), the rest highway (~62 mph), so a
+// 105-mile Columbus → Sandusky run reads ~2 hr 15, not ~3 hr. Deliberately
+// fuzzy — this sets expectations ("~40 min"), it doesn't route.
+const driveMin = (mi) => {
+  const road = mi * 1.2;
+  const town = Math.min(road, 20);
+  return Math.max(5, Math.round((town / 42 + (road - town) / 62) * 60));
+};
 const fmtDrive = (mi) => {
   const m = driveMin(mi);
   if (m < 60) return `~${Math.round(m / 5) * 5} min`;
@@ -31,12 +39,12 @@ const fmtDist = (mi) => `${Math.round(mi)} mi · ${fmtDrive(mi)} drive`;
 
 // Rank covered launches from a point, nearest first (used by the search panel,
 // the "best bets near you" section, and the /near/<metro> pages).
-const rankSpots = (summary, pt, limit = NEAR_SHOW) =>
+const rankSpots = (summary, pt, limit = NEAR_SHOW, radius = COVERAGE_MI) =>
   (summary || [])
     .filter((s) => s.lat != null && s.lon != null)
     .map((s) => ({ s, mi: haversineMi(pt, s) }))
     .sort((a, b) => a.mi - b.mi)
-    .filter((r) => r.mi <= COVERAGE_MI)
+    .filter((r) => r.mi <= radius)
     .slice(0, limit);
 
 // GO first, then CAUTION, then NO-GO, then unknown — for "best bets".
@@ -445,9 +453,9 @@ function NearCard({ s, mi, prefs, onSelect }) {
   return (
     <button className="loc-card" onClick={() => onSelect(s.id)}>
       <div className="loc-card-top"><span className="loc-name">{s.name}</span><StatusChip level={s.level} /></div>
+      <div className="near-dist">{fmtDist(mi)}</div>
       <div className="loc-card-meta">
-        {fmtDist(mi)}
-        {s.windKt != null ? <> · {s.windKt} kt{s.dir ? ` ${s.dir}` : ""}</> : null}
+        {s.windKt != null ? <>{s.windKt} kt{s.dir ? ` ${s.dir}` : ""}</> : "—"}
         {s.waveFt != null ? <> · {fmtWaves(s.waveFt, s.periodSec)}</> : null}
       </div>
       {flag && <div className={`nearflag ${flag.ok ? "ok" : "over"}`}>{flag.ok ? "✓ " : "⚠ "}{flag.text}</div>}
@@ -460,17 +468,26 @@ function NearCard({ s, mi, prefs, onSelect }) {
 // visits) or a /near/<metro> page. Signed-in boaters also see each launch
 // flagged against their comfort limits. Only renders when there's a point and
 // something reachable, so it never adds clutter to a cold homepage.
-function NearYou({ summary, pt, prefs, onSelect, heading }) {
+function NearYou({ summary, pt, prefs, onSelect, heading, limit = 6, radius = COVERAGE_MI }) {
   if (!pt || summary == null) return null;
-  const reachable = rankSpots(summary, pt, 6);
+  const reachable = rankSpots(summary, pt, limit, radius);
   if (!reachable.length) return null;
   const best = [...reachable].sort(byVerdictThenDistance);
   const label = pt.label && pt.label !== "your location" ? pt.label : "you";
+  const go = reachable.filter((r) => r.s.level === "GO").length;
+  const top = best[0];
+  // One-line answer before the cards: how many are GO, and the best bet.
+  const n = reachable.length;
+  const answer = !top || !top.s.level ? null
+    : go ? <><b>{go} of {n}</b> launches near {label} {go === 1 ? "is" : "are"} GO right now. Best bet: <b>{top.s.name}</b>, {fmtDrive(top.mi)} away.</>
+    : top.s.level === "CAUTION" ? <>No GO launches near {label} right now. The calmest is <b>{top.s.name}</b> at CAUTION, {fmtDrive(top.mi)} away.</>
+    : <><b>Stay in today:</b> {n === 1 ? "the launch" : `all ${n} launches`} near {label} {n === 1 ? "is" : "are"} NO-GO right now. Check the week ahead on each launch for a better day.</>;
   return (
     <section className="directory nearyou">
       <h2 className="directory-title">📍 {heading || <>Best bets near {label}</>}</h2>
+      {answer && <p className="near-answer">{answer}</p>}
       <p className="directory-blurb" style={{ margin: "0 0 var(--s3)" }}>
-        Reachable launches, best conditions first{prefs && (prefs.maxWaveFt != null || prefs.maxWindKt != null) ? ", flagged against your comfort limits" : ""}.
+        Best conditions first{prefs && (prefs.maxWaveFt != null || prefs.maxWindKt != null) ? ", flagged against your comfort limits" : ""}. Drive times are rough estimates.
       </p>
       <div className="loc-grid">
         {best.map(({ s, mi }) => <NearCard key={s.id} s={s} mi={mi} prefs={prefs} onSelect={onSelect} />)}
@@ -482,15 +499,42 @@ function NearYou({ summary, pt, prefs, onSelect, heading }) {
 // Crawlable internal links to the /near/<metro> pages, so people (and Google)
 // can reach the city landing pages. Real <a href> for SEO; the SPA intercepts
 // the click for a no-reload nav.
-function NearbyCities({ onCity }) {
+// Cities grouped by region (warm regions first in the off-season), each with a
+// live snapshot from the directory summary: GO launches within an easy drive
+// and the closest launch's distance.
+function NearbyCities({ onCity, summary, current }) {
+  const snap = (m) => {
+    if (!summary || !summary.length) return null;
+    const near = rankSpots(summary, m, 8, METRO_MI); // exactly the city page's list
+    if (!near.length) return null;
+    return { go: near.filter((r) => r.s.level === "GO").length, n: near.length, closest: near[0].mi };
+  };
+  const groups = seasonalRegions().map((r) => ({ r, cities: NEAR_METROS.filter((m) => m.region === r.slug) })).filter((g) => g.cities.length);
   return (
-    <nav className="nearby-cities" aria-label="Boating near a city">
-      <span className="nearby-cities-lede">Boating near a city:</span>
-      {NEAR_METROS.map((m) => (
-        <a key={m.slug} href={`/near/${m.slug}`} className="nearby-city"
-          onClick={(e) => { if (onCity) { e.preventDefault(); onCity(m.slug); } }}>{m.name.replace(/, [A-Z]{2}$/, "")}</a>
+    <section className="directory nearcities" aria-label="Boating near a city">
+      <h2 className="directory-title">Boating near a city</h2>
+      <p className="directory-blurb">Don't live on the water? Pick your city for the closest launches, best conditions first.</p>
+      {groups.map(({ r, cities }) => (
+        <div className="nearcities-group" key={r.slug}>
+          <h3>{r.title}</h3>
+          <div className="nearcities-grid">
+            {cities.map((m) => {
+              const sn = snap(m);
+              return (
+                <a key={m.slug} href={`/near/${m.slug}`} className={`nearcity${current === m.slug ? " on" : ""}`}
+                  aria-current={current === m.slug ? "page" : undefined}
+                  onClick={(e) => { if (onCity) { e.preventDefault(); onCity(m.slug); } }}>
+                  <span className="nearcity-name">{m.name}</span>
+                  <span className="nearcity-meta">
+                    {sn ? <><b className={sn.go ? "go" : ""}>{sn.go} of {sn.n} GO</b> · closest {Math.round(sn.closest)} mi</> : summary == null ? "\u00a0" : "no launch within 160 mi"}
+                  </span>
+                </a>
+              );
+            })}
+          </div>
+        </div>
       ))}
-    </nav>
+    </section>
   );
 }
 
@@ -550,6 +594,8 @@ export default function Landing({ adFree, showAds, onSelect, favorites, onCookie
     setTimeout(() => document.getElementById("request-location")?.scrollIntoView({ behavior: "smooth", block: "center" }), 60);
   };
   const deepLake = lakeParam();
+  // A city page focuses the directory (and any regional sponsor) on its region.
+  const dirRegion = region || (metro ? regionBySlug(metro.region) : null);
   useEffect(() => {
     let alive = true;
     fetch("/marine/conditions?summary")
@@ -560,16 +606,17 @@ export default function Landing({ adFree, showAds, onSelect, favorites, onCookie
   }, []);
   return (
     <>
-      <Takeover splash adFree={adFree} signedIn={signedIn} onJoin={onJoin} region={region ? region.slug : null}>
+      <Takeover splash adFree={adFree} signedIn={signedIn} onJoin={onJoin} region={dirRegion ? dirRegion.slug : null}
+        title={metro ? `Boating near ${metro.name}` : null}
+        subtitle={metro ? "The closest launches, best conditions first, with a live GO / CAUTION / NO-GO call from NOAA for each." : null}>
         <SplashSearch summary={summary} favorites={favorites}
           onSelect={onSelect} onPreview={onPreview} onRequest={openRequest} onLocate={rememberPt} />
       </Takeover>
       <main className="app">
+        {/* City pages lead with the answer: the closest launches. */}
         {metro && (
-          <p className="metro-intro">
-            The nearest launches we cover to <b>{metro.name}</b>, ranked by distance and drive time — with a live
-            GO / CAUTION / NO-GO call for each from NOAA wind, waves and warnings. Search your exact ZIP above for a tighter list.
-          </p>
+          <NearYou summary={summary} pt={nearPt} prefs={prefs} onSelect={onSelect} limit={8} radius={METRO_MI}
+            heading={<>Closest launches to {metro.name}</>} />
         )}
         {onJoin && (
           <div className="joinstrip">
@@ -586,17 +633,16 @@ export default function Landing({ adFree, showAds, onSelect, favorites, onCookie
           </div>
         )}
         {nudge}
-        <NearYou summary={summary} pt={nearPt} prefs={prefs} onSelect={onSelect}
-          heading={metro ? <>Closest launches to {metro.name}</> : null} />
+        {!metro && <NearYou summary={summary} pt={nearPt} prefs={prefs} onSelect={onSelect} />}
         {signedIn && <MyPorts summary={summary} favorites={favorites} onSelect={onSelect} />}
-        <RegionDirectory summary={summary} q="" onSelect={onSelect} deepLake={region ? null : deepLake} region={region} onRegion={onRegion} />
+        <RegionDirectory summary={summary} q="" onSelect={onSelect} deepLake={dirRegion ? null : deepLake} region={dirRegion} onRegion={onRegion} />
         {/* Ads sit after real content (the directory, then the guides), never
             above it — AdSense's "ads on screens without publisher content". */}
         {showAds && <AdSlot name="landingTop" />}
         <GuidesTeaser />
         {showAds && <AdSlot name="landing" />}
         <RequestLocation userEmail={userEmail} openToken={reqToken} prefill={reqPrefill} />
-        <NearbyCities onCity={onCity} />
+        <NearbyCities onCity={onCity} summary={summary} current={metro ? metro.slug : null} />
         <footer className="meta">
           Live data from NOAA/NWS &amp; NDBC buoys, maps by Windy. A planning aid, not an official forecast or a navigation tool.
           <div className="footlinks">

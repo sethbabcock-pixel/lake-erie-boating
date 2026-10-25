@@ -666,20 +666,31 @@ body.has-takeover .app { background: var(--bg); border-radius: var(--r-lg) var(-
 
 /* "Best bets near you" + comfort flags on launch cards */
 .nearyou .loc-card { position: relative; }
+/* "Best bets near …" / city pages */
+.near-answer { margin: 0 0 6px; font-size: var(--fs-base); color: var(--text); line-height: 1.5; }
+.near-answer b { font-weight: var(--fw-bold); }
+.near-dist { margin-top: 4px; font-size: var(--fs-xs); color: var(--text-muted); font-weight: var(--fw-semibold); }
+.nearyou .loc-card-meta { margin-top: 2px; }
+/* "Boating near a city": cities grouped by region with a live snapshot */
+.nearcities { margin-top: var(--s6); padding-top: var(--s5); border-top: 1px solid var(--border); }
+.nearcities-group + .nearcities-group { margin-top: var(--s4); }
+.nearcities-group h3 { margin: 0 0 var(--s2); font-size: var(--fs-xs); text-transform: uppercase; letter-spacing: var(--tracking-wide);
+  color: var(--text-muted); font-weight: var(--fw-semibold); }
+.nearcities-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: var(--s2); }
+.nearcity { display: flex; flex-direction: column; gap: 2px; padding: 10px 14px; border-radius: var(--r-md); border: 1px solid var(--border);
+  background: var(--surface); text-decoration: none; transition: border-color var(--dur-fast), transform var(--dur-fast); }
+.nearcity:hover { border-color: var(--accent); text-decoration: none; transform: translateY(-1px); }
+.nearcity.on { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 12%, var(--surface)); }
+.nearcity-name { font-size: var(--fs-sm); font-weight: var(--fw-semibold); color: var(--text); }
+.nearcity-meta { font-size: var(--fs-xs); color: var(--text-muted); }
+.nearcity-meta b { font-weight: var(--fw-bold); color: var(--text-muted); }
+.nearcity-meta b.go { color: var(--success); }
+@media (max-width: 560px) { .nearcities-grid { grid-template-columns: 1fr 1fr; } }
 .nearflag { margin-top: 6px; font-size: var(--fs-xs); font-weight: var(--fw-semibold); }
 .nearflag.ok { color: var(--go, #2E9E5B); }
 .nearflag.over { color: var(--danger); }
 
-/* /near/<metro> intro line */
-.metro-intro { margin: 0 0 var(--s4); color: var(--text-muted); font-size: var(--fs-base); line-height: 1.5; }
-.metro-intro b { color: var(--text); }
 
-/* Crawlable "boating near a city" link row */
-.nearby-cities { display: flex; flex-wrap: wrap; align-items: baseline; gap: 8px var(--s3);
-  margin: var(--s5) 0; padding-top: var(--s4); border-top: 1px solid var(--border); }
-.nearby-cities-lede { color: var(--text-muted); font-size: var(--fs-sm); font-weight: var(--fw-semibold); }
-.nearby-city { color: var(--accent); font-size: var(--fs-sm); font-weight: var(--fw-semibold); text-decoration: none; }
-.nearby-city:hover { text-decoration: underline; }
 
 .directory { padding-top: var(--s5); }
 .directory-title { font-size: var(--fs-xl); font-weight: var(--fw-bold); margin: 0 0 var(--s4); color: var(--text); }
