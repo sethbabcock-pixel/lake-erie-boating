@@ -86,7 +86,9 @@ function SponsorHero({ s, splash, children }) {
 }
 
 // ── House hero (brand band over the hero photo or video) ─────────────────────
-function HouseHero({ hero, spotName, verdict, adFree, splash, children, signedIn, onJoin }) {
+// title / subtitle replace the admin headline on pages with their own subject
+// (a /near/<city> page reads "Boating near Cleveland, OH").
+function HouseHero({ hero, spotName, verdict, adFree, splash, children, signedIn, onJoin, title, subtitle }) {
   const h = { ...DEFAULT_HERO, ...(hero || {}) };
   const photo = h.image;
   const video = h.video;
@@ -106,12 +108,12 @@ function HouseHero({ hero, spotName, verdict, adFree, splash, children, signedIn
       )}
       <div className="hero-inner">
         <div className="hero-eyebrow">Live boating conditions from NOAA</div>
-        <h1 className="hero-title">
+        {title ? <h1 className="hero-title">{title}</h1> : <h1 className="hero-title">
           {parts[0]}
           {parts.length > 1 && spotName ? <> at <span className="hero-spot">{spotName}</span></> : ""}
           {parts[1] ?? ""}
-        </h1>
-        {h.showVerdict && verdict ? (
+        </h1>}
+        {subtitle ? <p className="hero-subtitle">{subtitle}</p> : h.showVerdict && verdict ? (
           <div className="hero-verdict">
             <span className={`hv-badge ${vclass(verdict)}`}>{verdict}</span>
             <span className="hv-text">right now. Full breakdown below.</span>
@@ -133,7 +135,7 @@ function HouseHero({ hero, spotName, verdict, adFree, splash, children, signedIn
 // ── Public entry ──────────────────────────────────────────────────────────────
 // spot / region: where this hero sits (a launch id, a REGIONS slug), so a
 // targeted campaign shows on its own pages (see src/sponsor-target.js).
-export default function Takeover({ adFree, spotName, verdict, splash = false, children = null, signedIn = true, onJoin = null, spot = null, region = null }) {
+export default function Takeover({ adFree, spotName, verdict, splash = false, children = null, signedIn = true, onJoin = null, spot = null, region = null, title = null, subtitle = null }) {
   const [cfg, setCfg] = useState({ hero: DEFAULT_HERO, takeovers: [], gam: { networkCode: "" }, loaded: false });
   useEffect(() => {
     let alive = true;
@@ -171,5 +173,6 @@ export default function Takeover({ adFree, spotName, verdict, splash = false, ch
       </section>
     );
   }
-  return <HouseHero hero={cfg.hero} spotName={spotName} verdict={verdict} adFree={adFree} splash={splash} signedIn={signedIn} onJoin={onJoin}>{splash ? children : null}</HouseHero>;
+  return <HouseHero hero={cfg.hero} spotName={spotName} verdict={verdict} adFree={adFree} splash={splash} signedIn={signedIn} onJoin={onJoin}
+    title={title} subtitle={subtitle}>{splash ? children : null}</HouseHero>;
 }

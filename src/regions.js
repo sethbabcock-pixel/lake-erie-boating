@@ -94,18 +94,32 @@ export const regionFromPath = (pathname) => {
 // URL (finite set, so it stays indexable). Coords are the metro centroid; keep
 // to cities within a reasonable drive of covered water so the page has value.
 export const NEAR_METROS = [
-  { slug: "cleveland", name: "Cleveland, OH", lat: 41.4993, lon: -81.6944 },
-  { slug: "akron", name: "Akron, OH", lat: 41.0814, lon: -81.519 },
-  { slug: "columbus", name: "Columbus, OH", lat: 39.9612, lon: -82.9988 },
-  { slug: "toledo", name: "Toledo, OH", lat: 41.6528, lon: -83.5379 },
-  { slug: "buffalo", name: "Buffalo, NY", lat: 42.8864, lon: -78.8784 },
-  { slug: "rochester-ny", name: "Rochester, NY", lat: 43.1566, lon: -77.6088 },
-  { slug: "detroit", name: "Detroit, MI", lat: 42.3314, lon: -83.0458 },
-  { slug: "grand-rapids", name: "Grand Rapids, MI", lat: 42.9634, lon: -85.6681 },
-  { slug: "chicago", name: "Chicago, IL", lat: 41.8781, lon: -87.6298 },
-  { slug: "milwaukee", name: "Milwaukee, WI", lat: 43.0389, lon: -87.9065 },
-  { slug: "pittsburgh", name: "Pittsburgh, PA", lat: 40.4406, lon: -79.9959 },
-  { slug: "baltimore", name: "Baltimore, MD", lat: 39.2904, lon: -76.6122 },
+  // Great Lakes
+  { slug: "cleveland", name: "Cleveland, OH", lat: 41.4993, lon: -81.6944, region: "greatlakes" },
+  { slug: "akron", name: "Akron, OH", lat: 41.0814, lon: -81.519, region: "greatlakes" },
+  { slug: "columbus", name: "Columbus, OH", lat: 39.9612, lon: -82.9988, region: "greatlakes" },
+  { slug: "toledo", name: "Toledo, OH", lat: 41.6528, lon: -83.5379, region: "greatlakes" },
+  { slug: "buffalo", name: "Buffalo, NY", lat: 42.8864, lon: -78.8784, region: "greatlakes" },
+  { slug: "rochester-ny", name: "Rochester, NY", lat: 43.1566, lon: -77.6088, region: "greatlakes" },
+  { slug: "detroit", name: "Detroit, MI", lat: 42.3314, lon: -83.0458, region: "greatlakes" },
+  { slug: "grand-rapids", name: "Grand Rapids, MI", lat: 42.9634, lon: -85.6681, region: "greatlakes" },
+  { slug: "chicago", name: "Chicago, IL", lat: 41.8781, lon: -87.6298, region: "greatlakes" },
+  { slug: "milwaukee", name: "Milwaukee, WI", lat: 43.0389, lon: -87.9065, region: "greatlakes" },
+  { slug: "pittsburgh", name: "Pittsburgh, PA", lat: 40.4406, lon: -79.9959, region: "greatlakes" },
+  // Warm-water coasts: inland or big metros within an easy drive of covered launches
+  { slug: "miami", name: "Miami, FL", lat: 25.7617, lon: -80.1918, region: "florida" },
+  { slug: "orlando", name: "Orlando, FL", lat: 28.5384, lon: -81.3789, region: "florida" },
+  { slug: "tampa", name: "Tampa, FL", lat: 27.9506, lon: -82.4572, region: "florida" },
+  { slug: "jacksonville-fl", name: "Jacksonville, FL", lat: 30.3322, lon: -81.6557, region: "florida" },
+  { slug: "houston", name: "Houston, TX", lat: 29.7604, lon: -95.3698, region: "gulf-coast" },
+  { slug: "new-orleans", name: "New Orleans, LA", lat: 29.9511, lon: -90.0715, region: "gulf-coast" },
+  { slug: "mobile", name: "Mobile, AL", lat: 30.6954, lon: -88.0399, region: "gulf-coast" },
+  { slug: "corpus-christi", name: "Corpus Christi, TX", lat: 27.8006, lon: -97.3964, region: "gulf-coast" },
+  { slug: "savannah", name: "Savannah, GA", lat: 32.0809, lon: -81.0912, region: "southeast" },
+  { slug: "los-angeles", name: "Los Angeles, CA", lat: 34.0522, lon: -118.2437, region: "socal" },
+  { slug: "san-diego-ca", name: "San Diego, CA", lat: 32.7157, lon: -117.1611, region: "socal" },
+  // Mid-Atlantic
+  { slug: "baltimore", name: "Baltimore, MD", lat: 39.2904, lon: -76.6122, region: "chesapeake" },
 ];
 
 export const nearMetroBySlug = (slug) =>
