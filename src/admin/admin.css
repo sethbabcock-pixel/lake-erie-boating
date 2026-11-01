@@ -292,3 +292,13 @@ select.adm-input { padding-right: 28px; }
 .adm-warnbox { padding: 10px 14px; border-radius: var(--r-md); font-size: var(--fs-sm); color: var(--text);
   background: color-mix(in srgb, var(--warning) 14%, transparent); border: 1px solid color-mix(in srgb, var(--warning) 40%, transparent); }
 .adm-campstats { max-width: 420px; margin-top: 6px; }
+
+/* Per-region hero photos */
+.adm-regionheroes { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: var(--s4); }
+.adm-regionhero { display: flex; flex-direction: column; gap: var(--s2); }
+.adm-regionhero-img { position: relative; aspect-ratio: 2 / 1; border-radius: var(--r-md); background-size: cover; background-position: center;
+  border: 1px solid var(--border); overflow: hidden; }
+.adm-regionhero-img span { position: absolute; left: 10px; bottom: 8px; color: #fff; font-weight: var(--fw-bold); font-size: var(--fs-sm); text-shadow: 0 1px 6px rgba(0,0,0,.6); }
+.adm-regionhero-img em { position: absolute; right: 8px; top: 8px; font-style: normal; font-size: 11px; padding: 2px 8px; border-radius: var(--r-pill);
+  background: rgba(0,0,0,.55); color: #fff; }
+.adm-regionhero .adm-label { display: none; }

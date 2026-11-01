@@ -164,6 +164,11 @@ function sanitizeSiteConfig(input) {
       headline: str(hero.headline, 160) || DEFAULT_SITE_CONFIG.hero.headline,
       sub: str(hero.sub, 240),
       showVerdict: hero.showVerdict !== false,
+      // Per-region hero photo (REGIONS slug → URL); unset regions use the main
+      // image, or the coastal illustration for warm-water regions.
+      regions: Object.fromEntries(Object.entries(hero.regions && typeof hero.regions === "object" ? hero.regions : {})
+        .filter(([k, v]) => REGIONS.some((r) => r.slug === k) && typeof v === "string" && safeUrl(v.slice(0, 400)))
+        .map(([k, v]) => [k, v.slice(0, 400)])),
     },
     takeovers,
     gam: { networkCode: str(gam.networkCode, 30) },
