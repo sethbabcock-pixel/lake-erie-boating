@@ -648,6 +648,7 @@ export default function Landing({ adFree, showAds, onSelect, favorites, onCookie
           <div className="footlinks">
             <a href="/guides/" target="_blank" rel="noopener">Guides</a>
             <a href="/about" target="_blank" rel="noopener">About</a>
+            <a href="/advertise" target="_blank" rel="noopener">Advertise</a>
             <a href="/legal#terms" target="_blank" rel="noopener">Terms</a>
             <a href="/legal#privacy" target="_blank" rel="noopener">Privacy</a>
             {onCookieSettings && <button className="linklike" onClick={onCookieSettings}>Cookie settings</button>}

@@ -7,7 +7,7 @@ import { useAuth, Account, AuthModal } from "./auth.jsx";
 import Takeover from "./Takeover.jsx";
 import Landing from "./Landing.jsx";
 import { fmtWaves, waveFeel, compassToDeg } from "./units.js";
-import { regionBySlug, regionFromPath, regionForLake, nearMetroBySlug, nearMetroFromPath } from "./regions.js";
+import { regionBySlug, regionFromPath, regionForLake, nearMetroBySlug, nearMetroFromPath, LAKE_GUIDES } from "./regions.js";
 
 const fmt = (v, unit) => (v == null ? "—" : `${v}${unit || ""}`);
 const verdictClass = (lvl) => (lvl === "NO-GO" ? "nogo" : lvl === "CAUTION" ? "caution" : "go");
@@ -433,7 +433,7 @@ function LaunchNotes({ spot, facts }) {
       </div>
       <div className="hint">
         How each wind direction plays at this shore. <a href="/guides/wind-direction-and-fetch" target="_blank" rel="noopener">Why direction matters →</a>
-        {facts.lake === "Lake Erie" && <> · <a href="/guides/boating-lake-erie" target="_blank" rel="noopener">Boating Lake Erie guide →</a></>}
+        {LAKE_GUIDES[facts.lake] && <> · <a href={LAKE_GUIDES[facts.lake].href} target="_blank" rel="noopener">{LAKE_GUIDES[facts.lake].text} →</a></>}
         {facts.coastal && <> · <a href="/guides/boating-the-coast" target="_blank" rel="noopener">Boating the coast guide →</a></>}
       </div>
     </section>
@@ -1213,6 +1213,7 @@ export default function App() {
               <div className="footlinks">
                 <a href="/guides/" target="_blank" rel="noopener">Guides</a>
                 <a href="/about" target="_blank" rel="noopener">About</a>
+                <a href="/advertise" target="_blank" rel="noopener">Advertise</a>
                 <a href="/legal#terms" target="_blank" rel="noopener">Terms</a>
                 <a href="/legal#privacy" target="_blank" rel="noopener">Privacy</a>
                 <button className="linklike" onClick={() => chooseConsent(null)}>Cookie settings</button>
