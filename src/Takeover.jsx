@@ -102,13 +102,14 @@ function HouseHero({ hero, spotName, verdict, adFree, splash, children, signedIn
   const h = { ...DEFAULT_HERO, ...(hero || {}) };
   const photo = heroImageFor(h, region);
   // A hero video belongs to the main hero; a regional photo replaces it.
-  const video = photo === h.image ? h.video : "";
-  const bgStyle = !video && photo
-    ? { backgroundImage: `linear-gradient(90deg, rgba(7,24,43,0.94) 0%, rgba(7,24,43,0.66) 46%, rgba(7,24,43,0.14) 100%), url(${photo})` }
-    : undefined;
+  const pending = region === undefined; // keep the photo styling; image arrives once the region is known
+  const video = !pending && photo === h.image ? h.video : "";
+  const shade = "linear-gradient(90deg, rgba(7,24,43,0.94) 0%, rgba(7,24,43,0.66) 46%, rgba(7,24,43,0.14) 100%)";
+  const bgStyle = !video && photo ? { backgroundImage: `${shade}, url(${photo})` }
+    : pending ? { backgroundImage: `${shade}, linear-gradient(180deg, #0f2a4a, #0b3a5c)` } : undefined;
   const parts = (h.headline || DEFAULT_HERO.headline).split("{spot}");
   return (
-    <section className={`hero hero-house${photo || video ? " has-photo" : ""}${splash ? " hero-splash" : ""}`} style={bgStyle}>
+    <section className={`hero hero-house${photo || video || pending ? " has-photo" : ""}${splash ? " hero-splash" : ""}`} style={bgStyle}>
       {video && (
         <>
           <video className="hero-video" autoPlay muted loop playsInline poster={photo || undefined}>
