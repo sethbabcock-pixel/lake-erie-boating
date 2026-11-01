@@ -7,7 +7,7 @@ import { useAuth, Account, AuthModal } from "./auth.jsx";
 import Takeover from "./Takeover.jsx";
 import Landing from "./Landing.jsx";
 import { fmtWaves, waveFeel, compassToDeg } from "./units.js";
-import { regionBySlug, regionFromPath, regionForLake, nearMetroBySlug, nearMetroFromPath } from "./regions.js";
+import { regionBySlug, regionFromPath, regionForLake, nearMetroBySlug, nearMetroFromPath, LAKE_GUIDES } from "./regions.js";
 
 const fmt = (v, unit) => (v == null ? "—" : `${v}${unit || ""}`);
 const verdictClass = (lvl) => (lvl === "NO-GO" ? "nogo" : lvl === "CAUTION" ? "caution" : "go");
@@ -433,7 +433,7 @@ function LaunchNotes({ spot, facts }) {
       </div>
       <div className="hint">
         How each wind direction plays at this shore. <a href="/guides/wind-direction-and-fetch" target="_blank" rel="noopener">Why direction matters →</a>
-        {facts.lake === "Lake Erie" && <> · <a href="/guides/boating-lake-erie" target="_blank" rel="noopener">Boating Lake Erie guide →</a></>}
+        {LAKE_GUIDES[facts.lake] && <> · <a href={LAKE_GUIDES[facts.lake].href} target="_blank" rel="noopener">{LAKE_GUIDES[facts.lake].text} →</a></>}
         {facts.coastal && <> · <a href="/guides/boating-the-coast" target="_blank" rel="noopener">Boating the coast guide →</a></>}
       </div>
     </section>
@@ -973,6 +973,17 @@ export default function App() {
 
   const spot = data?.spot;
   const rec = data?.recommendation;
+  // Compact verdict bar: once the call card scrolls out of view, a thin bar
+  // under the sticky header keeps the verdict and key numbers in sight.
+  const callRef = useRef(null);
+  const [callHidden, setCallHidden] = useState(false);
+  useEffect(() => {
+    const el = callRef.current;
+    if (!el || typeof IntersectionObserver === "undefined") { setCallHidden(false); return; }
+    const io = new IntersectionObserver(([e]) => setCallHidden(!e.isIntersecting && e.boundingClientRect.top < 0), { threshold: 0 });
+    io.observe(el);
+    return () => io.disconnect();
+  }, [data && data.spot && data.spot.id, !!rec]);
   const wind = data?.wind || {};
   const wv = data?.waves || {};
   const buoy = data?.buoy;
@@ -1014,6 +1025,18 @@ export default function App() {
             <Account auth={auth} />
           </div>
         </div>
+        {!landing && callHidden && rec && data && !data.notMarine && (
+          <button className={`hdr-verdict ${verdictClass(rec.level)}`} onClick={() => window.scrollTo({ top: 0, behavior: "smooth" })}
+            aria-label={`${rec.level} at ${spot?.name || "this launch"}. Back to the top`}>
+            <span className="hdr-verdict-badge">{rec.level}</span>
+            <span className="hdr-verdict-name">{spot?.name}</span>
+            <span className="hdr-verdict-nums">
+              {wind.speedKt != null ? `${Math.round(wind.speedKt)} kt${wind.dir ? ` ${wind.dir}` : ""}` : ""}
+              {wv.ft != null ? ` · ${fmtWaves(wv.ft, wv.periodSec)}` : ""}
+            </span>
+            <span className="hdr-verdict-up" aria-hidden="true">↑</span>
+          </button>
+        )}
       </header>
 
       {landing ? (
@@ -1058,7 +1081,7 @@ export default function App() {
         {data && !data.notMarine && (
           <>
             {/* ── The Call ── */}
-            <section className={`call ${verdictClass(rec.level)}`}>
+            <section className={`call ${verdictClass(rec.level)}`} ref={callRef}>
               <div className="call-badge"><span>{rec.level}</span></div>
               <div className="call-body">
                 <div className="call-top">
@@ -1213,6 +1236,7 @@ export default function App() {
               <div className="footlinks">
                 <a href="/guides/" target="_blank" rel="noopener">Guides</a>
                 <a href="/about" target="_blank" rel="noopener">About</a>
+                <a href="/advertise" target="_blank" rel="noopener">Advertise</a>
                 <a href="/legal#terms" target="_blank" rel="noopener">Terms</a>
                 <a href="/legal#privacy" target="_blank" rel="noopener">Privacy</a>
                 <button className="linklike" onClick={() => chooseConsent(null)}>Cookie settings</button>

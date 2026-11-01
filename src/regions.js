@@ -70,6 +70,14 @@ export const isNorthernOffSeason = (d = new Date()) => {
 export const seasonalRegions = (d = new Date()) =>
   isNorthernOffSeason(d) ? [...REGIONS.filter((r) => r.warm), ...REGIONS.filter((r) => !r.warm)] : REGIONS;
 
+// In-depth guide for a water body, linked from its launches (spot page card +
+// server-rendered page).
+export const LAKE_GUIDES = {
+  "Lake Erie": { href: "/guides/boating-lake-erie", text: "Boating Lake Erie guide" },
+  "Florida Keys": { href: "/guides/boating-the-florida-keys", text: "Boating the Florida Keys guide" },
+  "Southern California Coast": { href: "/guides/boating-southern-california", text: "Boating Southern California guide" },
+};
+
 // Every water body in display order (was the hard-coded list in Landing).
 export const LAKE_ORDER = REGIONS.flatMap((r) => r.lakes);
 export const seasonalLakeOrder = (d = new Date()) => seasonalRegions(d).flatMap((r) => r.lakes);

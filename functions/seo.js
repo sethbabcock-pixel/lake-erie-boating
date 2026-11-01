@@ -8,7 +8,7 @@
 //     result ("Should I boat at <spot> today?") with canonical + JSON-LD.
 // The client reads /spot/<id> from the path (App.jsx) and renders normally.
 import { SPOTS, spotFacts } from "./marine/conditions.js";
-import { REGIONS, regionBySlug, nearMetroBySlug, seasonalRegions } from "../src/regions.js";
+import { REGIONS, regionBySlug, nearMetroBySlug, seasonalRegions, LAKE_GUIDES } from "../src/regions.js";
 
 const SITE = "https://shouldiboat.com";
 const lakeOf = (s) => s.lake || "Lake Erie";
@@ -301,7 +301,7 @@ export function seoForPath(pathname, live = null) {
         lede: description,
         sections: out,
         links: [{ href: "/", text: "All launches" },
-          ...(lake === "Lake Erie" ? [{ href: "/guides/boating-lake-erie", text: "Boating Lake Erie guide" }] : []),
+          ...(LAKE_GUIDES[lake] ? [LAKE_GUIDES[lake]] : []),
           ...(s.water ? [{ href: "/guides/boating-the-coast", text: "Boating the coast guide" }] : []),
           { href: "/guides/reading-a-marine-forecast", text: "How to read a marine forecast" }, { href: "/guides/go-caution-nogo-explained", text: "What GO / CAUTION / NO-GO means" }],
       }),
@@ -368,6 +368,8 @@ const GUIDES = [
   "before-you-launch",
   "boating-lake-erie",
   "boating-the-coast",
+  "boating-the-florida-keys",
+  "boating-southern-california",
 ];
 
 // Date the page templates / on-page content last changed materially. Google
@@ -394,6 +396,7 @@ export async function sitemapXml(env) {
     { loc: `${SITE}/guides/`, freq: "weekly", priority: "0.6" },
     ...GUIDES.map((slug) => ({ loc: `${SITE}/guides/${slug}`, freq: "monthly", priority: "0.5" })),
     { loc: `${SITE}/about`, freq: "monthly", priority: "0.3" },
+    { loc: `${SITE}/advertise`, freq: "monthly", priority: "0.3" },
     { loc: `${SITE}/legal`, freq: "yearly", priority: "0.2" },
   ];
   const body = urls

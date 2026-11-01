@@ -59,22 +59,30 @@ function installFetchStub() {
       emailCalls.push(JSON.parse(opts.body || "{}"));
       return jsonResp({ messageId: "<msg@brevo>" }, 201);
     }
-    // Open-Meteo batched summary + today-hourly (used by the email digest engine).
-    const omTimes = Array.from({ length: 24 }, (_, h) => `2026-07-02T${String(h).padStart(2, "0")}:00`);
-    if (u.includes("api.open-meteo.com/v1/forecast")) {
-      const n = (u.match(/latitude=([^&]*)/)?.[1] || "").split(",").length;
-      return jsonResp(Array.from({ length: n }, () => ({
-        current: { wind_speed_10m: stormMode ? 28 : 8, wind_gusts_10m: stormMode ? 35 : 12, wind_direction_10m: 220 },
-        hourly: { time: omTimes, wind_speed_10m: omTimes.map(() => (stormMode ? 28 : 8)) },
-      })));
+    // NWS api.weather.gov (the conditions engine behind the digest + alerts):
+    // /points → a grid, /gridpoints → 4 days of flat weather. Calm by default
+    // (8 kt, 1 ft @ 5 s → GO all day); stormMode = 28 kt, 6 ft → NO-GO.
+    if (u.includes("api.weather.gov/points/")) {
+      return jsonResp({ properties: { gridId: "CLE", gridX: 1, gridY: 1, timeZone: "America/New_York",
+        forecastGridData: "https://api.weather.gov/gridpoints/CLE/1,1",
+        forecast: "https://api.weather.gov/gridpoints/CLE/1,1/forecast",
+        forecastHourly: "https://api.weather.gov/gridpoints/CLE/1,1/forecast/hourly" } });
     }
-    if (u.includes("marine-api.open-meteo.com")) {
-      const n = (u.match(/latitude=([^&]*)/)?.[1] || "").split(",").length;
-      return jsonResp(Array.from({ length: n }, () => ({
-        current: { wave_height: stormMode ? 1.8 : 0.2, wave_period: stormMode ? 3 : 5 },
-        hourly: { time: omTimes, wave_height: omTimes.map(() => (stormMode ? 1.8 : 0.2)) },
-      })));
+    if (/api\.weather\.gov\/gridpoints\/[^/]+\/[^/]+$/.test(u)) {
+      const start = new Date(Date.now() - 30 * 3600e3); start.setUTCMinutes(0, 0, 0);
+      const span = (value) => ({ values: [{ validTime: `${start.toISOString().replace(".000Z", "+00:00")}/PT120H`, value }] });
+      return jsonResp({ properties: {
+        windSpeed: { uom: "wmoUnit:km_h-1", ...span(stormMode ? 52 : 15) },
+        windGust: { uom: "wmoUnit:km_h-1", ...span(stormMode ? 65 : 20) },
+        windDirection: span(225),
+        waveHeight: span(stormMode ? 1.83 : 0.3),
+        wavePeriod: span(5),
+        probabilityOfPrecipitation: span(0),
+        weather: span([]),
+      } });
     }
+    if (u.includes("api.weather.gov")) return jsonResp({ features: [], "@graph": [], properties: { periods: [] } });
+    if (u.includes("ndbc.noaa.gov")) return new Response("", { status: 404 });
     const body = opts.body ? Object.fromEntries(new URLSearchParams(opts.body)) : null;
     stripeCalls.push({ url: u, method: opts.method || "GET", body });
     if (u.includes("/v1/checkout/sessions"))

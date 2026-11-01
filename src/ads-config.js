@@ -11,6 +11,7 @@ export const ADSENSE_DEFAULTS = {
     detailMid: "8915670243",  // spot page, after the gear block
     landingTop: "1882789819", // homepage, after the directory
     landing: "3032908319",    // homepage, after the guides
+    guide: "8915670243",      // inside each boating guide (reuses the spot-page lower unit until a dedicated one exists)
     footerSticky: "",         // dismissible sticky footer (site-wide); empty = off
   },
 };
@@ -21,6 +22,7 @@ export const AD_PLACEMENTS = [
   { key: "detailMid", label: "Spot page · lower", where: "After the gear block, lower on the spot page." },
   { key: "landingTop", label: "Homepage · after directory", where: "Below the lake directory on the homepage." },
   { key: "landing", label: "Homepage · after guides", where: "Below the boating-guides section on the homepage." },
+  { key: "guide", label: "Boating guides · in article", where: "Inside every guide, before the third section. Placed by /guides/guide-ad.js." },
   { key: "footerSticky", label: "Sticky footer", where: "Dismissible anchor bar at the bottom of every page. Off unless a slot ID is set." },
 ];
 

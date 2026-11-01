@@ -268,7 +268,7 @@ export function HomepagePage({ cfg, setCfg }) {
   const set = (k, v) => setCfg((c) => ({ ...c, hero: { ...c.hero, [k]: v } }));
   return (
     <>
-      <PageHead title="Homepage hero" sub="The banner at the top of the homepage and spot pages whenever no sponsor is running." />
+      <PageHead title="Homepage hero" sub="The banner at the top of the homepage, region pages and spot pages whenever no sponsor is running." />
       <div className="adm-grid2 wide-left">
         <Panel title="Content">
           <div className="adm-form">
@@ -289,6 +289,23 @@ export function HomepagePage({ cfg, setCfg }) {
           <p className="adm-muted">Approximate. <a href="/spot/port-clinton" target="_blank" rel="noopener">Open a spot page</a> after saving to see it for real.</p>
         </Panel>
       </div>
+      <Panel title="Photo by region" sub="Give each region its own hero photo so Florida pages don't show a Great Lakes scene. Blank uses the main image, except warm-water regions, which use a coastal illustration until you upload a photo.">
+        <div className="adm-regionheroes">
+          {REGIONS.map((r) => {
+            const v = (h.regions || {})[r.slug] || "";
+            const shown = v || (r.warm ? "/hero-coast.svg" : h.image);
+            return (
+              <div className="adm-regionhero" key={r.slug}>
+                <div className="adm-regionhero-img" style={{ backgroundImage: `url(${shown})` }}>
+                  <span>{r.title}</span>
+                  {!v && <em>{r.warm ? "coastal default" : "main image"}</em>}
+                </div>
+                <UploadField label={r.title} value={v} onChange={(x) => set("regions", { ...(h.regions || {}), [r.slug]: x })} />
+              </div>
+            );
+          })}
+        </div>
+      </Panel>
     </>
   );
 }

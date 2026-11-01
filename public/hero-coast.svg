@@ -1,0 +1,78 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1600 800" preserveAspectRatio="xMidYMid slice" role="img" aria-label="Warm-water coast at golden hour with palms and a fishing boat">
+  <defs>
+    <linearGradient id="sky" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#0f2a4a"/>
+      <stop offset="0.45" stop-color="#1f6f8b"/>
+      <stop offset="0.8" stop-color="#7cc6c2"/>
+      <stop offset="1" stop-color="#ffe2a8"/>
+    </linearGradient>
+    <radialGradient id="glow" cx="0.5" cy="0.5" r="0.5">
+      <stop offset="0" stop-color="#fffbe6"/>
+      <stop offset="0.5" stop-color="#ffe7a8" stop-opacity="0.5"/>
+      <stop offset="1" stop-color="#ffd98a" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="water" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#3fb6b8"/>
+      <stop offset="0.35" stop-color="#1d8fa6"/>
+      <stop offset="1" stop-color="#0b3a5c"/>
+    </linearGradient>
+    <linearGradient id="sand" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#e9cf9b"/>
+      <stop offset="1" stop-color="#c9a46a"/>
+    </linearGradient>
+  </defs>
+
+  <!-- sky -->
+  <rect width="1600" height="500" fill="url(#sky)"/>
+  <g fill="#ffffff" opacity="0.18">
+    <ellipse cx="420" cy="140" rx="210" ry="22"/>
+    <ellipse cx="1180" cy="90" rx="260" ry="20"/>
+    <ellipse cx="900" cy="210" rx="150" ry="14"/>
+  </g>
+  <!-- sun low over the water -->
+  <circle cx="1100" cy="470" r="260" fill="url(#glow)"/>
+  <circle cx="1100" cy="478" r="60" fill="#fff6d6"/>
+
+  <!-- open water -->
+  <rect y="500" width="1600" height="300" fill="url(#water)"/>
+  <g fill="#ffffff" opacity="0.35">
+    <rect x="1040" y="520" width="120" height="4" rx="2"/>
+    <rect x="1010" y="556" width="180" height="5" rx="2.5"/>
+    <rect x="980" y="600" width="240" height="6" rx="3"/>
+  </g>
+  <!-- gentle swell lines -->
+  <g fill="none" stroke="#ffffff" stroke-opacity="0.18" stroke-width="3">
+    <path d="M0 610 C 200 598 400 622 600 610 S 1000 598 1200 610 1400 622 1600 610"/>
+    <path d="M0 680 C 220 666 440 694 660 680 S 1100 666 1320 680 1500 692 1600 682"/>
+  </g>
+
+  <!-- sport-fishing boat, right of center (text sits on the left) -->
+  <g transform="translate(1250,560)">
+    <path d="M-120 0 L120 0 L95 26 L-104 26 Z" fill="#f4f7fa"/>
+    <path d="M-104 26 L95 26 L88 34 L-98 34 Z" fill="#0b3a5c" opacity="0.6"/>
+    <rect x="-40" y="-30" width="70" height="30" rx="4" fill="#e3eaf0"/>
+    <rect x="-30" y="-24" width="50" height="12" rx="2" fill="#2b5f7c"/>
+    <rect x="-6" y="-70" width="4" height="40" fill="#e3eaf0"/>
+    <rect x="-36" y="-72" width="64" height="4" fill="#e3eaf0"/>
+    <path d="M-150 30 C -120 36 -90 36 -60 32" stroke="#ffffff" stroke-opacity="0.5" stroke-width="3" fill="none"/>
+  </g>
+
+  <!-- beach in the left foreground -->
+  <path d="M0 800 L0 640 C 160 650 300 690 420 740 C 470 762 500 784 520 800 Z" fill="url(#sand)"/>
+  <path d="M0 640 C 160 650 300 690 420 740" stroke="#ffffff" stroke-opacity="0.45" stroke-width="5" fill="none"/>
+
+  <!-- palms -->
+  <g fill="#0a2236">
+    <path d="M170 700 C 176 600 196 500 236 420 L246 424 C 210 506 192 602 188 700 Z"/>
+    <path d="M240 420 C 180 390 120 400 70 440 C 130 420 190 420 236 432 Z"/>
+    <path d="M240 420 C 230 360 190 320 130 300 C 180 340 214 380 232 428 Z"/>
+    <path d="M240 420 C 280 360 340 340 400 350 C 340 362 290 388 250 428 Z"/>
+    <path d="M240 420 C 300 410 360 430 400 470 C 350 440 296 432 244 432 Z"/>
+    <path d="M240 420 C 250 360 286 320 330 300 C 300 334 270 374 250 428 Z"/>
+    <path d="M70 720 C 74 650 86 580 110 530 L118 533 C 98 586 88 652 86 720 Z"/>
+    <path d="M114 530 C 74 510 36 516 4 540 C 44 528 82 530 112 540 Z"/>
+    <path d="M114 530 C 110 490 86 464 50 452 C 80 480 100 506 108 538 Z"/>
+    <path d="M114 530 C 140 494 180 482 220 490 C 180 498 146 514 120 540 Z"/>
+    <path d="M114 530 C 152 528 190 544 214 568 C 182 550 148 544 116 542 Z"/>
+  </g>
+</svg>

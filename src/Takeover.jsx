@@ -2,6 +2,16 @@ import React, { useEffect, useState } from "react";
 import { activeTakeover, GAM } from "./sponsor.js";
 import { loadSiteConfig } from "./siteConfig.js";
 import { pickCampaign } from "./sponsor-target.js";
+import { regionBySlug } from "./regions.js";
+
+// The hero photo for a page: the region's own upload, else the coastal
+// illustration for warm-water regions (the main photo is a Great Lakes scene),
+// else the main hero image.
+export function heroImageFor(hero, region) {
+  if (region === undefined) return ""; // spot page still resolving its region: no photo yet, never the wrong one
+  const r = region && regionBySlug(region);
+  return (r && hero.regions && hero.regions[r.slug]) || (r && r.warm ? "/hero-coast.svg" : hero.image);
+}
 
 // Sponsor reporting: one view per page shown, one click per click-through.
 // Cookieless; counts land in KV per campaign per day (admin → Sponsors).
@@ -88,16 +98,18 @@ function SponsorHero({ s, splash, children }) {
 // ── House hero (brand band over the hero photo or video) ─────────────────────
 // title / subtitle replace the admin headline on pages with their own subject
 // (a /near/<city> page reads "Boating near Cleveland, OH").
-function HouseHero({ hero, spotName, verdict, adFree, splash, children, signedIn, onJoin, title, subtitle }) {
+function HouseHero({ hero, spotName, verdict, adFree, splash, children, signedIn, onJoin, title, subtitle, region }) {
   const h = { ...DEFAULT_HERO, ...(hero || {}) };
-  const photo = h.image;
-  const video = h.video;
-  const bgStyle = !video && photo
-    ? { backgroundImage: `linear-gradient(90deg, rgba(7,24,43,0.94) 0%, rgba(7,24,43,0.66) 46%, rgba(7,24,43,0.14) 100%), url(${photo})` }
-    : undefined;
+  const photo = heroImageFor(h, region);
+  // A hero video belongs to the main hero; a regional photo replaces it.
+  const pending = region === undefined; // keep the photo styling; image arrives once the region is known
+  const video = !pending && photo === h.image ? h.video : "";
+  const shade = "linear-gradient(90deg, rgba(7,24,43,0.94) 0%, rgba(7,24,43,0.66) 46%, rgba(7,24,43,0.14) 100%)";
+  const bgStyle = !video && photo ? { backgroundImage: `${shade}, url(${photo})` }
+    : pending ? { backgroundImage: `${shade}, linear-gradient(180deg, #0f2a4a, #0b3a5c)` } : undefined;
   const parts = (h.headline || DEFAULT_HERO.headline).split("{spot}");
   return (
-    <section className={`hero hero-house${photo || video ? " has-photo" : ""}${splash ? " hero-splash" : ""}`} style={bgStyle}>
+    <section className={`hero hero-house${photo || video || pending ? " has-photo" : ""}${splash ? " hero-splash" : ""}`} style={bgStyle}>
       {video && (
         <>
           <video className="hero-video" autoPlay muted loop playsInline poster={photo || undefined}>
@@ -174,5 +186,5 @@ export default function Takeover({ adFree, spotName, verdict, splash = false, ch
     );
   }
   return <HouseHero hero={cfg.hero} spotName={spotName} verdict={verdict} adFree={adFree} splash={splash} signedIn={signedIn} onJoin={onJoin}
-    title={title} subtitle={subtitle}>{splash ? children : null}</HouseHero>;
+    title={title} subtitle={subtitle} region={region}>{splash ? children : null}</HouseHero>;
 }
