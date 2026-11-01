@@ -1108,3 +1108,17 @@ body.has-takeover .app { background: var(--bg); border-radius: var(--r-lg) var(-
 .app > * { margin-top: 0; margin-bottom: 0; }
 .app > footer.meta { margin-top: var(--s3); }
 @media (max-width: 640px) { .app { gap: var(--s3); } }
+
+/* Compact verdict bar: inside the sticky header once the call card scrolls away */
+.hdr-verdict { display: flex; align-items: center; gap: var(--s3); width: 100%; border: 0; border-top: 1px solid var(--border);
+  padding: 8px clamp(var(--s4), 3.5vw, var(--s6)); background: color-mix(in srgb, var(--vc, var(--accent)) 10%, var(--surface));
+  color: var(--text); font: inherit; font-size: var(--fs-sm); cursor: pointer; text-align: left; animation: hdrv-in var(--dur) var(--ease); }
+.hdr-verdict.go { --vc: var(--success); } .hdr-verdict.caution { --vc: var(--warning); } .hdr-verdict.nogo { --vc: var(--danger); }
+.hdr-verdict-badge { flex: 0 0 auto; font-weight: var(--fw-extrabold); font-size: var(--fs-xs); letter-spacing: var(--tracking-wide);
+  padding: 3px 10px; border-radius: var(--r-pill); background: var(--vc, var(--accent)); color: #fff; }
+.hdr-verdict.caution .hdr-verdict-badge { color: #1a1206; }
+.hdr-verdict-name { font-weight: var(--fw-semibold); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+.hdr-verdict-nums { color: var(--text-muted); font-family: var(--font-mono); font-size: var(--fs-xs); white-space: nowrap; }
+.hdr-verdict-up { margin-left: auto; color: var(--text-muted); }
+@keyframes hdrv-in { from { opacity: 0; transform: translateY(-4px); } to { opacity: 1; transform: none; } }
+@media (max-width: 560px) { .hdr-verdict-nums { display: none; } }

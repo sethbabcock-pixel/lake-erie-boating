@@ -973,6 +973,17 @@ export default function App() {
 
   const spot = data?.spot;
   const rec = data?.recommendation;
+  // Compact verdict bar: once the call card scrolls out of view, a thin bar
+  // under the sticky header keeps the verdict and key numbers in sight.
+  const callRef = useRef(null);
+  const [callHidden, setCallHidden] = useState(false);
+  useEffect(() => {
+    const el = callRef.current;
+    if (!el || typeof IntersectionObserver === "undefined") { setCallHidden(false); return; }
+    const io = new IntersectionObserver(([e]) => setCallHidden(!e.isIntersecting && e.boundingClientRect.top < 0), { threshold: 0 });
+    io.observe(el);
+    return () => io.disconnect();
+  }, [data && data.spot && data.spot.id, !!rec]);
   const wind = data?.wind || {};
   const wv = data?.waves || {};
   const buoy = data?.buoy;
@@ -1014,6 +1025,18 @@ export default function App() {
             <Account auth={auth} />
           </div>
         </div>
+        {!landing && callHidden && rec && data && !data.notMarine && (
+          <button className={`hdr-verdict ${verdictClass(rec.level)}`} onClick={() => window.scrollTo({ top: 0, behavior: "smooth" })}
+            aria-label={`${rec.level} at ${spot?.name || "this launch"}. Back to the top`}>
+            <span className="hdr-verdict-badge">{rec.level}</span>
+            <span className="hdr-verdict-name">{spot?.name}</span>
+            <span className="hdr-verdict-nums">
+              {wind.speedKt != null ? `${Math.round(wind.speedKt)} kt${wind.dir ? ` ${wind.dir}` : ""}` : ""}
+              {wv.ft != null ? ` · ${fmtWaves(wv.ft, wv.periodSec)}` : ""}
+            </span>
+            <span className="hdr-verdict-up" aria-hidden="true">↑</span>
+          </button>
+        )}
       </header>
 
       {landing ? (
@@ -1058,7 +1081,7 @@ export default function App() {
         {data && !data.notMarine && (
           <>
             {/* ── The Call ── */}
-            <section className={`call ${verdictClass(rec.level)}`}>
+            <section className={`call ${verdictClass(rec.level)}`} ref={callRef}>
               <div className="call-badge"><span>{rec.level}</span></div>
               <div className="call-body">
                 <div className="call-top">
