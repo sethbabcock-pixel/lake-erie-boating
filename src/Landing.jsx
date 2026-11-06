@@ -3,6 +3,7 @@ import Takeover from "./Takeover.jsx";
 import { IconStar } from "./icons.jsx";
 import { fmtWaves } from "./units.js";
 import { AdSlot } from "./monetize.jsx";
+import { getSummary } from "./summary.js";
 import { LAKE_ORDER, NEAR_METROS, seasonalRegions, seasonalLakeOrder, regionBySlug, regionGuides } from "./regions.js";
 
 const vclass = (v) => (v === "NO-GO" ? "nogo" : v === "CAUTION" ? "caution" : v === "GO" ? "go" : "unknown");
@@ -61,6 +62,9 @@ const comfortFlag = (prefs, s) => {
   return over.length ? { ok: false, text: `Over your ${over.join(" & ")} limit` } : { ok: true, text: "Within your limits" };
 };
 
+// The boater's "home" port: first starred port, else the last spot they opened.
+const homeIdFor = (favorites) => (favorites || [])[0] || (() => { try { return localStorage.getItem("boating.spot"); } catch (e) { return null; } })();
+
 function StatusChip({ level }) {
   return <span className={`loc-status ${level ? vclass(level) : "unknown"}`}>{level || "—"}</span>;
 }
@@ -83,7 +87,7 @@ function LocCard({ s, onSelect }) {
 // location" to rank the nearest launches, and — when nothing's covered — build
 // a live NOAA page for that exact place (routing through the account gate).
 // Absorbs what used to be a second "find or build" card lower on the page.
-function SplashSearch({ summary, favorites, onSelect, onPreview, onRequest, onLocate }) {
+function SplashSearch({ summary, favorites, onSelect, onPreview, onRequest, onLocate, refPt }) {
   const [q, setQ] = useState("");
   const [focused, setFocused] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -100,7 +104,7 @@ function SplashSearch({ summary, favorites, onSelect, onPreview, onRequest, onLo
   const canBuild = ql.length >= 2;
   // Returning visitor: their home port (first star) or the last spot they
   // opened, with its live verdict, one tap from the fold.
-  const homeId = (favorites || [])[0] || (() => { try { return localStorage.getItem("boating.spot"); } catch (e) { return null; } })();
+  const homeId = homeIdFor(favorites);
   const home = homeId ? (summary || []).find((s) => s.id === homeId) : null;
 
   useEffect(() => {
@@ -228,7 +232,7 @@ function SplashSearch({ summary, favorites, onSelect, onPreview, onRequest, onLo
             <>
               {matches.map((s) => (
                 <button key={s.id} className="splash-opt" onClick={() => onSelect(s.id)}>
-                  <span className="splash-opt-main">{s.name} <em className="splash-lake">{s.lake}</em></span>
+                  <span className="splash-opt-main">{s.name} <em className="splash-lake">{s.lake}{refPt && s.lat != null ? ` · ${Math.round(haversineMi(refPt, s))} mi` : ""}</em></span>
                   <StatusChip level={s.level} />
                 </button>
               ))}
@@ -592,6 +596,35 @@ function GuidesTeaser() {
   );
 }
 
+// "Right now" strip: live verdict chips for the boater's starred ports,
+// topped up with a few popular launches. Reads only the directory summary the
+// page already loads; a spot without a live level shows "No data", never a default.
+const POPULAR_IDS = ["cleveland", "chicago", "tampa-bay", "san-diego", "galveston"];
+function RightNow({ summary, favorites, skipId, onSelect }) {
+  if (!summary || !summary.length) return null;
+  const byId = new Map(summary.map((s) => [s.id, s]));
+  const ids = [];
+  const add = (id) => { if (id && id !== skipId && byId.has(id) && !ids.includes(id)) ids.push(id); };
+  (favorites || []).forEach(add);
+  const mine = Math.min(ids.length, 3);
+  POPULAR_IDS.forEach((id) => { if (ids.length < mine + 3) add(id); });
+  const chips = ids.slice(0, 6).map((id) => byId.get(id));
+  if (!chips.length) return null;
+  return (
+    <section className="rightnow" aria-label="Right now">
+      <h2 className="rightnow-title">Right now <span>{mine ? "your ports + popular launches" : "popular launches"}</span></h2>
+      <div className="rightnow-row">
+        {chips.map((s) => (
+          <button key={s.id} type="button" className="rightnow-chip" onClick={() => onSelect(s.id)}>
+            <span className="rightnow-name">{s.name}</span>
+            {s.level ? <StatusChip level={s.level} /> : <span className="loc-status unknown">No data</span>}
+          </button>
+        ))}
+      </div>
+    </section>
+  );
+}
+
 // Remembered "near me" point — the last place the boater searched or located
 // from, so a returning inland visitor gets their launches without re-typing.
 const NEARPT_KEY = "boating.nearpt";
@@ -624,10 +657,7 @@ export default function Landing({ adFree, showAds, onSelect, favorites, onCookie
   const dirRegion = region || (metro ? regionBySlug(metro.region) : null);
   useEffect(() => {
     let alive = true;
-    fetch("/marine/conditions?summary")
-      .then((r) => (r.ok ? r.json() : null))
-      .then((d) => { if (alive) setSummary((d && d.spots) || []); })
-      .catch(() => { if (alive) setSummary([]); });
+    getSummary().then((list) => { if (alive) setSummary(list); });
     return () => { alive = false; };
   }, []);
   // A region page (/greatlakes, /florida…) leads with its own subject and live
@@ -647,7 +677,8 @@ export default function Landing({ adFree, showAds, onSelect, favorites, onCookie
         subtitle={metro ? "The closest launches, best conditions first, with a live GO / CAUTION / NO-GO call from NOAA for each."
           : regionPage ? (regionTally || regionPage.blurb) : null}>
         <SplashSearch summary={summary} favorites={favorites}
-          onSelect={onSelect} onPreview={onPreview} onRequest={openRequest} onLocate={rememberPt} />
+          onSelect={onSelect} onPreview={onPreview} onRequest={openRequest} onLocate={rememberPt}
+          refPt={nearPt && nearPt.lat != null && nearPt.lon != null ? nearPt : null} />
       </Takeover>
       <main className="app">
         {/* City pages lead with the answer: the closest launches. */}
@@ -656,6 +687,7 @@ export default function Landing({ adFree, showAds, onSelect, favorites, onCookie
             heading={<>Closest launches to {metro.name}</>} />
         )}
         {regionPage && directory}
+        {!metro && !regionPage && <RightNow summary={summary} favorites={favorites} skipId={homeIdFor(favorites)} onSelect={onSelect} />}
         {onJoin && (
           <div className="joinstrip">
             <span><b>Every verdict, forecast and cam here is free.</b> A free account adds ⭐ saved ports, your ports' verdict by email at 6am, and NO-GO alerts.</span>

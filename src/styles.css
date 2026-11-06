@@ -1224,3 +1224,59 @@ body.has-takeover .app { background: var(--bg); border-radius: var(--r-lg) var(-
 
 /* Text for screen readers only (e.g. the ⚡ storm cue in the week strip). */
 .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
+
+/* ── UX review 2026-11: X2 / X3 / X6 ──────────────────────────────────────────
+   Landing "Right now" strip, picker verdict+distance, non-GO spot-page
+   ordering (promoted nearby, map poster, collapsed gear), auth form labels. */
+
+/* X2: landing "Right now" strip */
+.rightnow { margin: 0 0 var(--s4); }
+.rightnow-title { margin: 0 0 var(--s2); font-size: var(--fs-lg); font-weight: var(--fw-bold); color: var(--text); }
+.rightnow-title span { margin-left: 6px; font-size: var(--fs-xs); font-weight: var(--fw-medium); color: var(--text-muted); }
+.rightnow-row { display: flex; gap: var(--s2); overflow-x: auto; padding-bottom: 4px; scrollbar-width: thin; -webkit-overflow-scrolling: touch; }
+.rightnow-chip { flex: 0 0 auto; display: inline-flex; align-items: center; gap: var(--s2); min-height: 44px; max-width: 78vw; padding: 0 8px 0 14px;
+  background: var(--surface); border: 1px solid var(--border); border-radius: var(--r-pill); color: var(--text);
+  font-family: var(--font-sans); font-size: var(--fs-sm); font-weight: var(--fw-semibold); cursor: pointer; }
+.rightnow-chip:hover { border-color: var(--accent); }
+.rightnow-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* X2: picker rows carry distance + verdict */
+.locpick-pick { gap: var(--s2); min-height: 44px; }
+.locpick-pick .lp-name { flex: 1 1 auto; min-width: 0; }
+.locpick-pick .lp-mi { flex: 0 0 auto; font-size: var(--fs-xs); color: var(--text-muted); font-family: var(--font-mono); }
+.locpick-pick .loc-status { flex: 0 0 auto; }
+
+/* X3: promoted nearby list (non-GO) */
+.nlevel { font-size: 10px; font-weight: var(--fw-extrabold); letter-spacing: var(--tracking-wide); text-transform: uppercase; color: var(--text-muted); }
+.nlevel.go { color: var(--success); }
+.nlevel.caution { color: var(--warning); }
+.nlevel.nogo { color: var(--danger); }
+.nearby-promoted .nearby-row { flex-direction: column; flex-wrap: nowrap; }
+.nearby-promoted .nearby-chip { width: 100%; min-height: 44px; border-radius: var(--r-md); }
+.nearby-promoted .nname { flex: 1 1 auto; text-align: left; }
+.nearby-promoted .nearby-chip small { margin-left: auto; text-align: right; }
+
+/* X3: map poster (embed loads on tap) */
+.mapposter { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; width: 100%; min-height: 132px; padding: var(--s4);
+  background: var(--surface-sunk); border: 1px dashed var(--border-strong); border-radius: var(--r-md); color: var(--text);
+  font-family: var(--font-sans); font-size: var(--fs-sm); cursor: pointer; }
+.mapposter:hover { border-color: var(--accent); }
+.mapposter-ico { color: var(--accent); }
+.mapposter small { color: var(--text-muted); font-size: var(--fs-xs); }
+@media (min-width: 1024px) { .dash2 .mapposter { flex: 1 1 auto; } }
+
+/* X3: gear block collapsed on NO-GO (still labeled as affiliate links) */
+.gearfold { padding: 0; }
+.gearfold > summary { min-height: 44px; display: flex; align-items: center; padding: 0 var(--s4); font-size: var(--fs-sm); font-weight: var(--fw-semibold); color: var(--text-muted); cursor: pointer; }
+.gearfold[open] > summary { border-bottom: 1px solid var(--border); }
+.gearfold > .card { border: 0; box-shadow: none; margin-bottom: 0; background: none; }
+
+/* X6: auth modal labels, show/hide password, tap-size close */
+.field-label { display: block; margin: 0 0 4px; font-size: var(--fs-sm); font-weight: var(--fw-semibold); color: var(--text); }
+.pw-wrap { position: relative; }
+.pw-wrap .field { padding-right: 64px; }
+.pw-toggle { position: absolute; top: 0; right: 0; height: 44px; min-width: 56px; padding: 0 12px; background: none; border: 0; color: var(--accent);
+  font-family: var(--font-sans); font-size: var(--fs-sm); font-weight: var(--fw-semibold); cursor: pointer; }
+.modal .pw-rule { margin: calc(-1 * 4px) 0 var(--s3); line-height: 1.45; }
+.modal-x { width: 44px; height: 44px; top: 4px; right: 4px; display: flex; align-items: center; justify-content: center; }
+.modal h2 { padding-right: 36px; }
