@@ -390,6 +390,10 @@ const GUIDES = [
   "boating-the-chesapeake-bay",
   "vhf-radio-and-calling-for-help",
   "thunderstorms-and-lightning",
+  "boating-florida-atlantic-inlets",
+  "boating-lake-huron",
+  "boating-lake-ontario",
+  "boating-hawaii",
 ];
 
 // Date the page templates / on-page content last changed materially. Google
