@@ -1139,6 +1139,30 @@ async function run() {
     gridMode = null;
   }
 
+  // ── Launch-facts card: a configured buoy is not a live buoy ──
+  {
+    const { SPOTS, spotFacts } = await import("../functions/marine/conditions.js");
+    const { seoForPath } = await import("../functions/seo.js");
+    const fc = { source: "forecast" };
+    const off = spotFacts(SPOTS.duluth, { buoy: null, wind: fc, waves: fc }).liveData;
+    check("facts: pulled buoy (Duluth 45027) → not live, listed offline", off.checked && off.live === null && off.offline.join() === "45027", JSON.stringify(off));
+    const on = spotFacts({ buoys: ["45176", "45164", "45005"] }, { buoy: { station: "45164", ageMinutes: 30, observedAt: "2026-07-01T12:00:00Z" }, wind: { source: "buoy" }, waves: fc }).liveData;
+    check("facts: fallback buoy live → earlier station offline, later unchecked omitted", on.live === "45164" && on.offline.join() === "45176" && on.ageMinutes === 30 && on.wavesFrom === "forecast", JSON.stringify(on));
+    const stray = spotFacts({ buoys: ["45004"] }, { buoy: { station: "99999", ageMinutes: 5 }, wind: fc, waves: fc }).liveData;
+    check("facts: buoy not in the spot's list is never called live", stray.live === null, JSON.stringify(stray));
+    const dbl = spotFacts(SPOTS.duluth, { buoy: null, wind: { source: null }, waves: { source: null } }).liveData;
+    check("facts: buoy pulled AND forecast down → sources null, not 'forecast'", dbl.windFrom === null && dbl.wavesFrom === null, JSON.stringify(dbl));
+    const temps = spotFacts({ buoys: ["45005"] }, { buoy: { station: "45005", ageMinutes: -3, observedAt: "bad" }, wind: fc, waves: { source: null } }).liveData;
+    check("facts: fresh buoy with temps only → live, wind forecast, waves null; skewed age clamped; bad time dropped", temps.live === "45005" && temps.windFrom === "forecast" && temps.wavesFrom === null && temps.ageMinutes === 0 && temps.observedAt === null, JSON.stringify(temps));
+    check("facts: no conditions fetch → liveData.checked false", spotFacts(SPOTS.marquette).liveData.checked === false);
+    const html = JSON.stringify(seoForPath("/spot/marquette"));
+    check("seo: spot page never advertises a buoy as live", !/Live (observations|data)/.test(html) && /Buoy stations/.test(html));
+    check("seo: Great Lakes page mentions winter buoy pulls", /pulled in winter/.test(html));
+    const coastId = Object.keys(SPOTS).find((id) => SPOTS[id].water && SPOTS[id].water !== "lake" && (SPOTS[id].buoys || []).length);
+    const chtml = JSON.stringify(seoForPath(`/spot/${coastId}`));
+    check("seo: coastal page has no Great Lakes winter note", /Buoy stations/.test(chtml) && !/pulled in winter/.test(chtml) && !/Live (observations|data)/.test(chtml), coastId);
+  }
+
   console.log(results.join("\n"));
   console.log(`\n${passed} passed, ${failed} failed`);
   if (failed) process.exit(1);

@@ -1017,12 +1017,37 @@ export function windExposure(spot) {
 // Static, verifiable facts about a launch: which NWS marine zone forecasts it,
 // which NDBC stations feed it, and its wind exposure. Shown on the spot page
 // and server-rendered into its HTML.
-export function spotFacts(spot) {
+// Launch facts for the "About <spot>" card. `obs` is this response's live
+// readings ({ buoy, wind, waves }); pass it whenever a conditions fetch ran so
+// the card only calls a station live if it returned a fresh (<3 h) observation
+// in THIS response. Great Lakes offshore buoys are pulled for the winter, and
+// a configured station is not a live one. Without `obs` (static/SSR render)
+// liveData.checked is false and callers must not claim any station is live.
+export function spotFacts(spot, obs) {
+  const buoys = (spot.buoys || []).filter(Boolean);
+  let liveData = { checked: false, live: null, ageMinutes: null, observedAt: null, offline: [], windFrom: null, wavesFrom: null };
+  if (obs) {
+    const live = obs.buoy && obs.buoy.station && buoys.includes(obs.buoy.station) ? obs.buoy.station : null;
+    // fetchBuoy tries stations in order and stops at the first fresh one, so
+    // every station ahead of the live one (or all, if none) failed or was stale.
+    // Stations after the live one were never checked, so they're omitted.
+    const idx = live ? buoys.indexOf(live) : buoys.length;
+    liveData = {
+      checked: true,
+      live,
+      ageMinutes: live && Number.isFinite(obs.buoy.ageMinutes) ? Math.max(0, obs.buoy.ageMinutes) : null,
+      observedAt: live && Number.isFinite(Date.parse(obs.buoy.observedAt)) ? obs.buoy.observedAt : null,
+      offline: buoys.slice(0, idx),
+      windFrom: obs.wind?.source ?? null, // "buoy" | "forecast" | null (null = no data at all)
+      wavesFrom: obs.waves?.source ?? null,
+    };
+  }
   return {
     lake: spot.lake || "Lake Erie",
     lat: spot.lat, lon: spot.lon,
     zone: spot.zone || null,
-    buoys: (spot.buoys || []).filter(Boolean),
+    buoys, // configured stations, NOT a claim that any is reporting; see liveData
+    liveData,
     exposure: windExposure(spot),
     coastal: !!spot.water && spot.water !== "lake",
     water: waterProfile(spot),
@@ -1743,7 +1768,7 @@ export async function onRequest(context) {
     waves: { ...waves, periodSec: showPeriod(waves.ft, waves.periodSec) },
     temps,
     windRead: read,
-    facts: spotFacts(spot),
+    facts: spotFacts(spot, { buoy, wind, waves }),
     hourly: hourly.map((h) => ({ ...h, periodSec: showPeriod(h.waveFt, h.periodSec) })),
     outlook,
     week: week.map((d) => ({ ...d, periodSec: showPeriod(d.waveFt, d.periodSec) })),
