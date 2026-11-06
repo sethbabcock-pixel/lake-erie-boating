@@ -15,7 +15,7 @@
 // the same summary data the homepage directory shows (pooled NWS grid calls
 // for all ports, with cached /points lookups — cheap enough to run hourly).
 import { sendEmail, ensureUnsubToken, notify, emailFooter, isPro } from "./auth.js";
-import { fetchSummary, fetchTodayWindows, fetchBuiltSummaries, fetchWeeks } from "./marine/conditions.js";
+import { fetchSummary, fetchTodayWindows, fetchBuiltSummaries, fetchWeeks, fetchSpotVerdict } from "./marine/conditions.js";
 
 const SITE = "https://shouldiboat.com";
 export const DIGEST_UTC_HOUR = 10; // 6am ET / 5am CT
@@ -141,11 +141,34 @@ export async function runScheduled(env, utcHour, now = new Date()) {
   // GO alerts compare each port's level with the previous hourly run's, so they
   // fire on a real improvement rather than on every run that happens to be GO.
   const favIds = [...new Set(users.flatMap((u) => u.favorites || []))].filter((id) => byId[id]);
-  const prevLevel = {};
-  if (isAlertWindow) for (const id of favIds) prevLevel[id] = await env.USERS.get(`lvl:${id}`).catch(() => null);
+  // Stored as "LEVEL|YYYY-MM-DD"; a level from an earlier day is ignored, so a
+  // missed run can't turn an old CAUTION into a false "just improved".
+  const prevRaw = {}, prevLevel = {};
+  if (isAlertWindow) {
+    for (const id of favIds) {
+      const v = await env.USERS.get(`lvl:${id}`).catch(() => null);
+      prevRaw[id] = v;
+      const [lvl, day] = String(v || "").split("|");
+      prevLevel[id] = v && day === today ? lvl : null;
+    }
+  }
   // The first run of the window only records levels: an overnight change isn't
-  // news (the 6am digest covers the morning), so no GO alert fires on it.
-  const turnedGo = (id) => utcHour > ALERT_UTC_FROM && byId[id]?.level === "GO" && prevLevel[id] && prevLevel[id] !== "GO";
+  // news (the 6am digest covers the morning), so no GO alert fires on it. A
+  // candidate also needs real wind AND wave data on its tile.
+  const tileTurnedGo = (id) => {
+    const s = byId[id];
+    return utcHour > ALERT_UTC_FROM && s?.level === "GO" && s.windKt != null && s.waveFt != null && prevLevel[id] && prevLevel[id] !== "GO";
+  };
+  // Then confirm with the full spot-page verdict (marine advisories, gusts,
+  // buoys, nearshore text) — the tile alone is not enough to email "GO".
+  const goConfirmed = {};
+  if (isAlertWindow) {
+    const wanted = new Set(users.filter((u) => isPro(u) && (u.prefs || {}).goAlerts).flatMap((u) => u.favorites || []));
+    for (const id of favIds.filter((id) => wanted.has(id) && tileTurnedGo(id))) {
+      goConfirmed[id] = (await fetchSpotVerdict(env, id).catch(() => null)) === "GO";
+    }
+  }
+  const turnedGo = (id) => goConfirmed[id] === true;
 
   // Weekend outlook: only the starred ports of opted-in Pro members are fetched.
   const wantsWeekend = (u) => isPro(u) && (u.prefs || {}).weekendEmail && !u.emailOptOut && u.emailVerified !== false;
@@ -223,11 +246,13 @@ export async function runScheduled(env, utcHour, now = new Date()) {
   }
 
   // Remember each starred port's level for the next run's GO check. Written
-  // only when it changes, to stay well inside KV's daily write quota.
+  // only when it changes or is from an earlier day (≈1 write per port per day
+  // plus real changes), to stay well inside KV's daily write quota.
   if (isAlertWindow) {
     for (const id of favIds) {
       const lvl = byId[id].level;
-      if (lvl && lvl !== prevLevel[id]) await env.USERS.put(`lvl:${id}`, lvl).catch(() => {});
+      const val = `${lvl}|${today}`;
+      if (lvl && prevRaw[id] !== val) await env.USERS.put(`lvl:${id}`, val).catch(() => {});
     }
   }
 

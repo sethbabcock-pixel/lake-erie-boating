@@ -833,7 +833,10 @@ function zoneNumbers(spec) {
 export function plausiblePeriod(waveFt, sec) {
   if (sec == null || !(sec > 0)) return null;
   if (sec < 1.5) return null;
-  if (waveFt != null && waveFt * 0.3048 > (1.56 * sec * sec) / 7) return null;
+  // Periods arrive rounded to whole seconds, so allow +0.5 s before calling a
+  // pair impossible: real Lake Erie chop like 3–4 ft @ 2 s must stay visible.
+  const T = sec + 0.5;
+  if (waveFt != null && waveFt * 0.3048 > (1.56 * T * T) / 7) return null;
   return sec;
 }
 
@@ -1484,6 +1487,7 @@ export async function fetchBuiltSummaries(env, slugs) {
   for (const slug of [...new Set(slugs)]) { const b = await getBuiltSpot(env, slug); if (b) resolved.push([slug, b]); }
   if (!resolved.length) return [];
   const grids = await pooled(resolved, 8, ([, s]) => fetchSpotGrid(s));
+  await floorWithMarineText(resolved, grids).catch(() => {}); // same nearshore wave floor as the directory
   const nowH = Math.floor(Date.now() / 3600000);
   return resolved.map(([id, s], i) => summaryTile(id, s, grids[i], nowH));
 }
@@ -1500,7 +1504,30 @@ export async function fetchWeeks(env, ids) {
   if (!entries.length) return {};
   const grids = await pooled(entries, 8, ([, s]) => fetchSpotGrid(s));
   await floorWithMarineText(entries, grids).catch(() => {});
-  return Object.fromEntries(entries.map(([id, s], i) => [id, buildWeek(grids[i], waterProfile(s))]));
+  // For the weekend email, a day only reads GO with wind data, and on lakes the
+  // gusts count (as the hour-by-hour strip does). Never more generous than the
+  // week strip; a day without wind data shows "—", not GO.
+  return Object.fromEntries(entries.map(([id, s], i) => {
+    const profile = waterProfile(s);
+    return [id, buildWeek(grids[i], profile).map((d) => {
+      if (d.windKt == null) return { ...d, level: null };
+      if (profile === "ocean") return d;
+      const top = Math.max(d.windKt, d.gustKt ?? -1);
+      const lvl = hourRisk(top, d.precipPct ?? 0, "", d.waveFt, d.periodSec, profile);
+      const rank = { GO: 0, CAUTION: 1, "NO-GO": 2 };
+      return { ...d, level: rank[lvl] > rank[d.level] ? lvl : d.level };
+    })];
+  }));
+}
+
+// The full spot-page verdict (alerts, gusts, buoy, nearshore text) for one
+// port, as the page computes it. The GO alert email re-checks with this before
+// sending, so an email never says GO when the page wouldn't. null on failure.
+export async function fetchSpotVerdict(env, id) {
+  const r = await onRequest({ request: new Request(`https://shouldiboat.com/marine/conditions?spot=${encodeURIComponent(id)}`), env }).catch(() => null);
+  if (!r || !r.ok) return null;
+  const d = await r.json().catch(() => null);
+  return d && d.recommendation ? d.recommendation.level || null : null;
 }
 
 // Today's best GO window for every port (for the daily digest email): per-spot

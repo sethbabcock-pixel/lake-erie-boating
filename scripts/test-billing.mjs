@@ -46,6 +46,7 @@ let stripeCalls = [];
 let emailCalls = [];
 let priceResolves = true;
 let stormMode = false; // Open-Meteo stub: every spot NO-GO (true) vs calm GO (false)
+let scaMode = false; // NWS alerts stub: an active Small Craft Advisory at every point
 let subGetCancelState = false; // what a GET subscription retrieve reports
 const makeSub = (cancelAtPeriodEnd) => ({
   id: "sub_123", status: "active", cancel_at_period_end: cancelAtPeriodEnd,
@@ -80,6 +81,16 @@ function installFetchStub() {
         probabilityOfPrecipitation: span(0),
         weather: span([]),
       } });
+    }
+    // Hourly point forecast (the spot page's timeline): 48 calm or stormy hours.
+    if (/\/forecast\/hourly$/.test(u)) {
+      const t0 = new Date(); t0.setUTCMinutes(0, 0, 0);
+      const periods = Array.from({ length: 48 }, (_, i) => ({ startTime: new Date(t0.getTime() + i * 3600e3).toISOString(), temperature: 60,
+        windSpeed: stormMode ? "32 mph" : "9 mph", windDirection: "SW", shortForecast: "Sunny", probabilityOfPrecipitation: { value: 0 } }));
+      return jsonResp({ properties: { periods } });
+    }
+    if (u.includes("api.weather.gov/alerts/active") && scaMode) {
+      return jsonResp({ features: [{ properties: { event: "Small Craft Advisory", severity: "Minor", headline: "Small Craft Advisory in effect", sent: new Date().toISOString() } }] });
     }
     if (u.includes("api.weather.gov")) return jsonResp({ features: [], "@graph": [], properties: { periods: [] } });
     if (u.includes("ndbc.noaa.gov")) return new Response("", { status: 404 });
@@ -932,7 +943,7 @@ async function run() {
     emailCalls = [];
     const r1 = await runScheduled(env, 13);
     eq("go alerts: none while rough", r1.goAlerts, 0);
-    eq("go alerts: level recorded", await env.USERS.get("lvl:sandusky"), "NO-GO");
+    check("go alerts: level recorded with today's date", (await env.USERS.get("lvl:sandusky")) === `NO-GO|${new Date().toISOString().slice(0, 10)}`, await env.USERS.get("lvl:sandusky"));
     stormMode = false;
     const r2 = await runScheduled(env, 14);
     eq("go alerts: one sent on the turn to GO (Pro only)", r2.goAlerts, 1);
@@ -941,6 +952,19 @@ async function run() {
     stormMode = true; await runScheduled(env, 15);
     stormMode = false;
     eq("go alerts: deduped for the rest of the day", (await runScheduled(env, 16)).goAlerts, 0);
+    // An active advisory makes the full page verdict CAUTION: no GO email even
+    // though the grid tile alone reads GO.
+    const env3 = { USERS: makeKV(), BREVO_API_KEY: "brevo_x" };
+    await seedUser(env3, "go@example.com", { adFree: true, favorites: ["sandusky"], prefs: { goAlerts: true } });
+    stormMode = true; await runScheduled(env3, 13); stormMode = false;
+    scaMode = true;
+    eq("go alerts: advisory in effect → no GO email", (await runScheduled(env3, 14)).goAlerts, 0);
+    scaMode = false;
+    // A level recorded on an earlier day never counts as "was rough".
+    const yesterday = new Date(Date.now() - 86400e3).toISOString().slice(0, 10);
+    const env4 = { USERS: makeKV({ "lvl:sandusky": `NO-GO|${yesterday}` }), BREVO_API_KEY: "brevo_x" };
+    await seedUser(env4, "go@example.com", { adFree: true, favorites: ["sandusky"], prefs: { goAlerts: true } });
+    eq("go alerts: stale level from yesterday → no GO email", (await runScheduled(env4, 14)).goAlerts, 0);
     // First run of the window only records (an overnight change isn't an alert).
     const env2 = { USERS: makeKV({ "lvl:sandusky": "NO-GO" }), BREVO_API_KEY: "brevo_x" };
     await seedUser(env2, "go@example.com", { adFree: true, favorites: ["sandusky"], prefs: { goAlerts: true } });
