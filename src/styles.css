@@ -1202,3 +1202,8 @@ body.has-takeover .app { background: var(--bg); border-radius: var(--r-lg) var(-
   /* Spot-page hero: a tighter title band on phones. */
   .hero-house:not(.hero-splash) .hero-inner, .hero-house.has-photo:not(.hero-splash) .hero-inner { padding-top: var(--s4); padding-bottom: var(--s4); }
 }
+
+/* No verdict (missing wind data): neutral, never green. */
+.wd-level.unknown { background: var(--surface-sunk); color: var(--text-faint); border: 1px solid var(--border); }
+.ndot.unknown { background: transparent; border: 1.5px solid var(--text-faint); }
+.glance-band .gb.unknown, .hx-v.unknown { background: var(--border-strong); }

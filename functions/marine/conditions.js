@@ -537,7 +537,7 @@ function buildWeek(grid, profile = "lake") {
       precipPct: d.precipPct == null ? null : Math.round(d.precipPct),
       waveFt: round(d.waveFt, 1),
       periodSec: round(d.periodSec, 0),
-      level: hourRisk(round(d.windKt, 0), d.precipPct ?? 0, "", round(d.waveFt, 1), round(d.periodSec, 0), profile, { sustained: round(d.windKt, 0), gust: round(d.gustKt, 0) }),
+      level: riskLevel(round(d.windKt, 0), round(d.gustKt, 0), d.precipPct ?? 0, "", round(d.waveFt, 1), round(d.periodSec, 0), profile),
     }));
 }
 
@@ -1082,6 +1082,23 @@ function hourRisk(windKt, precipPct, short, waveFt, periodSec = null, profile = 
   return "GO";
 }
 
+// One verdict for an hour/day/tile summary, consistent with the hour-by-hour
+// strip (withRisk). On lakes and bays the gust counts against the wind limits,
+// as it does hourly; on the ocean, sustained and gust are rated separately
+// (coastal advisories key on sustained speed). Without wind data there is no
+// GO: the call is null (shown "—"), but anything the waves/storms alone
+// already make CAUTION or NO-GO is kept, so missing wind never softens a call.
+export function riskLevel(windKt, gustKt, precipPct, short, waveFt, periodSec, profile) {
+  let lvl;
+  if (profile === "ocean") lvl = hourRisk(windKt, precipPct, short, waveFt, periodSec, profile, { sustained: windKt ?? null, gust: gustKt ?? null });
+  else {
+    const top = Math.max(windKt ?? -1, gustKt ?? -1);
+    lvl = hourRisk(top < 0 ? null : top, precipPct, short, waveFt, periodSec, profile);
+  }
+  if (windKt == null && lvl === "GO") return null;
+  return lvl;
+}
+
 function withRisk(hours, profile = "lake") {
   return (hours || []).map((h) => {
     const top = Math.max(h.windKt ?? -1, h.gustKt ?? -1);
@@ -1444,7 +1461,7 @@ function summaryTile(id, s, g, nowH) {
   // verdict: this hour or the next.
   const precipPct = Math.max(g?.precipPct.get(nowH) ?? 0, g?.precipPct.get(nowH + 1) ?? 0);
   const thunder = g?.thunder.get(nowH) === true || g?.thunder.get(nowH + 1) === true;
-  const level = windKt == null && waveFt == null ? null : hourRisk(windKt, precipPct, thunder ? "thunderstorms" : "", waveFt, periodSec, waterProfile(s), { sustained: windKt, gust: gustKt });
+  const level = riskLevel(windKt, gustKt, precipPct, thunder ? "thunderstorms" : "", waveFt, periodSec, waterProfile(s));
   // lat/lon travel with each spot so the homepage can find the nearest launch
   // from a ZIP or the browser's location without a second request.
   return { id, name: s.name, lake: s.lake || "Lake Erie", lat: s.lat, lon: s.lon, level, windKt, gustKt, dir, waveFt, periodSec: plausiblePeriod(waveFt, periodSec) }; // level above used the raw period
@@ -1504,20 +1521,9 @@ export async function fetchWeeks(env, ids) {
   if (!entries.length) return {};
   const grids = await pooled(entries, 8, ([, s]) => fetchSpotGrid(s));
   await floorWithMarineText(entries, grids).catch(() => {});
-  // For the weekend email, a day only reads GO with wind data, and on lakes the
-  // gusts count (as the hour-by-hour strip does). Never more generous than the
-  // week strip; a day without wind data shows "—", not GO.
-  return Object.fromEntries(entries.map(([id, s], i) => {
-    const profile = waterProfile(s);
-    return [id, buildWeek(grids[i], profile).map((d) => {
-      if (d.windKt == null) return { ...d, level: null };
-      if (profile === "ocean") return d;
-      const top = Math.max(d.windKt, d.gustKt ?? -1);
-      const lvl = hourRisk(top, d.precipPct ?? 0, "", d.waveFt, d.periodSec, profile);
-      const rank = { GO: 0, CAUTION: 1, "NO-GO": 2 };
-      return { ...d, level: rank[lvl] > rank[d.level] ? lvl : d.level };
-    })];
-  }));
+  // Same per-day verdicts as the week strip (buildWeek → riskLevel: no wind
+  // data is "—", lake gusts count).
+  return Object.fromEntries(entries.map(([id, s], i) => [id, buildWeek(grids[i], waterProfile(s))]));
 }
 
 // The full spot-page verdict (alerts, gusts, buoy, nearshore text) for one
@@ -1556,7 +1562,7 @@ export async function fetchTodayWindows() {
       if (loc.date !== today || loc.hour < 6 || loc.hour > 20) { run = null; continue; }
       const windKt = round(g.windKt.get(h), 0);
       const waveFt = round(g.waveFt.get(h), 1);
-      const ok = windKt != null && hourRisk(windKt, g.precipPct.get(h) ?? 0, g.thunder.get(h) ? "thunderstorms" : "", waveFt, round(g.periodSec.get(h), 0), waterProfile(SPOTS[id] || {})) === "GO";
+      const ok = riskLevel(windKt, round(g.gustKt.get(h), 0), g.precipPct.get(h) ?? 0, g.thunder.get(h) ? "thunderstorms" : "", waveFt, round(g.periodSec.get(h), 0), waterProfile(SPOTS[id] || {})) === "GO";
       if (!ok) { run = null; continue; }
       if (!run) { run = { fromH: loc.hour, toH: loc.hour }; } else run.toH = loc.hour;
       if (!best || (run.toH - run.fromH) > (best.toH - best.fromH)) best = { ...run };
@@ -1666,7 +1672,10 @@ export async function onRequest(context) {
   const forecastWind = parseForecastWind(point?.[0]);
   const wind = {
     speedKt: buoy?.windKt ?? forecastWind?.speedKt ?? null,
-    gustKt: buoy?.windGustKt ?? null,
+    // Buoy gust when it reports one, else the grid's current-hour gust (the
+    // hourly strip already rates on it), so a no-buoy lake port's headline
+    // can't read GO under gusts the timeline calls CAUTION.
+    gustKt: buoy?.windGustKt ?? hourly[0]?.gustKt ?? null,
     dir: buoy?.windDir ?? forecastWind?.dir ?? null,
     source: buoy?.windKt != null ? "buoy" : forecastWind?.speedKt != null ? "forecast" : null,
   };
