@@ -1217,6 +1217,7 @@ export function buildRecommendation({ buoy, alerts, wind, waves, read, hours, pr
       if (w >= 22 || gu >= 28) bump("NO-GO", `Wind ~${desc}`);
       else if (w >= 17 || gu >= 24) bump("CAUTION", `Wind ~${desc}`);
       else if (w >= 15 || gu >= 20) bump("CAUTION", `Breezy ~${desc}`);
+      else if (wv == null) reasons.push(`Wind ~${desc}, light`);
     }
     else if (topWind >= 22) bump("NO-GO", `Wind/gusts ~${round(topWind, 0)} kt${tag}`);
     else if (topWind >= 17) bump("CAUTION", `Wind ~${round(topWind, 0)} kt${tag}`);
@@ -1273,14 +1274,19 @@ export function buildRecommendation({ buoy, alerts, wind, waves, read, hours, pr
   // A gust alone is not wind data: with no sustained wind and no waves there is
   // no basis for a call (a strong gust still escalates via topWind above).
   const noData = wv == null && wind?.speedKt == null;
+  // Partial data: the CAUTION comes only from the missing half, so the summary
+  // must not describe conditions we haven't measured.
+  let partial = false;
   if (noData) {
     bump("CAUTION", "Live wind and wave data are unavailable right now. Check the NWS marine forecast before you launch");
   } else if (wind?.speedKt == null) {
     // Waves alone (or a lone gust) can't make GO: wind is the decisive signal.
+    partial = level === "GO";
     bump("CAUTION", "Live wind data is unavailable right now. Check the NWS marine forecast before you launch");
   } else if (wv == null) {
     // Wind without waves is half the picture: no buoy wave sensor, no grid
     // wave cell and no wave numbers in the zone text. Never GO on that.
+    partial = level === "GO";
     bump("CAUTION", "Wave data is unavailable right now. Check the NWS marine forecast before you launch");
   } else if (reasons.length === 0) {
     reasons.push("Calm conditions reported");
@@ -1289,6 +1295,8 @@ export function buildRecommendation({ buoy, alerts, wind, waves, read, hours, pr
 
   const summary = noData
     ? "No live data right now. Check before you go."
+    : partial
+    ? "Incomplete data right now. Check before you go."
     : {
         GO: "Looks good to boat.",
         CAUTION: "Boatable with caution. Small boats take care.",

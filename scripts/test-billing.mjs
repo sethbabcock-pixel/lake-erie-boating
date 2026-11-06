@@ -1324,6 +1324,12 @@ async function run() {
     const buoyWavesFcWind = full({ speedKt: 8, gustKt: null, source: "forecast" }, { ft: 1, source: "buoy" }, { station: "45005" });
     eq("headline: waves buoy + forecast wind 8 kt → GO", buoyWavesFcWind.level, "GO");
     check("headline: waves buoy + forecast wind says wind is from the forecast", buoyWavesFcWind.reasons.some((x) => /Wind ~8 kt from the NWS forecast/.test(x)), JSON.stringify(buoyWavesFcWind.reasons));
+    eq("summary: wind-only partial data → 'Incomplete data', not 'Boatable'", windOnly.summary, "Incomplete data right now. Check before you go.");
+    eq("summary: waves-only partial data → 'Incomplete data'", wavesOnly.summary, "Incomplete data right now. Check before you go.");
+    const rough = full({ speedKt: 18, source: "buoy" }, { ft: null }, { station: "45005" });
+    eq("summary: real CAUTION (18 kt) + missing waves keeps the CAUTION summary", rough.summary, "Boatable with caution. Small boats take care.");
+    const oceanLight = full({ speedKt: 4, source: "buoy" }, { ft: null }, { station: "41009" }, "ocean");
+    check("headline: ocean light wind, no seas → wind number still shown", oceanLight.reasons.some((x) => /Wind ~4 kt, light/.test(x)), JSON.stringify(oceanLight.reasons));
     const noBuoyFc = full({ speedKt: 8, source: "forecast" }, { ft: 1, source: "forecast" });
     check("headline: no buoy → no duplicate 'from the forecast' wind line", !noBuoyFc.reasons.some((x) => /from the NWS forecast \(buoy/.test(x)), JSON.stringify(noBuoyFc.reasons));
   }
