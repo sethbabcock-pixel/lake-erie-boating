@@ -52,6 +52,7 @@ let alertsDown = false; // NWS alerts stub: the alerts endpoint fails
 // the gust); "nowind" = no wind/gust layers at all, calm 1 ft waves;
 // "gustonly" = a 9 kt gust but no sustained wind (grid or hourly) and no waves.
 let gridMode = null;
+let hourlyLagH = 0; // hourly stub: lead with this many already-past hours
 let subGetCancelState = false; // what a GET subscription retrieve reports
 const makeSub = (cancelAtPeriodEnd) => ({
   id: "sub_123", status: "active", cancel_at_period_end: cancelAtPeriodEnd,
@@ -89,7 +90,7 @@ function installFetchStub() {
     }
     // Hourly point forecast (the spot page's timeline): 48 calm or stormy hours.
     if (/\/forecast\/hourly$/.test(u)) {
-      const t0 = new Date(); t0.setUTCMinutes(0, 0, 0);
+      const t0 = new Date(Date.now() - hourlyLagH * 3600e3); t0.setUTCMinutes(0, 0, 0);
       const periods = Array.from({ length: 48 }, (_, i) => ({ startTime: new Date(t0.getTime() + i * 3600e3).toISOString(), temperature: 60,
         windSpeed: stormMode ? "32 mph" : gridMode === "gusty" ? "15 mph" : gridMode === "gustonly" ? "" : "9 mph", windDirection: "SW", shortForecast: "Sunny", probabilityOfPrecipitation: { value: 0 } }));
       return jsonResp({ properties: { periods } });
@@ -1137,6 +1138,38 @@ async function run() {
     check("gust only: current-hour outlook is not GO", p3.outlook?.nowLevel !== "GO", JSON.stringify(p3.outlook));
     check("gust only: headline is not GO", p3.recommendation?.level && p3.recommendation.level !== "GO", JSON.stringify(p3.recommendation));
     gridMode = null;
+  }
+
+  // 57. Follow-ups: Great Lakes GO needs waves; sparse future days can't GO;
+  //     the hourly strip starts at the current hour.
+  {
+    const { riskLevel, buildWeek, onRequest } = await import("../functions/marine/conditions.js");
+    eq("riskLevel: Great Lakes, wind but no waves → no call (null), not GO", riskLevel(8, 10, 0, "", null, null, "lake"), null);
+    eq("riskLevel: Great Lakes, no waves but 24 kt gust → still NO-GO", riskLevel(8, 24, 0, "", null, null, "lake"), "NO-GO");
+    eq("riskLevel: Great Lakes, no waves, 16 kt → still CAUTION", riskLevel(16, null, 0, "", null, null, "lake"), "CAUTION");
+    eq("riskLevel: sheltered water rates on wind alone (no waves → GO)", riskLevel(8, 10, 0, "", null, null, "sheltered"), "GO");
+
+    // Grid in UTC: tomorrow fully covered, the day after only 6 hours.
+    const nowH = Math.floor(Date.now() / 3600000);
+    const dayStart = (k) => Math.floor(nowH / 24) * 24 + 24 * k;
+    const mk = () => ({ tz: "UTC", windKt: new Map(), gustKt: new Map(), precipPct: new Map(), waveFt: new Map(), periodSec: new Map() });
+    const g = mk();
+    const put = (h, w, gu, ft) => { g.windKt.set(h, w); g.gustKt.set(h, gu); g.waveFt.set(h, ft); g.periodSec.set(h, 4); g.precipPct.set(h, 0); };
+    for (let h = dayStart(1); h < dayStart(2); h++) put(h, 8, 10, 1);
+    for (let h = dayStart(2); h < dayStart(2) + 6; h++) put(h, 8, 10, 1);
+    for (let h = dayStart(3); h < dayStart(3) + 4; h++) put(h, 20, 26, 5); // sparse but rough
+    const wk = Object.fromEntries(buildWeek(g, "lake").map((d) => [d.date, d.level]));
+    const iso = (k) => new Date(dayStart(k) * 3600000).toISOString().slice(0, 10);
+    eq("week: fully covered calm day → GO", wk[iso(1)], "GO");
+    eq("week: sparsely covered calm day (6 h) → null, not GO", wk[iso(2)], null);
+    eq("week: sparse day that's rough still → NO-GO", wk[iso(3)], "NO-GO");
+
+    stormMode = false; scaMode = false; alertsDown = false; gridMode = null;
+    hourlyLagH = 3;
+    const pg = await (await onRequest({ request: new Request("https://shouldiboat.com/marine/conditions?spot=sandusky"), env: { USERS: makeKV() } })).json();
+    hourlyLagH = 0;
+    const firstH = pg.hourly?.[0] && Math.floor(Date.parse(pg.hourly[0].time) / 3600000);
+    eq("hourly strip: past hours dropped, starts at the current hour", firstH, nowH);
   }
 
   console.log(results.join("\n"));
