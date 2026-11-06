@@ -344,8 +344,8 @@ function GlanceBand({ hours }) {
         {win.map((h, i) => (
           <button key={h.time} onClick={() => jumpTo(h.time)}
             className={`gb ${verdictClass(h.level)} ${best && i >= best.from && i <= best.to ? "best" : ""}`}
-            title={`${fmtHour(h.time)} · ${h.level}, see the detail`}
-            aria-label={`${fmtHour(h.time)}: ${h.level}. Jump to hour detail.`} />
+            title={`${fmtHour(h.time)} · ${h.level ?? "no data"}, see the detail`}
+            aria-label={`${fmtHour(h.time)}: ${h.level ?? "no data"}. Jump to hour detail.`} />
         ))}
       </div>
       <div className="glance-x">
@@ -406,6 +406,50 @@ function NearbyPorts({ lake, current, from, onSelect }) {
   );
 }
 
+// Which NDBC station (if any) is live in THIS response. A configured station
+// is only called live when it returned a fresh observation (facts.liveData,
+// from spotFacts); offshore Great Lakes buoys are pulled for winter, so the
+// card must not advertise one that isn't there. Mirrors functions/seo.js.
+const ndbcLink = (b) => <a href={`https://www.ndbc.noaa.gov/station_page.php?station=${b.toLowerCase()}`} target="_blank" rel="noopener">NDBC {b}</a>;
+const stationList = (ids) => ids.map((b, i) => <React.Fragment key={b}>{i ? ", " : ""}{ndbcLink(b)}</React.Fragment>);
+// "buoy" → live, "forecast" → NWS forecast, null → no data at all: missing
+// data is shown as missing, never credited to a source we don't have.
+const fromText = (k, from) => (from === "buoy" ? null : from === "forecast" ? `${k} from the NWS forecast` : `${k} unavailable right now`);
+// Age from the observation time so a cached response / open tab doesn't
+// freeze it; clamp clock skew to 0; 60+ min as "2 h 10 min".
+function obsAge(ld) {
+  const t = ld.observedAt ? Date.parse(ld.observedAt) : NaN;
+  const m = Number.isFinite(t) ? Math.max(0, Math.round((Date.now() - t) / 60000)) : ld.ageMinutes;
+  if (m == null) return null;
+  return m < 60 ? `${m} min ago` : `${Math.floor(m / 60)} h${m % 60 ? ` ${m % 60} min` : ""} ago`;
+}
+const notReported = (ids) => <>{stationList(ids)} {ids.length > 1 ? "haven't" : "hasn't"} reported wind or waves in the last 3 hours</>;
+function BuoyFact({ facts }) {
+  const buoys = facts.buoys || [];
+  const ld = facts.liveData;
+  if (!buoys.length) return <span>No buoy close by: wind and waves come from the NWS forecast</span>;
+  if (!ld || !ld.checked) return <span>Buoy stations: {stationList(buoys)}</span>; // no live check: make no claim
+  if (!ld.live) {
+    const both = ld.windFrom === "forecast" && ld.wavesFrom === "forecast";
+    return (
+      <span>
+        No live buoy right now: {notReported(ld.offline)} (it may be offline{facts.coastal ? "" : ", out for the season"}, or NOAA's feed may be down).{" "}
+        {both ? "Wind and waves come from the NWS forecast"
+          : `${[fromText("Wind", ld.windFrom), fromText("waves", ld.wavesFrom)].join("; ")}. Check the NWS marine forecast before you launch`}
+      </span>
+    );
+  }
+  const notes = [fromText("wind", ld.windFrom), fromText("waves", ld.wavesFrom)].filter(Boolean);
+  const age = obsAge(ld);
+  return (
+    <span>
+      Live data: {ndbcLink(ld.live)}{age && <> ({age})</>}
+      {notes.length > 0 && <>; {notes.join("; ")}</>}
+      {ld.offline.length > 0 && <> · {notReported(ld.offline)}</>}
+    </span>
+  );
+}
+
 // Launch facts: which NWS zone and NDBC stations feed this page and how each
 // wind direction plays at this shore. The server renders the same facts into
 // the page HTML (functions/seo.js), so visitors and crawlers see one page.
@@ -423,9 +467,7 @@ function LaunchNotes({ spot, facts }) {
       <div className="card-head"><h2>About {spot.name}</h2><span className="legend">{facts.lake}</span></div>
       <div className="ln-facts">
         {facts.zone && <span>NWS marine zone <b>{facts.zone}</b></span>}
-        {facts.buoys && facts.buoys.length
-          ? <span>Live data: {facts.buoys.map((b, i) => <React.Fragment key={b}>{i ? ", " : ""}<a href={`https://www.ndbc.noaa.gov/station_page.php?station=${b.toLowerCase()}`} target="_blank" rel="noopener">NDBC {b}</a></React.Fragment>)}</span>
-          : <span>No buoy close by: wind and waves come from the NWS forecast</span>}
+        <BuoyFact facts={facts} />
         <span>{facts.lat.toFixed(3)}, {facts.lon.toFixed(3)}</span>
       </div>
       <div className="ln-exposure">
@@ -690,7 +732,7 @@ function HourStrip({ hours, headInBy }) {
           {hours.map((h) => <div key={h.time} className={cls(h, "hx-ico")} title={h.short}><WxIcon short={h.short} size={18} /></div>)}
           {/* verdict strip */}
           <Label>Verdict</Label>
-          {hours.map((h) => <div key={h.time} className={cls(h, "hx-vwrap")} title={`${fmtHour(h.time)} · ${h.level}`}><i className={`hx-v ${verdictClass(h.level)}`} /></div>)}
+          {hours.map((h) => <div key={h.time} className={cls(h, "hx-vwrap")} title={`${fmtHour(h.time)} · ${h.level ?? "no data"}`}><i className={`hx-v ${verdictClass(h.level)}`} /></div>)}
           {/* temp — diverging heat-strip behind the numbers */}
           <Label unit="°F">Temp</Label>
           {hours.map((h) => <div key={h.time} className={cls(h)} style={{ background: tempTint(h.tempF) }}>{h.tempF ?? "—"}</div>)}
@@ -1169,7 +1211,7 @@ export default function App() {
               <div className="stat hero">
                 <div className="k">Wind</div>
                 <div className="v">{fmt(wind.speedKt, "")}<small>kt</small> <Trend t={trendOf(data.hourly?.[0]?.windKt, data.hourly?.[3]?.windKt)} /></div>
-                <div className="sub">{[wind.dir, wind.gustKt ? `gust ${wind.gustKt}` : null, wind.source].filter(Boolean).join(" · ") || "—"}</div>
+                <div className="sub">{[wind.dir, wind.gustKt ? `gust ${wind.gustKt}${wind.gustSrc === "forecast" && wind.source !== "forecast" ? " (forecast)" : ""}` : null, wind.source].filter(Boolean).join(" · ") || "—"}</div>
               </div>
               <div className="stat">
                 <div className="k">Waves</div>

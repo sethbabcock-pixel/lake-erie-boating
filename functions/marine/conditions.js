@@ -295,11 +295,12 @@ async function fetchForecasts(lat, lon) {
       precipPct: p.probabilityOfPrecipitation?.value ?? null,
     }));
     const hourly = (hc?.properties?.periods || []).slice(0, 72).map((p) => {
-      const mph = parseInt(String(p.windSpeed || "").match(/\d+/)?.[0] || "0", 10);
+      // Missing/unparseable wind is null (unknown), never 0 kt (calm).
+      const m = String(p.windSpeed || "").match(/\d+/);
       return {
         time: p.startTime,
         tempF: p.temperature,
-        windKt: round(mphToKt(mph), 0),
+        windKt: m ? round(mphToKt(parseInt(m[0], 10)), 0) : null,
         windDir: p.windDirection || null,
         precipPct: p.probabilityOfPrecipitation?.value ?? 0,
         short: p.shortForecast || "",
@@ -519,7 +520,8 @@ function sunTimes(lat, lon, date = new Date()) {
 // 7-day planning outlook from the grid: per-day max wind/gust/precip/wave in
 // the SPOT's local calendar. Powers the "week ahead / weekend" strip — a
 // per-day verdict so a boater can pick Saturday on Wednesday.
-function buildWeek(grid, profile = "lake") {
+const MIN_DAY_WIND_HOURS = 12; // hours of wind (and, on the Great Lakes, wave) forecast a future day needs to be rated GO
+export function buildWeek(grid, profile = "lake") {
   if (!grid) return [];
   const toLocal = localParts(grid.tz);
   const days = new Map();
@@ -528,7 +530,9 @@ function buildWeek(grid, profile = "lake") {
   for (const h of keys) {
     const { date } = toLocal(h);
     let d = days.get(date);
-    if (!d) days.set(date, (d = { date, windKt: null, gustKt: null, precipPct: null, waveFt: null, periodSec: null }));
+    if (!d) days.set(date, (d = { date, windKt: null, gustKt: null, precipPct: null, waveFt: null, periodSec: null, windHours: 0, waveHours: 0 }));
+    if (grid.windKt.get(h) != null) d.windHours++;
+    if (grid.waveFt.get(h) != null) d.waveHours++;
     d.windKt = max(d.windKt, grid.windKt.get(h));
     d.gustKt = max(d.gustKt, grid.gustKt.get(h));
     d.precipPct = max(d.precipPct, grid.precipPct.get(h));
@@ -540,15 +544,25 @@ function buildWeek(grid, profile = "lake") {
     .filter((d) => d.date >= today)
     .sort((a, b) => (a.date < b.date ? -1 : 1))
     .slice(0, 7)
-    .map((d) => ({
+    .map((d) => {
+      const level = riskLevel(round(d.windKt, 0), round(d.gustKt, 0), d.precipPct ?? 0, "", round(d.waveFt, 1), round(d.periodSec, 0), profile);
+      // A future day the grid only partly covers (often the last one) has a
+      // max taken over a few hours: it can't make GO, though what it does
+      // show can still make CAUTION/NO-GO. Today is exempt: its remaining
+      // hours are what matter and they're covered.
+      // Great Lakes days also need the waves covered (the NWS wave grid often
+      // ends before the wind grid), not a max over a couple of hours.
+      const sparse = d.date !== today && (d.windHours < MIN_DAY_WIND_HOURS || (profile === "lake" && d.waveHours < MIN_DAY_WIND_HOURS));
+      return {
       date: d.date,
       windKt: round(d.windKt, 0),
       gustKt: round(d.gustKt, 0),
       precipPct: d.precipPct == null ? null : Math.round(d.precipPct),
       waveFt: round(d.waveFt, 1),
       periodSec: round(d.periodSec, 0),
-      level: riskLevel(round(d.windKt, 0), round(d.gustKt, 0), d.precipPct ?? 0, "", round(d.waveFt, 1), round(d.periodSec, 0), profile),
-    }));
+      level: sparse && level === "GO" ? null : level,
+      };
+    });
 }
 
 async function fetchMarineForecast(zone) {
@@ -1026,12 +1040,38 @@ export function windExposure(spot) {
 // Static, verifiable facts about a launch: which NWS marine zone forecasts it,
 // which NDBC stations feed it, and its wind exposure. Shown on the spot page
 // and server-rendered into its HTML.
-export function spotFacts(spot) {
+// Launch facts for the "About <spot>" card. `obs` is this response's live
+// readings ({ buoy, wind, waves }); pass it whenever a conditions fetch ran so
+// the card only calls a station live if it returned a fresh (<3 h) observation
+// in THIS response. Great Lakes offshore buoys are pulled for the winter, and
+// a configured station is not a live one. Without `obs` (static/SSR render)
+// liveData.checked is false and callers must not claim any station is live.
+export function spotFacts(spot, obs) {
+  const buoys = (spot.buoys || []).filter(Boolean);
+  let liveData = { checked: false, live: null, ageMinutes: null, observedAt: null, offline: [], windFrom: null, wavesFrom: null };
+  if (obs) {
+    const live = obs.buoy && obs.buoy.station && buoys.includes(obs.buoy.station) ? obs.buoy.station : null;
+    // fetchBuoy tries stations in order and stops at the first fresh one that
+    // reports wind or waves, so every station ahead of the live one (or all, if
+    // none) failed, was stale, or reported only temperatures.
+    // Stations after the live one were never checked, so they're omitted.
+    const idx = live ? buoys.indexOf(live) : buoys.length;
+    liveData = {
+      checked: true,
+      live,
+      ageMinutes: live && Number.isFinite(obs.buoy.ageMinutes) ? Math.max(0, obs.buoy.ageMinutes) : null,
+      observedAt: live && Number.isFinite(Date.parse(obs.buoy.observedAt)) ? obs.buoy.observedAt : null,
+      offline: buoys.slice(0, idx),
+      windFrom: obs.wind?.source ?? null, // "buoy" | "forecast" | null (null = no data at all)
+      wavesFrom: obs.waves?.source ?? null,
+    };
+  }
   return {
     lake: spot.lake || "Lake Erie",
     lat: spot.lat, lon: spot.lon,
     zone: spot.zone || null,
-    buoys: (spot.buoys || []).filter(Boolean),
+    buoys, // configured stations, NOT a claim that any is reporting; see liveData
+    liveData,
     exposure: windExposure(spot),
     coastal: !!spot.water && spot.water !== "lake",
     water: waterProfile(spot),
@@ -1106,14 +1146,17 @@ export function riskLevel(windKt, gustKt, precipPct, short, waveFt, periodSec, p
     lvl = hourRisk(top < 0 ? null : top, precipPct, short, waveFt, periodSec, profile);
   }
   if (windKt == null && lvl === "GO") return null;
+  // Great Lakes: waves are half the call (short steep chop), so no wave data
+  // → no GO either. Inland/sheltered waters rate on wind alone by design.
+  if (profile === "lake" && waveFt == null && lvl === "GO") return null;
   return lvl;
 }
 
 function withRisk(hours, profile = "lake") {
-  return (hours || []).map((h) => {
-    const top = Math.max(h.windKt ?? -1, h.gustKt ?? -1);
-    return { ...h, level: hourRisk(top < 0 ? null : top, h.precipPct, h.short, h.waveFt, h.periodSec, profile, { sustained: h.windKt ?? null, gust: h.gustKt ?? null }) };
-  });
+  // Same rule as tiles/week (riskLevel): lake gusts count, and an hour with no
+  // sustained wind is never GO (null, shown "no data"), though waves/storms
+  // can still make it CAUTION/NO-GO.
+  return (hours || []).map((h) => ({ ...h, level: riskLevel(h.windKt ?? null, h.gustKt ?? null, h.precipPct, h.short, h.waveFt, h.periodSec, profile) }));
 }
 
 // Turn the hourly timeline into an actionable "go now / be in by X" outlook.
@@ -1256,6 +1299,13 @@ export function buildRecommendation({ buoy, alerts, wind, waves, read, hours, pr
   const noData = wv == null && wind?.speedKt == null;
   if (noData) {
     bump("CAUTION", "Live wind and wave data are unavailable right now. Check the NWS marine forecast before you launch");
+  } else if (wind?.speedKt == null) {
+    // Waves alone (or a lone gust) can't make GO: wind is the decisive signal.
+    bump("CAUTION", "Live wind data is unavailable right now. Check the NWS marine forecast before you launch");
+  } else if (profile === "lake" && wv == null) {
+    // Great Lakes: waves are half the call (tiles/hours show "—" here), so
+    // wind alone can't make the headline GO either.
+    bump("CAUTION", "Wave data is unavailable right now. On the Great Lakes, check the NWS nearshore forecast before you launch");
   } else if (reasons.length === 0) {
     reasons.push("Calm conditions reported");
   }
@@ -1671,8 +1721,12 @@ export async function onRequest(context) {
   const sun = sunTimes(spot.lat, spot.lon);
   // Merge hourly wave height (NWS grid) into the NWS hourly rows, then rate
   // risk. Keyed by epoch hour, so spots outside Eastern time line up too.
+  // Drop hours that have already passed (the NWS hourly product can lead with
+  // them), so the strip's first row, the outlook, and the headline's
+  // imminent-hazard check all start at the current hour.
+  const nowEH = Math.floor(Date.now() / 3600000);
   const hourly = withRisk(
-    fc.hourly.map((h) => {
+    fc.hourly.filter((h) => Math.floor(Date.parse(h.time) / 3600000) >= nowEH).map((h) => {
       const eh = Math.floor(Date.parse(h.time) / 3600000);
       return {
         ...h,
@@ -1688,15 +1742,24 @@ export async function onRequest(context) {
   // Effective wind: prefer the live buoy, fall back to the NWS forecast so wind
   // is present even when no buoy (and no wave data) is available.
   const forecastWind = parseForecastWind(point?.[0]);
+  // "Now or imminent" rows of the hourly strip (this hour or the next, like the
+  // directory tiles), picked by timestamp: the hourly product can lead with
+  // hours that have already passed.
+  const nowRows = hourly.filter((h) => { const eh = Math.floor(Date.parse(h.time) / 3600000); return eh === nowEH || eh === nowEH + 1; });
+  const nowGusts = nowRows.map((h) => h.gustKt).filter((v) => v != null);
+  const gridNowGust = nowGusts.length ? Math.max(...nowGusts) : null;
+  // Last-resort sustained wind: the hourly forecast's current hour, when the
+  // daily period is unavailable (it's a separate NWS fetch that fails alone).
+  const hourlyNowWind = nowRows.find((h) => h.windKt != null)?.windKt ?? null;
   const wind = {
-    speedKt: buoy?.windKt ?? forecastWind?.speedKt ?? null,
-    // Buoy gust when it reports one, else the grid's current-hour gust (the
+    speedKt: buoy?.windKt ?? forecastWind?.speedKt ?? hourlyNowWind,
+    // Buoy gust when it reports one, else the grid's current gust (the
     // hourly strip already rates on it), so a no-buoy lake port's headline
     // can't read GO under gusts the timeline calls CAUTION.
-    gustKt: buoy?.windGustKt ?? hourly[0]?.gustKt ?? null,
-    gustSrc: buoy?.windGustKt != null ? "buoy" : hourly[0]?.gustKt != null ? "forecast" : null,
+    gustKt: buoy?.windGustKt ?? gridNowGust,
+    gustSrc: buoy?.windGustKt != null ? "buoy" : gridNowGust != null ? "forecast" : null,
     dir: buoy?.windDir ?? forecastWind?.dir ?? null,
-    source: buoy?.windKt != null ? "buoy" : forecastWind?.speedKt != null ? "forecast" : null,
+    source: buoy?.windKt != null ? "buoy" : (forecastWind?.speedKt ?? hourlyNowWind) != null ? "forecast" : null,
   };
 
   // Effective waves reflect RIGHT NOW and agree with the hour-by-hour strip,
@@ -1704,8 +1767,10 @@ export async function onRequest(context) {
   // forecast (applyMarineWaveFloor above). Order: live buoy, then that
   // nearshore-corrected current hour, then the zone text where the grid has no
   // cell at all (some coastal/estuary spots).
-  const gridNowFt = hourly[0]?.waveFt ?? null;
-  const gridNowPeriod = hourly[0]?.periodSec ?? null;
+  // The current hour by timestamp (the hourly product can lead with past hours).
+  const nowRow = nowRows[0] ?? null;
+  const gridNowFt = nowRow?.waveFt ?? null;
+  const gridNowPeriod = nowRow?.periodSec ?? null;
   const textWaveFt = parseForecastWaves(marinePeriods) ?? null;
   const currentWaveFt = gridNowFt ?? textWaveFt;
   const nowFt = buoy?.waveHeightFt ?? currentWaveFt ?? null;
@@ -1724,7 +1789,7 @@ export async function onRequest(context) {
   // runs colder), so its reading wins, as it did before this split.
   const tempsStation = tempsObs && tempsObs !== buoy ? tempsObs : null;
   const waterTempF = tempsStation?.waterTempF ?? buoy?.waterTempF ?? waterStation?.f ?? nshWaterTempF(noaaReport?.text, spot);
-  const airTempF = tempsStation?.airTempF ?? buoy?.airTempF ?? hourly[0]?.tempF ?? null;
+  const airTempF = tempsStation?.airTempF ?? buoy?.airTempF ?? nowRow?.tempF ?? null;
   const temps = {
     waterF: round(waterTempF, 0), // display; the verdict gets the unrounded value below
     waterSource: tempsStation?.waterTempF != null ? `NDBC ${tempsStation.station}` : buoy?.waterTempF != null ? "buoy" : waterStation?.f != null ? `NDBC ${waterStation.station}` : waterTempF != null ? "NWS" : null,
@@ -1745,7 +1810,7 @@ export async function onRequest(context) {
     waves: { ...waves, periodSec: showPeriod(waves.ft, waves.periodSec) },
     temps,
     windRead: read,
-    facts: spotFacts(spot),
+    facts: spotFacts(spot, { buoy, wind, waves }),
     hourly: hourly.map((h) => ({ ...h, periodSec: showPeriod(h.waveFt, h.periodSec) })),
     outlook,
     week: week.map((d) => ({ ...d, periodSec: showPeriod(d.waveFt, d.periodSec) })),
