@@ -819,7 +819,12 @@ body.has-takeover .app { background: var(--bg); border-radius: var(--r-lg) var(-
   .hero-splash { min-height: 0; }
   .hero-splash .hero-inner { padding-top: var(--s7); padding-bottom: var(--s6); }
   .splash-search { min-height: 48px; }
-  .loc-grid { grid-template-columns: 1fr 1fr; gap: var(--s2); padding: var(--s3); }
+  /* minmax(0, 1fr): plain 1fr can't shrink below a card's content, which
+     pushed the right column ~6px off a 360px screen. Cards may shrink, and
+     the verdict chip wraps under a long name instead of crushing it. */
+  .loc-grid { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: var(--s2); padding: var(--s3); }
+  .loc-card { min-width: 0; }
+  .loc-card-top { flex-wrap: wrap; row-gap: 6px; }
   .region .region-head { flex-direction: column; align-items: flex-start; gap: var(--s2); }
   /* In the stacked (column) layout the desktop `flex: 0 1 320px` would become a
      320px HEIGHT basis, leaving a tall empty gap under the tally. Reset it to
