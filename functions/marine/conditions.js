@@ -510,7 +510,7 @@ function sunTimes(lat, lon, date = new Date()) {
 // 7-day planning outlook from the grid: per-day max wind/gust/precip/wave in
 // the SPOT's local calendar. Powers the "week ahead / weekend" strip — a
 // per-day verdict so a boater can pick Saturday on Wednesday.
-const MIN_DAY_WIND_HOURS = 12; // hours of wind forecast a future day needs to be rated GO
+const MIN_DAY_WIND_HOURS = 12; // hours of wind (and, on the Great Lakes, wave) forecast a future day needs to be rated GO
 export function buildWeek(grid, profile = "lake") {
   if (!grid) return [];
   const toLocal = localParts(grid.tz);
@@ -520,8 +520,9 @@ export function buildWeek(grid, profile = "lake") {
   for (const h of keys) {
     const { date } = toLocal(h);
     let d = days.get(date);
-    if (!d) days.set(date, (d = { date, windKt: null, gustKt: null, precipPct: null, waveFt: null, periodSec: null, windHours: 0 }));
+    if (!d) days.set(date, (d = { date, windKt: null, gustKt: null, precipPct: null, waveFt: null, periodSec: null, windHours: 0, waveHours: 0 }));
     if (grid.windKt.get(h) != null) d.windHours++;
+    if (grid.waveFt.get(h) != null) d.waveHours++;
     d.windKt = max(d.windKt, grid.windKt.get(h));
     d.gustKt = max(d.gustKt, grid.gustKt.get(h));
     d.precipPct = max(d.precipPct, grid.precipPct.get(h));
@@ -539,7 +540,9 @@ export function buildWeek(grid, profile = "lake") {
       // max taken over a few hours: it can't make GO, though what it does
       // show can still make CAUTION/NO-GO. Today is exempt: its remaining
       // hours are what matter and they're covered.
-      const sparse = d.date !== today && d.windHours < MIN_DAY_WIND_HOURS;
+      // Great Lakes days also need the waves covered (the NWS wave grid often
+      // ends before the wind grid), not a max over a couple of hours.
+      const sparse = d.date !== today && (d.windHours < MIN_DAY_WIND_HOURS || (profile === "lake" && d.waveHours < MIN_DAY_WIND_HOURS));
       return {
       date: d.date,
       windKt: round(d.windKt, 0),
@@ -1263,6 +1266,10 @@ export function buildRecommendation({ buoy, alerts, wind, waves, read, hours, pr
   } else if (wind?.speedKt == null) {
     // Waves alone (or a lone gust) can't make GO: wind is the decisive signal.
     bump("CAUTION", "Live wind data is unavailable right now. Check the NWS marine forecast before you launch");
+  } else if (profile === "lake" && wv == null) {
+    // Great Lakes: waves are half the call (tiles/hours show "—" here), so
+    // wind alone can't make the headline GO either.
+    bump("CAUTION", "Wave data is unavailable right now. On the Great Lakes, check the NWS nearshore forecast before you launch");
   } else if (reasons.length === 0) {
     reasons.push("Calm conditions reported");
   }

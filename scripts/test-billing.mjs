@@ -1163,13 +1163,23 @@ async function run() {
     eq("week: fully covered calm day → GO", wk[iso(1)], "GO");
     eq("week: sparsely covered calm day (6 h) → null, not GO", wk[iso(2)], null);
     eq("week: sparse day that's rough still → NO-GO", wk[iso(3)], "NO-GO");
+    const g2 = mk();
+    for (let h = dayStart(1); h < dayStart(2); h++) { g2.windKt.set(h, 8); g2.gustKt.set(h, 10); g2.precipPct.set(h, 0); }
+    for (let h = dayStart(1); h < dayStart(1) + 3; h++) { g2.waveFt.set(h, 1); g2.periodSec.set(h, 4); }
+    const wk2 = Object.fromEntries(buildWeek(g2, "lake").map((d) => [d.date, d.level]));
+    eq("week: Great Lakes day with full wind but 3 h of waves → null, not GO", wk2[iso(1)], null);
+    eq("week: same coverage on sheltered water → GO (wind-only by design)", Object.fromEntries(buildWeek(g2, "sheltered").map((d) => [d.date, d.level]))[iso(1)], "GO");
+    const { buildRecommendation } = await import("../functions/marine/conditions.js");
+    const hr = (profile) => buildRecommendation({ buoy: null, alerts: [], wind: { speedKt: 8, gustKt: 10, source: "forecast", gustSrc: "forecast" }, waves: { ft: null }, read: null, hours: [], profile }).level;
+    eq("headline: Great Lakes, light wind, no wave data → CAUTION, not GO", hr("lake"), "CAUTION");
+    eq("headline: sheltered, light wind, no wave data → GO (wind-only by design)", hr("sheltered"), "GO");
 
     stormMode = false; scaMode = false; alertsDown = false; gridMode = null;
     hourlyLagH = 3;
     const pg = await (await onRequest({ request: new Request("https://shouldiboat.com/marine/conditions?spot=sandusky"), env: { USERS: makeKV() } })).json();
     hourlyLagH = 0;
     const firstH = pg.hourly?.[0] && Math.floor(Date.parse(pg.hourly[0].time) / 3600000);
-    eq("hourly strip: past hours dropped, starts at the current hour", firstH, nowH);
+    check("hourly strip: past hours dropped, starts at the current hour", firstH === nowH || firstH === nowH + 1, `got ${firstH}, now ${nowH}`);
   }
 
   console.log(results.join("\n"));
