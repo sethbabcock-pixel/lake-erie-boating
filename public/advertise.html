@@ -4,70 +4,325 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Advertise · shouldiboat.com</title>
-  <meta name="description" content="Sponsor the boating conditions page local boaters check before they launch. Takeovers targeted to a region or a single launch, with daily view and click reports." />
+  <meta name="description" content="Sponsor the boating conditions page local boaters check before they launch. A clearly labeled banner on one launch, a region or the whole site, with daily view and click reports." />
   <meta name="robots" content="index,follow" />
+  <link rel="canonical" href="https://shouldiboat.com/advertise" />
+  <link rel="icon" type="image/png" href="/icon-256.png" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400..800&display=swap" rel="stylesheet" />
   <style>
-    :root { --navy:#004777; --teal:#008BA8; --green:#1B936A; --ink:#10202E; --muted:#50616F; --bg:#F6F8F4; --border:#DCE2DA; }
+    :root { --navy:#004777; --navy-d:#07182B; --teal:#008BA8; --teal-l:#7fe3ff; --green:#1B936A; --amber:#9a7212; --red:#c0392b;
+      --ink:#10202E; --body:#27323d; --muted:#50616F; --faint:#8595A1; --bg:#F6F8F4; --surface:#fff; --border:#DCE2DA; }
     * { box-sizing: border-box; }
-    body { margin:0; background:var(--bg); color:var(--ink); font-family:'Inter',system-ui,-apple-system,'Segoe UI',Roboto,sans-serif; line-height:1.6; }
-    .wrap { max-width:760px; margin:0 auto; padding:40px 20px 80px; }
+    body { margin:0; background:var(--bg); color:var(--ink); font-family:'Inter',system-ui,-apple-system,'Segoe UI',Roboto,sans-serif; line-height:1.6; -webkit-font-smoothing:antialiased; }
     a { color:var(--teal); }
-    h1 { font-size:2rem; color:var(--navy); margin:0 0 4px; letter-spacing:-0.02em; }
-    .tag { color:var(--muted); font-size:1rem; margin-bottom:28px; }
-    h2 { font-size:1.15rem; color:var(--navy); margin:28px 0 8px; }
-    p, li { color:#27323d; }
-    .home { display:inline-block; margin-bottom:24px; color:var(--teal); text-decoration:none; font-weight:600; }
-    .card { background:#fff; border:1px solid var(--border); border-radius:14px; padding:24px 26px; }
-    .pill { display:inline-block; padding:2px 10px; border-radius:999px; font-weight:700; font-size:.85rem; }
-    .go { background:rgba(27,147,106,.14); color:var(--green); }
-    .cau { background:rgba(169,131,28,.16); color:#9a7212; }
-    .nogo { background:rgba(192,57,43,.14); color:#c0392b; }
-    footer { color:var(--muted); font-size:.85rem; margin-top:28px; }
-    .grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(200px,1fr)); gap:12px; margin:12px 0; }
-    .opt { border:1px solid var(--border); border-radius:12px; padding:14px 16px; background:#fbfcfa; }
-    .opt b { display:block; color:var(--navy); margin-bottom:2px; }
-    .opt span { color:var(--muted); font-size:.92rem; }
-    .cta { display:inline-block; margin-top:8px; background:var(--navy); color:#fff; text-decoration:none; font-weight:700; padding:12px 22px; border-radius:999px; }
-    .cta:hover { background:#013A60; }
+    .wrap { max-width:980px; margin:0 auto; padding:0 20px; }
+
+    /* Brand bar + hero band (matches the app's navy hero) */
+    .bar { background:var(--navy-d); }
+    .bar .wrap { display:flex; align-items:center; justify-content:space-between; gap:12px; min-height:60px; }
+    .brand { display:flex; align-items:center; gap:10px; color:#fff; text-decoration:none; font-weight:800; letter-spacing:-0.01em; }
+    .brand img { height:30px; width:auto; }
+    .bar-link { color:#bfe6fb; text-decoration:none; font-weight:600; font-size:14px; }
+    .bar-link:hover { text-decoration:underline; }
+    .hero { background:linear-gradient(118deg, #0b3a5c, var(--navy-d) 70%); color:#fff; padding:48px 0 56px; }
+    .eyebrow { text-transform:uppercase; letter-spacing:.08em; font-size:12px; font-weight:700; color:var(--teal-l); margin-bottom:10px; }
+    h1 { font-size:clamp(1.9rem, 4.4vw, 2.8rem); line-height:1.12; letter-spacing:-0.02em; margin:0 0 14px; max-width:760px; }
+    .hero p.lede { font-size:1.12rem; color:rgba(255,255,255,.86); max-width:680px; margin:0 0 22px; }
+    .live { display:inline-flex; flex-wrap:wrap; gap:8px; margin:0 0 26px; padding:0; list-style:none; }
+    .live li { background:rgba(255,255,255,.08); border:1px solid rgba(255,255,255,.18); border-radius:999px; padding:6px 14px; font-size:14px; color:#e8f6ff; }
+    .live b { color:#fff; }
+    .btns { display:flex; flex-wrap:wrap; gap:10px; }
+    .btn { display:inline-flex; align-items:center; justify-content:center; min-height:46px; padding:0 22px; border-radius:999px; font-weight:700; text-decoration:none; font-size:15px; }
+    .btn.primary { background:#f9b612; color:#11151c; }
+    .btn.primary:hover { filter:brightness(1.05); }
+    .btn.ghost { border:1.5px solid rgba(255,255,255,.5); color:#fff; }
+    .btn.ghost:hover { border-color:#fff; }
+
+    section.blk { padding:44px 0 4px; }
+    h2 { font-size:1.45rem; color:var(--navy); margin:0 0 6px; letter-spacing:-0.01em; }
+    .sub { color:var(--muted); margin:0 0 20px; max-width:700px; }
+
+    /* Mockups: a phone and a desktop window, built in HTML (no screenshots to go stale) */
+    .mocks { display:grid; grid-template-columns: 1.7fr 1fr; gap:22px; align-items:start; }
+    .frame { background:#0d1b2a; border-radius:14px; padding:10px; box-shadow:0 10px 30px rgba(7,24,43,.18); }
+    .frame.phone { max-width:300px; border-radius:30px; padding:12px 10px; margin:0 auto; }
+    .screen { background:#0f2236; border-radius:8px; overflow:hidden; color:#e9f2f9; font-size:12px; }
+    .phone .screen { border-radius:20px; }
+    .dots { display:flex; gap:5px; padding:2px 4px 8px; } .dots i { width:9px; height:9px; border-radius:50%; background:#2b3d50; display:block; }
+    .m-hdr { display:flex; align-items:center; justify-content:space-between; padding:9px 12px; background:#07182b; font-weight:700; font-size:11px; }
+    .m-hdr span { color:#7fe3ff; } .m-hdr em { font-style:normal; font-weight:500; color:#9fb3c4; }
+    .m-ad { position:relative; background:#0b3a5c; padding:16px 14px; display:flex; align-items:center; justify-content:space-between; gap:12px; }
+    .m-ad .k { font-size:9.5px; text-transform:uppercase; letter-spacing:.08em; color:rgba(255,255,255,.75); }
+    .m-ad .logo { display:inline-block; background:#fff; color:#0b3a5c; font-weight:800; font-size:10px; border-radius:4px; padding:2px 6px; margin:4px 0; }
+    .m-ad .h { font-weight:800; font-size:15px; line-height:1.2; color:#fff; }
+    .m-ad .cta { background:#f9b612; color:#11151c; font-weight:800; border-radius:999px; padding:6px 12px; white-space:nowrap; font-size:11px; }
+    .m-ad .lbl { position:absolute; top:6px; right:8px; font-size:9px; background:rgba(0,0,0,.35); color:#fff; border-radius:4px; padding:1px 5px; }
+    .m-call { margin:12px; border-radius:10px; background:#3a1d1d; border:1px solid #6b2a2a; padding:10px 12px; }
+    .m-call.go { background:#123326; border-color:#1f6b4c; }
+    .m-call .v { font-weight:900; font-size:20px; color:#ff8a7a; text-align:center; letter-spacing:.02em; }
+    .m-call.go .v { color:#5fe0a8; }
+    .m-call .s { color:#c7d3dc; text-align:center; font-size:11px; }
+    .m-row { display:grid; grid-template-columns:repeat(4,1fr); gap:6px; margin:0 12px 12px; }
+    .m-row div { background:#16304a; border-radius:6px; padding:6px; text-align:center; font-size:10px; color:#9fb3c4; }
+    .m-row b { display:block; color:#fff; font-size:13px; }
+    .phone .m-row { grid-template-columns:repeat(2,1fr); }
+    .cap { text-align:center; font-size:13px; color:var(--muted); margin-top:10px; }
+
+    .opts { display:grid; grid-template-columns:repeat(3,1fr); gap:14px; }
+    .card { background:var(--surface); border:1px solid var(--border); border-radius:14px; padding:18px 20px; }
+    .card b.t { display:block; color:var(--navy); font-size:1.05rem; margin-bottom:4px; }
+    .card span { color:var(--muted); font-size:.95rem; }
+    .chips { display:flex; flex-wrap:wrap; gap:8px; margin-top:16px; }
+    .chip { display:inline-block; background:var(--surface); border:1px solid var(--border); border-radius:999px; padding:5px 12px; font-size:14px; color:var(--body); text-decoration:none; }
+    .chip:hover { border-color:var(--teal); }
+    .chip.season { border-color:#b9e0cf; background:#effaf4; }
+
+    .two { display:grid; grid-template-columns:1fr 1fr; gap:14px; }
+    ul.ticks { list-style:none; padding:0; margin:0; }
+    ul.ticks li { padding-left:24px; position:relative; margin:6px 0; color:var(--body); }
+    ul.ticks li::before { content:"✓"; position:absolute; left:0; color:var(--green); font-weight:800; }
+    .note { color:var(--muted); font-size:.95rem; }
+    .stats { display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:12px; }
+    .stat { background:var(--surface); border:1px solid var(--border); border-radius:12px; padding:14px 16px; }
+    .stat b { display:block; font-size:1.5rem; color:var(--navy); }
+    .stat span { color:var(--muted); font-size:.9rem; }
+    table.rates { width:100%; border-collapse:collapse; background:var(--surface); border:1px solid var(--border); border-radius:12px; overflow:hidden; }
+    table.rates th, table.rates td { text-align:left; padding:10px 14px; border-bottom:1px solid var(--border); }
+    table.rates th { font-size:.85rem; color:var(--muted); font-weight:600; background:#fbfcfa; }
+
+    /* Booking form → prefilled email (nothing is stored on our side) */
+    form.book { background:var(--surface); border:1px solid var(--border); border-radius:14px; padding:22px; display:grid; grid-template-columns:1fr 1fr; gap:14px; }
+    form.book label { display:flex; flex-direction:column; gap:5px; font-weight:600; font-size:.92rem; color:var(--ink); }
+    form.book label.full { grid-column:1 / -1; }
+    form.book input, form.book select, form.book textarea { font:inherit; font-weight:400; padding:10px 12px; border:1px solid #c9d2c7; border-radius:10px; background:#fff; color:var(--ink); min-height:44px; }
+    form.book textarea { min-height:90px; resize:vertical; }
+    form.book .opt { color:var(--faint); font-weight:400; }
+    form.book .actions { grid-column:1 / -1; display:flex; flex-wrap:wrap; align-items:center; gap:14px; }
+    form.book button { background:var(--navy); color:#fff; border:none; border-radius:999px; min-height:46px; padding:0 24px; font:inherit; font-weight:700; cursor:pointer; }
+    form.book button:hover { background:#013A60; }
+
+    details { background:var(--surface); border:1px solid var(--border); border-radius:12px; padding:12px 16px; margin:8px 0; }
+    summary { cursor:pointer; font-weight:600; color:var(--ink); }
+    details p { margin:8px 0 2px; color:var(--body); }
+
+    footer { color:var(--muted); font-size:.88rem; padding:40px 0 70px; }
+    footer a { color:var(--muted); }
+
+    @media (max-width: 780px) {
+      .mocks, .two, form.book { grid-template-columns:1fr; }
+      .opts { grid-template-columns:1fr; }
+      .frame.desk { display:none; } /* the phone mockup carries the point on small screens */
+    }
   </style>
-  </head>
+</head>
 <body>
-  <div class="wrap">
-    <a class="home" href="/">← Back to shouldiboat.com</a>
-    <div class="card">
-      <h1>Advertise on shouldiboat.com</h1>
-      <div class="tag">Put your business in front of boaters at the moment they decide to go out.</div>
+  <div class="bar"><div class="wrap">
+    <a class="brand" href="/"><img src="/boat-mark-white.png" width="91" height="30" alt="" />shouldiboat.com</a>
+    <a class="bar-link" href="/">← Back to conditions</a>
+  </div></div>
 
-      <p>shouldiboat.com gives a clear GO / CAUTION / NO-GO call for launches on the Great Lakes and the
-        warm-water coasts: Florida, the Gulf, Georgia and the Carolinas, Southern California, Hawaii and
-        Puerto Rico. The people reading a launch's page are boaters, anglers and charter customers deciding
-        whether to head out, often from that exact harbor.</p>
-
-      <h2>The sponsorship</h2>
-      <p>A <strong>takeover</strong>: your brand fills the banner at the top of the page, with your logo,
-        headline, button and link, plus a full-page brand background on wide screens. It's clearly labeled
-        as sponsored and shows above the conditions, where every visitor sees it.</p>
-
-      <h2>Where it shows</h2>
-      <div class="grid">
-        <div class="opt"><b>One launch</b><span>Your harbor's page only. Ideal for a marina, charter, bait shop or boat rental.</span></div>
-        <div class="opt"><b>A region</b><span>Every page in Florida, the Gulf Coast, Southern California and more. Ideal for a dealer or regional chain.</span></div>
-        <div class="opt"><b>Everywhere</b><span>Every page on the site, including the homepage.</span></div>
-      </div>
-      <p>Book by the day, week or season. On any page, the most local sponsor wins, so a launch sponsor is
-        never crowded out by a site-wide one.</p>
-
-      <h2>Reporting</h2>
-      <p>You get views, clicks and click-through rate for every day of your run, counted without cookies.
-        Renew based on what the numbers show.</p>
-
-      <h2>Book a sponsorship</h2>
-      <p>Tell us your business, the launch or region you want, and your dates. We'll reply with current
-        audience numbers for that area and a rate.</p>
-      <a class="cta" href="mailto:hello@shouldiboat.com?subject=Sponsorship%20inquiry">Email hello@shouldiboat.com</a>
-
-      <footer><a href="/about">About</a> · <a href="/guides/">Guides</a> · <a href="/legal#terms">Terms of Use</a> · <a href="/legal#privacy">Privacy policy</a></footer>
+  <header class="hero"><div class="wrap">
+    <div class="eyebrow">Advertise on shouldiboat.com</div>
+    <h1>Put your business in front of boaters at the moment they decide to go out.</h1>
+    <p class="lede">Boaters and anglers check their launch here for a GO / CAUTION / NO-GO call from live NOAA data before they hitch up the trailer. Sponsor that page, for your harbor or your whole region.</p>
+    <ul class="live" id="live" aria-live="polite">
+      <li><b>Great Lakes</b> + Florida, the Gulf, the Carolinas, SoCal, Hawaii &amp; Puerto Rico</li>
+    </ul>
+    <div class="btns">
+      <a class="btn primary" href="#book">Get rates for your area</a>
+      <a class="btn ghost" id="demo-link" href="/spot/put-in-bay?sponsor=demo" target="_blank" rel="noopener">See a sample banner on a live page ↗</a>
     </div>
-  </div>
+  </div></header>
+
+  <main class="wrap">
+    <section class="blk" aria-labelledby="look">
+      <h2 id="look">What your sponsorship looks like</h2>
+      <p class="sub">A banner across the top of the page, above the conditions, with your logo, headline, a short line and a button to your site. On wide screens your brand color also fills the page background. It's always labeled as an ad.</p>
+      <div class="mocks">
+        <div class="frame desk" aria-hidden="true">
+          <div class="dots"><i></i><i></i><i></i></div>
+          <div class="screen">
+            <div class="m-hdr"><b>shouldiboat<span>.com</span></b><em>Put-in-Bay ▾</em></div>
+            <div class="m-ad"><span class="lbl">Ad</span>
+              <div><div class="k">Today's forecast brought to you by</div><span class="logo">YOUR LOGO</span><div class="h">Fuel, slips &amp; bait, five minutes from the ramp</div></div>
+              <span class="cta">Your button →</span></div>
+            <div class="m-call"><div class="v">NO-GO</div><div class="s">Not recommended. Stay in.</div></div>
+            <div class="m-row"><div><b>19 kt</b>Wind</div><div><b>4 ft</b>Waves</div><div><b>61°F</b>Water</div><div><b>49°F</b>Air</div></div>
+          </div>
+        </div>
+        <div>
+          <div class="frame phone" aria-hidden="true">
+            <div class="screen">
+              <div class="m-hdr"><b>shouldiboat<span>.com</span></b></div>
+              <div class="m-ad"><span class="lbl">Ad</span>
+                <div><div class="k">Brought to you by</div><span class="logo">YOUR LOGO</span><div class="h">Your headline here</div></div></div>
+              <div class="m-call go"><div class="v">GO</div><div class="s">Looks good to boat.</div></div>
+              <div class="m-row"><div><b>8 kt</b>Wind</div><div><b>1 ft</b>Waves</div></div>
+            </div>
+          </div>
+          <p class="cap">Sample creative. We build the banner from your logo, colors and copy.</p>
+        </div>
+      </div>
+    </section>
+
+    <section class="blk" aria-labelledby="where">
+      <h2 id="where">Where it shows</h2>
+      <p class="sub">Pick the area your customers launch from. On any page, the most local sponsor wins, so a harbor sponsor is never crowded out by a region-wide one.</p>
+      <div class="opts">
+        <div class="card"><b class="t">One launch</b><span>Your harbor's page only. Built for a marina, charter, boat rental or bait shop.</span></div>
+        <div class="card"><b class="t">A region</b><span>Every launch page in a region, plus the region page. Built for a dealer, a service shop or a regional chain.</span></div>
+        <div class="card"><b class="t">Everywhere</b><span>Every page on the site, including the homepage.</span></div>
+      </div>
+      <div class="chips" id="regions">
+        <a class="chip" href="/greatlakes">Great Lakes</a>
+        <a class="chip" data-warm href="/florida">Florida</a>
+        <a class="chip" data-warm href="/gulf-coast">Gulf Coast</a>
+        <a class="chip" data-warm href="/southeast">Georgia &amp; the Carolinas</a>
+        <a class="chip" data-warm href="/socal">Southern California</a>
+        <a class="chip" data-warm href="/islands">Hawaii &amp; Puerto Rico</a>
+        <a class="chip" href="/chesapeake">Chesapeake Bay</a>
+        <a class="chip" href="/carolina">Carolina Sounds</a>
+      </div>
+      <p class="note" style="margin-top:12px" id="timing"><b>Timing:</b> book by the week, month or season, for the season your customers are on the water.</p>
+    </section>
+
+    <section class="blk" aria-labelledby="audience" id="audience-blk" hidden>
+      <h2 id="audience">Audience</h2>
+      <p class="sub" id="audience-note"></p>
+      <div class="stats" id="audience-stats"></div>
+    </section>
+
+    <section class="blk two" aria-labelledby="report">
+      <div class="card">
+        <h2 id="report">Reporting</h2>
+        <ul class="ticks">
+          <li>Views, clicks and click-through rate for every day of your run</li>
+          <li>Sponsor views and clicks are counted without cookies</li>
+          <li>A report at the end, so you can renew on real numbers</li>
+        </ul>
+      </div>
+      <div class="card">
+        <h2>Ground rules</h2>
+        <ul class="ticks">
+          <li>Your banner is always labeled as an ad</li>
+          <li>Sponsors never influence a GO / CAUTION / NO-GO call or any safety information</li>
+          <li>One sponsor per page at a time, so you're not sharing the spot</li>
+        </ul>
+      </div>
+    </section>
+
+    <section class="blk" aria-labelledby="pricing">
+      <h2 id="pricing">Pricing</h2>
+      <div id="rates-table"></div>
+      <p class="sub" id="rates-note">Book by the week, month or season. Rates depend on the area and the time of year. Tell us the launch or region and your dates, and we'll send current page views for that area along with a quote.</p>
+    </section>
+
+    <section class="blk" aria-labelledby="bookh" id="book">
+      <h2 id="bookh">Get rates for your area</h2>
+      <p class="sub">Fill this in and we'll open an email to us with the details, ready to send from your own inbox.</p>
+      <form class="book" id="book-form">
+        <label>Business name<input name="business" required autocomplete="organization" /></label>
+        <label>Website <span class="opt">(optional)</span><input name="website" type="url" inputmode="url" placeholder="https://" /></label>
+        <label>Where
+          <select name="where">
+            <option>One launch (name it below)</option>
+            <option>Great Lakes region</option>
+            <option>Florida region</option>
+            <option>Gulf Coast region</option>
+            <option>Georgia &amp; the Carolinas region</option>
+            <option>Southern California region</option>
+            <option>Hawaii &amp; Puerto Rico region</option>
+            <option>Chesapeake Bay region</option>
+            <option>Carolina Sounds region</option>
+            <option>Everywhere</option>
+            <option>Not sure yet</option>
+          </select>
+        </label>
+        <label>Launch or harbor <span class="opt">(if one launch)</span><input name="launch" placeholder="e.g. Put-in-Bay" /></label>
+        <label>Dates <span class="opt">(roughly)</span><input name="dates" placeholder="e.g. May 1 – June 30" /></label>
+        <label>Budget <span class="opt">(optional)</span><input name="budget" placeholder="e.g. $200/month" /></label>
+        <label class="full">Anything else <span class="opt">(optional)</span><textarea name="notes" placeholder="What you'd like to promote, a season special, questions…"></textarea></label>
+        <div class="actions">
+          <button type="submit">Open the email</button>
+          <span class="note">Or write to <a href="mailto:hello@shouldiboat.com?subject=Sponsorship%20inquiry">hello@shouldiboat.com</a> directly.</span>
+        </div>
+      </form>
+    </section>
+
+    <section class="blk" aria-labelledby="faq">
+      <h2 id="faq">Questions</h2>
+      <details><summary>Do Pro subscribers see my banner?</summary><p>Yes. Pro removes Google display ads, but direct sponsor banners show to every visitor by default.</p></details>
+      <details><summary>What do I need to provide?</summary><p>Your logo, a headline, an optional short line, the button text, the link, and your brand colors. We put the banner together and send you a preview before it goes live.</p></details>
+      <details><summary>Can I see it before I commit?</summary><p>Yes. <a href="/spot/put-in-bay?sponsor=demo" target="_blank" rel="noopener">Open any page with the sample banner</a>, and before your run starts we'll send a preview with your own creative.</p></details>
+      <details><summary>Will my business affect the conditions call?</summary><p>No. Verdicts come only from NOAA wind, wave, storm and advisory data, and the banner is kept separate from them and labeled as an ad.</p></details>
+    </section>
+
+    <footer><a href="/">shouldiboat.com</a> · <a href="/about">About</a> · <a href="/guides/">Guides</a> · <a href="/legal#terms">Terms of Use</a> · <a href="/legal#privacy">Privacy policy</a></footer>
+  </main>
+
+  <script>
+    // ── Owner-set numbers ─────────────────────────────────────────────────────
+    // Nothing here is shown until it's filled in with REAL figures. Never
+    // estimate: these are claims to paying customers.
+    //   AUDIENCE: monthly figures from GA4, with the month they cover.
+    //   RATES: starting prices you're willing to honor.
+    var AUDIENCE = null; // e.g. { period: "October 2026", stats: [["12,400", "page views"], ["3,100", "visitors"]] }
+    var RATES = null;    // e.g. [["One launch", "from $50 / week"], ["A region", "from $150 / week"], ["Everywhere", "from $400 / week"]]
+
+    function esc(s) { return String(s).replace(/[&<>"]/g, function (c) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]; }); }
+    if (AUDIENCE && AUDIENCE.stats && AUDIENCE.stats.length) {
+      document.getElementById("audience-note").textContent = "From our analytics for " + AUDIENCE.period + ". We'll send the figures for your launch or region with your quote.";
+      document.getElementById("audience-stats").innerHTML = AUDIENCE.stats.map(function (s) { return '<div class="stat"><b>' + esc(s[0]) + "</b><span>" + esc(s[1]) + "</span></div>"; }).join("");
+      document.getElementById("audience-blk").hidden = false;
+    }
+    if (RATES && RATES.length) {
+      document.getElementById("rates-table").innerHTML = '<table class="rates"><thead><tr><th>Placement</th><th>Starting at</th></tr></thead><tbody>' +
+        RATES.map(function (r) { return "<tr><td>" + esc(r[0]) + "</td><td>" + esc(r[1]) + "</td></tr>"; }).join("") + "</tbody></table>";
+      document.getElementById("rates-note").textContent = "Book by the week, month or season. Tell us the launch or region and your dates for an exact quote, with current page views for that area.";
+    }
+
+    // ── Season cue: same off-season window as the app (src/regions.js
+    //    isNorthernOffSeason: mid-October to mid-April). ─────────────────────
+    (function () {
+      var d = new Date(), m = d.getMonth(), day = d.getDate();
+      var off = m > 9 || (m === 9 && day >= 15) || m < 3 || (m === 3 && day < 15);
+      document.querySelectorAll("#regions .chip").forEach(function (c) {
+        var warm = c.hasAttribute("data-warm");
+        if (warm === off) { c.classList.add("season"); c.title = "In season now"; }
+      });
+      document.getElementById("timing").innerHTML = off
+        ? "<b>Timing:</b> the warm-water coasts (highlighted) are in season now. Great Lakes boaters start checking in spring, and that's when marinas plan their season, so now is the time to book a spring run."
+        : "<b>Timing:</b> it's boating season on the Great Lakes and the northern waters (highlighted). Book by the week, month or season.";
+    })();
+
+    // ── Live proof: real counts from the same feed the site runs on ──────────
+    fetch("/marine/conditions?summary").then(function (r) { return r.ok ? r.json() : null; }).then(function (d) {
+      var spots = (d && d.spots) || [];
+      if (!spots.length) return;
+      var go = spots.filter(function (s) { return s.level === "GO"; }).length;
+      document.getElementById("live").innerHTML =
+        "<li><b>" + spots.length + "</b> launch pages</li>" +
+        "<li>Great Lakes + Florida, the Gulf, the Carolinas, SoCal, Hawaii &amp; Puerto Rico</li>" +
+        "<li>Live call right now: <b>" + go + "</b> GO of " + spots.length + "</li>";
+    }).catch(function () {});
+
+    // ── Booking form → a prefilled email in the sender's own mail app ───────
+    document.getElementById("book-form").addEventListener("submit", function (e) {
+      e.preventDefault();
+      var f = e.target, v = function (n) { return (f.elements[n].value || "").trim(); };
+      var lines = [
+        "Business: " + v("business"),
+        v("website") && "Website: " + v("website"),
+        "Where: " + v("where") + (v("launch") ? " (" + v("launch") + ")" : ""),
+        v("dates") && "Dates: " + v("dates"),
+        v("budget") && "Budget: " + v("budget"),
+        v("notes") && "\n" + v("notes"),
+      ].filter(Boolean);
+      var subject = "Sponsorship inquiry: " + v("business");
+      window.location.href = "mailto:hello@shouldiboat.com?subject=" + encodeURIComponent(subject) + "&body=" + encodeURIComponent(lines.join("\n"));
+    });
+  </script>
 </body>
 </html>

@@ -16,12 +16,23 @@ export function heroImageFor(hero, region) {
 // Sponsor reporting: one view per page shown, one click per click-through.
 // Cookieless; counts land in KV per campaign per day (admin → Sponsors).
 function sponsorHit(id, k) {
+  if (!id) return; // the /advertise demo (and any id-less campaign) is never counted
   try {
     const body = JSON.stringify({ id, k });
     if (navigator.sendBeacon) navigator.sendBeacon("/api/sponsor-hit", new Blob([body], { type: "application/json" }));
     else fetch("/api/sponsor-hit", { method: "POST", body, keepalive: true, headers: { "Content-Type": "application/json" } }).catch(() => {});
   } catch (e) { /* reporting never breaks the page */ }
 }
+
+// /advertise "see it live" preview: ?sponsor=demo on any page shows a sample
+// banner, clearly marked as a sample. No id, so no view/click is ever counted
+// and no real campaign's report is touched.
+const DEMO_SPONSOR = {
+  id: "", sponsor: "Sample sponsor", eyebrow: "Sample sponsor banner · preview",
+  headline: "Your marina, front and center", sub: "Your logo, your headline and a button, on the page boaters check before they launch.",
+  cta: "Your button", href: "/advertise#book", bg: "#0b3a5c", fg: "#ffffff", accent: "#f9b612", accentFg: "#11151c",
+};
+const isSponsorDemo = () => { try { return new URLSearchParams(window.location.search).get("sponsor") === "demo"; } catch (e) { return false; } };
 
 const vclass = (v) => (v === "NO-GO" ? "nogo" : v === "CAUTION" ? "caution" : v === "GO" ? "go" : "unknown");
 const DEFAULT_HERO = { image: "/hero-sunset.svg", video: "", headline: "Should I boat{spot} today?", sub: "", showVerdict: true };
@@ -164,7 +175,7 @@ export default function Takeover({ adFree, spotName, verdict, splash = false, ch
   }, []);
 
   // region === undefined means "not known yet": hold the house hero.
-  const sponsor = region === undefined ? null : pickCampaign(cfg.takeovers, { spot, region });
+  const sponsor = isSponsorDemo() ? DEMO_SPONSOR : region === undefined ? null : pickCampaign(cfg.takeovers, { spot, region });
   const showSponsor = sponsor && (!adFree || !sponsor.hideForAdFree);
   // One view per campaign per page (a new launch or region counts again).
   const viewKey = showSponsor && sponsor.id ? `${sponsor.id}|${spot || ""}|${region || ""}` : "";
