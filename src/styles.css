@@ -1003,6 +1003,12 @@ body.has-takeover .app { background: var(--bg); border-radius: var(--r-lg) var(-
   cursor: pointer; transition: border-color var(--dur-fast), color var(--dur-fast); }
 .share-btn:hover { border-color: var(--accent); color: var(--accent); }
 
+/* "Wrong call?" feedback link — quiet, under the reasons, never competes with the verdict. */
+.call-feedback { margin-top: 8px; font-size: var(--fs-xs); }
+.call-feedback a { color: var(--text-muted); text-decoration: underline; text-underline-offset: 2px;
+  display: inline-block; padding: 6px 0; min-height: 24px; }
+.call-feedback a:hover { color: var(--accent); }
+
 /* Glance-band segments are buttons (tap → jump the hourly strip there). */
 .glance-band .gb { border: none; padding: 0; cursor: pointer; transition: opacity var(--dur-fast), transform var(--dur-fast); }
 .glance-band .gb:hover { opacity: 1; transform: scaleY(1.25); }

@@ -1,0 +1,32 @@
+name: CI
+
+# Build + offline test suite on every PR and every push to main, so nothing
+# reaches the auto-deploy on main without passing. Tests run fully offline
+# (in-memory KV, stubbed Stripe/email), so no secrets are needed here.
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - run: npm run build
+      - run: npm test
