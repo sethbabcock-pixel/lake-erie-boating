@@ -423,6 +423,8 @@ function obsAge(ld) {
   if (m == null) return null;
   return m < 60 ? `${m} min ago` : `${Math.floor(m / 60)} h${m % 60 ? ` ${m % 60} min` : ""} ago`;
 }
+// Stations with a fresh reading but no wind or wave sensor data.
+const noMetText = (ld) => (ld.noMet && ld.noMet.length ? <> · {stationList(ld.noMet)} {ld.noMet.length > 1 ? "are" : "is"} reporting, but not wind or waves</> : null);
 const notReported = (ids) => <>{stationList(ids)} {ids.length > 1 ? "haven't" : "hasn't"} reported in the last 3 hours</>;
 function BuoyFact({ facts }) {
   const buoys = facts.buoys || [];
@@ -433,7 +435,9 @@ function BuoyFact({ facts }) {
     const both = ld.windFrom === "forecast" && ld.wavesFrom === "forecast";
     return (
       <span>
-        No live buoy right now: {notReported(ld.offline)} (it may be offline{facts.coastal ? "" : ", out for the season"}, or NOAA's feed may be down).{" "}
+        No live buoy right now
+        {ld.offline.length > 0 && <>: {notReported(ld.offline)} (it may be offline{facts.coastal ? "" : ", out for the season"}, or NOAA's feed may be down)</>}
+        {(ld.noMet || []).length > 0 && <>{ld.offline.length ? "; " : ": "}{stationList(ld.noMet)} {ld.noMet.length > 1 ? "are" : "is"} reporting, but not wind or waves</>}.{" "}
         {both ? "Wind and waves come from the NWS forecast"
           : `${[fromText("Wind", ld.windFrom), fromText("waves", ld.wavesFrom)].join("; ")}. Check the NWS marine forecast before you launch`}
       </span>
@@ -446,6 +450,7 @@ function BuoyFact({ facts }) {
       Live data: {ndbcLink(ld.live)}{age && <> ({age})</>}
       {notes.length > 0 && <>; {notes.join("; ")}</>}
       {ld.offline.length > 0 && <> · {notReported(ld.offline)}</>}
+      {noMetText(ld)}
     </span>
   );
 }
@@ -1316,7 +1321,7 @@ export default function App() {
             {showAds && <AdSlot name="detailMid" />}
 
             <footer className="meta">
-              Source: {buoy ? `Buoy ${buoy.station} · ${buoy.ageMinutes != null ? `${buoy.ageMinutes} min ago` : "latest"}` : "forecast only"}
+              Source: {buoy && (wind?.source === "buoy" || data.waves?.source === "buoy") ? `Buoy ${buoy.station} · ${buoy.ageMinutes != null ? `${buoy.ageMinutes} min ago` : "latest"}` : "forecast only"}
               {" · NWS & NDBC (NOAA), Windy. Updated "}{new Date(data.updatedAt).toLocaleTimeString()}
               <span className="buildtag" title="Deployed version">{typeof __BUILD__ !== "undefined" ? ` · v ${__BUILD__}` : ""}</span>
               <button onClick={() => loadSpot(active)}><IconRefresh /> Refresh</button>

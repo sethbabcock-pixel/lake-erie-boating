@@ -52,6 +52,16 @@ let alertsDown = false; // NWS alerts stub: the alerts endpoint fails
 // the gust); "nowind" = no wind/gust layers at all, calm 1 ft waves;
 // "gustonly" = a 9 kt gust but no sustained wind (grid or hourly) and no waves.
 let gridMode = null;
+// NDBC realtime2 stub: station id → file text (missing → 404).
+let ndbcStub = {};
+// One realtime2 row, `ageMin` minutes old. "MM" = missing sensor.
+const ndbcText = ({ ageMin = 20, wspd = "MM", gst = "MM", wvht = "MM", dpd = "MM", wdir = "MM", atmp = "MM", wtmp = "MM", badTime = false } = {}) => {
+  const d = new Date(Date.now() - ageMin * 60000);
+  const p2 = (n) => String(n).padStart(2, "0");
+  const t = badTime ? ["XX", "XX", "XX", "XX", "XX"] : [d.getUTCFullYear(), p2(d.getUTCMonth() + 1), p2(d.getUTCDate()), p2(d.getUTCHours()), p2(d.getUTCMinutes())];
+  return "#YY  MM DD hh mm WDIR WSPD GST  WVHT   DPD   APD MWD   PRES  ATMP  WTMP  DEWP  VIS PTDY  TIDE\n#yr  mo dy hr mn degT m/s  m/s     m   sec   sec degT   hPa  degC  degC  degC  nmi  hPa    ft\n"
+    + [...t, wdir, wspd, gst, wvht, dpd, "MM", "MM", "1015.0", atmp, wtmp, "MM", "MM", "MM", "MM"].join(" ") + "\n";
+};
 let subGetCancelState = false; // what a GET subscription retrieve reports
 let subStatus = {}; // sub id → status a GET retrieve reports ("missing" → 404); default active
 let subCustomer = {}; // sub id → customer a GET retrieve reports (default: none)
@@ -102,7 +112,10 @@ function installFetchStub() {
       return jsonResp({ features: [{ properties: { event: "Small Craft Advisory", severity: "Minor", headline: "Small Craft Advisory in effect", sent: new Date().toISOString() } }] });
     }
     if (u.includes("api.weather.gov")) return jsonResp({ features: [], "@graph": [], properties: { periods: [] } });
-    if (u.includes("ndbc.noaa.gov")) return new Response("", { status: 404 });
+    if (u.includes("ndbc.noaa.gov")) {
+      const id = (u.match(/realtime2\/([^/.]+)\.txt/) || [])[1];
+      return id && ndbcStub[id] != null ? new Response(ndbcStub[id]) : new Response("", { status: 404 });
+    }
     const body = opts.body ? Object.fromEntries(new URLSearchParams(opts.body)) : null;
     stripeCalls.push({ url: u, method: opts.method || "GET", body });
     if (u.includes("/v1/checkout/sessions"))
@@ -1376,6 +1389,45 @@ async function run() {
     const coastId = Object.keys(SPOTS).find((id) => SPOTS[id].water && SPOTS[id].water !== "lake" && (SPOTS[id].buoys || []).length);
     const chtml = JSON.stringify(seoForPath(`/spot/${coastId}`));
     check("seo: coastal page has no Great Lakes winter note", /Buoy stations/.test(chtml) && !/pulled in winter/.test(chtml) && !/Live (observations|data)/.test(chtml), coastId);
+  }
+
+  // ── fetchBuoy: a fresh reading with no wind and no waves is not a live buoy ──
+  {
+    const { fetchBuoy, buildRecommendation, onRequest } = await import("../functions/marine/conditions.js");
+    ndbcStub = { AAA: ndbcText({ wtmp: "8.0", atmp: "6.0" }), BBB: ndbcText({ wspd: "5.0", gst: "7.0", wdir: "225", wvht: "0.5", dpd: "4" }) };
+    let r = await fetchBuoy(["AAA", "BBB"]);
+    check("fetchBuoy: temps-only station skipped, fallback with wind/waves is live", r.met?.station === "BBB" && r.fresh.map((o) => o.station).join() === "AAA,BBB", JSON.stringify(r).slice(0, 200));
+    check("fetchBuoy: tried records no-met then live", JSON.stringify(r.tried) === JSON.stringify([{ station: "AAA", status: "no-met" }, { station: "BBB", status: "live" }]), JSON.stringify(r.tried));
+    ndbcStub = { AAA: ndbcText({ ageMin: 300, wspd: "5.0" }), CCC: ndbcText({ badTime: true, wspd: "5.0" }) };
+    r = await fetchBuoy(["AAA", "BBB", "CCC"]);
+    check("fetchBuoy: stale, 404 and unreadable time → no live buoy", r.met === null && r.tried.map((t) => t.status).join() === "stale,error,stale", JSON.stringify(r.tried));
+    ndbcStub = { AAA: ndbcText({ wvht: "0.8", dpd: "5" }) };
+    r = await fetchBuoy(["AAA"]);
+    check("fetchBuoy: waves without wind still counts as live", r.met?.station === "AAA");
+
+    // Spot page: Vermilion's first buoy (45176) logs temps only, 45164 has wind+waves.
+    const env = { USERS: makeKV() };
+    stormMode = false; scaMode = false; alertsDown = false; gridMode = null;
+    ndbcStub = { "45176": ndbcText({ wtmp: "9.0" }), "45164": ndbcText({ wspd: "4.0", gst: "5.0", wdir: "225", wvht: "0.3", dpd: "4" }) };
+    let page = await (await onRequest({ request: new Request("https://shouldiboat.com/marine/conditions?spot=vermilion"), env })).json();
+    eq("vermilion: live buoy is the fallback with wind/waves", page.buoy?.station, "45164");
+    eq("vermilion: wind source is buoy", page.wind?.source, "buoy");
+    eq("vermilion: water temp credited to the temps-only station", page.temps?.waterSource, "NDBC 45176");
+    check("vermilion: facts card live 45164, 45176 reporting without wind/waves", page.facts?.liveData?.live === "45164" && page.facts.liveData.noMet.join() === "45176" && page.facts.liveData.offline.length === 0, JSON.stringify(page.facts?.liveData));
+    check("vermilion: no forecast-only caveat when a buoy supplies wind", !(page.recommendation?.reasons || []).some((x) => /No live buoy here/.test(x)), JSON.stringify(page.recommendation?.reasons));
+
+    // Every station temps-only → forecast-only call, caveat shown, no buoy credited.
+    ndbcStub = { "45176": ndbcText({ wtmp: "9.0" }), "45164": ndbcText({ atmp: "7.0" }), "45005": ndbcText({ wtmp: "9.5" }) };
+    page = await (await onRequest({ request: new Request("https://shouldiboat.com/marine/conditions?spot=vermilion"), env })).json();
+    eq("temps-only buoys: page.buoy is null", page.buoy, null);
+    eq("temps-only buoys: wind from forecast", page.wind?.source, "forecast");
+    check("temps-only buoys: forecast-only caveat shown", (page.recommendation?.reasons || []).some((x) => /No live buoy here/.test(x)), JSON.stringify(page.recommendation?.reasons));
+    eq("temps-only buoys: air temp credited to its station", page.temps?.airSource, "NDBC 45164");
+    check("temps-only buoys: facts card not live, all listed as no wind/waves", page.facts?.liveData?.live === null && page.facts.liveData.noMet.join() === "45176,45164,45005" && page.facts.liveData.offline.length === 0, JSON.stringify(page.facts?.liveData));
+    ndbcStub = {};
+
+    const rr = buildRecommendation({ buoy: { station: "X" }, alerts: [], wind: { speedKt: 6, source: "forecast" }, waves: { ft: 0.5, source: "forecast" }, read: null, hours: [], profile: "lake" });
+    check("headline: caveat keyed on sources, not on a buoy object", rr.reasons.some((x) => /No live buoy here/.test(x)), JSON.stringify(rr.reasons));
   }
 
   console.log(results.join("\n"));

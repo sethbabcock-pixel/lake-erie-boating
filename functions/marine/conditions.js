@@ -235,19 +235,44 @@ function parseBuoy(text, station) {
   };
 }
 
-async function fetchBuoy(buoys) {
-  for (const station of buoys) {
+// Live wind/wave buoy for a spot. Tries spot.buoys in order and takes the
+// first station with a fresh (<3 h) observation that carries wind OR waves.
+// A fresh reading with neither (a met station logging only water/air temps,
+// or a buoy whose anemometer and wave sensor are both out) is NOT a live
+// wind/wave buoy: counting it would stop the search before a fallback that
+// has real data and would hide the "no live buoy, using the forecast" caveat.
+// Returns { met, fresh, tried }:
+//   met   — the live wind/wave observation, or null
+//   fresh — every fresh observation fetched, in order (temps-only stations
+//           still feed the water/air tiles)
+//   tried — [{ station, status }] in order; status "live" | "no-met" (fresh,
+//           no wind/waves) | "stale" (no obs <3 h, or unreadable time) |
+//           "error" (fetch/parse failed). Stations after the live one
+//           aren't fetched and aren't listed.
+export async function fetchBuoy(buoys) {
+  const tried = [];
+  const fresh = [];
+  for (const station of buoys || []) {
+    let obs = null;
     try {
-      const text = await getText(`https://www.ndbc.noaa.gov/data/realtime2/${station}.txt`);
-      const obs = parseBuoy(text, station);
-      // Skip stale (>3h) or empty observations; try the next fallback buoy.
-      if (obs && obs.ageMinutes != null && obs.ageMinutes < 180) return obs;
-      if (obs && obs.ageMinutes == null) return obs;
+      obs = parseBuoy(await getText(`https://www.ndbc.noaa.gov/data/realtime2/${station}.txt`), station);
     } catch (e) {
-      // try next buoy
+      tried.push({ station, status: "error" });
+      continue;
     }
+    // A NaN age (unparseable timestamp) is not "fresh".
+    if (!obs || !Number.isFinite(obs.ageMinutes) || obs.ageMinutes >= 180) {
+      tried.push({ station, status: obs ? "stale" : "error" });
+      continue;
+    }
+    fresh.push(obs);
+    if (obs.windKt != null || obs.waveHeightFt != null) {
+      tried.push({ station, status: "live" });
+      return { met: obs, fresh, tried };
+    }
+    tried.push({ station, status: "no-met" });
   }
-  return null;
+  return { met: null, fresh, tried };
 }
 
 // Water temperature from the nearest station that reports one (spot.waterBuoys),
@@ -1025,19 +1050,22 @@ export function windExposure(spot) {
 // liveData.checked is false and callers must not claim any station is live.
 export function spotFacts(spot, obs) {
   const buoys = (spot.buoys || []).filter(Boolean);
-  let liveData = { checked: false, live: null, ageMinutes: null, observedAt: null, offline: [], windFrom: null, wavesFrom: null };
+  let liveData = { checked: false, live: null, ageMinutes: null, observedAt: null, offline: [], noMet: [], windFrom: null, wavesFrom: null };
   if (obs) {
     const live = obs.buoy && obs.buoy.station && buoys.includes(obs.buoy.station) ? obs.buoy.station : null;
-    // fetchBuoy tries stations in order and stops at the first fresh one, so
-    // every station ahead of the live one (or all, if none) failed or was stale.
-    // Stations after the live one were never checked, so they're omitted.
+    // fetchBuoy tries stations in order and stops at the first live one;
+    // `tried` says what happened to each station ahead of it. Stations after
+    // the live one were never checked, so they're omitted. Without `tried`,
+    // every station ahead of the live one (or all) counts as not reporting.
     const idx = live ? buoys.indexOf(live) : buoys.length;
+    const tried = Array.isArray(obs.tried) ? obs.tried.filter((t) => buoys.includes(t.station) && t.station !== live) : null;
     liveData = {
       checked: true,
       live,
       ageMinutes: live && Number.isFinite(obs.buoy.ageMinutes) ? Math.max(0, obs.buoy.ageMinutes) : null,
       observedAt: live && Number.isFinite(Date.parse(obs.buoy.observedAt)) ? obs.buoy.observedAt : null,
-      offline: buoys.slice(0, idx),
+      offline: tried ? tried.filter((t) => t.status !== "no-met").map((t) => t.station) : buoys.slice(0, idx),
+      noMet: tried ? tried.filter((t) => t.status === "no-met").map((t) => t.station) : [], // fresh, but no wind or waves
       windFrom: obs.wind?.source ?? null, // "buoy" | "forecast" | null (null = no data at all)
       wavesFrom: obs.waves?.source ?? null,
     };
@@ -1278,7 +1306,9 @@ export function buildRecommendation({ buoy, alerts, wind, waves, read, hours, pr
   } else if (reasons.length === 0) {
     reasons.push("Calm conditions reported");
   }
-  if (!buoy && !noData) reasons.push("No live buoy here; using the NWS forecast, so verify before launch");
+  // Keyed on where wind and waves actually came from, not on whether a buoy
+  // object exists: the call is forecast-only unless a buoy supplied one of them.
+  if (!noData && wind?.source !== "buoy" && waves?.source !== "buoy") reasons.push("No live buoy here; using the NWS forecast, so verify before launch");
 
   const summary = noData
     ? "No live data right now. Check before you go."
@@ -1666,7 +1696,7 @@ export async function onRequest(context) {
 
   // Fetch all sources concurrently; each resolves to null on failure so one
   // bad source never sinks the whole response.
-  const [buoy, fc, marine, alerts, noaaReport, grid, waterStation] = await Promise.all([
+  const [buoyRes, fc, marine, alerts, noaaReport, grid, waterStation] = await Promise.all([
     fetchBuoy(spot.buoys),
     fetchForecastsNear(spot),
     fetchMarineForecast(spot.zone),
@@ -1675,6 +1705,8 @@ export async function onRequest(context) {
     fetchSpotGrid(spot),
     spot.waterBuoys && spot.waterBuoys.length ? fetchWaterTemp(spot.waterBuoys) : null,
   ]);
+  // `buoy` is only ever a station with live wind or waves (see fetchBuoy).
+  const buoy = buoyRes.met;
   const point = fc.daily;
   // The nearshore periods, from the marine-zone API or (fallback) the NSH text.
   const marinePeriods = (marine && marine.length) ? marine : nshPeriodsForZone(noaaReport?.text, spot.zone);
@@ -1746,13 +1778,17 @@ export async function onRequest(context) {
   // Water temp: live buoy, else the NSH text (which lists a few ports). Air
   // temp: live buoy, else the current hour of the NWS point forecast. So the
   // Water/Air tiles aren't blank at the many spots with no reporting buoy.
-  const waterTempF = buoy?.waterTempF ?? waterStation?.f ?? nshWaterTempF(noaaReport?.text, spot);
-  const airTempF = buoy?.airTempF ?? nowRow?.tempF ?? null;
+  // A temps-only station (fresh, but no wind/waves) still feeds these tiles.
+  // The live buoy first, else the nearest fresh station reporting each one.
+  const bWater = buoy?.waterTempF != null ? buoy : buoyRes.fresh.find((o) => o.waterTempF != null) || null;
+  const bAir = buoy?.airTempF != null ? buoy : buoyRes.fresh.find((o) => o.airTempF != null) || null;
+  const waterTempF = bWater?.waterTempF ?? waterStation?.f ?? nshWaterTempF(noaaReport?.text, spot);
+  const airTempF = bAir?.airTempF ?? nowRow?.tempF ?? null;
   const temps = {
     waterF: round(waterTempF, 0), // display; the verdict gets the unrounded value below
-    waterSource: buoy?.waterTempF != null ? "buoy" : waterStation?.f != null ? `NDBC ${waterStation.station}` : waterTempF != null ? "NWS" : null,
+    waterSource: bWater === buoy && bWater ? "buoy" : bWater ? `NDBC ${bWater.station}` : waterStation?.f != null ? `NDBC ${waterStation.station}` : waterTempF != null ? "NWS" : null,
     airF: round(airTempF, 0),
-    airSource: buoy?.airTempF != null ? "buoy" : airTempF != null ? "NWS" : null,
+    airSource: bAir === buoy && bAir ? "buoy" : bAir ? `NDBC ${bAir.station}` : airTempF != null ? "NWS" : null,
   };
 
   const read = windReadFor(spot, wind.dir);
@@ -1768,7 +1804,7 @@ export async function onRequest(context) {
     waves: { ...waves, periodSec: showPeriod(waves.ft, waves.periodSec) },
     temps,
     windRead: read,
-    facts: spotFacts(spot, { buoy, wind, waves }),
+    facts: spotFacts(spot, { buoy, tried: buoyRes.tried, wind, waves }),
     hourly: hourly.map((h) => ({ ...h, periodSec: showPeriod(h.waveFt, h.periodSec) })),
     outlook,
     week: week.map((d) => ({ ...d, periodSec: showPeriod(d.waveFt, d.periodSec) })),
