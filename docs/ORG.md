@@ -16,8 +16,8 @@ Product     Design     Engineering   Forecast &     Go-to-market   Revenue     T
                                      Safety
 product-    ux-        frontend-     marine-data-   product-mktg-  revenue-    security-
 manager     designer   engineer      scientist      manager        analyst     engineer
-                       backend-                     seo-content-               legal-
-                       engineer                     strategist                 compliance
+                       backend-                     seo-content-   merch-      legal-
+                       engineer                     strategist     manager     compliance
                        devops-sre                   growth-                    customer-
                        qa-engineer                  marketer                   support
                                                     sales-
@@ -41,6 +41,7 @@ manager     designer   engineer      scientist      manager        analyst     e
 | growth-marketer | sonnet | docs | Campaigns, social, email, conversion | `docs/marketing/` |
 | sales-sponsorships | sonnet | docs | Sponsor pipeline, outreach, rate cards | `docs/sales/` |
 | revenue-analyst | sonnet | docs | AdSense/affiliate/Stripe/GA4 KPIs | `docs/business/` |
+| merch-manager | sonnet | docs | Merch line, POD vendors, margins, shop integration, co-branded merch | `docs/merch/` |
 | customer-support | haiku | docs | Replies, triage, FAQ | `docs/support/` |
 | legal-compliance | sonnet | docs | Disclaimers, privacy, platform policy | `docs/legal/` |
 
@@ -49,6 +50,7 @@ manager     designer   engineer      scientist      manager        analyst     e
 - **QA** — separate from development so someone is paid to assume it's broken.
 - **DevOps/SRE** — NOAA feeds, webcams, crons, and Stripe webhooks all fail in production in ways code review won't catch.
 - **Revenue/analytics** — four revenue streams already wired (`MONETIZATION.md`) need someone watching the numbers.
+- **Merch**: a new revenue stream, plus walking billboards at marinas and ramps.
 - **Customer support** — wrong-verdict reports and billing issues need a fast triage path.
 - **Legal/compliance** — safety disclaimers, privacy, Amazon/AdSense/Stripe policy, CAN-SPAM.
 - Marketing is split into **product marketing** (what we say: positioning, launches, competitive, sales enablement), **SEO/content** (your #1 channel), and **growth** (campaigns, community, conversion).
