@@ -1356,6 +1356,11 @@ export async function handleAuth(request, env, url, ctx) {
     // marker is written only after processing, so a failed attempt still retries.
     const evtKey = typeof event?.id === "string" && /^evt_[A-Za-z0-9]{1,200}$/.test(event.id) ? `stripeevt:${event.id}` : null;
     if (evtKey && (await env.USERS.get(evtKey))) return json({ received: true, duplicate: true });
+    // Tombstones for ended subscriptions: a late or out-of-order event for a
+    // subscription Stripe already deleted (different event id, so dedupe can't
+    // catch it) must never grant Pro again.
+    const subKey = (id) => (typeof id === "string" && /^sub_[A-Za-z0-9]{1,200}$/.test(id) ? `stripesubdead:${id}` : null);
+    const subEnded = async (id) => { const k = subKey(id); return !!(k && (await env.USERS.get(k))); };
     const done = async (body) => { if (evtKey) await env.USERS.put(evtKey, "1", { expirationTtl: 7 * 86400 }); return json(body); };
     const obj = event?.data?.object || {};
     const setAdFree = async (email, value, extra = {}) => {
@@ -1384,8 +1389,9 @@ export async function handleAuth(request, env, url, ctx) {
         const sub = await stripeGET(env, `subscriptions/${encodeURIComponent(obj.subscription)}`).catch(() => null);
         if (!sub || (sub.error && sub.error.code !== "resource_missing")) return json({ error: "Could not confirm the subscription with Stripe." }, 503);
         if (sub.status === "incomplete") return json({ error: "Subscription not active yet; retry." }, 503); // payment settling
-        if (sub.error || !["active", "trialing"].includes(sub.status)) return done({ received: true, ignored: true });
+        if (sub.error || !["active", "trialing", "past_due"].includes(sub.status)) return done({ received: true, ignored: true });
       }
+      if (await subEnded(obj.subscription)) return done({ received: true, ignored: true });
       const email = (obj.client_reference_id || obj.customer_email || obj.customer_details?.email || "").toLowerCase();
       const before = email ? await env.USERS.get(emailKey(email), "json") : null;
       if (obj.customer && email) await env.USERS.put(`stripecust:${obj.customer}`, email); // reverse index for later events
@@ -1394,6 +1400,7 @@ export async function handleAuth(request, env, url, ctx) {
       const changed = !!before && (!before.adFree || before.stripeSubId !== obj.subscription);
       if (changed) await runBg(ctx, notify(env, "adfree_activated", { email }, { to: email, subject: "Welcome to shouldiboat Pro", html: adFreeHtml(), ttlDays: 30 }));
     } else if ((event.type === "customer.subscription.updated" || event.type === "customer.subscription.deleted") && !notAdFree) {
+      if (event.type === "customer.subscription.deleted" && subKey(obj.id)) await env.USERS.put(subKey(obj.id), "1", { expirationTtl: 30 * 86400 });
       const email = await env.USERS.get(`stripecust:${obj.customer}`);
       const user = email ? await env.USERS.get(emailKey(email), "json") : null;
       // Only the subscription we recorded as the user's ad-free plan may flip it.
@@ -1408,7 +1415,7 @@ export async function handleAuth(request, env, url, ctx) {
       // switch a comp off.
       const matched = !!user && !!user.stripeSubId && user.stripeSubId === obj.id;
       if (user && (matched || (!user.stripeSubId && purpose == null && !user.comp))) {
-        const active = event.type !== "customer.subscription.deleted" && ["active", "trialing", "past_due"].includes(obj.status);
+        const active = event.type !== "customer.subscription.deleted" && ["active", "trialing", "past_due"].includes(obj.status) && !(await subEnded(obj.id));
         // When the recorded subscription ends, forget it: the member is no longer
         // a subscriber (Account page, admin "paid" badge), and can be comped.
         await setAdFree(email, active, event.type === "customer.subscription.deleted" && matched ? { stripeSubId: null } : {});
