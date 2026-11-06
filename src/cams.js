@@ -101,6 +101,10 @@ export const CAMS = [
   { name: "Kona · Keauhou Bay", lat: 19.56, lon: -155.96, yt: "RxDQLIwxyhA", lake: "Hawaii" },
   { name: "Maui · Wailea Beach", lat: 20.68, lon: -156.44, yt: "mrUciA_XZxA", lake: "Hawaii" },
   { name: "San Juan · Isla Verde beach", lat: 18.445, lon: -66.02, yt: "taI7GiyvDxE", lake: "Puerto Rico" },
+  // Added after a visual frame check (2026-11-06)
+  { name: "Havre de Grace · Upper Chesapeake (Decoy Museum)", lat: 39.545, lon: -76.09, yt: "uOC4CPHiOFM", lake: "Chesapeake Bay" },
+  { name: "Baltimore · Shipping channel (StreamTime)", lat: 39.22, lon: -76.52, yt: "t_VfYNtprYE", lake: "Chesapeake Bay" },
+  { name: "Myrtle Beach · Oceanfront (Captain's Quarters)", lat: 33.69, lon: -78.89, yt: "GKOyGoRE0Tg", lake: "Georgia & South Carolina Coast" },
 ];
 
 // Extra cam directories to link out to, per lake (sites that block embedding).
