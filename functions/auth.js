@@ -1351,6 +1351,12 @@ export async function handleAuth(request, env, url, ctx) {
     if (!ok) return json({ error: "Bad signature" }, 400);
     let event;
     try { event = JSON.parse(raw); } catch { return json({ error: "Bad payload" }, 400); }
+    // Stripe delivers at least once and retries for days (re-signed, so the
+    // 5-minute window doesn't catch it). Each event id is acted on once; the
+    // marker is written only after processing, so a failed attempt still retries.
+    const evtKey = typeof event?.id === "string" && /^evt_[A-Za-z0-9]{1,200}$/.test(event.id) ? `stripeevt:${event.id}` : null;
+    if (evtKey && (await env.USERS.get(evtKey))) return json({ received: true, duplicate: true });
+    const done = async (body) => { if (evtKey) await env.USERS.put(evtKey, "1", { expirationTtl: 7 * 86400 }); return json(body); };
     const obj = event?.data?.object || {};
     const setAdFree = async (email, value, extra = {}) => {
       if (!email) return;
@@ -1370,10 +1376,23 @@ export async function handleAuth(request, env, url, ctx) {
       // can arrive `unpaid`; the grant then waits for `async_payment_succeeded`.
       const paid = obj.payment_status === "paid" || obj.payment_status === "no_payment_required";
       if (obj.mode !== "subscription" || !obj.subscription || purpose !== "adfree" || !paid) return json({ received: true, ignored: true });
+      // Confirm the subscription is still live: a late or out-of-order checkout
+      // event (e.g. delivered after customer.subscription.deleted) must not
+      // re-grant Pro and store a dead subscription id nothing would ever revoke.
+      // If Stripe can't be reached, answer 503 so Stripe retries later.
+      if (env.STRIPE_SECRET_KEY) {
+        const sub = await stripeGET(env, `subscriptions/${encodeURIComponent(obj.subscription)}`).catch(() => null);
+        if (!sub || (sub.error && sub.error.code !== "resource_missing")) return json({ error: "Could not confirm the subscription with Stripe." }, 503);
+        if (sub.status === "incomplete") return json({ error: "Subscription not active yet; retry." }, 503); // payment settling
+        if (sub.error || !["active", "trialing"].includes(sub.status)) return done({ received: true, ignored: true });
+      }
       const email = (obj.client_reference_id || obj.customer_email || obj.customer_details?.email || "").toLowerCase();
+      const before = email ? await env.USERS.get(emailKey(email), "json") : null;
       if (obj.customer && email) await env.USERS.put(`stripecust:${obj.customer}`, email); // reverse index for later events
       await setAdFree(email, true, { stripeCustomerId: obj.customer || null, stripeSubId: obj.subscription, comp: undefined }); // now paid, not a comp
-      if (email) await runBg(ctx, notify(env, "adfree_activated", { email }, { to: email, subject: "Welcome to shouldiboat Pro", html: adFreeHtml(), ttlDays: 30 }));
+      // Welcome only on a real change, never for a re-delivery of the same grant.
+      const changed = !!before && (!before.adFree || before.stripeSubId !== obj.subscription);
+      if (changed) await runBg(ctx, notify(env, "adfree_activated", { email }, { to: email, subject: "Welcome to shouldiboat Pro", html: adFreeHtml(), ttlDays: 30 }));
     } else if ((event.type === "customer.subscription.updated" || event.type === "customer.subscription.deleted") && !notAdFree) {
       const email = await env.USERS.get(`stripecust:${obj.customer}`);
       const user = email ? await env.USERS.get(emailKey(email), "json") : null;
@@ -1395,7 +1414,7 @@ export async function handleAuth(request, env, url, ctx) {
         await setAdFree(email, active, event.type === "customer.subscription.deleted" && matched ? { stripeSubId: null } : {});
       }
     }
-    return json({ received: true });
+    return done({ received: true });
   }
 
   return json({ error: "Not found" }, 404);
