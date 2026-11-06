@@ -1393,10 +1393,24 @@ export async function handleAuth(request, env, url, ctx) {
       const email = (obj.client_reference_id || obj.customer_email || obj.customer_details?.email || "").toLowerCase();
       // Reverse index first: even if the sub isn't live right now (e.g.
       // past_due), a later subscription.updated can still find the user.
-      if (obj.customer && email) await env.USERS.put(`stripecust:${obj.customer}`, email);
+      // Only for an existing account, so a late retry can't recreate the
+      // index after the account was deleted.
+      if (obj.customer && email && await env.USERS.get(emailKey(email))) await env.USERS.put(`stripecust:${obj.customer}`, email);
       const live = await stripeSubLive(env, obj.subscription);
       if (live === null) return json({ error: "Could not confirm subscription with Stripe; retry later." }, 503);
-      if (!live.ok || (obj.customer && live.customer && live.customer !== obj.customer)) return done({ received: true, ignored: true });
+      if (!live.ok || (obj.customer && live.customer && live.customer !== obj.customer)) {
+        // Not live yet but recoverable (e.g. first invoice past_due): record
+        // the subscription id WITHOUT granting, so the later
+        // subscription.updated → active matches `stripeSubId` and grants.
+        // Never for canceled / incomplete_expired / 404: a stale checkout
+        // retry would overwrite the user's current subscription id.
+        const recoverable = ["past_due", "unpaid", "incomplete"].includes(live.status);
+        if (recoverable && obj.customer && live.customer === obj.customer && email) {
+          const user = await env.USERS.get(emailKey(email), "json");
+          if (user) await saveUser(env, { ...user, stripeCustomerId: obj.customer, stripeSubId: obj.subscription });
+        }
+        return done({ received: true, ignored: true });
+      }
       const prev = await setAdFree(email, true, { stripeCustomerId: obj.customer || null, stripeSubId: obj.subscription });
       // Welcome only on a real state change, not on every redelivery.
       if (prev && (!prev.adFree || prev.stripeSubId !== obj.subscription)) {

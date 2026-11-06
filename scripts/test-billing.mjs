@@ -924,11 +924,45 @@ async function run() {
     // A paid checkout whose sub is past_due at delivery: no grant, but the
     // reverse index is written so a later `updated` (active) can grant.
     await seedUser(env, "pastdue@example.com");
-    subStatus.sub_pd = "past_due";
+    subStatus.sub_pd = "past_due"; subCustomer.sub_pd = "cus_pd";
+    emailCalls = [];
     const pd = { id: "evt_pd", type: "checkout.session.completed", data: { object: { ...session, client_reference_id: "pastdue@example.com", customer: "cus_pd", subscription: "sub_pd" } } };
     await call(stripeWebhookReq(pd, "whsec_right"), env);
-    eq("past_due at checkout: no grant", (await env.USERS.get("user:pastdue@example.com", "json")).adFree, false);
+    const pdUser = await env.USERS.get("user:pastdue@example.com", "json");
+    eq("past_due at checkout: no grant", pdUser.adFree, false);
     eq("past_due at checkout: reverse index written", await env.USERS.get("stripecust:cus_pd"), "pastdue@example.com");
+    eq("past_due at checkout: stores stripeSubId", pdUser.stripeSubId, "sub_pd");
+    eq("past_due at checkout: stores stripeCustomerId", pdUser.stripeCustomerId, "cus_pd");
+    check("past_due at checkout: no welcome email", !emailCalls.some((c) => /Welcome to shouldiboat Pro/i.test(c.subject)));
+    check("past_due at checkout: no adfree_activated notification", ![...env.USERS._map.keys()].filter((k) => k.startsWith("admin:notification:")).map((k) => JSON.parse(env.USERS._map.get(k))).some((n) => n.type === "adfree_activated" && n.email === "pastdue@example.com"));
+    // Payment recovers: updated (active, live active) for the tagged sub grants.
+    subStatus.sub_pd = "active";
+    const pdUpd = { id: "evt_pd_upd", type: "customer.subscription.updated", data: { object: { id: "sub_pd", customer: "cus_pd", status: "active", metadata: { purpose: "adfree" } } } };
+    eq("past_due → active updated → 200", (await call(stripeWebhookReq(pdUpd, "whsec_right"), env)).status, 200);
+    eq("past_due → active updated grants ad-free", (await env.USERS.get("user:pastdue@example.com", "json")).adFree, true);
+
+    // Recoverable status but the live sub belongs to another customer → nothing stored.
+    await seedUser(env, "pdmix@example.com");
+    subStatus.sub_pdmix = "past_due"; subCustomer.sub_pdmix = "cus_other";
+    await call(stripeWebhookReq({ id: "evt_pdmix", type: "checkout.session.completed", data: { object: { ...session, client_reference_id: "pdmix@example.com", customer: "cus_pdmix", subscription: "sub_pdmix" } } }, "whsec_right"), env);
+    check("past_due, customer mismatch: stripeSubId not stored", !(await env.USERS.get("user:pdmix@example.com", "json")).stripeSubId);
+
+    // A stale checkout retry whose sub is canceled (or expired / gone) at
+    // delivery must not overwrite the user's current subscription id.
+    for (const [st, tag] of [["canceled", "c"], ["incomplete_expired", "x"], ["missing", "m"]]) {
+      await seedUser(env, `cur${tag}@example.com`, { adFree: true, stripeCustomerId: `cus_cur${tag}`, stripeSubId: `sub_current${tag}` });
+      subStatus[`sub_old${tag}`] = st; subCustomer[`sub_old${tag}`] = `cus_cur${tag}`;
+      await call(stripeWebhookReq({ id: `evt_old${tag}`, type: "checkout.session.completed", data: { object: { ...session, client_reference_id: `cur${tag}@example.com`, customer: `cus_cur${tag}`, subscription: `sub_old${tag}` } } }, "whsec_right"), env);
+      const cu = await env.USERS.get(`user:cur${tag}@example.com`, "json");
+      eq(`${st} at checkout: stripeSubId NOT overwritten`, cu.stripeSubId, `sub_current${tag}`);
+      eq(`${st} at checkout: ad-free untouched`, cu.adFree, true);
+    }
+
+    // N2: a late retry for a deleted account must not recreate the reverse index.
+    subStatus.sub_del = "past_due"; subCustomer.sub_del = "cus_del";
+    await call(stripeWebhookReq({ id: "evt_del", type: "checkout.session.completed", data: { object: { ...session, client_reference_id: "deleted@example.com", customer: "cus_del", subscription: "sub_del" } } }, "whsec_right"), env);
+    check("deleted account: reverse index not recreated", !(await env.USERS.get("stripecust:cus_del")));
+    check("deleted account: no user recreated", !(await env.USERS.get("user:deleted@example.com")));
     subStatus = {}; subCustomer = {};
   }
 
