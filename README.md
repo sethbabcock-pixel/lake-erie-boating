@@ -1,6 +1,8 @@
 # Lake Erie — shouldiboat.com
 
-A go/no-go boating conditions app for **Lake Erie**, from Toledo to Erie, PA.
+A go/no-go boating conditions app for the Great Lakes and US coastal waters —
+it started on Lake Erie and now covers the other Great Lakes plus Florida, the
+Gulf, the Southeast, Chesapeake Bay, Southern California, Hawaii and Puerto Rico.
 Tap a launch spot and get a clear **GO / CAUTION / NO-GO** call backed by live
 NOAA data, a wind-direction read, a weather map, and live webcams — everything
 you need to decide whether to head out, in one place.
@@ -24,12 +26,16 @@ you need to decide whether to head out, in one place.
 - **Boating guides** under `/guides/` and server-rendered SEO pages per spot/region.
 - **Admin** at `/admin` (ads, sponsorships, users).
 
-## Data sources (all free, no API key)
+## Data sources
 
-- **NWS api.weather.gov** — point forecast, marine alerts, NSH text product
-- **NOAA NDBC buoys** — live wave height, wind, water temp (45005/45164/45167/45176/45207, …)
+Conditions data is free and needs no API key:
+
+- **NWS api.weather.gov** — point forecast, marine alerts, marine forecast text products
+- **NOAA NDBC buoys** — live wave height and period, wind, water temp
 - **Windy** — embedded weather map
-- Webcams — Angelcam, Pixelcaster, YouTube live, et al.
+- **Webcams** — curated feeds in `src/cams.js` (YouTube live, ipcamlive, et al.),
+  plus the **Windy Webcams API** for the nearest cam when `WINDY_WEBCAMS_KEY` is
+  set (optional)
 
 ## Architecture (Cloudflare Worker + static assets)
 
