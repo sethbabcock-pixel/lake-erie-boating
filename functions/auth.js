@@ -387,7 +387,7 @@ export async function sendEmail(env, to, subject, htmlBody) {
 // sess:/verify:/reset: tokens map token → email and aren't indexed by email,
 // so this scans; only used on rare paths (account delete, Google takeover of
 // an unverified sign-up).
-async function purgeKeysFor(env, email, prefixes) {
+export async function purgeKeysFor(env, email, prefixes) {
   for (const prefix of prefixes) {
     let cursor;
     do {
@@ -521,8 +521,14 @@ export async function handleAuth(request, env, url, ctx) {
     user.salt = randHex(16);
     user.pass = await pbkdf2(password, user.salt);
     user.passIter = PBKDF2_ITERATIONS;
+    // The reset link reached their mailbox, so the address is proven: confirm
+    // it (else the daily prune would delete a signed-in user) and retire any
+    // pending confirm links.
+    const wasUnverified = user.emailVerified === false;
+    if (wasUnverified) user.emailVerified = true;
     await env.USERS.put(emailKey(email), JSON.stringify(user));
     await env.USERS.delete(`reset:${token}`);
+    if (wasUnverified) await purgeKeysFor(env, email, ["verify:"]);
     const sess = await createSession(env, email);
     return json({ user: publicUser(user) }, 200, { "Set-Cookie": cookie("sib_session", sess, SESSION_DAYS * 86400) });
   }

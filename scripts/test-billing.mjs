@@ -1312,6 +1312,19 @@ async function run() {
     eq("digest: 3am UTC run skipped", (await runScheduled(env, 3)).skipped, "outside windows");
   }
 
+  // 47a. a password reset proves the mailbox → an unverified account becomes verified
+  {
+    const env = { USERS: makeKV() };
+    await env.USERS.put("user:late@example.com", JSON.stringify({ id: "l", email: "late@example.com", salt: "ab", pass: "cd", passIter: 1, via: "password", emailVerified: false, created: "2026-01-01T00:00:00Z" }));
+    await env.USERS.put("verify:latev", "late@example.com");
+    await env.USERS.put("reset:later", "late@example.com");
+    const r = await call(req("POST", "/auth/reset", { body: { token: "later", password: "New-pass-12345" } }), env);
+    eq("reset: unverified account reset → 200", r.status, 200);
+    eq("reset: marks the email verified", (await env.USERS.get("user:late@example.com", "json")).emailVerified, true);
+    check("reset: pending confirm link retired", !env.USERS._map.has("verify:latev"));
+    eq("reset: account not pruned by the daily run", (await runScheduled(env, 10)).pruned, 0);
+  }
+
   // 47b. daily run prunes unconfirmed password sign-ups older than 48h (squatting)
   {
     const env = { USERS: makeKV(), BREVO_API_KEY: "brevo_x" };
@@ -1324,11 +1337,13 @@ async function run() {
     await put("ok@example.com", { via: "password", pass: "p", salt: "s", emailVerified: true, created: ago(1000) });
     await put("paying@example.com", { via: "password", pass: "p", salt: "s", emailVerified: false, created: ago(1000), stripeCustomerId: "cus_1" });
     await put("nodate@example.com", { via: "password", pass: "p", salt: "s", emailVerified: false });
+    await env.USERS.put("sess:stalesess", "stale@example.com");
     const alertRun = await runScheduled(env, 14, now);
     check("prune: alert-window run prunes nothing", !alertRun.pruned && env.USERS._map.has("user:stale@example.com"), JSON.stringify(alertRun));
     const res = await runScheduled(env, 10, now);
     eq("prune: digest run prunes exactly one", res.pruned, 1);
     check("prune: stale unverified sign-up deleted", !env.USERS._map.has("user:stale@example.com"));
+    check("prune: stale sign-up's sessions deleted", !env.USERS._map.has("sess:stalesess"));
     for (const e of ["fresh", "legacy", "ok", "paying", "nodate"]) check(`prune: ${e} account kept`, env.USERS._map.has(`user:${e}@example.com`));
     // The address is free again for its real owner.
     eq("prune: address can be registered again", (await call(req("POST", "/auth/register", { body: { email: "stale@example.com", password: "Owner-pass-123" } }), env)).status, 200);

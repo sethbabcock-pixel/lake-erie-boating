@@ -14,7 +14,7 @@
 // Both respect the global emailOptOut, carry the unsubscribe footer, and reuse
 // the same summary data the homepage directory shows (pooled NWS grid calls
 // for all ports, with cached /points lookups — cheap enough to run hourly).
-import { sendEmail, ensureUnsubToken, notify, emailFooter, isPro } from "./auth.js";
+import { sendEmail, ensureUnsubToken, notify, emailFooter, isPro, purgeKeysFor } from "./auth.js";
 import { fetchSummary, fetchTodayWindows, fetchBuiltSummaries, fetchWeeks, fetchSpotVerdict } from "./marine/conditions.js";
 
 const SITE = "https://shouldiboat.com";
@@ -111,7 +111,7 @@ async function allUsers(env) {
     const page = await env.USERS.list({ prefix: "user:", limit: 1000, cursor });
     for (const k of page.keys) {
       const u = await env.USERS.get(k.name, "json").catch(() => null);
-      if (u && u.email) users.push(u);
+      if (u && u.email) { Object.defineProperty(u, "_key", { value: k.name }); users.push(u); }
     }
     cursor = page.list_complete ? null : page.cursor;
   } while (cursor);
@@ -139,7 +139,13 @@ export async function runScheduled(env, utcHour, now = new Date()) {
   if (isDigestRun) {
     const stale = users.filter((u) => isStaleUnverified(u, now));
     for (const u of stale) {
-      try { await env.USERS.delete(`user:${u.email}`); pruned++; } catch (e) { /* retry tomorrow */ }
+      try {
+        await env.USERS.delete(u._key || `user:${u.email}`);
+        // Drop its sessions too, so a token can't resolve to a later
+        // re-registration of the same address.
+        await purgeKeysFor(env, u.email, ["sess:", "verify:", "reset:"]);
+        pruned++;
+      } catch (e) { /* retry tomorrow */ }
     }
     if (stale.length) users = users.filter((u) => !stale.includes(u));
   }
