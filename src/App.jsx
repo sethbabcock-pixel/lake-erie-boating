@@ -344,8 +344,8 @@ function GlanceBand({ hours }) {
         {win.map((h, i) => (
           <button key={h.time} onClick={() => jumpTo(h.time)}
             className={`gb ${verdictClass(h.level)} ${best && i >= best.from && i <= best.to ? "best" : ""}`}
-            title={`${fmtHour(h.time)} · ${h.level}, see the detail`}
-            aria-label={`${fmtHour(h.time)}: ${h.level}. Jump to hour detail.`} />
+            title={`${fmtHour(h.time)} · ${h.level ?? "no data"}, see the detail`}
+            aria-label={`${fmtHour(h.time)}: ${h.level ?? "no data"}. Jump to hour detail.`} />
         ))}
       </div>
       <div className="glance-x">
@@ -660,7 +660,7 @@ function HourStrip({ hours, headInBy }) {
           {hours.map((h) => <div key={h.time} className={cls(h, "hx-ico")} title={h.short}><WxIcon short={h.short} size={18} /></div>)}
           {/* verdict strip */}
           <Label>Verdict</Label>
-          {hours.map((h) => <div key={h.time} className={cls(h, "hx-vwrap")} title={`${fmtHour(h.time)} · ${h.level}`}><i className={`hx-v ${verdictClass(h.level)}`} /></div>)}
+          {hours.map((h) => <div key={h.time} className={cls(h, "hx-vwrap")} title={`${fmtHour(h.time)} · ${h.level ?? "no data"}`}><i className={`hx-v ${verdictClass(h.level)}`} /></div>)}
           {/* temp — diverging heat-strip behind the numbers */}
           <Label unit="°F">Temp</Label>
           {hours.map((h) => <div key={h.time} className={cls(h)} style={{ background: tempTint(h.tempF) }}>{h.tempF ?? "—"}</div>)}

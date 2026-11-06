@@ -1101,10 +1101,10 @@ export function riskLevel(windKt, gustKt, precipPct, short, waveFt, periodSec, p
 }
 
 function withRisk(hours, profile = "lake") {
-  return (hours || []).map((h) => {
-    const top = Math.max(h.windKt ?? -1, h.gustKt ?? -1);
-    return { ...h, level: hourRisk(top < 0 ? null : top, h.precipPct, h.short, h.waveFt, h.periodSec, profile, { sustained: h.windKt ?? null, gust: h.gustKt ?? null }) };
-  });
+  // Same rule as tiles/week (riskLevel): lake gusts count, and an hour with no
+  // sustained wind is never GO (null, shown "no data"), though waves/storms
+  // can still make it CAUTION/NO-GO.
+  return (hours || []).map((h) => ({ ...h, level: riskLevel(h.windKt ?? null, h.gustKt ?? null, h.precipPct, h.short, h.waveFt, h.periodSec, profile) }));
 }
 
 // Turn the hourly timeline into an actionable "go now / be in by X" outlook.
@@ -1705,8 +1705,10 @@ export async function onRequest(context) {
   // forecast (applyMarineWaveFloor above). Order: live buoy, then that
   // nearshore-corrected current hour, then the zone text where the grid has no
   // cell at all (some coastal/estuary spots).
-  const gridNowFt = hourly[0]?.waveFt ?? null;
-  const gridNowPeriod = hourly[0]?.periodSec ?? null;
+  // The current hour by timestamp (the hourly product can lead with past hours).
+  const nowRow = nowRows[0] ?? null;
+  const gridNowFt = nowRow?.waveFt ?? null;
+  const gridNowPeriod = nowRow?.periodSec ?? null;
   const textWaveFt = parseForecastWaves(marinePeriods) ?? null;
   const currentWaveFt = gridNowFt ?? textWaveFt;
   const nowFt = buoy?.waveHeightFt ?? currentWaveFt ?? null;
@@ -1720,7 +1722,7 @@ export async function onRequest(context) {
   // temp: live buoy, else the current hour of the NWS point forecast. So the
   // Water/Air tiles aren't blank at the many spots with no reporting buoy.
   const waterTempF = buoy?.waterTempF ?? waterStation?.f ?? nshWaterTempF(noaaReport?.text, spot);
-  const airTempF = buoy?.airTempF ?? hourly[0]?.tempF ?? null;
+  const airTempF = buoy?.airTempF ?? nowRow?.tempF ?? null;
   const temps = {
     waterF: round(waterTempF, 0), // display; the verdict gets the unrounded value below
     waterSource: buoy?.waterTempF != null ? "buoy" : waterStation?.f != null ? `NDBC ${waterStation.station}` : waterTempF != null ? "NWS" : null,

@@ -1133,6 +1133,8 @@ async function run() {
     eq("gust only: sustained wind missing", p3.wind?.speedKt, null);
     eq("gust only: grid gust present", p3.wind?.gustKt, 9);
     check("gust only: unparseable hourly wind is null, not 0 kt", (p3.hourly || []).length && p3.hourly.every((h) => h.windKt === null), JSON.stringify((p3.hourly || []).slice(0, 2)));
+    check("gust only: no-wind hours in the strip are not GO (null)", (p3.hourly || []).length && p3.hourly.every((h) => h.level === null), JSON.stringify((p3.hourly || []).slice(0, 2).map((h) => h.level)));
+    check("gust only: current-hour outlook is not GO", p3.outlook?.nowLevel !== "GO", JSON.stringify(p3.outlook));
     check("gust only: headline is not GO", p3.recommendation?.level && p3.recommendation.level !== "GO", JSON.stringify(p3.recommendation));
     gridMode = null;
   }
