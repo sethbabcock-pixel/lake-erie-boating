@@ -102,6 +102,11 @@ function installFetchStub() {
       return jsonResp({ id: "cs_test_123", url: "https://checkout.stripe.com/c/pay/cs_test_123" });
     if (u.includes("/v1/billing_portal/sessions"))
       return jsonResp({ id: "bps_123", url: "https://billing.stripe.com/p/session/bps_123" });
+    if (u.includes("/v1/subscriptions/sub_pd")) return jsonResp({ id: "sub_pd", status: "past_due" });
+    if (u.includes("/v1/subscriptions/sub_auth")) return jsonResp({ error: { type: "authentication_error", message: "Invalid API Key" } }, 401);
+    if (u.includes("/v1/subscriptions/sub_dead")) return jsonResp({ id: "sub_dead", status: "canceled" });
+    if (u.includes("/v1/subscriptions/sub_inc")) return jsonResp({ id: "sub_inc", status: "incomplete" });
+    if (u.includes("/v1/subscriptions/sub_err")) return jsonResp({ error: { type: "api_error", message: "boom" } }, 500);
     if (u.includes("/v1/subscriptions/sub_gone")) return jsonResp({ error: { code: "resource_missing", message: "No such subscription" } });
     if (u.includes("/v1/subscriptions/")) {
       // POST = update (cancel/resume) → mirror the request; GET = retrieve.
@@ -412,6 +417,92 @@ async function run() {
     const on = await (await call(req("POST", "/api/admin/user", { cookie: admin, body: { email: "stale@example.com", adFree: true } }), env)).json();
     eq("comp: dead stripeSubId cleared", on.user.hasSubscription, false);
     eq("comp: dead stripeSubId → recorded as comp", on.user.comp?.by, "admin@example.com");
+  }
+
+  // 6e4. Redeliveries: the same event id is acted on once, and a re-grant of the
+  // same subscription sends no second welcome email
+  {
+    const env = { USERS: makeKV(), STRIPE_WEBHOOK_SECRET: "whsec_right", BREVO_API_KEY: "brevo_x", STRIPE_SECRET_KEY: "sk_test_abc" };
+    await seedUser(env, "redo@example.com");
+    emailCalls = [];
+    const session = { mode: "subscription", payment_status: "paid", metadata: { purpose: "adfree" }, subscription: "sub_123", customer: "cus_r1", client_reference_id: "redo@example.com" };
+    const evt = { id: "evt_redo1", type: "checkout.session.completed", data: { object: session } };
+    eq("dedupe: first delivery → 200", (await call(stripeWebhookReq(evt, "whsec_right"), env)).status, 200);
+    const again = await (await call(stripeWebhookReq(evt, "whsec_right"), env)).json();
+    eq("dedupe: same event id → duplicate", again.duplicate, true);
+    // A different event for the same grant (e.g. completed + a stray async success)
+    await call(stripeWebhookReq({ id: "evt_redo2", type: "checkout.session.async_payment_succeeded", data: { object: session } }, "whsec_right"), env);
+    const welcomes = emailCalls.filter((c) => /Welcome to shouldiboat Pro/i.test(c.subject)).length;
+    eq("dedupe: one welcome email across redeliveries", welcomes, 1);
+    eq("dedupe: still Pro", (await env.USERS.get("user:redo@example.com", "json")).adFree, true);
+    // Event ids that don't look like Stripe's aren't used as KV keys
+    const odd = await (await call(stripeWebhookReq({ id: "evt_../x", type: "ping", data: { object: {} } }, "whsec_right"), env)).json();
+    check("dedupe: odd event id processed without a marker", odd.received && ![...env.USERS._map.keys()].some((k) => k.includes("evt_../")));
+  }
+
+  // 6e5. A checkout event delivered after the subscription was cancelled does not re-grant
+  {
+    const env = { USERS: makeKV(), STRIPE_WEBHOOK_SECRET: "whsec_right", BREVO_API_KEY: "brevo_x", STRIPE_SECRET_KEY: "sk_test_abc" };
+    await seedUser(env, "late@example.com");
+    emailCalls = [];
+    const evt = { id: "evt_late1", type: "checkout.session.completed", data: { object: { mode: "subscription", payment_status: "paid", metadata: { purpose: "adfree" }, subscription: "sub_dead", customer: "cus_l1", client_reference_id: "late@example.com" } } };
+    const r = await (await call(stripeWebhookReq(evt, "whsec_right"), env)).json();
+    eq("live check: cancelled sub → ignored", r.ignored, true);
+    const u = await env.USERS.get("user:late@example.com", "json");
+    check("live check: cancelled sub does not grant", !u.adFree);
+    check("live check: cancelled sub stores no stripeSubId", !u.stripeSubId);
+    check("live check: no welcome email", !emailCalls.some((c) => /Welcome/i.test(c.subject)));
+    for (const [id, label] of [["sub_gone", "deleted sub"]]) {
+      await seedUser(env, "gone@example.com");
+      const e2 = { id: "evt_gone1", type: "checkout.session.completed", data: { object: { ...evt.data.object, subscription: id, client_reference_id: "gone@example.com" } } };
+      await call(stripeWebhookReq(e2, "whsec_right"), env);
+      check(`live check: ${label} does not grant`, !(await env.USERS.get("user:gone@example.com", "json")).adFree);
+    }
+  }
+
+  // 6e6. Stripe unreachable, or the subscription still settling → 503 (Stripe
+  // retries) and no dedupe marker, so the retry is processed
+  {
+    const env = { USERS: makeKV(), STRIPE_WEBHOOK_SECRET: "whsec_right", STRIPE_SECRET_KEY: "sk_test_abc" };
+    await seedUser(env, "flaky@example.com");
+    for (const id of ["sub_err", "sub_inc"]) {
+      const evt = { id: `evt_${id.replace("_", "")}`, type: "checkout.session.async_payment_succeeded", data: { object: { mode: "subscription", payment_status: "paid", metadata: { purpose: "adfree" }, subscription: id, client_reference_id: "flaky@example.com" } } };
+      eq(`live check: ${id} → 503`, (await call(stripeWebhookReq(evt, "whsec_right"), env)).status, 503);
+      check(`live check: ${id} leaves no dedupe marker`, !(await env.USERS.get(`stripeevt:${evt.id}`)));
+    }
+    check("live check: nothing granted while unconfirmed", !(await env.USERS.get("user:flaky@example.com", "json")).adFree);
+  }
+
+  // 6e7. past_due at grant time still grants (matches the subscription-event path)
+  {
+    const env = { USERS: makeKV(), STRIPE_WEBHOOK_SECRET: "whsec_right", STRIPE_SECRET_KEY: "sk_test_abc" };
+    await seedUser(env, "pd@example.com");
+    const evt = { id: "evt_pd1", type: "checkout.session.completed", data: { object: { mode: "subscription", payment_status: "paid", metadata: { purpose: "adfree" }, subscription: "sub_pd", customer: "cus_pd", client_reference_id: "pd@example.com" } } };
+    await call(stripeWebhookReq(evt, "whsec_right"), env);
+    eq("live check: past_due at grant still grants", (await env.USERS.get("user:pd@example.com", "json")).adFree, true);
+    // A revoked/invalid Stripe key → 503 (retry), never a silent drop
+    await seedUser(env, "authfail@example.com");
+    const e2 = { id: "evt_auth1", type: "checkout.session.completed", data: { object: { ...evt.data.object, subscription: "sub_auth", client_reference_id: "authfail@example.com" } } };
+    eq("live check: Stripe auth error → 503", (await call(stripeWebhookReq(e2, "whsec_right"), env)).status, 503);
+  }
+
+  // 6e8. Tombstones: after a subscription is deleted, a late/out-of-order event
+  // for it (untagged legacy updated, or a checkout event) never re-grants Pro
+  {
+    const env = { USERS: makeKV(), STRIPE_WEBHOOK_SECRET: "whsec_right" };
+    await seedUser(env, "tomb@example.com", { adFree: true, stripeCustomerId: "cus_tb", stripeSubId: "sub_tb1" });
+    await env.USERS.put("stripecust:cus_tb", "tomb@example.com");
+    await call(stripeWebhookReq({ id: "evt_tb_del", type: "customer.subscription.deleted", data: { object: { id: "sub_tb1", customer: "cus_tb", status: "canceled" } } }, "whsec_right"), env);
+    eq("tombstone: delete revokes", (await env.USERS.get("user:tomb@example.com", "json")).adFree, false);
+    check("tombstone: written", !!(await env.USERS.get("stripesubdead:sub_tb1")));
+    await call(stripeWebhookReq({ id: "evt_tb_upd", type: "customer.subscription.updated", data: { object: { id: "sub_tb1", customer: "cus_tb", status: "active" } } }, "whsec_right"), env);
+    eq("tombstone: late untagged updated(active) does not re-grant", (await env.USERS.get("user:tomb@example.com", "json")).adFree, false);
+    await call(stripeWebhookReq({ id: "evt_tb_co", type: "checkout.session.completed", data: { object: { mode: "subscription", payment_status: "paid", metadata: { purpose: "adfree" }, subscription: "sub_tb1", customer: "cus_tb", client_reference_id: "tomb@example.com" } } }, "whsec_right"), env);
+    const u = await env.USERS.get("user:tomb@example.com", "json");
+    check("tombstone: late checkout does not re-grant", !u.adFree && !u.stripeSubId);
+    // A new subscription for the same customer is unaffected
+    await call(stripeWebhookReq({ id: "evt_tb_new", type: "checkout.session.completed", data: { object: { mode: "subscription", payment_status: "paid", metadata: { purpose: "adfree" }, subscription: "sub_tb2", customer: "cus_tb", client_reference_id: "tomb@example.com" } } }, "whsec_right"), env);
+    eq("tombstone: new subscription grants", (await env.USERS.get("user:tomb@example.com", "json")).adFree, true);
   }
 
   // 6f. Webhook with no secret configured → 503, never verified against an empty key
