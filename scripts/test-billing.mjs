@@ -49,6 +49,7 @@ let stormMode = false; // Open-Meteo stub: every spot NO-GO (true) vs calm GO (f
 let scaMode = false; // NWS alerts stub: an active Small Craft Advisory at every point
 let alertsDown = false; // NWS alerts stub: the alerts endpoint fails
 let zoneAlert = null; // NWS alerts stub: "gale" = a Gale Warning on the zone query only; "down" = zone query fails
+let alertFeatures = null; // NWS alerts stub: every alerts query returns these raw features
 let alertTestStatus = null; // NWS alerts stub: every alerts query returns one Gale Warning with this status (e.g. "Test")
 let zoneAlertOnly = null; // with zoneAlert "gale": only these zones carry it (null = every queried zone)
 let zoneAlertSpan = null; // with zoneAlert "gale": { onsetH, endsH } hours from now (null = in effect now, open-ended)
@@ -112,6 +113,7 @@ function installFetchStub() {
       return jsonResp({ properties: { periods } });
     }
     if (u.includes("api.weather.gov/alerts/active") && alertsDown) return new Response("", { status: 503 });
+    if (u.includes("api.weather.gov/alerts/active") && alertFeatures) return jsonResp({ features: alertFeatures });
     if (u.includes("api.weather.gov/alerts/active") && alertTestStatus) {
       return jsonResp({ features: [{ properties: { status: alertTestStatus, event: "Gale Warning", severity: "Moderate", headline: "TEST Gale Warning", sent: new Date().toISOString(), geocode: { UGC: ["LEZ143"] } } }] });
     }
@@ -1967,13 +1969,30 @@ async function run() {
     alertTestStatus = null;
   }
 
-  // 61. Flash Flood Warning is CAUTION (debris/current at river ramps); the
-  //     watch, statement and other flood products stay shore-side notes.
+  // 61. Flash Flood Warning is CAUTION (debris/current at river ramps); a Flash
+  //     Flood Emergency (catastrophic threat) is NO-GO; the watch, statement
+  //     and other flood products stay shore-side notes.
   {
     const { alertLevel, buildRecommendation } = await import("../functions/marine/conditions.js");
     eq("flash flood: warning → CAUTION", alertLevel({ event: "Flash Flood Warning" }), "CAUTION");
-    eq("flash flood: emergency → CAUTION", alertLevel({ event: "Flash Flood Emergency" }), "CAUTION");
+    // NWS sends an emergency as event "Flash Flood Warning" + flashFloodDamageThreat CATASTROPHIC.
+    eq("flash flood: emergency (catastrophic threat) → NO-GO", alertLevel({ event: "Flash Flood Warning", ffThreat: "CATASTROPHIC" }), "NO-GO");
+    eq("flash flood: considerable threat stays CAUTION", alertLevel({ event: "Flash Flood Warning", ffThreat: "CONSIDERABLE" }), "CAUTION");
+    eq("flash flood: literal emergency event → NO-GO", alertLevel({ event: "Flash Flood Emergency" }), "NO-GO");
     for (const ev of ["Flash Flood Watch", "Flash Flood Statement", "Flood Warning", "Flood Watch", "Flood Advisory", "Coastal Flood Warning", "Lakeshore Flood Warning"]) eq(`flash flood: ${ev} stays a note`, alertLevel({ event: ev }), null);
+    // End to end: the threat parameter survives parsing, and when an emergency
+    // and a later ordinary warning are both active, the emergency is the card kept.
+    const { fetchAlerts, SPOTS } = await import("../functions/marine/conditions.js");
+    const ffw = (sent, threat) => ({ properties: { status: "Actual", event: "Flash Flood Warning", severity: "Severe", sent, parameters: threat ? { flashFloodDamageThreat: [threat] } : {}, geocode: { UGC: ["OHC095"] } } });
+    alertFeatures = [ffw("2026-07-01T10:00:00Z", "CATASTROPHIC"), ffw("2026-07-01T11:00:00Z", "CONSIDERABLE")];
+    const fe = await fetchAlerts(SPOTS.toledo);
+    check("flash flood: emergency card kept over a later ordinary warning", fe.ok && fe.alerts.length === 1 && alertLevel(fe.alerts[0]) === "NO-GO", JSON.stringify(fe.alerts));
+    alertFeatures = [ffw("2026-07-01T10:00:00Z", null)];
+    const fo = await fetchAlerts(SPOTS.toledo);
+    check("flash flood: parsed warning without a threat tag → CAUTION", fo.ok && alertLevel(fo.alerts[0]) === "CAUTION", JSON.stringify(fo.alerts));
+    alertFeatures = null;
+    const em = buildRecommendation({ buoy: null, alerts: [{ event: "Flash Flood Warning", ffThreat: "CATASTROPHIC" }], wind: { speedKt: 6, gustKt: 8, source: "forecast", gustSrc: "forecast" }, waves: { ft: 1, source: "forecast" }, read: null, hours: [], profile: "lake" });
+    eq("flash flood: calm day under a Flash Flood Emergency is NO-GO", em.level, "NO-GO");
     const r = buildRecommendation({ buoy: null, alerts: [{ event: "Flash Flood Warning" }], wind: { speedKt: 6, gustKt: 8, source: "forecast", gustSrc: "forecast" }, waves: { ft: 1, source: "forecast" }, read: null, hours: [], profile: "lake" });
     check("flash flood: calm day under a Flash Flood Warning is CAUTION, with the reason", r.level === "CAUTION" && r.reasons.some((x) => /Active Flash Flood Warning/.test(x)), JSON.stringify(r));
   }
