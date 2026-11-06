@@ -137,8 +137,12 @@ function spotSections(id, s, lake, tile, updatedAt) {
   }
   const facts = [`<li>Water: ${esc(lake)}</li>`, `<li>Location: ${esc(f.lat.toFixed(3))}, ${esc(f.lon.toFixed(3))}</li>`];
   if (f.zone) facts.push(`<li>NWS marine forecast zone: ${esc(f.zone)}</li>`);
-  if (f.buoys.length) facts.push(`<li>Live observations: ${f.buoys.map((b) => link(`https://www.ndbc.noaa.gov/station_page.php?station=${b.toLowerCase()}`, `NDBC ${b}`)).join(", ")}</li>`);
-  else facts.push(`<li>Live observations: no reporting buoy close by, so wind and waves come from the NWS forecast</li>`);
+  // The server render never fetches buoys, so it can't know whether a station
+  // is reporting right now (Great Lakes offshore buoys are pulled for winter).
+  // Name the stations without calling them live; the app's card shows which,
+  // if any, returned a fresh observation.
+  if (f.buoys.length) facts.push(`<li>Buoy stations: ${f.buoys.map((b) => link(`https://www.ndbc.noaa.gov/station_page.php?station=${b.toLowerCase()}`, `NDBC ${b}`)).join(", ")}. The live page uses a station only while it is reporting; when one hasn't reported in the last 3 hours${f.coastal ? "" : " (it may be offline, or out for the season: Great Lakes offshore buoys are pulled in winter)"}, wind and waves come from the NWS forecast</li>`);
+  else facts.push(`<li>Buoy stations: no buoy close by, so wind and waves come from the NWS forecast</li>`);
   out.push({ h2: `About ${s.name}`, html: `<ul style="margin:0;padding-left:20px">${facts.join("")}</ul>` });
   const e = f.exposure;
   if (e.onshore.length || e.offshore.length) {
@@ -390,6 +394,10 @@ const GUIDES = [
   "boating-the-chesapeake-bay",
   "vhf-radio-and-calling-for-help",
   "thunderstorms-and-lightning",
+  "boating-florida-atlantic-inlets",
+  "boating-lake-huron",
+  "boating-lake-ontario",
+  "boating-hawaii",
 ];
 
 // Date the page templates / on-page content last changed materially. Google
