@@ -133,9 +133,17 @@ const DEFAULT_SITE_CONFIG = {
   ads: ADSENSE_DEFAULTS, // AdSense on/off, publisher ID, slot IDs (src/ads-config.js)
 };
 // Site owner — admin by default so /admin works with no Cloudflare setup.
-// Override (or add more admins) with the ADMIN_EMAIL env var.
+// Admins come from the ADMIN_EMAIL Worker variable: one address, or several
+// separated by commas (e.g. "a@x.com, b@y.com"). Unset or empty → DEFAULT_ADMIN.
+// Deliberately not editable from /admin, so one admin can't add another.
 const DEFAULT_ADMIN = "seth.babcock@gmail.com";
-const isAdmin = (env, u) => !!(u && u.email === (env.ADMIN_EMAIL || DEFAULT_ADMIN).trim().toLowerCase());
+const adminList = (env) => {
+  const list = String(env.ADMIN_EMAIL || "").split(/[\s,;]+/).map((e) => e.trim().toLowerCase()).filter(validEmail);
+  return list.length ? [...new Set(list)] : [DEFAULT_ADMIN];
+};
+// An admin must have proved they own the address: an unverified password
+// account (explicit emailVerified === false) never gets admin, even if listed.
+const isAdmin = (env, u) => !!(u && u.emailVerified !== false && adminList(env).includes(String(u.email || "").toLowerCase()));
 // Admin views of a user — never expose the password hash/salt or tokens.
 const adminUserSummary = (u) => ({
   email: u.email, created: u.created || null, via: u.via || "password",
@@ -404,7 +412,7 @@ async function adminEmails(env) {
   const cfg = await env.USERS.get("site:config", "json").catch(() => null);
   const fromCfg = cfg && Array.isArray(cfg.notifyEmails) ? cfg.notifyEmails : [];
   const legacy = await env.USERS.get("admin:emails", "json").catch(() => null);
-  const list = fromCfg.length ? fromCfg : (Array.isArray(legacy) && legacy.length ? legacy : [env.ADMIN_EMAIL || DEFAULT_ADMIN]);
+  const list = fromCfg.length ? fromCfg : (Array.isArray(legacy) && legacy.length ? legacy : adminList(env));
   return [...new Set(list.map((e) => String(e).trim().toLowerCase()).filter(Boolean))];
 }
 // Footer for non-essential (relationship/marketing) email only — NOT for
@@ -1210,6 +1218,9 @@ export async function handleAuth(request, env, url, ctx) {
     const payload = JSON.parse(atob(tok.id_token.split(".")[1].replace(/-/g, "+").replace(/_/g, "/")));
     const email = (payload.email || "").toLowerCase();
     if (!email) return new Response("No email from Google", { status: 502 });
+    // Only trust an address Google has verified; otherwise anyone could sign in
+    // as (or claim admin for) an address they don't control.
+    if (payload.email_verified !== true && payload.email_verified !== "true") return new Response("Your Google account's email address isn't verified.", { status: 403 });
     let user = await env.USERS.get(emailKey(email), "json");
     if (!user) {
       user = { id: randHex(8), email, created: new Date().toISOString(), prefs: {}, favorites: [], adFree: false, via: "google", emailVerified: true };
