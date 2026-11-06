@@ -106,11 +106,13 @@ week ahead, the daily digest and NO-GO alerts stay free. Pro adds:
 - **GO alerts**: email when a starred port turns GO mid-day (`prefs.goAlerts`)
 - **Weekend outlook**: Thursday 22:00 UTC email with Sat/Sun per port (`prefs.weekendEmail`)
 
+**Decided 2026-11-06: $4.99/mo and $29.99/yr.**
+
 Prices are read live from Stripe (`GET /api/plans`), so the site always shows
 what Checkout will charge. To set or change pricing:
 
-1. In Stripe, create a **Pro** product with a monthly recurring price (suggested
-   $4.99) and, optionally, a yearly one (suggested $29.99).
+1. In Stripe, create a **Pro** product with a monthly recurring price ($4.99)
+   and a yearly one ($29.99).
 2. Set Worker secrets/vars `STRIPE_PRICE_ID` (monthly) and
    `STRIPE_PRICE_ID_YEARLY` (yearly; unset = monthly only). With no
    `STRIPE_PRICE_ID`, the original $2.99/mo price in `functions/auth.js` is used.

@@ -470,6 +470,36 @@ function ShareButton({ spot, rec, wind, wv }) {
   );
 }
 
+// "Wrong call?" — the one path for a boater to tell us a verdict didn't match
+// the water. A mailto (no form, no new endpoint) pre-filled with the spot,
+// the call, the readings, and the time, so a report can be checked against
+// the data that produced it.
+const FEEDBACK_EMAIL = "hello@shouldiboat.com";
+function WrongCallLink({ spot, rec, wind, wv, updatedAt }) {
+  const url = spot.adHoc
+    ? `https://shouldiboat.com/preview?lat=${spot.lat}&lon=${spot.lon}&name=${encodeURIComponent(spot.name)}`
+    : `https://shouldiboat.com/spot/${encodeURIComponent(spot.id)}`;
+  const subject = `Wrong call? ${spot.name}: ${rec.level}`;
+  const body = [
+    `Spot: ${spot.name} (${spot.id})`,
+    `Our call: ${rec.level}`,
+    `Wind ${wind?.speedKt ?? "–"} kt${wind?.gustKt != null ? `, gusts ${wind.gustKt} kt` : ""}; waves ${wv?.ft ?? "–"} ft`,
+    `Data updated: ${updatedAt ? new Date(updatedAt).toLocaleString() : "unknown"}`,
+    `Page: ${url}`,
+    "",
+    "What did you see on the water (and when)?",
+    "",
+  ].join("\n");
+  const href = `mailto:${FEEDBACK_EMAIL}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+  return (
+    <div className="call-feedback">
+      <a href={href} onClick={() => track("event", "wrong_call_click", { spot: spot.id, level: rec.level })}>
+        Wrong call? Tell us what you saw →
+      </a>
+    </div>
+  );
+}
+
 // Which NWS nearshore periods belong to a given date. Period names read like
 // "TODAY", "TONIGHT", "THURSDAY", "THURSDAY NIGHT" — the zone forecast only
 // reaches ~2–3 days, so weekday names can't collide with next week.
@@ -1120,6 +1150,7 @@ export default function App() {
                     {comfort.ok ? "today's conditions are within your limits." : `above your limit: ${comfort.over.join("; ")}.`}
                   </div>
                 )}
+                <WrongCallLink spot={spot} rec={rec} wind={wind} wv={wv} updatedAt={data.updatedAt} />
               </div>
             </section>
 
@@ -1250,6 +1281,7 @@ export default function App() {
               <div className="footlinks">
                 <a href="/guides/" target="_blank" rel="noopener">Guides</a>
                 <a href="/about" target="_blank" rel="noopener">About</a>
+                <a href={`mailto:${FEEDBACK_EMAIL}?subject=${encodeURIComponent("shouldiboat.com feedback")}`}>Feedback</a>
                 <a href="/advertise" target="_blank" rel="noopener">Advertise</a>
                 <a href="/legal#terms" target="_blank" rel="noopener">Terms</a>
                 <a href="/legal#privacy" target="_blank" rel="noopener">Privacy</a>
