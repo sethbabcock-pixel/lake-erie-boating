@@ -119,7 +119,7 @@ export function BuiltPagesPage({ onCount }) {
   const shown = groups[filter];
   return (
     <>
-      <PageHead title="Built pages" sub="Pages visitors built for their own spots. Feature one to index it and list it in the directory. Un-featured pages work by direct link but stay out of search.">
+      <PageHead title="Built pages" sub="Pages visitors built for their own spots. Feature one to list it in the directory; un-featured pages work by direct link. Launch pages stay out of search either way (thin-content policy).">
         <RefreshButton onClick={list.reload} busy={list.loading} />
       </PageHead>
       <div className="adm-tabs">

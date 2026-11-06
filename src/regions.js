@@ -72,13 +72,33 @@ export const seasonalRegions = (d = new Date()) =>
 
 // In-depth guide for a water body, linked from its launches (spot page card +
 // server-rendered page).
+const GULF_GUIDE = { href: "/guides/boating-the-gulf-coast", text: "Boating the Gulf Coast guide" };
+const SOUTHEAST_GUIDE = { href: "/guides/boating-georgia-and-the-carolinas", text: "Boating Georgia & the Carolinas guide" };
 export const LAKE_GUIDES = {
   "Lake Erie": { href: "/guides/boating-lake-erie", text: "Boating Lake Erie guide" },
+  "Lake Michigan": { href: "/guides/boating-lake-michigan", text: "Boating Lake Michigan guide" },
+  "Florida Gulf Coast": GULF_GUIDE,
+  "Alabama & Mississippi Coast": GULF_GUIDE,
+  "Louisiana & Texas Coast": GULF_GUIDE,
+  "Georgia & South Carolina Coast": SOUTHEAST_GUIDE,
+  "North Carolina Coast": SOUTHEAST_GUIDE,
+  "Pamlico Sound": SOUTHEAST_GUIDE,
   "Florida Keys": { href: "/guides/boating-the-florida-keys", text: "Boating the Florida Keys guide" },
   "Southern California Coast": { href: "/guides/boating-southern-california", text: "Boating Southern California guide" },
 };
 
 // Every water body in display order (was the hard-coded list in Landing).
+// The in-depth guides that cover a region's waters (deduped), for the region
+// pages' "Read before you go" links — server-rendered and in the app alike.
+const GENERAL_GUIDE = { href: "/guides/reading-a-marine-forecast", text: "How to read a marine forecast" };
+export const regionGuides = (region) => {
+  const seen = new Set(), out = [];
+  for (const g of [...(region.lakes || []).map((l) => LAKE_GUIDES[l]), region.warm ? { href: "/guides/boating-the-coast", text: "Boating the coast guide" } : { href: "/guides/cold-water-safety", text: "Cold-water safety guide" }, GENERAL_GUIDE]) {
+    if (g && !seen.has(g.href)) { seen.add(g.href); out.push(g); }
+  }
+  return out;
+};
+
 export const LAKE_ORDER = REGIONS.flatMap((r) => r.lakes);
 export const seasonalLakeOrder = (d = new Date()) => seasonalRegions(d).flatMap((r) => r.lakes);
 

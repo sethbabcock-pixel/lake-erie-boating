@@ -24,7 +24,10 @@ you need to decide whether to head out, in one place.
 - **Accounts** — saved ports, daily verdict digest and NO-GO alert emails, and
   a **Pro** subscription via Stripe: no ads, unlimited starred ports, GO alerts
   and a weekend outlook email (see `MONETIZATION.md`).
-- **Boating guides** under `/guides/` and server-rendered SEO pages per spot/region.
+- **Boating guides** under `/guides/` and server-rendered SEO pages per region.
+  Launch pages (`/spot/*`) are server-rendered too but `noindex` and out of the
+  sitemap: ~90 pages on one template read as thin content to AdSense, so the
+  index is the homepage, region pages and the editorial guides.
 - **Admin** at `/admin` (ads, sponsorships, users).
 
 ## Data sources

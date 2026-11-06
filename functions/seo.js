@@ -8,7 +8,7 @@
 //     result ("Should I boat at <spot> today?") with canonical + JSON-LD.
 // The client reads /spot/<id> from the path (App.jsx) and renders normally.
 import { SPOTS, spotFacts } from "./marine/conditions.js";
-import { REGIONS, regionBySlug, nearMetroBySlug, seasonalRegions, LAKE_GUIDES } from "../src/regions.js";
+import { REGIONS, regionBySlug, nearMetroBySlug, seasonalRegions, LAKE_GUIDES, regionGuides } from "../src/regions.js";
 
 const SITE = "https://shouldiboat.com";
 const lakeOf = (s) => s.lake || "Lake Erie";
@@ -207,11 +207,16 @@ export function seoForPath(pathname, live = null) {
       bodyHtml: ssrPage({
         h1: "Should I boat today? Live boating conditions",
         lede: `${description} Every launch gets its own page with the verdict, the numbers behind it, how the wind direction plays at that shore, and an hour-by-hour timeline.`,
-        sections: tiles.length
+        sections: [...(tiles.length
           ? [{ h2: `Today's verdicts${asOf}`, html: `<p style="margin:0">${esc(tally(tiles))} across ${tiles.length} launches.</p>` },
              ...lakeSections(tiles, seasonalRegions().flatMap((r) => r.lakes))]
-          : [{ h2: "Launches", html: `<p style="margin:0">${Object.entries(SPOTS).map(([id, s]) => link(`/spot/${id}`, s.name)).join(" · ")}</p>` }],
-        links: [{ href: "/guides/", text: "Boating guides" }, { href: "/about", text: "About" }],
+          : [{ h2: "Launches", html: `<p style="margin:0">${Object.entries(SPOTS).map(([id, s]) => link(`/spot/${id}`, s.name)).join(" · ")}</p>` }]), { h2: "Learn the water", html:
+          `<p style="margin:0">Plain-English guides to reading the conditions behind every verdict: ${[
+            ["/guides/boating-the-coast", "Boating the coast"],
+            ["/guides/reading-a-marine-forecast", "How to read a marine forecast"],
+            ["/guides/cold-water-safety", "Cold-water safety"],
+          ].map(([h, t]) => link(h, t)).join(" · ")}.</p>` }],
+        links: [{ href: "/guides/", text: "All boating guides" }, { href: "/about", text: "About" }],
       }),
     };
   }
@@ -230,9 +235,12 @@ export function seoForPath(pathname, live = null) {
       bodyHtml: ssrPage({
         h1: `${region.title} boating conditions`,
         lede: `${description}${region.blurb ? ` ${region.blurb}` : ""}`,
-        sections: tiles.length
-          ? lakeSections(tiles, region.lakes || [])
-          : [{ h2: "Launches", html: `<p style="margin:0">${regionSpots(region, 99).map((x) => link(x.href, x.text)).join(" · ")}</p>` }],
+        sections: [
+          { h2: "Read before you go", html: `<p style="margin:0">${regionGuides(region).map((g) => link(g.href, g.text)).join(" · ")}</p>` },
+          ...(tiles.length
+            ? lakeSections(tiles, region.lakes || [])
+            : [{ h2: "Launches", html: `<p style="margin:0">${regionSpots(region, 99).map((x) => link(x.href, x.text)).join(" · ")}</p>` }]),
+        ],
         links: [{ href: "/", text: "All waters" }, { href: "/guides/", text: "Boating guides" }],
       }),
     };
@@ -292,6 +300,11 @@ export function seoForPath(pathname, live = null) {
       }).join("")}</ul>` });
     }
     return {
+      // Live tool page, kept out of the index: all ~90 launch pages share one
+      // template with different numbers, which AdSense rejects as "low value
+      // content" when they outnumber the editorial pages. Visitors and internal
+      // links are unaffected; region pages and guides carry the indexed content.
+      noindex: true,
       url: `${SITE}/spot/${m[1]}`,
       title: `Should I boat at ${s.name} today? Live conditions · shouldiboat.com`,
       description,
@@ -310,8 +323,8 @@ export function seoForPath(pathname, live = null) {
   return null;
 }
 
-// A user-built /spot/<slug> page (KV). Indexable meta once an admin features it;
-// otherwise a noindex shell so pending pages stay out of search. null = unknown.
+// A user-built /spot/<slug> page (KV). Always noindex, like curated launch pages
+// (same template, so same thin-content risk). null = unknown.
 export async function seoForBuiltSpot(env, slug) {
   if (!env?.USERS) return null;
   const b = await env.USERS.get(`builtspot:${slug}`, "json").catch(() => null);
@@ -323,7 +336,7 @@ export async function seoForBuiltSpot(env, slug) {
     title: `Should I boat at ${b.name} today? Live conditions · shouldiboat.com`,
     description,
     jsonld: spotJsonld(slug, b, lake),
-    noindex: !b.featured,
+    noindex: true,
     bodyHtml: ssrBody({
       h1: `Should I boat at ${b.name} today?`,
       description,
@@ -370,6 +383,9 @@ const GUIDES = [
   "boating-the-coast",
   "boating-the-florida-keys",
   "boating-southern-california",
+  "boating-lake-michigan",
+  "boating-the-gulf-coast",
+  "boating-georgia-and-the-carolinas",
 ];
 
 // Date the page templates / on-page content last changed materially. Google
@@ -377,22 +393,13 @@ const GUIDES = [
 // but only trusts it when it's accurate — so BUMP THIS when you ship a change
 // that alters what's on the pages (new content, layout, copy), not on every
 // deploy. W3C date format (YYYY-MM-DD).
-const CONTENT_UPDATED = "2026-10-22";
+const CONTENT_UPDATED = "2026-11-06";
 
-export async function sitemapXml(env) {
-  // Admin-featured user-built pages join the sitemap; pending ones stay out.
-  let built = [];
-  try {
-    if (env?.USERS) {
-      const list = await env.USERS.list({ prefix: "builtspot:", limit: 1000 });
-      for (const k of list.keys) { const b = await env.USERS.get(k.name, "json").catch(() => null); if (b && b.featured && !b.disabled) built.push(b.slug); }
-    }
-  } catch (e) { built = []; }
+// Launch pages (/spot/*) are noindex and deliberately left out (see seoForPath).
+export async function sitemapXml() {
   const urls = [
     { loc: `${SITE}/`, freq: "hourly", priority: "1.0" },
     ...REGIONS.map((r) => ({ loc: `${SITE}/${r.slug}`, freq: "hourly", priority: "0.9" })),
-    ...Object.keys(SPOTS).map((id) => ({ loc: `${SITE}/spot/${id}`, freq: "hourly", priority: "0.8" })),
-    ...built.map((slug) => ({ loc: `${SITE}/spot/${slug}`, freq: "hourly", priority: "0.7" })),
     { loc: `${SITE}/guides/`, freq: "weekly", priority: "0.6" },
     ...GUIDES.map((slug) => ({ loc: `${SITE}/guides/${slug}`, freq: "monthly", priority: "0.5" })),
     { loc: `${SITE}/about`, freq: "monthly", priority: "0.3" },

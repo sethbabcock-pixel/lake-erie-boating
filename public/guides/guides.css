@@ -93,3 +93,4 @@ footer a { color: var(--muted); }
 .guide-ad { margin: 28px 0; text-align: center; }
 .guide-ad.pending .guide-adlabel { visibility: hidden; }
 .guide-adlabel { display: block; font-size: 10px; text-transform: uppercase; letter-spacing: .08em; color: #8595a1; margin-bottom: 4px; }
+.byline { color: var(--muted); font-size: .88rem; margin: -6px 0 14px; }
