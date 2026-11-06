@@ -53,6 +53,7 @@ let alertsDown = false; // NWS alerts stub: the alerts endpoint fails
 // "gustonly" = a 9 kt gust but no sustained wind (grid or hourly) and no waves.
 let gridMode = null;
 let hourlyLagH = 0; // hourly stub: lead with this many already-past hours
+let ndbcFiles = {}; // NDBC realtime2 stub: station → file text (unlisted → 404)
 let subGetCancelState = false; // what a GET subscription retrieve reports
 let subStatus = {}; // sub id → status a GET retrieve reports ("missing" → 404); default active
 let subCustomer = {}; // sub id → customer a GET retrieve reports (default: none)
@@ -103,7 +104,10 @@ function installFetchStub() {
       return jsonResp({ features: [{ properties: { event: "Small Craft Advisory", severity: "Minor", headline: "Small Craft Advisory in effect", sent: new Date().toISOString() } }] });
     }
     if (u.includes("api.weather.gov")) return jsonResp({ features: [], "@graph": [], properties: { periods: [] } });
-    if (u.includes("ndbc.noaa.gov")) return new Response("", { status: 404 });
+    if (u.includes("ndbc.noaa.gov")) {
+      const st = u.match(/realtime2\/([^/.]+)\.txt$/)?.[1];
+      return st && ndbcFiles[st] != null ? new Response(ndbcFiles[st], { status: 200 }) : new Response("", { status: 404 });
+    }
     const body = opts.body ? Object.fromEntries(new URLSearchParams(opts.body)) : null;
     stripeCalls.push({ url: u, method: opts.method || "GET", body });
     if (u.includes("/v1/checkout/sessions"))
@@ -926,10 +930,43 @@ async function run() {
     // reverse index is written so a later `updated` (active) can grant.
     await seedUser(env, "pastdue@example.com");
     subStatus.sub_pd = "past_due";
+    emailCalls = [];
     const pd = { id: "evt_pd", type: "checkout.session.completed", data: { object: { ...session, client_reference_id: "pastdue@example.com", customer: "cus_pd", subscription: "sub_pd" } } };
     await call(stripeWebhookReq(pd, "whsec_right"), env);
     eq("past_due at checkout: no grant", (await env.USERS.get("user:pastdue@example.com", "json")).adFree, false);
     eq("past_due at checkout: reverse index written", await env.USERS.get("stripecust:cus_pd"), "pastdue@example.com");
+    check("past_due at checkout: no welcome email", !emailCalls.some((c) => /Welcome to shouldiboat Pro/i.test(c.subject)));
+    // No customer on the live sub → can't confirm the match → nothing stored.
+    eq("past_due at checkout without customer match: stripeSubId not stored", (await env.USERS.get("user:pastdue@example.com", "json")).stripeSubId, undefined);
+    // With a confirmed customer, the sub is recorded (not granted) so the
+    // tagged subscription.updated that follows payment can grant.
+    subCustomer.sub_pd = "cus_pd";
+    await call(stripeWebhookReq({ ...pd, id: "evt_pd_retry" }, "whsec_right"), env);
+    let pdu = await env.USERS.get("user:pastdue@example.com", "json");
+    eq("past_due at checkout: still not granted", pdu.adFree, false);
+    eq("past_due at checkout: stripeSubId stored", pdu.stripeSubId, "sub_pd");
+    eq("past_due at checkout: stripeCustomerId stored", pdu.stripeCustomerId, "cus_pd");
+    subStatus.sub_pd = "active";
+    const paidUp = { id: "evt_pd_upd", type: "customer.subscription.updated", data: { object: { id: "sub_pd", customer: "cus_pd", status: "active", metadata: { purpose: "adfree" } } } };
+    eq("past_due → active update → 200", (await call(stripeWebhookReq(paidUp, "whsec_right"), env)).status, 200);
+    eq("past_due → active update grants ad-free", (await env.USERS.get("user:pastdue@example.com", "json")).adFree, true);
+
+    // A canceled-at-delivery checkout must not overwrite the user's current sub.
+    await seedUser(env, "current@example.com", { adFree: true, stripeCustomerId: "cus_cur", stripeSubId: "sub_cur_live" });
+    subStatus.sub_cur_old = "canceled"; subCustomer.sub_cur_old = "cus_cur";
+    await call(stripeWebhookReq({ id: "evt_cur_old", type: "checkout.session.completed", data: { object: { ...session, client_reference_id: "current@example.com", customer: "cus_cur", subscription: "sub_cur_old" } } }, "whsec_right"), env);
+    let cu = await env.USERS.get("user:current@example.com", "json");
+    eq("canceled checkout retry keeps current stripeSubId", cu.stripeSubId, "sub_cur_live");
+    eq("canceled checkout retry keeps ad-free", cu.adFree, true);
+    // Nor may a recoverable (past_due) other sub replace a granting one.
+    subStatus.sub_cur_pd = "past_due"; subCustomer.sub_cur_pd = "cus_cur";
+    await call(stripeWebhookReq({ id: "evt_cur_pd", type: "checkout.session.completed", data: { object: { ...session, client_reference_id: "current@example.com", customer: "cus_cur", subscription: "sub_cur_pd" } } }, "whsec_right"), env);
+    eq("past_due other-sub checkout keeps current stripeSubId", (await env.USERS.get("user:current@example.com", "json")).stripeSubId, "sub_cur_live");
+
+    // Account deleted, then a late checkout retry: no reverse index re-created.
+    subStatus.sub_del = "active";
+    await call(stripeWebhookReq({ id: "evt_del", type: "checkout.session.completed", data: { object: { ...session, client_reference_id: "deleted@example.com", customer: "cus_del", subscription: "sub_del" } } }, "whsec_right"), env);
+    eq("no account: reverse index not written", await env.USERS.get("stripecust:cus_del"), null);
     subStatus = {}; subCustomer = {};
   }
 
@@ -1355,6 +1392,44 @@ async function run() {
     gridMode = null;
   }
 
+  // 56. Week strip rates forecast thunder (hour by hour, with that hour's rain
+  //     chance); the outlook never counts no-data hours as good.
+  {
+    const { buildWeek, computeOutlook, buildRecommendation } = await import("../functions/marine/conditions.js");
+    const nowH = Math.floor(Date.now() / 3600000);
+    // A calm 3-day grid (UTC), 8 kt / 1 ft / dry, with thunder injected per test.
+    const grid = (thunderHours = {}, precip = {}) => {
+      const mk = (v) => new Map(Array.from({ length: 72 }, (_, i) => [nowH + i, typeof v === "function" ? v(nowH + i) : v]));
+      return { tz: "UTC", windKt: mk(8), gustKt: mk(10), waveFt: mk(1), periodSec: mk(4), windDirDeg: mk(225),
+        precipPct: mk((h) => precip[h] ?? 0), thunder: mk((h) => !!thunderHours[h]) };
+    };
+    const day2 = (w) => w.find((d) => d.date === new Date((nowH + 30) * 3600e3).toISOString().slice(0, 10));
+    eq("week: calm day stays GO", day2(buildWeek(grid())).level, "GO");
+    const h = nowH + 30;
+    eq("week: thunder hour with 40% rain → day NO-GO", day2(buildWeek(grid({ [h]: true }, { [h]: 40 }))).level, "NO-GO");
+    eq("week: slight thunder chance (10% rain) → day CAUTION", day2(buildWeek(grid({ [h]: true }, { [h]: 10 }))).level, "CAUTION");
+    eq("week: dry thunder hour + unrelated wet hour → CAUTION, not NO-GO", day2(buildWeek(grid({ [h]: true }, { [h]: 5, [h + 3]: 40 }))).level, "CAUTION");
+    check("week: day reports thunder flag", day2(buildWeek(grid({ [h]: true }, { [h]: 40 }))).thunder === true);
+
+    const hr = (level, i) => ({ time: new Date((nowH + i) * 3600e3).toISOString(), level, short: "" });
+    const o1 = computeOutlook([hr(null, 0), hr("GO", 1), hr("GO", 2)]);
+    check("outlook: no data this hour → noData, 0 good hours", o1.noData === true && o1.goodHours === 0, JSON.stringify(o1));
+    const o2 = computeOutlook([hr("GO", 0), hr("GO", 1), hr(null, 2), hr("GO", 3)]);
+    check("outlook: good window stops at the first no-data hour", o2.goodHours === 2 && o2.dataEndsAt === hr(null, 2).time && !o2.headInBy, JSON.stringify(o2));
+    const o3 = computeOutlook([hr("GO", 0), hr("NO-GO", 1), hr(null, 2)]);
+    check("outlook: an earlier NO-GO still sets be-in-by", o3.goodHours === 1 && o3.headInBy === hr("NO-GO", 1).time, JSON.stringify(o3));
+    const storm = { ...hr("NO-GO", 2), short: "Chance Showers And Thunderstorms" };
+    const o4 = computeOutlook([hr(null, 0), hr(null, 1), storm]);
+    check("outlook: missing wind keeps a known storm cutoff", o4.noData === true && o4.goodHours === 0 && o4.headInBy === storm.time && o4.headInReason === "thunderstorms", JSON.stringify(o4));
+    const o5 = computeOutlook([hr("GO", 0), hr(null, 1), storm]);
+    const o6 = computeOutlook([hr("NO-GO", 0), hr(null, 1), hr("GO", 2)]);
+    check("outlook: NO-GO now then a data gap → be in now, no dataEndsAt", o6.goodHours === 0 && o6.headInBy === hr("NO-GO", 0).time && !o6.dataEndsAt, JSON.stringify(o6));
+    check("outlook: data gap before a storm keeps both", o5.goodHours === 1 && o5.dataEndsAt === hr(null, 1).time && o5.headInBy === storm.time, JSON.stringify(o5));
+
+    const r24 = buildRecommendation({ buoy: null, alerts: [], wind: { speedKt: null, gustKt: 24, source: null, gustSrc: "forecast" }, waves: { ft: null }, read: null, hours: [], profile: "lake" });
+    check("summary: gust-driven NO-GO with no other data reads as NO-GO, not 'no live data'", r24.level === "NO-GO" && !/No live data/.test(r24.summary), r24.summary);
+  }
+
   // 57. Follow-ups: Great Lakes GO needs waves; sparse future days can't GO;
   //     the hourly strip starts at the current hour.
   {
@@ -1419,6 +1494,94 @@ async function run() {
     const coastId = Object.keys(SPOTS).find((id) => SPOTS[id].water && SPOTS[id].water !== "lake" && (SPOTS[id].buoys || []).length);
     const chtml = JSON.stringify(seoForPath(`/spot/${coastId}`));
     check("seo: coastal page has no Great Lakes winter note", /Buoy stations/.test(chtml) && !/pulled in winter/.test(chtml) && !/Live (observations|data)/.test(chtml), coastId);
+  }
+
+  // 58. Buoy fallback: a fresh temps-only station (no wind, no waves) must not
+  //     stand in for the live buoy. The walk continues to a later station that
+  //     reports wind/waves, and when none does the verdict says it is running
+  //     on the forecast (wind.source / waves.source, not the buoy object).
+  {
+    const { fetchBuoy, buildRecommendation, onRequest } = await import("../functions/marine/conditions.js");
+    // NDBC realtime2 line: YY MM DD hh mm WDIR WSPD GST WVHT DPD APD MWD PRES ATMP WTMP DEWP VIS PTDY TIDE
+    const ndbc = ({ ageMin = 20, wdir = "MM", wspd = "MM", gst = "MM", wvht = "MM", dpd = "MM", atmp = "MM", wtmp = "MM" } = {}) => {
+      const t = new Date(Date.now() - ageMin * 60000);
+      const p2 = (n) => String(n).padStart(2, "0");
+      return "#YY  MM DD hh mm WDIR WSPD GST  WVHT   DPD   APD MWD   PRES  ATMP  WTMP  DEWP  VIS PTDY  TIDE\n#yr  mo dy hr mn degT m/s  m/s     m   sec   sec degT   hPa  degC  degC  degC  nmi  hPa    ft\n"
+        + [t.getUTCFullYear(), p2(t.getUTCMonth() + 1), p2(t.getUTCDate()), p2(t.getUTCHours()), p2(t.getUTCMinutes()), wdir, wspd, gst, wvht, dpd, "MM", "MM", "1015.0", atmp, wtmp, "MM", "MM", "MM", "MM"].join(" ") + "\n";
+    };
+    const TEMPS = ndbc({ atmp: "12.0", wtmp: "10.0" }); // temps-only: 50°F water, 53.6°F air
+    const MET = ndbc({ wdir: "220", wspd: "5.0", gst: "6.0", wvht: "0.5", dpd: "4", atmp: "14.0" }); // ~10 kt, 1.6 ft, no water temp
+
+    ndbcFiles = { TMPS1: TEMPS, METB1: MET };
+    let r = await fetchBuoy(["TMPS1", "METB1"]);
+    eq("fetchBuoy: temps-only first station is skipped for the wind/wave buoy", r.buoy?.station, "METB1");
+    eq("fetchBuoy: temps-only station kept for the tiles", r.tempsObs?.station, "TMPS1");
+    r = await fetchBuoy(["TMPS1"]);
+    eq("fetchBuoy: temps-only alone → no live buoy", r.buoy, null);
+    eq("fetchBuoy: temps-only alone → temps still available", r.tempsObs?.waterTempF, 50);
+    ndbcFiles = { WAVE1: ndbc({ wvht: "1.0", dpd: "5" }) };
+    r = await fetchBuoy(["WAVE1"]);
+    eq("fetchBuoy: waves-only station is accepted", r.buoy?.station, "WAVE1");
+    ndbcFiles = { GUST1: ndbc({ gst: "8.0", atmp: "12.0" }) };
+    r = await fetchBuoy(["GUST1"]);
+    eq("fetchBuoy: gust-only station still counts as a met station", r.buoy?.station, "GUST1");
+    ndbcFiles = { OLD01: ndbc({ ageMin: 240, wspd: "5.0" }), METB1: MET };
+    r = await fetchBuoy(["OLD01", "METB1"]);
+    eq("fetchBuoy: stale (>3 h) station still skipped", r.buoy?.station, "METB1");
+    ndbcFiles = {};
+    r = await fetchBuoy(["GONE1"]);
+    check("fetchBuoy: nothing reporting → { buoy: null, tempsObs: null }", r.buoy === null && r.tempsObs === null, JSON.stringify(r));
+
+    const FC_NOTE = /No live buoy here; using the NWS forecast/;
+    const recOf = (buoy, wind, waves) => buildRecommendation({ buoy, alerts: [], wind, waves, read: null, hours: [], profile: "lake" });
+    const tempsBuoy = { station: "TMPS1", windKt: null, waveHeightFt: null, waterTempF: 70 };
+    let rr = recOf(tempsBuoy, { speedKt: 8, source: "forecast" }, { ft: 1, source: "forecast" });
+    check("headline: temps-only buoy object, forecast wind+waves → forecast-only reason shown", rr.reasons.some((x) => FC_NOTE.test(x)), JSON.stringify(rr.reasons));
+    rr = recOf({ station: "METB1", windKt: 9 }, { speedKt: 9, source: "buoy" }, { ft: 1, source: "forecast" });
+    check("headline: buoy wind → no forecast-only reason", !rr.reasons.some((x) => FC_NOTE.test(x)), JSON.stringify(rr.reasons));
+    rr = recOf({ station: "WAVE1", waveHeightFt: 1 }, { speedKt: 9, source: "forecast" }, { ft: 1, source: "buoy" });
+    check("headline: buoy waves → no forecast-only reason", !rr.reasons.some((x) => FC_NOTE.test(x)), JSON.stringify(rr.reasons));
+    rr = recOf({ station: "GUST1", windGustKt: 16 }, { speedKt: 8, gustKt: 16, source: "forecast", gustSrc: "buoy" }, { ft: 1, source: "forecast" });
+    check("headline: buoy gust only → no forecast-only reason (agrees with the facts card)", !rr.reasons.some((x) => FC_NOTE.test(x)), JSON.stringify(rr.reasons));
+    rr = recOf(null, { speedKt: null, source: null }, { ft: null, source: null });
+    check("headline: no data → CAUTION, no forecast-only reason (no-data reason covers it)", rr.level === "CAUTION" && !rr.reasons.some((x) => FC_NOTE.test(x)), JSON.stringify(rr));
+
+    // End to end through the spot page (stubbed NWS: calm, 9 mph SW, 1 ft).
+    const page = async (spot) => (await onRequest({ request: new Request(`https://shouldiboat.com/marine/conditions?spot=${spot}`), env: {} })).json();
+    const sandusky = (await import("../functions/marine/conditions.js")).SPOTS.sandusky;
+    const saved = sandusky.buoys;
+    try {
+      sandusky.buoys = ["TMPS1", "METB1"];
+      ndbcFiles = { TMPS1: TEMPS, METB1: MET };
+      let d = await page("sandusky");
+      eq("page: fallback met buoy supplies wind", d.wind?.source, "buoy");
+      eq("page: fallback met buoy supplies waves", d.waves?.source, "buoy");
+      eq("page: buoy is the met station", d.buoy?.station, "METB1");
+      eq("page: water tile from the temps-only station", d.temps?.waterSource, "NDBC TMPS1");
+      eq("page: air tile from the earlier-listed station", d.temps?.airSource, "NDBC TMPS1");
+      eq("page: earlier-listed station's water temp wins", d.temps?.waterF, 50);
+      eq("page: facts card calls the fallback met buoy live", d.facts?.liveData?.live, "METB1");
+      eq("page: facts card lists the temps-only station as not reporting wind/waves", d.facts?.liveData?.offline?.join(), "TMPS1");
+      check("page: facts card sources agree with the verdict", d.facts?.liveData?.windFrom === "buoy" && d.facts?.liveData?.wavesFrom === "buoy", JSON.stringify(d.facts?.liveData));
+      check("page: no forecast-only reason when the fallback buoy reports", !d.recommendation.reasons.some((x) => FC_NOTE.test(x)), JSON.stringify(d.recommendation.reasons));
+
+      sandusky.buoys = ["TMPS1"];
+      d = await page("sandusky");
+      eq("page: temps-only → buoy null", d.buoy, null);
+      // (The stub serves no daily point forecast, so forecast wind is null here.)
+      check("page: temps-only → wind not credited to a buoy", d.wind?.source !== "buoy", JSON.stringify(d.wind));
+      eq("page: temps-only → waves from forecast", d.waves?.source, "forecast");
+      eq("page: temps-only → water tile still from the station", d.temps?.waterSource, "NDBC TMPS1");
+      eq("page: temps-only → water tile value", d.temps?.waterF, 50);
+      check("page: temps-only → forecast-only reason shown", d.recommendation.reasons.some((x) => FC_NOTE.test(x)), JSON.stringify(d.recommendation.reasons));
+      check("page: temps-only → cold-water reason still from the station", d.recommendation.reasons.some((x) => /Water 50°F/.test(x)), JSON.stringify(d.recommendation.reasons));
+      eq("page: temps-only → sources.buoy says no live buoy", d.sources?.buoy, "no live buoy");
+      eq("page: temps-only → facts card shows no live buoy", d.facts?.liveData?.live, null);
+      eq("page: temps-only → facts card waves from forecast", d.facts?.liveData?.wavesFrom, "forecast");
+    } finally {
+      sandusky.buoys = saved;
+      ndbcFiles = {};
+    }
   }
 
   console.log(results.join("\n"));

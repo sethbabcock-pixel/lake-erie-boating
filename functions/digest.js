@@ -73,7 +73,7 @@ function goAlertHtml(goSpots, unsubUrl) {
 
 const dayName = (iso) => new Date(`${iso}T12:00:00Z`).toLocaleDateString("en-US", { weekday: "long", timeZone: "UTC" });
 const dayCell = (d) => d
-  ? `${chip(d.level)}<div style="color:#5b6b78;font-size:12px;margin-top:3px">${d.windKt != null ? `${d.windKt}${d.gustKt != null && d.gustKt > d.windKt ? `–${d.gustKt}` : ""} kt` : "—"} · ${d.waveFt != null ? `${d.waveFt} ft` : "—"}</div>`
+  ? `${chip(d.level)}<div style="color:#5b6b78;font-size:12px;margin-top:3px">${d.thunder ? "⚡ storms · " : ""}${d.windKt != null ? `${d.windKt}${d.gustKt != null && d.gustKt > d.windKt ? `–${d.gustKt}` : ""} kt` : "—"} · ${d.waveFt != null ? `${d.waveFt} ft` : "—"}</div>`
   : `<span style="color:#8a99a6">—</span>`;
 
 // The coming Saturday + Sunday in a port's 7-day outlook (local dates).
