@@ -59,6 +59,8 @@ let subStatus = {}; // sub id → status a GET retrieve reports ("missing" → 4
 let subCustomer = {}; // sub id → customer a GET retrieve reports (default: none)
 let stripeDown = false; // every Stripe API call → 500
 let subInvoice = {}; // sub id → latest_invoice.status when expanded (default "paid")
+let subList = {}; // customer → [{ id, status, purpose, invoice }] for GET /v1/subscriptions?customer=
+let subListDown = false; // the list endpoint → 500
 const makeSub = (cancelAtPeriodEnd) => ({
   id: "sub_123", status: "active", cancel_at_period_end: cancelAtPeriodEnd,
   current_period_end: 1790000000, cancel_at: cancelAtPeriodEnd ? 1790000000 : null,
@@ -116,6 +118,13 @@ function installFetchStub() {
     if (u.includes("/v1/billing_portal/sessions"))
       return jsonResp({ id: "bps_123", url: "https://billing.stripe.com/p/session/bps_123" });
     if (stripeDown) return jsonResp({ error: { message: "stripe is down" } }, 500);
+    if (/\/v1\/subscriptions\?/.test(u)) {
+      if (subListDown) return jsonResp({ error: { message: "list down" } }, 500);
+      const cus = new URL(u).searchParams.get("customer");
+      const data = (subList[cus] || []).map((x) => ({ id: x.id, customer: cus, status: x.status,
+        metadata: x.purpose ? { purpose: x.purpose } : {}, latest_invoice: { id: `in_${x.id}`, status: x.invoice || "paid" } }));
+      return jsonResp({ object: "list", data, has_more: false });
+    }
     if (u.includes("/v1/subscriptions/")) {
       // POST = update (cancel/resume) → mirror the request; GET = retrieve.
       if ((opts.method || "GET") === "POST") return jsonResp(makeSub(body?.cancel_at_period_end === "true"));
@@ -1031,6 +1040,61 @@ async function run() {
     subStatus.sub_h2 = "active"; subCustomer.sub_h2 = "cus_h1";
     await call(stripeWebhookReq({ id: "evt_h2", type: "customer.subscription.updated", data: { object: { id: "sub_h2", customer: "cus_h1", status: "active", metadata: { purpose: "adfree" } } } }, "whsec_right"), env);
     eq("adopt: already ad-free → stripeSubId unchanged", (await env.USERS.get("user:hasone@example.com", "json")).stripeSubId, "sub_h1");
+
+    // G1: paying for two subs (A recorded, B also live). A ends → switch to B
+    // instead of revoking, and alert the admins.
+    {
+      const genv = { USERS: makeKV(), STRIPE_WEBHOOK_SECRET: "whsec_right", STRIPE_SECRET_KEY: "sk_test_x", BREVO_API_KEY: "brevo_x", ADMIN_EMAIL: "owner@example.com" };
+      const seedTwo = async (em, cus) => {
+        await seedUser(genv, em, { adFree: true, stripeCustomerId: cus, stripeSubId: `${cus}_A` });
+        await genv.USERS.put(`stripecust:${cus}`, em);
+      };
+      const delA = (cus, id) => ({ id, type: "customer.subscription.deleted", data: { object: { id: `${cus}_A`, customer: cus, status: "canceled", metadata: { purpose: "adfree" } } } });
+      await seedTwo("double@example.com", "cus_g1");
+      subList.cus_g1 = [{ id: "cus_g1_A", status: "canceled", purpose: "adfree" }, { id: "cus_g1_B", status: "active", purpose: "adfree" }];
+      emailCalls = [];
+      eq("G1: recorded sub deleted → 200", (await call(stripeWebhookReq(delA("cus_g1", "evt_g1"), "whsec_right"), genv)).status, 200);
+      let g = await genv.USERS.get("user:double@example.com", "json");
+      eq("G1: still ad-free via the other live sub", g.adFree, true);
+      eq("G1: stripeSubId switched to B", g.stripeSubId, "cus_g1_B");
+      check("G1: admins alerted about the double subscription", emailCalls.some((c) => /Double Pro subscription/i.test(c.subject) && (c.to || []).some((r) => r.email === "owner@example.com")), JSON.stringify(emailCalls.map((c) => c.subject)));
+      check("G1: user gets no welcome email on switch", !emailCalls.some((c) => /Welcome to shouldiboat Pro/i.test(c.subject)));
+      // Then B ends too, nothing else live → revoked.
+      subList.cus_g1 = [{ id: "cus_g1_A", status: "canceled", purpose: "adfree" }, { id: "cus_g1_B", status: "canceled", purpose: "adfree" }];
+      await call(stripeWebhookReq({ id: "evt_g1_b", type: "customer.subscription.deleted", data: { object: { id: "cus_g1_B", customer: "cus_g1", status: "canceled", metadata: { purpose: "adfree" } } } }, "whsec_right"), genv);
+      eq("G1: last sub ends → revoked", (await genv.USERS.get("user:double@example.com", "json")).adFree, false);
+
+      // Non-qualifying others don't keep ad-free: unpaid invoice, untagged, past_due.
+      for (const [label, other] of [
+        ["open invoice", { id: "x", status: "active", purpose: "adfree", invoice: "open" }],
+        ["untagged", { id: "x", status: "active" }],
+        ["past_due", { id: "x", status: "past_due", purpose: "adfree" }],
+      ]) {
+        const cus = `cus_g1_${label.replace(/\W/g, "")}`;
+        await seedTwo(`g1${label.replace(/\W/g, "")}@example.com`, cus);
+        subList[cus] = [{ ...other, id: `${cus}_B` }];
+        await call(stripeWebhookReq(delA(cus, `evt_${cus}`), "whsec_right"), genv);
+        eq(`G1: other sub ${label} → revoked`, (await genv.USERS.get(`user:g1${label.replace(/\W/g, "")}@example.com`, "json")).adFree, false);
+      }
+      // List endpoint down → revoke (safe direction), event recorded, no 5xx.
+      await seedTwo("g1down@example.com", "cus_g1d");
+      subList.cus_g1d = [{ id: "cus_g1d_B", status: "active", purpose: "adfree" }];
+      subListDown = true;
+      const gd = await call(stripeWebhookReq(delA("cus_g1d", "evt_g1d"), "whsec_right"), genv);
+      subListDown = false;
+      eq("G1: list down → 200", gd.status, 200);
+      eq("G1: list down → revoked", (await genv.USERS.get("user:g1down@example.com", "json")).adFree, false);
+      // ...and B's next updated re-adopts it (F1 path).
+      subStatus.cus_g1d_B = "active"; subCustomer.cus_g1d_B = "cus_g1d";
+      await call(stripeWebhookReq({ id: "evt_g1d_upd", type: "customer.subscription.updated", data: { object: { id: "cus_g1d_B", customer: "cus_g1d", status: "active", metadata: { purpose: "adfree" } } } }, "whsec_right"), genv);
+      eq("G1: other sub's next update re-adopts", (await genv.USERS.get("user:g1down@example.com", "json")).adFree, true);
+      // A non-recorded sub's deletion never triggers the lookup.
+      stripeCalls = [];
+      await call(stripeWebhookReq({ id: "evt_g1_other", type: "customer.subscription.deleted", data: { object: { id: "sub_unrelated", customer: "cus_g1d", status: "canceled", metadata: { purpose: "adfree" } } } }, "whsec_right"), genv);
+      check("G1: unrelated sub deletion makes no list call", !stripeCalls.some((c) => /\/v1\/subscriptions\?/.test(c.url)));
+      eq("G1: unrelated sub deletion keeps ad-free", (await genv.USERS.get("user:g1down@example.com", "json")).adFree, true);
+      subList = {};
+    }
 
     // Account deleted, then a late checkout retry: no reverse index re-created.
     subStatus.sub_del = "active";

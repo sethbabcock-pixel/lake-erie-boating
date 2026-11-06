@@ -281,6 +281,31 @@ async function stripeSubLive(env, subId, { invoice = false } = {}) {
     return null;
   }
 }
+// Another live, paid ad-free subscription on this customer (not `excludeId`)?
+// Used when the recorded one ends, so a user paying for two isn't cut off.
+// → the subscription id, or null if none / Stripe can't answer (callers then
+// fall back to revoking, the safe direction).
+async function stripeOtherLiveAdfreeSub(env, customer, excludeId) {
+  if (!customer) return null;
+  try {
+    const q = `customer=${encodeURIComponent(customer)}&status=all&limit=20&expand[]=data.latest_invoice`;
+    const r = await fetch(`https://api.stripe.com/v1/subscriptions?${q}`, {
+      headers: { Authorization: `Bearer ${env.STRIPE_SECRET_KEY}` },
+      signal: AbortSignal.timeout(8000),
+    });
+    if (!r.ok) return null;
+    const list = await r.json();
+    const subs = Array.isArray(list?.data) ? list.data : [];
+    const hit = subs.find((s) => s && s.id && s.id !== excludeId
+      && (s.customer === customer || s.customer?.id === customer)
+      && s.metadata?.purpose === "adfree"
+      && (s.status === "active" || s.status === "trialing")
+      && s.latest_invoice && typeof s.latest_invoice === "object" && s.latest_invoice.status === "paid");
+    return hit ? hit.id : null;
+  } catch (e) {
+    return null;
+  }
+}
 async function stripeDELETE(env, path) {
   const r = await fetch(`https://api.stripe.com/v1/${path}`, {
     method: "DELETE",
@@ -1443,6 +1468,24 @@ export async function handleAuth(request, env, url, ctx) {
           const live = await stripeSubLive(env, obj.id);
           if (live === null) return json({ error: "Could not confirm subscription with Stripe; retry later." }, 503);
           active = ["active", "trialing", "past_due"].includes(live.status);
+        }
+        // The recorded sub ended while the user was ad-free. If they're still
+        // paying for another tagged, live, paid ad-free sub on the same
+        // customer (e.g. two checkouts from two tabs), switch to it instead of
+        // revoking, and tell the admins: a double subscription is a billing
+        // issue (refund/cancel one). If Stripe can't answer, revoke (safe);
+        // the other sub's next `updated` adopts it.
+        if (!active && user.adFree && user.stripeSubId && user.stripeSubId === obj.id) {
+          const other = await stripeOtherLiveAdfreeSub(env, obj.customer, obj.id);
+          if (other) {
+            await setAdFree(email, true, { stripeSubId: other });
+            await runBg(ctx, notify(env, "double_subscription", { email, customer: obj.customer, ended: obj.id, now: other }, {
+              to: await adminEmails(env), subject: "Double Pro subscription · shouldiboat.com",
+              html: `<div style="font-family:system-ui,sans-serif"><p><b>${htmlEscape(email)}</b> had two Pro subscriptions on customer <code>${htmlEscape(String(obj.customer))}</code>. <code>${htmlEscape(String(obj.id))}</code> ended; ad-free now follows <code>${htmlEscape(other)}</code>. Check whether a refund is owed.</p></div>`,
+              ttlDays: 30,
+            }));
+            return done();
+          }
         }
         await setAdFree(email, active);
       } else if (user && event.type === "customer.subscription.updated" && purpose === "adfree" && obj.id
