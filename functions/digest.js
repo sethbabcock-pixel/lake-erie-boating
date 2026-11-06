@@ -64,7 +64,7 @@ function alertHtml(nogoSpots, unsubUrl) {
 function goAlertHtml(goSpots, unsubUrl) {
   return `<div style="font-family:system-ui,-apple-system,sans-serif;max-width:520px;color:#1a2b38">
     <h2 style="margin:0 0 10px">It's GO at ${goSpots.length > 1 ? "your ports" : esc(goSpots[0].name)}</h2>
-    <p style="margin:0 0 14px;color:#5b6b78">Conditions just improved. If you can get out, now's the window:</p>
+    <p style="margin:0 0 14px;color:#5b6b78">Conditions just improved to GO on the forecast. Check the spot page and the marine forecast before you launch:</p>
     <table cellspacing="0" cellpadding="0" style="border-collapse:collapse">${goSpots.map(portRow).join("")}</table>
     <p style="margin:18px 0 0"><a href="${SITE}/spot/${encodeURIComponent(goSpots[0].id)}" style="display:inline-block;background:#1B936A;color:#fff;padding:10px 18px;border-radius:8px;text-decoration:none;font-weight:600">See how long it lasts</a></p>
     <p style="color:#8a99a6;font-size:12px;margin:18px 0 0">GO alerts are a Pro feature, on in your <a href="${SITE}/account" style="color:#8a99a6">account settings</a>: one email per port per day.</p>

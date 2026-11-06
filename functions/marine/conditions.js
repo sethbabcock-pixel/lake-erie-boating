@@ -1527,7 +1527,13 @@ export async function fetchSpotVerdict(env, id) {
   const r = await onRequest({ request: new Request(`https://shouldiboat.com/marine/conditions?spot=${encodeURIComponent(id)}`), env }).catch(() => null);
   if (!r || !r.ok) return null;
   const d = await r.json().catch(() => null);
-  return d && d.recommendation ? d.recommendation.level || null : null;
+  if (!d || !d.recommendation) return null;
+  const level = d.recommendation.level || null;
+  // An email may only say GO when nothing is missing: the alerts feed answered
+  // (a failed lookup isn't "no advisories"), and the current hour of the
+  // timeline (grid gusts, thunder, rain chance) agrees with the headline.
+  if (level === "GO" && (!d.alertsOk || d.outlook?.nowLevel !== "GO")) return "CAUTION";
+  return level;
 }
 
 // Today's best GO window for every port (for the daily digest email): per-spot
@@ -1713,6 +1719,7 @@ export async function onRequest(context) {
     sun,
     buoy,
     alerts: alerts || [],
+    alertsOk: alerts != null, // false = the NWS alerts feed failed (not "no alerts")
     marineForecast: marinePeriods,
     pointForecast: point || [],
     noaaReport,

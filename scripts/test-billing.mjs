@@ -47,6 +47,7 @@ let emailCalls = [];
 let priceResolves = true;
 let stormMode = false; // Open-Meteo stub: every spot NO-GO (true) vs calm GO (false)
 let scaMode = false; // NWS alerts stub: an active Small Craft Advisory at every point
+let alertsDown = false; // NWS alerts stub: the alerts endpoint fails
 let subGetCancelState = false; // what a GET subscription retrieve reports
 const makeSub = (cancelAtPeriodEnd) => ({
   id: "sub_123", status: "active", cancel_at_period_end: cancelAtPeriodEnd,
@@ -89,6 +90,7 @@ function installFetchStub() {
         windSpeed: stormMode ? "32 mph" : "9 mph", windDirection: "SW", shortForecast: "Sunny", probabilityOfPrecipitation: { value: 0 } }));
       return jsonResp({ properties: { periods } });
     }
+    if (u.includes("api.weather.gov/alerts/active") && alertsDown) return new Response("", { status: 503 });
     if (u.includes("api.weather.gov/alerts/active") && scaMode) {
       return jsonResp({ features: [{ properties: { event: "Small Craft Advisory", severity: "Minor", headline: "Small Craft Advisory in effect", sent: new Date().toISOString() } }] });
     }
@@ -961,6 +963,13 @@ async function run() {
     eq("go alerts: advisory in effect → no GO email", (await runScheduled(env3, 14)).goAlerts, 0);
     scaMode = false;
     // A level recorded on an earlier day never counts as "was rough".
+    // Alerts feed down: a failed lookup is not "no advisories" → no GO email.
+    const env5 = { USERS: makeKV(), BREVO_API_KEY: "brevo_x" };
+    await seedUser(env5, "go@example.com", { adFree: true, favorites: ["sandusky"], prefs: { goAlerts: true } });
+    stormMode = true; await runScheduled(env5, 13); stormMode = false;
+    alertsDown = true;
+    eq("go alerts: alerts feed down → no GO email", (await runScheduled(env5, 14)).goAlerts, 0);
+    alertsDown = false;
     const yesterday = new Date(Date.now() - 86400e3).toISOString().slice(0, 10);
     const env4 = { USERS: makeKV({ "lvl:sandusky": `NO-GO|${yesterday}` }), BREVO_API_KEY: "brevo_x" };
     await seedUser(env4, "go@example.com", { adFree: true, favorites: ["sandusky"], prefs: { goAlerts: true } });
