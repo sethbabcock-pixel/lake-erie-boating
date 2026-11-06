@@ -53,6 +53,8 @@ let alertFeatures = null; // NWS alerts stub: every alerts query returns these r
 let alertTestStatus = null; // NWS alerts stub: every alerts query returns one Gale Warning with this status (e.g. "Test")
 let landAlert = null; // NWS alerts stub: an event name issued for the land county OHC043 (every mock launch point is in it)
 let pointsNoZones = false;
+let pointsCalls = 0; // NWS /points stub: lookups served
+let pointsFail = null; // NWS /points stub: a function (lat, lon) → true to answer 503
 let pointsOnWater = null; // NWS /points stub: a function (lat, lon) → true when that point is on the water (marine zone, no county) // NWS /points stub: omit the launch point's forecastZone/county
 let zoneAlertOnly = null; // with zoneAlert "gale": only these zones carry it (null = every queried zone)
 let zoneAlertSpan = null; // with zoneAlert "gale": { onsetH, endsH } hours from now (null = in effect now, open-ended)
@@ -90,6 +92,8 @@ function installFetchStub() {
     // /points → a grid, /gridpoints → 4 days of flat weather. Calm by default
     // (8 kt, 1 ft @ 5 s → GO all day); stormMode = 28 kt, 6 ft → NO-GO.
     if (u.includes("api.weather.gov/points/")) {
+      pointsCalls++;
+      if (pointsFail && pointsFail(...u.split("/points/")[1].split(",").map(Number))) return new Response("", { status: 503 });
       return jsonResp({ properties: { gridId: "CLE", gridX: 1, gridY: 1, timeZone: "America/New_York",
         forecastGridData: "https://api.weather.gov/gridpoints/CLE/1,1",
         forecast: "https://api.weather.gov/gridpoints/CLE/1,1/forecast",
@@ -2009,14 +2013,18 @@ async function run() {
   //     marine zones) reach tiles, the digest window and the weekend outlook
   //     via the launch point's land zones; unresolved land zones block GO.
   {
-    const { fetchSummary, fetchTodayWindows, fetchWeeks, fetchBuiltSummaries, fetchSpotsAlerts, SPOTS } = await import("../functions/marine/conditions.js");
+    const { fetchSummary, fetchTodayWindows, fetchWeeks, fetchBuiltSummaries, fetchSpotsAlerts, SPOTS, landZonesFor: landZonesFor0 } = await import("../functions/marine/conditions.js");
     const env = { USERS: makeKV() };
     stormMode = false; scaMode = false; alertsDown = false; gridMode = null; zoneAlert = null; zoneAlertOnly = null; zoneAlertSpan = null;
 
     const calm = (await fetchSummary(env)).spots.find((x) => x.id === "sandusky");
     eq("land alerts: calm day, no land warning → tile GO", calm?.level, "GO");
     const sa = await fetchSpotsAlerts([SPOTS.sandusky]);
-    check("land alerts: launch point resolves to its forecast zone + county", JSON.stringify(sa.land.get(`${SPOTS.sandusky.lat},${SPOTS.sandusky.lon}`)) === JSON.stringify(["OHZ007", "OHC043"]), JSON.stringify([...sa.land]));
+    check("land alerts: a curated spot uses its stored land zones", JSON.stringify(sa.land.get(`${SPOTS.sandusky.lat},${SPOTS.sandusky.lon}`)) === JSON.stringify(SPOTS.sandusky.land), JSON.stringify([...sa.land]));
+    check("land alerts: every curated spot carries valid land zones", Object.values(SPOTS).every((x) => Array.isArray(x.land) && x.land.length && x.land.every((z) => /^[A-Z]{3}\d{3}$/.test(z))), Object.entries(SPOTS).filter(([, x]) => !Array.isArray(x.land)).map(([k]) => k).join());
+    pointsCalls = 0;
+    await fetchSpotsAlerts(Object.values(SPOTS));
+    eq("land alerts: curated spots make no /points lookups for land zones", pointsCalls, 0);
 
     landAlert = "Tornado Warning";
     eq("land alerts: Tornado Warning on the county → tile NO-GO", (await fetchSummary(env)).spots.find((x) => x.id === "sandusky")?.level, "NO-GO");
@@ -2038,7 +2046,27 @@ async function run() {
     check("land alerts: launch point's land zones unresolved → tile not GO", nl && nl.level !== "GO", JSON.stringify(nl));
     const nlw = (await fetchWeeks({ USERS: kv }, ["noland-cove"]))["noland-cove"] || [];
     check("land alerts: … and weekend today not GO", nlw.length && nlw[0].level !== "GO", JSON.stringify(nlw.slice(0, 1)));
+    const { onRequest } = await import("../functions/marine/conditions.js");
+    const nlp = await (await onRequest({ request: new Request("https://shouldiboat.com/marine/conditions?spot=noland-cove"), env: { USERS: kv } })).json();
+    check("land alerts: … and its spot page reads alerts unknown, not GO", nlp.alertsOk === false && nlp.recommendation?.level !== "GO", JSON.stringify({ ok: nlp.alertsOk, level: nlp.recommendation?.level }));
     pointsNoZones = false;
+
+    // The spot page checks the same land zones as its tile, so a zone-issued
+    // land warning (no polygon; a water launch point is in no land zone) can't
+    // leave the page softer than the tile.
+    const spotPage = async () => (await onRequest({ request: new Request("https://shouldiboat.com/marine/conditions?spot=sandusky"), env: { USERS: makeKV() } })).json();
+    landAlert = "High Wind Warning";
+    const hw = await spotPage();
+    check("land alerts: spot page lists the county/zone High Wind Warning and is NO-GO", hw.recommendation?.level === "NO-GO" && (hw.alerts || []).some((a) => a.event === "High Wind Warning") && hw.alertsOk === true, JSON.stringify({ level: hw.recommendation?.level, alerts: hw.alerts }));
+    eq("land alerts: … and its tile agrees", (await fetchSummary(env)).spots.find((x) => x.id === "sandusky")?.level, "NO-GO");
+    landAlert = null;
+    eq("land alerts: spot page calm with no land warning → GO", (await spotPage()).recommendation?.level, "GO");
+
+    // Curated overrides where the nearest-land walk picks the wrong county.
+    eq("land zones: San Juan → San Juan municipio, not Guaynabo", JSON.stringify(await landZonesFor0(SPOTS["san-juan"])), JSON.stringify(["PRZ001", "PRC127"]));
+    check("land zones: Vermilion / Lorain watches both counties", ["OHC043", "OHC093"].every((z) => SPOTS.vermilion.land.includes(z)), JSON.stringify(SPOTS.vermilion.land));
+    eq("land zones: Miami / Government Cut → coastal Miami-Dade zone", JSON.stringify(await landZonesFor0(SPOTS.miami)), JSON.stringify(["FLZ173", "FLC086"]));
+    check("land zones: Sebastian Inlet watches Brevard and Indian River", ["FLC009", "FLC061"].every((z) => SPOTS["sebastian-inlet"].land.includes(z)), JSON.stringify(SPOTS["sebastian-inlet"].land));
 
     // A launch on the water (marine forecast zone, no county) resolves to the
     // county a step inland — never to the marine zone.
@@ -2049,6 +2077,31 @@ async function run() {
     pointsOnWater = () => true;
     eq("land zones: no county anywhere nearby → null (unknown, not none)", await landZonesFor({ lat: 45.6789, lon: -84.321, zone: "LHZ345", lake: "Lake Huron" }), null);
     pointsOnWater = null;
+
+    // Budget: one call walks at most 10 uncached built spots; the rest are
+    // unknown (null → no GO) until a later call.
+    const many = Array.from({ length: 14 }, (_, i) => ({ lat: 40.1 + i * 0.01, lon: -81.9, zone: "LEZ145", lake: "Lake Erie" }));
+    pointsNoZones = true;
+    pointsCalls = 0;
+    const bud = await fetchSpotsAlerts(many);
+    check("land walk budget: at most 10 uncached walks per call", [...bud.land.values()].every((v) => v === null) && pointsCalls <= 10 * 20, `${pointsCalls} lookups`);
+    pointsNoZones = false;
+    const many2 = many.map((x) => ({ ...x, lon: -81.7 })); // fresh points (the no-zone answers above are cached)
+    const bud2 = await fetchSpotsAlerts(many2);
+    eq("land walk budget: 10 resolve, the rest wait (unknown)", [...bud2.land.values()].filter(Boolean).length, 10);
+    const bud3 = await fetchSpotsAlerts(many2);
+    eq("land walk budget: the next call finishes them (first 10 cached)", [...bud3.land.values()].filter(Boolean).length, 14);
+
+    // An errored closer candidate: use the farther county now, but don't cache it.
+    pointsFail = (lat, lon) => lat === 39.5 && lon === -81.5;
+    const errSpot = { lat: 39.5, lon: -81.5, zone: "LEZ145", lake: "Lake Erie" };
+    check("land walk: still resolves past an errored lookup", Array.isArray(await landZonesFor(errSpot)));
+    pointsFail = null; pointsCalls = 0;
+    await landZonesFor(errSpot);
+    check("land walk: a walk that hit an error isn't cached (walks again)", pointsCalls > 0, `${pointsCalls} lookups`);
+    pointsCalls = 0;
+    await landZonesFor(errSpot);
+    eq("land walk: a clean walk is cached (no lookups next time)", pointsCalls, 0);
   }
 
   // ── Launch-facts card: a configured buoy is not a live buoy ──
