@@ -27,14 +27,14 @@ function UserDetail({ email, onBack, onChanged }) {
           <div>
             <div className="adm-kv"><span>Member since</span><b>{fmtDate(u.created)}</b></div>
             <div className="adm-kv"><span>Sign-in</span><b>{u.via === "google" ? "Google" : "Email & password"}</b></div>
-            <div className="adm-kv"><span>Plan</span><b>{u.adFree ? "Ad-free" : "Free"}</b></div>
+            <div className="adm-kv"><span>Plan</span><b>{u.adFree ? "Pro" : "Free"}</b></div>
             <div className="adm-kv"><span>Stripe</span><b>{u.hasSubscription ? "Active subscription" : u.hasStripeCustomer ? "Customer, no active sub" : "—"}</b></div>
             <div className="adm-kv"><span>Boat</span><b>{p.boatName || p.boatType || "—"}</b></div>
             <div className="adm-kv"><span>Comfort limits</span><b>{[p.maxWaveFt != null ? `${p.maxWaveFt} ft` : null, p.maxWindKt != null ? `${p.maxWindKt} kt` : null].filter(Boolean).join(" · ") || "—"}</b></div>
             <div className="adm-kv"><span>Saved ports</span><b>{(u.favoriteSpots || []).length}</b></div>
           </div>
           <div className="adm-stack">
-            <Switch checked={u.adFree} disabled={busy} label="Ad-free"
+            <Switch checked={u.adFree} disabled={busy} label="Pro"
               sub="Manual override. Doesn't start or cancel Stripe billing."
               onChange={(v) => act({ adFree: v }, (d) => { setU(d.user); onChanged(d.user); })} />
             <div className="adm-actions">
@@ -68,7 +68,7 @@ export function UsersPage() {
   );
   return (
     <>
-      <PageHead title="Users" sub="Search accounts, grant ad-free, send password resets." />
+      <PageHead title="Users" sub="Search accounts, grant Pro, send password resets." />
       <Panel>
         <form className="adm-search" onSubmit={(e) => { e.preventDefault(); setQuery(q.trim()); }}>
           <Icon name="search" />
@@ -88,7 +88,7 @@ export function UsersPage() {
                   <div className="adm-row-sub">{u.via === "google" ? "Google" : "Email"}{u.boatType ? ` · ${u.boatType}` : ""}{u.favorites ? ` · ${u.favorites} saved` : ""}</div>
                 </div>
                 <span className="adm-muted">{fmtDate(u.created)}</span>
-                <Badge tone={u.adFree ? "ok" : "neutral"}>{u.adFree ? (u.hasSubscription ? "Paid" : "Ad-free") : "Free"}</Badge>
+                <Badge tone={u.adFree ? "ok" : "neutral"}>{u.adFree ? (u.hasSubscription ? "Pro (paid)" : "Pro (comp)") : "Free"}</Badge>
               </button>
             ))}
           </div>
@@ -242,13 +242,17 @@ export function SystemPage({ cfg, setCfg }) {
           {b && (
             <div className="adm-checks">
               <Check state={b.email?.present ? "ok" : "warn"} title="Email delivery (Brevo)">{b.email?.present ? "BREVO_API_KEY set." : "BREVO_API_KEY missing: no welcome, reset or alert emails go out."}</Check>
-              <Check state={b.secretKey?.present ? "ok" : "bad"} title={`Stripe secret key${b.secretKey?.present ? ` · ${b.secretKey.mode} mode` : ""}`}>{b.secretKey?.present ? null : "STRIPE_SECRET_KEY missing: the ad-free plan can't be purchased."}</Check>
-              <Check state={b.webhookSecret?.present ? "ok" : "bad"} title="Stripe webhook secret">{b.webhookSecret?.present ? null : "Without it, paid subscriptions never flip accounts to ad-free."}</Check>
+              <Check state={b.secretKey?.present ? "ok" : "bad"} title={`Stripe secret key${b.secretKey?.present ? ` · ${b.secretKey.mode} mode` : ""}`}>{b.secretKey?.present ? null : "STRIPE_SECRET_KEY missing: the Pro plan can't be purchased."}</Check>
+              <Check state={b.webhookSecret?.present ? "ok" : "bad"} title="Stripe webhook secret">{b.webhookSecret?.present ? null : "Without it, paid subscriptions never flip accounts to Pro."}</Check>
               {b.price && (
-                <Check state={b.price.resolved && b.price.active ? "ok" : "bad"} title={`Ad-free price ${b.priceId}`}>
+                <Check state={b.price.resolved && b.price.active ? "ok" : "bad"} title={`Pro monthly price ${b.priceId}`}>
                   {b.price.resolved ? `${(b.price.amount / 100).toFixed(2)} ${String(b.price.currency).toUpperCase()} / ${b.price.interval}${b.price.active ? "" : " · INACTIVE"}` : b.price.error}
                 </Check>
               )}
+              <Check state={b.yearlyPrice ? (b.yearlyPrice.resolved && b.yearlyPrice.active ? "ok" : "bad") : "warn"} title={`Pro yearly price${b.yearlyPriceId ? ` ${b.yearlyPriceId}` : ""}`}>
+                {!b.yearlyPrice ? "Optional: set STRIPE_PRICE_ID_YEARLY to offer a yearly plan."
+                  : b.yearlyPrice.resolved ? `${(b.yearlyPrice.amount / 100).toFixed(2)} ${String(b.yearlyPrice.currency).toUpperCase()} / ${b.yearlyPrice.interval}${b.yearlyPrice.active ? "" : " · INACTIVE"}` : b.yearlyPrice.error}
+              </Check>
             </div>
           )}
         </Panel>

@@ -1472,6 +1472,21 @@ export async function fetchBuiltSummaries(env, slugs) {
   return resolved.map(([id, s], i) => summaryTile(id, s, grids[i], nowH));
 }
 
+// 7-day outlook (same per-day verdicts as the spot page's week strip) for
+// specific ports, curated or user-built: { id: [{date, level, windKt, ...}] }.
+// Powers the Pro weekend-outlook email; only the requested ports are fetched.
+export async function fetchWeeks(env, ids) {
+  const entries = [];
+  for (const id of [...new Set(ids)]) {
+    if (SPOTS[id]) entries.push([id, SPOTS[id]]);
+    else { const b = await getBuiltSpot(env, id).catch(() => null); if (b) entries.push([id, b]); }
+  }
+  if (!entries.length) return {};
+  const grids = await pooled(entries, 8, ([, s]) => fetchSpotGrid(s));
+  await floorWithMarineText(entries, grids).catch(() => {});
+  return Object.fromEntries(entries.map(([id, s], i) => [id, buildWeek(grids[i], waterProfile(s))]));
+}
+
 // Today's best GO window for every port (for the daily digest email): per-spot
 // NWS grid hourlies, then the longest contiguous GO run between 6am and 8pm in
 // the spot's local time. Returns { spotId: {from, to, hours} | null }.

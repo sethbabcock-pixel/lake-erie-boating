@@ -134,11 +134,11 @@ function HouseHero({ hero, spotName, verdict, adFree, splash, children, signedIn
           <p className="hero-subtitle">{h.sub || "A clear GO / CAUTION / NO-GO call from live NOAA wind, waves & weather."}</p>
         )}
         {children}
-        {/* One goal per audience: signed-out → sign up; signed-in free → ad-free upsell. */}
+        {/* One goal per audience: signed-out → sign up; signed-in free → Pro upsell. */}
         {!splash && !signedIn && onJoin && (
           <button className="hero-housecta linkbtn" onClick={onJoin}>Create a free account for hour-by-hour, cams &amp; alerts →</button>
         )}
-        {!splash && signedIn && !adFree && <a className="hero-housecta" href="/account">Go ad-free, no banners ever →</a>}
+        {!splash && signedIn && !adFree && <a className="hero-housecta" href="/account#pro">Go Pro: no ads, GO alerts &amp; weekend outlook →</a>}
       </div>
     </section>
   );

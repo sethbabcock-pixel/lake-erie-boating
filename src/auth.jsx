@@ -27,7 +27,7 @@ export function useAuth() {
     }).catch(() => setUser(null));
   }, []);
   // After returning from Stripe Checkout, re-poll a couple times so the plan
-  // flips to ad-free as soon as the webhook lands.
+  // flips to Pro as soon as the webhook lands.
   useEffect(() => {
     if (!/[?&]upgraded=1/.test(window.location.search)) return;
     let n = 0;
@@ -57,7 +57,11 @@ export function useAuth() {
   };
   return {
     user, setUser, available, billing, refresh,
-    checkout: () => go("/api/checkout"),
+    checkout: async (plan = "month") => {
+      const d = await post("/api/checkout", { plan });
+      if (d.url) { window.location.href = d.url; return; }
+      throw new Error(d.error || "Something went wrong.");
+    },
     portal: () => go("/api/portal"),
     subscription: () => fetch("/api/subscription").then((r) => r.json()).catch(() => ({ subscription: null })),
     updateSubscription: async (action) => {
@@ -80,8 +84,14 @@ export function useAuth() {
         const d = await r.json(); if (d.user) setUser(d.user);
       } catch (e) { /* ignore */ }
     },
+    // Resolves {upgrade: true} when the free starred-port limit blocked the save.
     saveFavorites: async (favorites) => {
-      try { const r = await fetch("/api/favorites", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ favorites }) }); const d = await r.json(); if (d.user) setUser(d.user); } catch (e) { /* ignore */ }
+      try {
+        const r = await fetch("/api/favorites", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ favorites }) });
+        const d = await r.json();
+        if (d.user) setUser(d.user);
+        return { upgrade: r.status === 402 && !!d.upgrade };
+      } catch (e) { return {}; }
     },
   };
 }
@@ -259,13 +269,7 @@ export function Account({ auth }) {
   const [authMode, setAuthMode] = useState("register"); // login | register when modal opens
   const [menu, setMenu] = useState(false);
   const ref = useRef(null);
-  const [busy, setBusy] = useState(false);
-  const [billErr, setBillErr] = useState("");
   const openAuth = (mode) => { setAuthMode(mode); setModal(true); };
-  const doBilling = async (fn) => {
-    setBusy(true); setBillErr("");
-    try { await fn(); } catch (e) { setBillErr(e.message); setBusy(false); } // success redirects away
-  };
   useEffect(() => {
     if (!menu) return;
     const h = (e) => { if (ref.current && !ref.current.contains(e.target)) setMenu(false); };
@@ -298,13 +302,12 @@ export function Account({ auth }) {
             <span className="acct-avatar lg">{initial}</span>
             <div className="acct-menu-id">
               <div className="acct-email">{auth.user.email}</div>
-              <span className={`acct-pill ${auth.user.adFree ? "ok" : ""}`}>{auth.user.adFree ? "Ad-free" : "Free plan"}</span>
+              <span className={`acct-pill ${auth.user.adFree ? "ok" : ""}`}>{auth.user.adFree ? "Pro" : "Free plan"}</span>
             </div>
           </div>
           {auth.billing && !auth.user.adFree && (
-            <button className="upgrade-btn" disabled={busy} onClick={() => { track("event", "subscribe_click", { where: "account_menu" }); doBilling(auth.checkout); }}>{busy ? "…" : "Go ad-free — $2.99/mo"}</button>
+            <a className="upgrade-btn" href="/account#pro" onClick={() => track("event", "pro_menu_click", {})}>Go Pro: no ads + GO alerts</a>
           )}
-          {billErr && <div className="modal-err" style={{ margin: "4px 0" }}>{billErr}</div>}
           <div className="acct-menu-sep" />
           {auth.user.admin && <a className="acct-item" href="/admin" role="menuitem"><IconGear /> Site admin</a>}
           <a className="acct-item" href="/account" role="menuitem"><IconGear /> Account &amp; boat settings</a>

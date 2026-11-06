@@ -4,6 +4,7 @@ import WxIcon from "./WxIcon.jsx";
 import { IconStar, IconCheck, IconClock, IconNoGo, IconAlert, IconSunrise, IconSunset, IconDoc, IconRefresh } from "./icons.jsx";
 import { useAdsense, useAnalytics, getConsent, updateConsentMode, AdSlot, GearBlock, ConsentBanner, StickyFooterAd, track } from "./monetize.jsx";
 import { useAuth, Account, AuthModal } from "./auth.jsx";
+import { UpgradeModal } from "./Pro.jsx";
 import Takeover from "./Takeover.jsx";
 import Landing from "./Landing.jsx";
 import { fmtWaves, waveFeel, compassToDeg } from "./units.js";
@@ -783,10 +784,16 @@ export default function App() {
   useAdsense(!adFree);
   useAnalytics(consent === "all");
 
-  const toggleFav = (id) => {
+  const [proPrompt, setProPrompt] = useState(null); // reason the Pro upgrade modal is open
+  const toggleFav = async (id) => {
     if (!auth.user) return;
     const f = auth.user.favorites || [];
-    auth.saveFavorites(f.includes(id) ? f.filter((x) => x !== id) : [...f, id]);
+    if (f.includes(id)) { auth.saveFavorites(f.filter((x) => x !== id)); return; }
+    // Free plan: check the limit up front so the star doesn't flicker on and off.
+    const limit = auth.user.limits && auth.user.limits.favorites;
+    if (limit && f.length >= limit) { setProPrompt("favorites"); return; }
+    const r = await auth.saveFavorites([...f, id]);
+    if (r && r.upgrade) setProPrompt("favorites");
   };
   // Sync prefs: apply the account's saved spot/theme once on sign-in; save on change.
   const appliedRef = useRef(false);
@@ -1252,6 +1259,7 @@ export default function App() {
       {resetToken && <AuthModal auth={auth} initialMode="reset" resetToken={resetToken} onClose={() => setResetToken("")} />}
       {!resetToken && verifyToken && <AuthModal auth={auth} initialMode="verify" verifyToken={verifyToken} onClose={() => setVerifyToken("")} />}
       {!resetToken && !verifyToken && gateAuth && <AuthModal auth={auth} initialMode={gateAuth} spotId={!landing ? active : ""} onClose={() => setGateAuth(null)} />}
+      {proPrompt && auth.user && <UpgradeModal auth={auth} reason={proPrompt} onClose={() => setProPrompt(null)} />}
     </>
   );
 }

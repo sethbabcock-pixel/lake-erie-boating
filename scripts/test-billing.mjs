@@ -70,7 +70,7 @@ function installFetchStub() {
     }
     if (/api\.weather\.gov\/gridpoints\/[^/]+\/[^/]+$/.test(u)) {
       const start = new Date(Date.now() - 30 * 3600e3); start.setUTCMinutes(0, 0, 0);
-      const span = (value) => ({ values: [{ validTime: `${start.toISOString().replace(".000Z", "+00:00")}/PT120H`, value }] });
+      const span = (value) => ({ values: [{ validTime: `${start.toISOString().replace(".000Z", "+00:00")}/PT240H`, value }] });
       return jsonResp({ properties: {
         windSpeed: { uom: "wmoUnit:km_h-1", ...span(stormMode ? 52 : 15) },
         windGust: { uom: "wmoUnit:km_h-1", ...span(stormMode ? 65 : 20) },
@@ -637,7 +637,7 @@ async function run() {
     emailCalls = [];
     const evt = { type: "checkout.session.completed", data: { object: { client_reference_id: "newpaid@example.com", customer: "cus_9", subscription: "sub_9" } } };
     await call(stripeWebhookReq(evt, "whsec_right"), env);
-    check("webhook: sends ad-free email", emailCalls.some((c) => /ad-free/i.test(c.subject)), JSON.stringify(emailCalls.map((c) => c.subject)));
+    check("webhook: sends Pro welcome email", emailCalls.some((c) => /Welcome to shouldiboat Pro/i.test(c.subject)), JSON.stringify(emailCalls.map((c) => c.subject)));
     const notifs = [...env.USERS._map.keys()].filter((k) => k.startsWith("admin:notification:")).map((k) => JSON.parse(env.USERS._map.get(k)));
     check("webhook: adfree_activated notification logged", notifs.some((n) => n.type === "adfree_activated"), JSON.stringify(notifs.map((n) => n.type)));
   }
@@ -866,6 +866,101 @@ async function run() {
     const r2 = await runScheduled(env, 16);
     eq("alerts: deduped for the rest of the day", r2.alerts, 0);
     stormMode = false;
+  }
+
+  // 49. Pro: free plan caps starred ports; Pro is unlimited; existing ports are kept
+  {
+    const env = { USERS: makeKV() };
+    const free = await seedUser(env, "free@example.com", { favorites: ["a", "b"] });
+    eq("pro: free can star up to the cap", (await call(req("PUT", "/api/favorites", { cookie: free, body: { favorites: ["a", "b", "c"] } }), env)).status, 200);
+    const over = await call(req("PUT", "/api/favorites", { cookie: free, body: { favorites: ["a", "b", "c", "d"] } }), env);
+    eq("pro: free past the cap → 402", over.status, 402);
+    const od = await over.json();
+    check("pro: 402 asks to upgrade", od.upgrade === true && od.limit === 3, JSON.stringify(od));
+    eq("pro: rejected save leaves ports unchanged", (await env.USERS.get("user:free@example.com", "json")).favorites.length, 3);
+    eq("pro: removing a port still works", (await call(req("PUT", "/api/favorites", { cookie: free, body: { favorites: ["a"] } }), env)).status, 200);
+    const lapsed = await seedUser(env, "lapsed@example.com", { favorites: ["a", "b", "c", "d", "e"] });
+    eq("pro: lapsed member keeps existing ports (reorder ok)", (await call(req("PUT", "/api/favorites", { cookie: lapsed, body: { favorites: ["e", "d", "c", "b", "a"] } }), env)).status, 200);
+    eq("pro: lapsed member can't add more", (await call(req("PUT", "/api/favorites", { cookie: lapsed, body: { favorites: ["a", "b", "c", "d", "e", "f"] } }), env)).status, 402);
+    const pro = await seedUser(env, "pro@example.com", { adFree: true });
+    const many = Array.from({ length: 12 }, (_, i) => `p${i}`);
+    eq("pro: Pro stars unlimited ports", (await call(req("PUT", "/api/favorites", { cookie: pro, body: { favorites: many } }), env)).status, 200);
+    const me = await (await call(req("GET", "/auth/me", { cookie: pro }), env)).json();
+    check("pro: /auth/me reports pro + no limit", me.user.pro === true && me.user.limits.favorites === null, JSON.stringify(me.user.limits));
+    const meFree = await (await call(req("GET", "/auth/me", { cookie: free }), env)).json();
+    check("pro: /auth/me reports free limit", meFree.user.pro === false && meFree.user.limits.favorites === 3);
+  }
+
+  // 50. Pro-only prefs can't be switched on from a free account
+  {
+    const env = { USERS: makeKV() };
+    const free = await seedUser(env, "fp@example.com");
+    await call(req("PUT", "/api/prefs", { cookie: free, body: { prefs: { goAlerts: true, weekendEmail: true, dailyEmail: true } } }), env);
+    const fu = await env.USERS.get("user:fp@example.com", "json");
+    check("pro prefs: free can't enable GO alerts / weekend", !fu.prefs.goAlerts && !fu.prefs.weekendEmail, JSON.stringify(fu.prefs));
+    eq("pro prefs: free prefs still save", fu.prefs.dailyEmail, true);
+    const pro = await seedUser(env, "pp@example.com", { adFree: true });
+    await call(req("PUT", "/api/prefs", { cookie: pro, body: { prefs: { goAlerts: true, weekendEmail: true } } }), env);
+    const pu = await env.USERS.get("user:pp@example.com", "json");
+    check("pro prefs: Pro can enable both", pu.prefs.goAlerts === true && pu.prefs.weekendEmail === true, JSON.stringify(pu.prefs));
+  }
+
+  // 51. Plans + yearly checkout
+  {
+    const env = { USERS: makeKV(), STRIPE_SECRET_KEY: "sk_test_x" };
+    const plans = await (await call(req("GET", "/api/plans"), env)).json();
+    check("plans: monthly listed with live amount", plans.plans.length === 1 && plans.plans[0].id === "month" && plans.plans[0].amount === 299, JSON.stringify(plans));
+    eq("plans: no billing key → empty", (await (await call(req("GET", "/api/plans"), { USERS: env.USERS })).json()).plans.length, 0);
+    const cookie = await seedUser(env, "yr@example.com");
+    eq("checkout: yearly without a yearly price → 400", (await call(req("POST", "/api/checkout", { cookie, body: { plan: "year" } }), env)).status, 400);
+    env.STRIPE_PRICE_ID_YEARLY = "price_year_abc";
+    stripeCalls = [];
+    eq("checkout: yearly → 200", (await call(req("POST", "/api/checkout", { cookie, body: { plan: "year" } }), env)).status, 200);
+    const sent = stripeCalls.find((c) => c.url.includes("checkout/sessions"));
+    eq("checkout: yearly uses the yearly price", sent?.body?.["line_items[0][price]"], "price_year_abc");
+    eq("checkout: plan recorded in metadata", sent?.body?.["metadata[plan]"], "year");
+    const plans2 = await (await call(req("GET", "/api/plans"), env)).json();
+    eq("plans: yearly listed once configured", plans2.plans.map((p) => p.id).join(","), "month,year");
+  }
+
+  // 52. GO alerts (Pro): fire when a starred port improves to GO, once per day
+  {
+    const env = { USERS: makeKV(), BREVO_API_KEY: "brevo_x" };
+    await seedUser(env, "go@example.com", { adFree: true, favorites: ["sandusky"], prefs: { goAlerts: true } });
+    await seedUser(env, "gofree@example.com", { favorites: ["sandusky"], prefs: { goAlerts: true } }); // stale pref, not Pro
+    stormMode = true;
+    emailCalls = [];
+    const r1 = await runScheduled(env, 13);
+    eq("go alerts: none while rough", r1.goAlerts, 0);
+    eq("go alerts: level recorded", await env.USERS.get("lvl:sandusky"), "NO-GO");
+    stormMode = false;
+    const r2 = await runScheduled(env, 14);
+    eq("go alerts: one sent on the turn to GO (Pro only)", r2.goAlerts, 1);
+    const m = emailCalls.find((c) => /^GO now/.test(c.subject));
+    check("go alerts: to the Pro member", m && m.to[0].email === "go@example.com", JSON.stringify(emailCalls.map((c) => [c.subject, c.to])));
+    stormMode = true; await runScheduled(env, 15);
+    stormMode = false;
+    eq("go alerts: deduped for the rest of the day", (await runScheduled(env, 16)).goAlerts, 0);
+    // First run of the window only records (an overnight change isn't an alert).
+    const env2 = { USERS: makeKV({ "lvl:sandusky": "NO-GO" }), BREVO_API_KEY: "brevo_x" };
+    await seedUser(env2, "go@example.com", { adFree: true, favorites: ["sandusky"], prefs: { goAlerts: true } });
+    eq("go alerts: first window run doesn't fire", (await runScheduled(env2, 9)).goAlerts, 0);
+  }
+
+  // 53. Weekend outlook (Pro): Thursday evening, Saturday + Sunday per port
+  {
+    const env = { USERS: makeKV(), BREVO_API_KEY: "brevo_x" };
+    await seedUser(env, "wk@example.com", { adFree: true, favorites: ["sandusky"], prefs: { weekendEmail: true } });
+    await seedUser(env, "wkfree@example.com", { favorites: ["sandusky"], prefs: { weekendEmail: true } });
+    const thu = new Date(); thu.setUTCDate(thu.getUTCDate() + ((4 - thu.getUTCDay() + 7) % 7)); thu.setUTCHours(22, 0, 0, 0);
+    const notThu = new Date(thu.getTime() + 86400e3);
+    emailCalls = [];
+    eq("weekend: not sent on other days", (await runScheduled(env, 22, notThu)).weekends, 0);
+    const r = await runScheduled(env, 22, thu);
+    eq("weekend: one sent (Pro only)", r.weekends, 1);
+    const m = emailCalls.find((c) => /Weekend outlook/.test(c.subject));
+    check("weekend: to the Pro member", m && m.to[0].email === "wk@example.com");
+    check("weekend: has Saturday + Sunday columns", m && /Saturday/.test(m.htmlContent) && /Sunday/.test(m.htmlContent));
   }
 
   console.log(results.join("\n"));
