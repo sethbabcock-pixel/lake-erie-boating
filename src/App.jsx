@@ -344,8 +344,8 @@ function GlanceBand({ hours }) {
         {win.map((h, i) => (
           <button key={h.time} onClick={() => jumpTo(h.time)}
             className={`gb ${verdictClass(h.level)} ${best && i >= best.from && i <= best.to ? "best" : ""}`}
-            title={`${fmtHour(h.time)} · ${h.level}, see the detail`}
-            aria-label={`${fmtHour(h.time)}: ${h.level}. Jump to hour detail.`} />
+            title={`${fmtHour(h.time)} · ${h.level ?? "no data"}, see the detail`}
+            aria-label={`${fmtHour(h.time)}: ${h.level ?? "no data"}. Jump to hour detail.`} />
         ))}
       </div>
       <div className="glance-x">
@@ -467,6 +467,36 @@ function ShareButton({ spot, rec, wind, wv }) {
         </>
       )}
     </button>
+  );
+}
+
+// "Wrong call?" — the one path for a boater to tell us a verdict didn't match
+// the water. A mailto (no form, no new endpoint) pre-filled with the spot,
+// the call, the readings, and the time, so a report can be checked against
+// the data that produced it.
+const FEEDBACK_EMAIL = "hello@shouldiboat.com";
+function WrongCallLink({ spot, rec, wind, wv, updatedAt }) {
+  const url = spot.adHoc
+    ? `https://shouldiboat.com/preview?lat=${spot.lat}&lon=${spot.lon}&name=${encodeURIComponent(spot.name)}`
+    : `https://shouldiboat.com/spot/${encodeURIComponent(spot.id)}`;
+  const subject = `Wrong call? ${spot.name}: ${rec.level}`;
+  const body = [
+    `Spot: ${spot.name} (${spot.id})`,
+    `Our call: ${rec.level}`,
+    `Wind ${wind?.speedKt ?? "–"} kt${wind?.gustKt != null ? `, gusts ${wind.gustKt} kt` : ""}; waves ${wv?.ft ?? "–"} ft`,
+    `Data updated: ${updatedAt ? new Date(updatedAt).toLocaleString() : "unknown"}`,
+    `Page: ${url}`,
+    "",
+    "What did you see on the water (and when)?",
+    "",
+  ].join("\n");
+  const href = `mailto:${FEEDBACK_EMAIL}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+  return (
+    <div className="call-feedback">
+      <a href={href} onClick={() => track("event", "wrong_call_click", { spot: spot.id, level: rec.level })}>
+        Wrong call? Tell us what you saw →
+      </a>
+    </div>
   );
 }
 
@@ -660,7 +690,7 @@ function HourStrip({ hours, headInBy }) {
           {hours.map((h) => <div key={h.time} className={cls(h, "hx-ico")} title={h.short}><WxIcon short={h.short} size={18} /></div>)}
           {/* verdict strip */}
           <Label>Verdict</Label>
-          {hours.map((h) => <div key={h.time} className={cls(h, "hx-vwrap")} title={`${fmtHour(h.time)} · ${h.level}`}><i className={`hx-v ${verdictClass(h.level)}`} /></div>)}
+          {hours.map((h) => <div key={h.time} className={cls(h, "hx-vwrap")} title={`${fmtHour(h.time)} · ${h.level ?? "no data"}`}><i className={`hx-v ${verdictClass(h.level)}`} /></div>)}
           {/* temp — diverging heat-strip behind the numbers */}
           <Label unit="°F">Temp</Label>
           {hours.map((h) => <div key={h.time} className={cls(h)} style={{ background: tempTint(h.tempF) }}>{h.tempF ?? "—"}</div>)}
@@ -1120,6 +1150,7 @@ export default function App() {
                     {comfort.ok ? "today's conditions are within your limits." : `above your limit: ${comfort.over.join("; ")}.`}
                   </div>
                 )}
+                <WrongCallLink spot={spot} rec={rec} wind={wind} wv={wv} updatedAt={data.updatedAt} />
               </div>
             </section>
 
@@ -1135,7 +1166,7 @@ export default function App() {
               <div className="stat hero">
                 <div className="k">Wind</div>
                 <div className="v">{fmt(wind.speedKt, "")}<small>kt</small> <Trend t={trendOf(data.hourly?.[0]?.windKt, data.hourly?.[3]?.windKt)} /></div>
-                <div className="sub">{[wind.dir, wind.gustKt ? `gust ${wind.gustKt}` : null, wind.source].filter(Boolean).join(" · ") || "—"}</div>
+                <div className="sub">{[wind.dir, wind.gustKt ? `gust ${wind.gustKt}${wind.gustSrc === "forecast" && wind.source !== "forecast" ? " (forecast)" : ""}` : null, wind.source].filter(Boolean).join(" · ") || "—"}</div>
               </div>
               <div className="stat">
                 <div className="k">Waves</div>
@@ -1250,6 +1281,7 @@ export default function App() {
               <div className="footlinks">
                 <a href="/guides/" target="_blank" rel="noopener">Guides</a>
                 <a href="/about" target="_blank" rel="noopener">About</a>
+                <a href={`mailto:${FEEDBACK_EMAIL}?subject=${encodeURIComponent("shouldiboat.com feedback")}`}>Feedback</a>
                 <a href="/advertise" target="_blank" rel="noopener">Advertise</a>
                 <a href="/legal#terms" target="_blank" rel="noopener">Terms</a>
                 <a href="/legal#privacy" target="_blank" rel="noopener">Privacy</a>
