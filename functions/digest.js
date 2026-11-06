@@ -133,7 +133,11 @@ export async function runScheduled(env, utcHour, now = new Date()) {
   // ("squat") an address they don't own until its real owner signs up.
   if (isDigestRun) {
     const cutoff = now.getTime() - UNVERIFIED_TTL_MS;
-    const stale = users.filter((u) => u.emailVerified === false && u.via !== "google" && Date.parse(u.created || "") < cutoff);
+    // Never touch a record that shows any sign of use (only a session can add
+    // these, and a squatter can't get one): a real member may have skipped
+    // verification and signed in with Google before that was checked.
+    const used = (u) => u.adFree || u.stripeSubId || u.stripeCustomerId || u.comp || (u.favorites || []).length || Object.keys(u.prefs || {}).length;
+    const stale = users.filter((u) => u.emailVerified === false && u.via !== "google" && !used(u) && Date.parse(u.created || "") < cutoff);
     for (const u of stale) await env.USERS.delete(`user:${u.email}`).catch(() => {});
     if (stale.length) users = users.filter((u) => !stale.includes(u));
   }

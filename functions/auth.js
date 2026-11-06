@@ -138,15 +138,15 @@ const DEFAULT_SITE_CONFIG = {
 // set but with no valid address → nobody (fails closed).
 // Deliberately not editable from /admin, so one admin can't add another.
 const DEFAULT_ADMIN = "seth.babcock@gmail.com";
-const adminList = (env) => {
+function adminList(env) {
   const raw = String(env.ADMIN_EMAIL || "").trim();
   if (!raw) return [DEFAULT_ADMIN];
   // Set but with no valid address (e.g. a typo) → no admins, rather than
   // silently handing admin back to the default owner.
   const list = raw.split(/[\s,;]+/).map((e) => e.trim().toLowerCase()).filter(validEmail);
-  if (!list.length) console.warn("ADMIN_EMAIL is set but contains no valid email; /admin is locked.");
+  if (!list.length && !adminList.warned) { adminList.warned = true; console.warn("ADMIN_EMAIL is set but contains no valid email; /admin is locked."); }
   return [...new Set(list)];
-};
+}
 // An admin must have proved they own the address: an unverified password
 // account (explicit emailVerified === false) never gets admin, even if listed.
 const isAdmin = (env, u) => !!(u && u.emailVerified !== false && adminList(env).includes(String(u.email || "").toLowerCase()));
@@ -455,7 +455,7 @@ async function welcomeNotify(env, user, url) {
 // Always log a KV notification (success or failure); send the email if given.
 export async function notify(env, type, context, mail) {
   let emailSent = false, emailError = null;
-  if (mail && mail.to && mail.subject && mail.html) {
+  if (mail && mail.to && (!Array.isArray(mail.to) || mail.to.length) && mail.subject && mail.html) {
     const r = await sendEmail(env, mail.to, mail.subject, mail.html);
     emailSent = r.ok; emailError = r.error;
   }
@@ -553,6 +553,10 @@ export async function handleAuth(request, env, url, ctx) {
     if (!user) return json({ error: "Account not found." }, 404);
     const firstTime = user.emailVerified === false;
     user.emailVerified = true;
+    // For an admin address, a verification click must never activate a
+    // password the clicker didn't set (a squatter may have registered it).
+    // Drop it: the admin signs in with Google or sets one via "Forgot password".
+    if (firstTime && user.pass && adminList(env).includes(email)) { delete user.pass; delete user.salt; delete user.passIter; }
     await env.USERS.put(emailKey(email), JSON.stringify(user));
     await env.USERS.delete(`verify:${token}`);
     // The account is real now → fire the welcome + admin signup notice once.
@@ -1228,12 +1232,18 @@ export async function handleAuth(request, env, url, ctx) {
     // as (or claim admin for) an address they don't control.
     if (payload.email_verified !== true && payload.email_verified !== "true") return new Response("Your Google account's email address isn't verified.", { status: 403 });
     let user = await env.USERS.get(emailKey(email), "json");
-    // An unverified password account for this address was never proven to be
-    // its owner's; anyone can register any address. Google has now verified the
-    // owner, so discard that record (password, prefs and all) and start fresh.
-    // Otherwise a squatter's password would start working once the owner
-    // verified, which could hand them the owner's account (or admin).
-    if (user && user.emailVerified === false) user = null;
+    // An unverified password account was never proven to be its owner's:
+    // anyone can register any address. Google has now verified the owner, so
+    // promote the account and drop its password. Otherwise a squatter's
+    // password would start working once the owner verified, which could hand
+    // them the account (or admin). The rest of the record is kept: a squatter
+    // can't write to it (no session until verified), and real members who
+    // skipped verification and used Google sign-in may have favorites or Pro.
+    if (user && user.emailVerified === false) {
+      user = { ...user, emailVerified: true, via: "google" };
+      delete user.pass; delete user.salt; delete user.passIter;
+      await env.USERS.put(emailKey(email), JSON.stringify(user));
+    }
     if (!user) {
       user = { id: randHex(8), email, created: new Date().toISOString(), prefs: {}, favorites: [], adFree: false, via: "google", emailVerified: true };
       await env.USERS.put(emailKey(email), JSON.stringify(user));
