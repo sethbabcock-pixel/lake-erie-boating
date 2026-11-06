@@ -434,7 +434,8 @@ function BuoyFact({ facts }) {
     return (
       <span>
         No live buoy right now: {notReported(ld.offline)} (it may be offline{facts.coastal ? "" : ", out for the season"}, or NOAA's feed may be down).{" "}
-        {both ? "Wind and waves come from the NWS forecast" : "Wind/wave data is unavailable right now. Check the NWS marine forecast before you launch"}
+        {both ? "Wind and waves come from the NWS forecast"
+          : `${[fromText("Wind", ld.windFrom), fromText("waves", ld.wavesFrom)].join("; ")}. Check the NWS marine forecast before you launch`}
       </span>
     );
   }
