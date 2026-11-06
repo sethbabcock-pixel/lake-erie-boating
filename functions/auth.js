@@ -260,9 +260,13 @@ async function stripeGET(env, path) {
 // Is this subscription live (active/trialing) right now, per Stripe?
 // → { ok, status, customer } on a definite answer (404 = gone → ok:false);
 // → null when Stripe is unreachable or errors, so the caller can fail closed.
-async function stripeSubLive(env, subId) {
+// With { invoice: true } it also expands latest_invoice and reports
+// invoicePaid (a delayed ACH/SEPA first payment can leave the sub "active"
+// while its invoice is still open/processing).
+async function stripeSubLive(env, subId, { invoice = false } = {}) {
   try {
-    const r = await fetch(`https://api.stripe.com/v1/subscriptions/${encodeURIComponent(subId)}`, {
+    const q = invoice ? "?expand[]=latest_invoice" : "";
+    const r = await fetch(`https://api.stripe.com/v1/subscriptions/${encodeURIComponent(subId)}${q}`, {
       headers: { Authorization: `Bearer ${env.STRIPE_SECRET_KEY}` },
       signal: AbortSignal.timeout(8000),
     });
@@ -271,7 +275,8 @@ async function stripeSubLive(env, subId) {
     const s = await r.json();
     if (!s || typeof s.status !== "string") return null;
     const customer = typeof s.customer === "string" ? s.customer : s.customer?.id || null;
-    return { ok: s.status === "active" || s.status === "trialing", status: s.status, customer };
+    const invoicePaid = s.latest_invoice && typeof s.latest_invoice === "object" ? s.latest_invoice.status === "paid" : null;
+    return { ok: s.status === "active" || s.status === "trialing", status: s.status, customer, invoicePaid };
   } catch (e) {
     return null;
   }
@@ -1440,6 +1445,27 @@ export async function handleAuth(request, env, url, ctx) {
           active = ["active", "trialing", "past_due"].includes(live.status);
         }
         await setAdFree(email, active);
+      } else if (user && event.type === "customer.subscription.updated" && purpose === "adfree" && obj.id
+                 && !user.adFree && ["active", "trialing"].includes(obj.status)
+                 && (!user.stripeCustomerId || user.stripeCustomerId === obj.customer)) {
+        // A tagged ad-free subscription on this user's own customer became
+        // live, but it isn't the one we recorded. This happens when a stale
+        // checkout retry for an older, still-pending subscription repointed
+        // stripeSubId (e.g. two checkouts from two tabs), or the checkout
+        // event was never delivered. The user isn't ad-free, so adopt it:
+        // confirm live with Stripe (active/trialing, same customer), then
+        // record and grant. Never replaces a subscription that's granting.
+        // The latest invoice must be paid: with no checkout event to show the
+        // payment settled, an ACH/SEPA sub that is "active" while its first
+        // payment is still processing must not grant early.
+        const live = await stripeSubLive(env, obj.id, { invoice: true });
+        if (live === null) return json({ error: "Could not confirm subscription with Stripe; retry later." }, 503);
+        if (live.ok && live.customer === obj.customer && live.invoicePaid === true) {
+          const prev = await setAdFree(email, true, { stripeCustomerId: obj.customer, stripeSubId: obj.id });
+          if (prev && !prev.adFree) {
+            await runBg(ctx, notify(env, "adfree_activated", { email }, { to: email, subject: "Welcome to shouldiboat Pro", html: adFreeHtml(), ttlDays: 30 }));
+          }
+        }
       }
     }
     return done();
