@@ -285,11 +285,12 @@ async function fetchForecasts(lat, lon) {
       precipPct: p.probabilityOfPrecipitation?.value ?? null,
     }));
     const hourly = (hc?.properties?.periods || []).slice(0, 72).map((p) => {
-      const mph = parseInt(String(p.windSpeed || "").match(/\d+/)?.[0] || "0", 10);
+      // Missing/unparseable wind is null (unknown), never 0 kt (calm).
+      const m = String(p.windSpeed || "").match(/\d+/);
       return {
         time: p.startTime,
         tempF: p.temperature,
-        windKt: round(mphToKt(mph), 0),
+        windKt: m ? round(mphToKt(parseInt(m[0], 10)), 0) : null,
         windDir: p.windDirection || null,
         precipPct: p.probabilityOfPrecipitation?.value ?? 0,
         short: p.shortForecast || "",
@@ -1169,7 +1170,10 @@ function buildRecommendation({ buoy, alerts, wind, waves, read, hours, profile =
   // factors in (the decisive signal when wave data is missing).
   const topWind = Math.max(wind?.speedKt ?? 0, wind?.gustKt ?? 0);
   if (topWind) {
-    const tag = wind?.source === "forecast" ? " (forecast)" : "";
+    // "(forecast)" whenever a forecast value is in play: the sustained wind, or
+    // a grid gust standing in for a buoy that reports no gust.
+    const gustFromForecast = wind?.gustSource === "forecast" && (wind?.gustKt ?? 0) > (wind?.speedKt ?? 0);
+    const tag = wind?.source === "forecast" || gustFromForecast ? " (forecast)" : "";
     // Ocean: no "breezy" step at 12 kt; a 12-15 kt sea breeze is a normal
     // coastal afternoon, and the seas rule above carries the wave risk.
     if (profile === "ocean") {
@@ -1230,9 +1234,12 @@ function buildRecommendation({ buoy, alerts, wind, waves, read, hours, profile =
   // No wind AND no waves means the upstream feeds failed (NOAA outage, timeout),
   // not that it's calm. Never call GO on missing data — fail to CAUTION and
   // say why, so a blank page can't read as "looks good".
-  const noData = wv == null && wind?.speedKt == null && wind?.gustKt == null;
+  // A gust alone (no sustained wind) is still missing data, not calm.
+  const noData = wv == null && wind?.speedKt == null;
   if (noData) {
     bump("CAUTION", "Live wind and wave data are unavailable right now. Check the NWS marine forecast before you launch");
+  } else if (wind?.speedKt == null) {
+    bump("CAUTION", "Live wind data is unavailable right now. Check the NWS marine forecast before you launch");
   } else if (reasons.length === 0) {
     reasons.push("Calm conditions reported");
   }
@@ -1665,14 +1672,23 @@ export async function onRequest(context) {
   // Effective wind: prefer the live buoy, fall back to the NWS forecast so wind
   // is present even when no buoy (and no wave data) is available.
   const forecastWind = parseForecastWind(point?.[0]);
+  // Grid gust for "now or imminent" (this hour or the next, like the tiles),
+  // picked by timestamp: the hourly product can lead with already-past hours.
+  const nowEH = Math.floor(Date.now() / 3600000);
+  const nowRows = hourly.filter((h) => { const eh = Math.floor(Date.parse(h.time) / 3600000); return eh === nowEH || eh === nowEH + 1; });
+  const gridNowGusts = nowRows.map((h) => h.gustKt).filter((v) => v != null);
+  const gridNowGust = gridNowGusts.length ? Math.max(...gridNowGusts) : null;
+  // Last-resort sustained wind: the hourly forecast's current hour (when the
+  // daily period is unavailable), so a lone grid gust never stands in for it.
+  const hourlyNowWind = nowRows.find((h) => h.windKt != null)?.windKt ?? null;
   const wind = {
-    speedKt: buoy?.windKt ?? forecastWind?.speedKt ?? null,
-    // Buoy gust, else this hour's grid gust (the NWS hourly feed has none), so
+    speedKt: buoy?.windKt ?? forecastWind?.speedKt ?? hourlyNowWind,
+    // Buoy gust, else the current grid gust (the NWS hourly feed has none), so
     // the headline at a no-buoy port weighs gusts just like the hourly strip.
-    gustKt: buoy?.windGustKt ?? hourly[0]?.gustKt ?? null,
-    gustSource: buoy?.windGustKt != null ? "buoy" : hourly[0]?.gustKt != null ? "forecast" : null,
+    gustKt: buoy?.windGustKt ?? gridNowGust,
+    gustSource: buoy?.windGustKt != null ? "buoy" : gridNowGust != null ? "forecast" : null,
     dir: buoy?.windDir ?? forecastWind?.dir ?? null,
-    source: buoy?.windKt != null ? "buoy" : forecastWind?.speedKt != null ? "forecast" : null,
+    source: buoy?.windKt != null ? "buoy" : (forecastWind?.speedKt ?? hourlyNowWind) != null ? "forecast" : null,
   };
 
   // Effective waves reflect RIGHT NOW and agree with the hour-by-hour strip,
