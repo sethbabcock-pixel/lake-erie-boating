@@ -118,6 +118,36 @@ what Checkout will charge. To set or change pricing:
 4. Check **/admin → System**: both prices should show green.
 5. Run one real checkout to confirm the webhook flips the account to Pro.
 
+### Stripe Dashboard settings (do once, in both test and live mode)
+
+The Worker handles the charge lifecycle automatically, but only for events
+Stripe is told to send. Without these settings, some buyers can be charged and
+never upgraded.
+
+1. **Webhook endpoint** (Developers → Webhooks): `https://shouldiboat.com/stripe/webhook`,
+   subscribed to these events:
+   - `checkout.session.completed`: grants Pro for card payments
+   - `checkout.session.async_payment_succeeded`: grants Pro when ACH/SEPA settles
+     (a bank-debit checkout completes *unpaid*, and Pro waits for this event)
+   - `customer.subscription.updated`: keeps Pro on, or turns it off, as the status changes
+   - `customer.subscription.deleted`: removes Pro when a subscription ends
+
+   Copy its signing secret into the Worker secret `STRIPE_WEBHOOK_SECRET`. To
+   rotate the secret, use "Roll secret" with an overlap period. The webhook accepts
+   either signature, so update the Worker secret any time during the overlap.
+2. **Customer portal** (Settings → Billing → Customer portal): activate it, and
+   allow customers to cancel and to update their payment method. `/api/portal`
+   fails until the portal is saved once.
+3. **Failed payments** (Settings → Billing → Subscriptions and emails): turn on
+   Smart Retries, the failed-payment and expiring-card emails, and set "if all
+   retries fail" to **cancel the subscription**. That fires
+   `customer.subscription.deleted`, which removes Pro automatically. While retries run,
+   the subscription is `past_due` and Pro stays on.
+4. **Receipts** (Settings → Business → Customer emails): turn on successful-payment receipts.
+5. **Payment methods** (Settings → Payments → Payment methods): Checkout uses
+   whatever methods are enabled here. If you enable ACH or SEPA, step 1's
+   `async_payment_succeeded` event is required.
+
 The entitlement flag is still `adFree` on the user record (`isPro()` in
 `functions/auth.js`), so no migration is needed.
 
