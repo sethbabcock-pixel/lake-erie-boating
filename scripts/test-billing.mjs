@@ -926,10 +926,43 @@ async function run() {
     // reverse index is written so a later `updated` (active) can grant.
     await seedUser(env, "pastdue@example.com");
     subStatus.sub_pd = "past_due";
+    emailCalls = [];
     const pd = { id: "evt_pd", type: "checkout.session.completed", data: { object: { ...session, client_reference_id: "pastdue@example.com", customer: "cus_pd", subscription: "sub_pd" } } };
     await call(stripeWebhookReq(pd, "whsec_right"), env);
     eq("past_due at checkout: no grant", (await env.USERS.get("user:pastdue@example.com", "json")).adFree, false);
     eq("past_due at checkout: reverse index written", await env.USERS.get("stripecust:cus_pd"), "pastdue@example.com");
+    check("past_due at checkout: no welcome email", !emailCalls.some((c) => /Welcome to shouldiboat Pro/i.test(c.subject)));
+    // No customer on the live sub → can't confirm the match → nothing stored.
+    eq("past_due at checkout without customer match: stripeSubId not stored", (await env.USERS.get("user:pastdue@example.com", "json")).stripeSubId, undefined);
+    // With a confirmed customer, the sub is recorded (not granted) so the
+    // tagged subscription.updated that follows payment can grant.
+    subCustomer.sub_pd = "cus_pd";
+    await call(stripeWebhookReq({ ...pd, id: "evt_pd_retry" }, "whsec_right"), env);
+    let pdu = await env.USERS.get("user:pastdue@example.com", "json");
+    eq("past_due at checkout: still not granted", pdu.adFree, false);
+    eq("past_due at checkout: stripeSubId stored", pdu.stripeSubId, "sub_pd");
+    eq("past_due at checkout: stripeCustomerId stored", pdu.stripeCustomerId, "cus_pd");
+    subStatus.sub_pd = "active";
+    const paidUp = { id: "evt_pd_upd", type: "customer.subscription.updated", data: { object: { id: "sub_pd", customer: "cus_pd", status: "active", metadata: { purpose: "adfree" } } } };
+    eq("past_due → active update → 200", (await call(stripeWebhookReq(paidUp, "whsec_right"), env)).status, 200);
+    eq("past_due → active update grants ad-free", (await env.USERS.get("user:pastdue@example.com", "json")).adFree, true);
+
+    // A canceled-at-delivery checkout must not overwrite the user's current sub.
+    await seedUser(env, "current@example.com", { adFree: true, stripeCustomerId: "cus_cur", stripeSubId: "sub_cur_live" });
+    subStatus.sub_cur_old = "canceled"; subCustomer.sub_cur_old = "cus_cur";
+    await call(stripeWebhookReq({ id: "evt_cur_old", type: "checkout.session.completed", data: { object: { ...session, client_reference_id: "current@example.com", customer: "cus_cur", subscription: "sub_cur_old" } } }, "whsec_right"), env);
+    let cu = await env.USERS.get("user:current@example.com", "json");
+    eq("canceled checkout retry keeps current stripeSubId", cu.stripeSubId, "sub_cur_live");
+    eq("canceled checkout retry keeps ad-free", cu.adFree, true);
+    // Nor may a recoverable (past_due) other sub replace a granting one.
+    subStatus.sub_cur_pd = "past_due"; subCustomer.sub_cur_pd = "cus_cur";
+    await call(stripeWebhookReq({ id: "evt_cur_pd", type: "checkout.session.completed", data: { object: { ...session, client_reference_id: "current@example.com", customer: "cus_cur", subscription: "sub_cur_pd" } } }, "whsec_right"), env);
+    eq("past_due other-sub checkout keeps current stripeSubId", (await env.USERS.get("user:current@example.com", "json")).stripeSubId, "sub_cur_live");
+
+    // Account deleted, then a late checkout retry: no reverse index re-created.
+    subStatus.sub_del = "active";
+    await call(stripeWebhookReq({ id: "evt_del", type: "checkout.session.completed", data: { object: { ...session, client_reference_id: "deleted@example.com", customer: "cus_del", subscription: "sub_del" } } }, "whsec_right"), env);
+    eq("no account: reverse index not written", await env.USERS.get("stripecust:cus_del"), null);
     subStatus = {}; subCustomer = {};
   }
 
