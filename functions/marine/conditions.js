@@ -515,14 +515,22 @@ export function buildWeek(grid, profile = "lake") {
   if (!grid) return [];
   const toLocal = localParts(grid.tz);
   const days = new Map();
-  const keys = new Set([...grid.windKt.keys(), ...grid.waveFt.keys(), ...grid.precipPct.keys()]);
+  const keys = new Set([...grid.windKt.keys(), ...grid.waveFt.keys(), ...grid.precipPct.keys(), ...(grid.thunder ? grid.thunder.keys() : [])]);
   const max = (a, b) => (b == null ? a : a == null ? b : Math.max(a, b));
   for (const h of keys) {
     const { date } = toLocal(h);
     let d = days.get(date);
-    if (!d) days.set(date, (d = { date, windKt: null, gustKt: null, precipPct: null, waveFt: null, periodSec: null, windHours: 0, waveHours: 0 }));
+    if (!d) days.set(date, (d = { date, windKt: null, gustKt: null, precipPct: null, waveFt: null, periodSec: null, windHours: 0, waveHours: 0, storm: null }));
     if (grid.windKt.get(h) != null) d.windHours++;
     if (grid.waveFt.get(h) != null) d.waveHours++;
+    // Thunder is rated hour by hour against THAT hour's rain chance (as the
+    // hourly strip does): >= 25% with thunder is NO-GO, a slight chance is
+    // CAUTION. Pairing it with the day's max rain chance instead would let a
+    // dry storm hour and an unrelated wet hour add up to a NO-GO day.
+    if (grid.thunder && grid.thunder.get(h) === true) {
+      const lvl = (grid.precipPct.get(h) ?? 0) >= 25 ? "NO-GO" : "CAUTION";
+      d.storm = worseLevel(d.storm, lvl);
+    }
     d.windKt = max(d.windKt, grid.windKt.get(h));
     d.gustKt = max(d.gustKt, grid.gustKt.get(h));
     d.precipPct = max(d.precipPct, grid.precipPct.get(h));
@@ -544,15 +552,25 @@ export function buildWeek(grid, profile = "lake") {
       // ends before the wind grid), not a max over a couple of hours.
       const sparse = d.date !== today && (d.windHours < MIN_DAY_WIND_HOURS || (profile === "lake" && d.waveHours < MIN_DAY_WIND_HOURS));
       return {
-      date: d.date,
-      windKt: round(d.windKt, 0),
-      gustKt: round(d.gustKt, 0),
-      precipPct: d.precipPct == null ? null : Math.round(d.precipPct),
-      waveFt: round(d.waveFt, 1),
-      periodSec: round(d.periodSec, 0),
-      level: sparse && level === "GO" ? null : level,
+        date: d.date,
+        windKt: round(d.windKt, 0),
+        gustKt: round(d.gustKt, 0),
+        precipPct: d.precipPct == null ? null : Math.round(d.precipPct),
+        waveFt: round(d.waveFt, 1),
+        periodSec: round(d.periodSec, 0),
+        thunder: d.storm != null,
+        // Sparse days can't be GO; then any forecast thunder that day raises it.
+        level: worseLevel(sparse && level === "GO" ? null : level, d.storm),
       };
     });
+}
+
+// The more cautious of two levels; null (no call) loses to any real level.
+function worseLevel(a, b) {
+  const rank = { GO: 0, CAUTION: 1, "NO-GO": 2 };
+  if (a == null) return b ?? null;
+  if (b == null) return a;
+  return rank[b] > rank[a] ? b : a;
 }
 
 async function fetchMarineForecast(zone) {
@@ -1149,11 +1167,11 @@ function withRisk(hours, profile = "lake") {
 }
 
 // Turn the hourly timeline into an actionable "go now / be in by X" outlook.
-function computeOutlook(hours) {
+export function computeOutlook(hours) {
   if (!hours || !hours.length) return null;
   const win = hours.slice(0, 18); // actionable "today/tonight" window for "be in by"
-  const idx = win.findIndex((h) => h.level === "NO-GO");
   const out = { nowLevel: hours[0].level, headInBy: null, headInReason: null, goodHours: win.length };
+  const idx = win.findIndex((h) => h.level === "NO-GO");
   if (idx === 0) { out.headInBy = win[0].time; out.goodHours = 0; }
   else if (idx > 0) {
     const h = win[idx];
@@ -1164,6 +1182,12 @@ function computeOutlook(hours) {
       : (h.waveFt != null && h.waveFt >= 4 ? "building waves"
       : (h.windKt >= 22 ? "building wind" : "deteriorating weather"));
   }
+  // An hour with no call (missing wind) is not a good hour: it only SHORTENS
+  // the "good for Nh" count. The NO-GO cutoff above is always kept, so a known
+  // storm deadline never disappears just because wind data is missing.
+  const unknownAt = win.findIndex((h) => h.level == null);
+  if (unknownAt === 0) { out.goodHours = 0; out.noData = true; }
+  else if (unknownAt > 0 && (idx < 0 || unknownAt < idx)) { out.goodHours = unknownAt; out.dataEndsAt = win[unknownAt].time; }
   return out;
 }
 
@@ -1300,7 +1324,9 @@ export function buildRecommendation({ buoy, alerts, wind, waves, read, hours, pr
   }
   if (!buoy && !noData) reasons.push("No live buoy here; using the NWS forecast, so verify before launch");
 
-  const summary = noData
+  // The "no data" line only when that's the whole story: a gust or storm that
+  // drove the call higher gets the normal summary for its level.
+  const summary = noData && level === "CAUTION"
     ? "No live data right now. Check before you go."
     : {
         GO: "Looks good to boat.",

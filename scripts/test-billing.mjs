@@ -1388,6 +1388,44 @@ async function run() {
     gridMode = null;
   }
 
+  // 56. Week strip rates forecast thunder (hour by hour, with that hour's rain
+  //     chance); the outlook never counts no-data hours as good.
+  {
+    const { buildWeek, computeOutlook, buildRecommendation } = await import("../functions/marine/conditions.js");
+    const nowH = Math.floor(Date.now() / 3600000);
+    // A calm 3-day grid (UTC), 8 kt / 1 ft / dry, with thunder injected per test.
+    const grid = (thunderHours = {}, precip = {}) => {
+      const mk = (v) => new Map(Array.from({ length: 72 }, (_, i) => [nowH + i, typeof v === "function" ? v(nowH + i) : v]));
+      return { tz: "UTC", windKt: mk(8), gustKt: mk(10), waveFt: mk(1), periodSec: mk(4), windDirDeg: mk(225),
+        precipPct: mk((h) => precip[h] ?? 0), thunder: mk((h) => !!thunderHours[h]) };
+    };
+    const day2 = (w) => w.find((d) => d.date === new Date((nowH + 30) * 3600e3).toISOString().slice(0, 10));
+    eq("week: calm day stays GO", day2(buildWeek(grid())).level, "GO");
+    const h = nowH + 30;
+    eq("week: thunder hour with 40% rain → day NO-GO", day2(buildWeek(grid({ [h]: true }, { [h]: 40 }))).level, "NO-GO");
+    eq("week: slight thunder chance (10% rain) → day CAUTION", day2(buildWeek(grid({ [h]: true }, { [h]: 10 }))).level, "CAUTION");
+    eq("week: dry thunder hour + unrelated wet hour → CAUTION, not NO-GO", day2(buildWeek(grid({ [h]: true }, { [h]: 5, [h + 3]: 40 }))).level, "CAUTION");
+    check("week: day reports thunder flag", day2(buildWeek(grid({ [h]: true }, { [h]: 40 }))).thunder === true);
+
+    const hr = (level, i) => ({ time: new Date((nowH + i) * 3600e3).toISOString(), level, short: "" });
+    const o1 = computeOutlook([hr(null, 0), hr("GO", 1), hr("GO", 2)]);
+    check("outlook: no data this hour → noData, 0 good hours", o1.noData === true && o1.goodHours === 0, JSON.stringify(o1));
+    const o2 = computeOutlook([hr("GO", 0), hr("GO", 1), hr(null, 2), hr("GO", 3)]);
+    check("outlook: good window stops at the first no-data hour", o2.goodHours === 2 && o2.dataEndsAt === hr(null, 2).time && !o2.headInBy, JSON.stringify(o2));
+    const o3 = computeOutlook([hr("GO", 0), hr("NO-GO", 1), hr(null, 2)]);
+    check("outlook: an earlier NO-GO still sets be-in-by", o3.goodHours === 1 && o3.headInBy === hr("NO-GO", 1).time, JSON.stringify(o3));
+    const storm = { ...hr("NO-GO", 2), short: "Chance Showers And Thunderstorms" };
+    const o4 = computeOutlook([hr(null, 0), hr(null, 1), storm]);
+    check("outlook: missing wind keeps a known storm cutoff", o4.noData === true && o4.goodHours === 0 && o4.headInBy === storm.time && o4.headInReason === "thunderstorms", JSON.stringify(o4));
+    const o5 = computeOutlook([hr("GO", 0), hr(null, 1), storm]);
+    const o6 = computeOutlook([hr("NO-GO", 0), hr(null, 1), hr("GO", 2)]);
+    check("outlook: NO-GO now then a data gap → be in now, no dataEndsAt", o6.goodHours === 0 && o6.headInBy === hr("NO-GO", 0).time && !o6.dataEndsAt, JSON.stringify(o6));
+    check("outlook: data gap before a storm keeps both", o5.goodHours === 1 && o5.dataEndsAt === hr(null, 1).time && o5.headInBy === storm.time, JSON.stringify(o5));
+
+    const r24 = buildRecommendation({ buoy: null, alerts: [], wind: { speedKt: null, gustKt: 24, source: null, gustSrc: "forecast" }, waves: { ft: null }, read: null, hours: [], profile: "lake" });
+    check("summary: gust-driven NO-GO with no other data reads as NO-GO, not 'no live data'", r24.level === "NO-GO" && !/No live data/.test(r24.summary), r24.summary);
+  }
+
   // 57. Follow-ups: Great Lakes GO needs waves; sparse future days can't GO;
   //     the hourly strip starts at the current hour.
   {

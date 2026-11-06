@@ -1213,3 +1213,6 @@ body.has-takeover .app { background: var(--bg); border-radius: var(--r-lg) var(-
 .wd-level.unknown { background: var(--surface-sunk); color: var(--text-faint); border: 1px solid var(--border); }
 .ndot.unknown { background: transparent; border: 1.5px solid var(--text-faint); }
 .glance-band .gb.unknown, .hx-v.unknown { background: var(--border-strong); }
+
+/* Text for screen readers only (e.g. the ⚡ storm cue in the week strip). */
+.sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
