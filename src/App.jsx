@@ -25,7 +25,8 @@ function comfortCheck(prefs, windKt, waveFt) {
   if (maxW == null && maxK == null) return null;
   const over = [];
   if (maxW != null && waveFt != null && waveFt > maxW) over.push(`waves ${waveFt} ft over your ${maxW} ft`);
-  if (maxK != null && windKt != null && windKt > maxK) over.push(`wind ${windKt} kt over your ${maxK} kt`);
+  // Whole knots, but keep the decimal if rounding would hide the overage (20.4 over 20).
+  if (maxK != null && windKt != null && windKt > maxK) over.push(`wind ${kt(windKt) > maxK ? kt(windKt) : windKt} kt over your ${maxK} kt`);
   const limits = [maxW != null ? `≤${maxW} ft` : null, maxK != null ? `≤${maxK} kt` : null].filter(Boolean).join(" · ");
   return { ok: over.length === 0, over, limits };
 }

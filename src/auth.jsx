@@ -318,7 +318,7 @@ export function Account({ auth }) {
             </div>
           </div>
           {auth.billing && !auth.user.adFree && (
-            <a className="upgrade-btn" href="/account#pro" onClick={() => track("event", "pro_menu_click", {})}>Go Pro: no ads + GO alerts</a>
+            <a className="upgrade-btn" href="/account#pro" onClick={() => track("event", "pro_menu_click", {})}>Go Pro: no Google ads + GO alerts</a>
           )}
           <div className="acct-menu-sep" />
           {auth.user.admin && <a className="acct-item" href="/admin" role="menuitem"><IconGear /> Site admin</a>}
