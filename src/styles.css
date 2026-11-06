@@ -52,23 +52,17 @@ svg.ico { vertical-align: -0.15em; flex: 0 0 auto; }
 .app { max-width: var(--maxw-wide); margin: 0 auto; padding: var(--s5) clamp(var(--s4), 3.5vw, var(--s6)) var(--s8); }
 
 /* ---------- Sticky header ---------- */
-.appheader { position: sticky; top: 0; z-index: 50; border-bottom: 1px solid var(--border);
-  background: color-mix(in srgb, var(--bg) 85%, transparent);
-  -webkit-backdrop-filter: saturate(140%) blur(10px); backdrop-filter: saturate(140%) blur(10px); }
+/* One quiet row at every width: solid background, the brand mark + a plain
+   wordmark on the left, small square-cornered controls on the right. */
+.appheader { position: sticky; top: 0; z-index: 50; border-bottom: 1px solid var(--border); background: var(--bg); }
 .appheader-inner { max-width: var(--maxw-wide); margin: 0 auto; display: flex; align-items: center;
-  justify-content: space-between; gap: var(--s3) var(--s4); flex-wrap: wrap;
-  padding: var(--s3) clamp(var(--s4), 3.5vw, var(--s6)); }
-.brand { display: flex; align-items: center; gap: var(--s3); min-width: 0; text-decoration: none; }
+  justify-content: space-between; gap: var(--s3); min-height: 60px;
+  padding: var(--s2) clamp(var(--s4), 3.5vw, var(--s6)); }
+.brand { display: flex; align-items: center; gap: 10px; min-width: 0; flex: 0 0 auto; text-decoration: none; color: var(--text); }
 .brand:hover { text-decoration: none; }
-.brand .logo { height: 40px; width: auto; flex: 0 0 auto; }
-.wordmark { display: flex; flex-direction: column; min-width: 0; }
-.wm-name { font-weight: var(--fw-semibold); font-size: var(--fs-xl); letter-spacing: 0.02em;
-  color: var(--text); line-height: 1.05; }
-.wm-name b { font-weight: var(--fw-extrabold); color: var(--brand); }
-[data-theme="dark"] .wm-name b { color: var(--accent); }
-.wm-dot { color: var(--accent); font-weight: var(--fw-semibold); font-size: 0.62em; vertical-align: text-top; margin-left: 1px; }
-.wm-tag { font-size: var(--fs-xs); color: var(--text-muted); margin-top: 1px; font-weight: var(--fw-regular); letter-spacing: 0; }
-.controls { display: flex; align-items: center; gap: var(--s2); flex-wrap: wrap; justify-content: flex-end; }
+.brand .logo { height: 28px; width: auto; flex: 0 0 auto; display: block; }
+.wordmark { font-size: 1.0625rem; font-weight: var(--fw-bold); letter-spacing: -0.01em; color: var(--text); white-space: nowrap; line-height: 1; }
+.controls { display: flex; align-items: center; gap: var(--s2); min-width: 0; justify-content: flex-end; }
 .live { display: inline-flex; align-items: center; gap: 6px; font-size: var(--fs-xs); font-weight: var(--fw-semibold);
   color: var(--success); text-transform: uppercase; letter-spacing: var(--tracking-wide); }
 .live::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: var(--success);
@@ -86,15 +80,16 @@ svg.ico { vertical-align: -0.15em; flex: 0 0 auto; }
 .sel.themesel { min-width: 92px; }
 
 /* SVG sun/moon theme toggle */
-.theme-toggle { display: inline-flex; align-items: center; justify-content: center; width: 44px; height: 44px; flex: 0 0 auto;
-  border-radius: var(--r-pill); background: var(--surface); border: 1px solid var(--border-strong); color: var(--text);
-  cursor: pointer; transition: border-color var(--dur-fast), color var(--dur-fast), background var(--dur-fast); }
-.theme-toggle:hover { border-color: var(--accent); color: var(--accent); }
+.theme-toggle { display: inline-flex; align-items: center; justify-content: center; width: 40px; height: 40px; flex: 0 0 auto;
+  border-radius: var(--r-md); background: transparent; border: 0; color: var(--text-muted);
+  cursor: pointer; transition: color var(--dur-fast), background var(--dur-fast); }
+.theme-toggle svg { width: 18px; height: 18px; }
+.theme-toggle:hover { background: var(--surface-sunk); color: var(--text); }
 
 /* Custom location picker */
 .locpick { position: relative; }
-.locpick-btn { display: inline-flex; align-items: center; gap: var(--s2); min-height: 44px; padding: 0 12px;
-  background: var(--surface); color: var(--text); border: 1px solid var(--border-strong); border-radius: var(--r-md);
+.locpick-btn { display: inline-flex; align-items: center; gap: var(--s2); min-height: 40px; padding: 0 12px;
+  background: var(--surface); color: var(--text); border: 1px solid var(--border); border-radius: var(--r-md);
   font-family: var(--font-sans); font-size: var(--fs-sm); font-weight: var(--fw-semibold); cursor: pointer;
   transition: border-color var(--dur-fast); max-width: 240px; }
 .locpick-btn:hover { border-color: var(--accent); }
@@ -141,19 +136,17 @@ svg.ico { vertical-align: -0.15em; flex: 0 0 auto; }
 .mweather { margin: 7px 0 0 32px; font-size: var(--fs-sm); color: var(--text-muted); line-height: 1.4; }
 
 @media (max-width: 620px) {
-  .wm-tag { display: none; }
-  .wm-name { font-size: var(--fs-lg); }
-  /* Use the full header width on phones instead of hugging the right edge:
-     the location picker stretches across the row beside the theme toggle, and
-     the two auth buttons split an equal, full-width row beneath it. */
-  .controls { width: 100%; justify-content: flex-start; row-gap: var(--s2); }
-  /* flex-basis 0 so line-wrapping ignores the picker's text width: it shares a
-     row with the theme toggle (signed-out) or the toggle + avatar (signed-in)
-     and grows to fill, instead of taking a full row and pushing them to wrap. */
+  /* Phones: the mark alone is the home link; the picker takes the free space
+     on the same row, so the sticky header stays one 56px row. */
+  .wordmark { display: none; }
+  .appheader-inner { min-height: 56px; gap: var(--s2); }
+  .brand .logo { height: 24px; }
+  .controls { flex: 1 1 auto; }
   .controls .locpick { flex: 1 1 0; min-width: 0; }
-  .locpick-btn { width: 100%; max-width: none; }
-  .controls .auth-ctas { flex: 1 1 100%; width: 100%; justify-content: stretch; }
-  .auth-ctas .signin-btn { flex: 1 1 0; min-width: 0; display: flex; align-items: center; justify-content: center; }
+  .locpick-btn { width: 100%; max-width: none; padding: 0 10px; gap: 6px; }
+  .locpick-btn .chev { display: none; }
+  .theme-toggle { width: 36px; }
+  .auth-ctas .signin-btn { padding: 0 12px; }
   .sel.locsel { flex: 1 1 auto; }
 }
 
@@ -384,16 +377,19 @@ details.card[open] > summary { margin-bottom: var(--s3); }
 
 /* ---------- Accounts ---------- */
 .auth-ctas { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; justify-content: flex-end; }
-.signin-btn { min-height: 44px; padding: 0 16px; border-radius: var(--r-pill); background: var(--brand); color: #fff;
+.signin-btn { min-height: 40px; padding: 0 14px; border-radius: var(--r-md); background: var(--brand); color: #fff;
   border: 1px solid transparent; font-family: var(--font-sans); font-size: var(--fs-sm); font-weight: var(--fw-semibold); cursor: pointer; }
 .signin-btn:hover { background: var(--brand-hover); }
-.signin-btn.ghost { background: transparent; color: var(--text); border-color: var(--border-strong); }
-.signin-btn.ghost:hover { border-color: var(--accent); color: var(--text); background: var(--surface-sunk); }
+/* Dark theme's brand is a bright cyan: white text on it failed contrast. */
+[data-theme="dark"] .signin-btn:not(.ghost) { color: #04121e; }
+.signin-btn.ghost { background: transparent; color: var(--text); }
+.signin-btn.ghost:hover { background: var(--surface-sunk); }
 .acct { position: relative; }
-.acct-btn { width: 44px; height: 44px; border-radius: var(--r-pill); background: var(--surface); border: 1px solid var(--border-strong); cursor: pointer; padding: 0; }
-.acct-btn:hover { border-color: var(--accent); }
+.acct-btn { width: 40px; height: 40px; border-radius: var(--r-pill); background: transparent; border: 0; cursor: pointer; padding: 2px; }
+.acct-btn:hover .acct-avatar { border-color: var(--accent); }
 .acct-avatar { display: flex; align-items: center; justify-content: center; width: 100%; height: 100%; border-radius: var(--r-pill);
-  background: var(--brand); color: #fff; font-weight: var(--fw-bold); font-size: var(--fs-base); }
+  background: var(--surface-sunk); color: var(--text); border: 1px solid var(--border-strong);
+  font-weight: var(--fw-semibold); font-size: var(--fs-sm); }
 .acct-menu { position: absolute; top: calc(100% + 8px); right: 0; z-index: 80; width: 256px; background: var(--surface);
   border: 1px solid var(--border-strong); border-radius: var(--r-lg); box-shadow: var(--shadow-lg); padding: var(--s2); }
 .acct-menu-head { display: flex; align-items: center; gap: var(--s3); padding: var(--s2) var(--s2) var(--s3); }
@@ -1224,3 +1220,22 @@ body.has-takeover .app { background: var(--bg); border-radius: var(--r-lg) var(-
 
 /* Text for screen readers only (e.g. the ⚡ storm cue in the week strip). */
 .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
+
+/* ── Spot-page title band (replaces the photo billboard) ─────────────────── */
+/* The verdict card right below is the headline; this is just the page title. */
+.hero-band { background: var(--bg); }
+.hero-band .hero-inner { display: flex; align-items: flex-end; justify-content: space-between; gap: var(--s2) var(--s5);
+  flex-wrap: wrap; padding: var(--s5) clamp(var(--s4), 3.5vw, var(--s6)) 0; }
+.hero-band-text { min-width: 0; }
+.hero-band .hero-eyebrow { color: var(--text-muted); opacity: 1; font-weight: var(--fw-semibold); margin-bottom: 6px; }
+.hero-band .hero-title { font-size: clamp(var(--fs-xl), 2.6vw, var(--fs-2xl)); font-weight: var(--fw-bold);
+  letter-spacing: var(--tracking-tight); line-height: var(--lh-snug); color: var(--text); }
+.hero-band .hero-subtitle { font-size: var(--fs-base); color: var(--text-muted); opacity: 1; margin-top: var(--s2); }
+.hero-band .hero-housecta { margin: 0; font-size: var(--fs-sm); text-align: left; }
+.hero-band + .app { padding-top: var(--s4); }
+@media (max-width: 640px) {
+  .hero-band .hero-inner { padding-top: var(--s4); }
+  .hero-band .hero-eyebrow { display: none; }
+  .hero-band .hero-title { font-size: var(--fs-lg); }
+  .hero-band + .app { padding-top: var(--s3); }
+}

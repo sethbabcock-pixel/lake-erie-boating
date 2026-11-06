@@ -114,6 +114,31 @@ function SponsorHero({ s, splash, children }) {
 // (a /near/<city> page reads "Boating near Cleveland, OH").
 function HouseHero({ hero, spotName, verdict, adFree, splash, children, signedIn, onJoin, title, subtitle, region, authPending }) {
   const h = { ...DEFAULT_HERO, ...(hero || {}) };
+  // Spot pages get a plain title band: the verdict card right below is the
+  // headline, so no photo, no second verdict badge, no billboard.
+  if (!splash) {
+    const parts = (h.headline || DEFAULT_HERO.headline).split("{spot}");
+    return (
+      <section className="hero hero-band">
+        <div className="hero-inner">
+          <div className="hero-band-text">
+            <div className="hero-eyebrow">Live conditions · NOAA / NWS data</div>
+            {title ? <h1 className="hero-title">{title}</h1> : <h1 className="hero-title">
+              {parts[0]}
+              {parts.length > 1 && spotName ? <> at {spotName}</> : ""}
+              {parts[1] ?? ""}
+            </h1>}
+            {subtitle && <p className="hero-subtitle">{subtitle}</p>}
+          </div>
+          {authPending && <span className="hero-housecta hero-cta-pending" aria-hidden="true">&nbsp;</span>}
+          {!authPending && !signedIn && onJoin && (
+            <button className="hero-housecta linkbtn" onClick={onJoin}>Get this port's 6am verdict by email, free →</button>
+          )}
+          {!authPending && signedIn && !adFree && <a className="hero-housecta" href="/account#pro">Go Pro: no Google ads + GO alerts →</a>}
+        </div>
+      </section>
+    );
+  }
   const photo = heroImageFor(h, region);
   // A hero video belongs to the main hero; a regional photo replaces it.
   const pending = region === undefined; // keep the photo styling; image arrives once the region is known
