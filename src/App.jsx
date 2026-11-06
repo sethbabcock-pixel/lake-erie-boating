@@ -11,6 +11,9 @@ import { fmtWaves, waveFeel, compassToDeg } from "./units.js";
 import { regionBySlug, regionFromPath, regionForLake, nearMetroBySlug, nearMetroFromPath, LAKE_GUIDES } from "./regions.js";
 
 const fmt = (v, unit) => (v == null ? "—" : `${v}${unit || ""}`);
+// Wind for display: whole knots (buoys report tenths, e.g. 22.9). Display only;
+// the verdict is computed server-side from the raw value.
+const kt = (v) => (v == null ? null : Math.round(v));
 // No level = no call (missing data): neutral, never painted as GO.
 const verdictClass = (lvl) => (lvl === "NO-GO" ? "nogo" : lvl === "CAUTION" ? "caution" : lvl === "GO" ? "go" : "unknown");
 const fmtHour = (t, withMin) =>
@@ -23,7 +26,7 @@ function comfortCheck(prefs, windKt, waveFt) {
   if (maxW == null && maxK == null) return null;
   const over = [];
   if (maxW != null && waveFt != null && waveFt > maxW) over.push(`waves ${waveFt} ft over your ${maxW} ft`);
-  if (maxK != null && windKt != null && windKt > maxK) over.push(`wind ${windKt} kt over your ${maxK} kt`);
+  if (maxK != null && windKt != null && windKt > maxK) over.push(`wind ${kt(windKt) > maxK ? kt(windKt) : windKt} kt over your ${maxK} kt`) // keep the decimal if rounding would hide the overage;
   const limits = [maxW != null ? `≤${maxW} ft` : null, maxK != null ? `≤${maxK} kt` : null].filter(Boolean).join(" · ");
   return { ok: over.length === 0, over, limits };
 }
@@ -490,7 +493,7 @@ function ShareButton({ spot, rec, wind, wv }) {
   const [copied, setCopied] = useState(false);
   const share = async () => {
     track("event", "share_verdict", { spot: spot.id, level: rec.level });
-    const text = `${spot.name}: ${rec.level} right now. Wind ${wind.speedKt ?? "–"} kt, waves ${wv.ft ?? "–"} ft.`;
+    const text = `${spot.name}: ${rec.level} right now. Wind ${kt(wind.speedKt) ?? "–"} kt, waves ${wv.ft ?? "–"} ft.`;
     const url = spot.adHoc
       ? `https://shouldiboat.com/preview?lat=${spot.lat}&lon=${spot.lon}&name=${encodeURIComponent(spot.name)}`
       : `https://shouldiboat.com/spot/${encodeURIComponent(spot.id)}`;
@@ -1215,8 +1218,8 @@ export default function App() {
             <div className="grid stats">
               <div className="stat hero">
                 <div className="k">Wind</div>
-                <div className="v">{fmt(wind.speedKt, "")}<small>kt</small> <Trend t={trendOf(data.hourly?.[0]?.windKt, data.hourly?.[3]?.windKt)} /></div>
-                <div className="sub">{[wind.dir, wind.gustKt ? `gust ${wind.gustKt}${wind.gustSrc === "forecast" && wind.source !== "forecast" ? " (forecast)" : ""}` : null, wind.source].filter(Boolean).join(" · ") || "—"}</div>
+                <div className="v">{fmt(kt(wind.speedKt), "")}<small>kt</small> <Trend t={trendOf(data.hourly?.[0]?.windKt, data.hourly?.[3]?.windKt)} /></div>
+                <div className="sub">{[wind.dir, wind.gustKt ? `gust ${kt(wind.gustKt)}${wind.gustSrc === "forecast" && wind.source !== "forecast" ? " (forecast)" : ""}` : null, wind.source].filter(Boolean).join(" · ") || "—"}</div>
               </div>
               <div className="stat">
                 <div className="k">Waves</div>

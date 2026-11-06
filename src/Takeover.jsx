@@ -74,6 +74,9 @@ function SponsorSkin({ s }) {
     return () => document.body.classList.remove("has-takeover");
   }, []);
   const bg = s.bgImage ? `${s.bg || "#102036"} url(${s.bgImage}) center/cover no-repeat` : s.bg;
+  // The /advertise sample (no id) gets a plain, non-clickable background: a
+  // full-page click target beside real ad units invites accidental clicks.
+  if (!s.id) return <div className="takeover-skin" aria-hidden="true" style={{ background: bg }} />;
   return (
     <a className="takeover-skin" href={s.href} target="_blank" rel="sponsored noopener" onClick={() => sponsorHit(s.id, "c")}
       aria-label={`${s.sponsor} sponsor`} style={{ background: bg }} />
@@ -153,7 +156,7 @@ function HouseHero({ hero, spotName, verdict, adFree, splash, children, signedIn
         {!splash && !authPending && !signedIn && onJoin && (
           <button className="hero-housecta linkbtn" onClick={onJoin}>Get this port's verdict by email at 6am, free →</button>
         )}
-        {!splash && !authPending && signedIn && !adFree && <a className="hero-housecta" href="/account#pro">Go Pro: no ads + GO alerts →</a>}
+        {!splash && !authPending && signedIn && !adFree && <a className="hero-housecta" href="/account#pro">Go Pro: no Google ads + GO alerts →</a>}
       </div>
     </section>
   );
