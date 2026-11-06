@@ -475,13 +475,8 @@ details.card[open] > summary { margin-bottom: var(--s3); }
 
 /* ---------- Account page (/account) ---------- */
 .acctpage { min-height: 100vh; background: var(--bg); }
-.acctpage-header { display: flex; align-items: center; justify-content: space-between; gap: var(--s4);
-  padding: var(--s4) var(--s5); border-bottom: 1px solid var(--border); background: var(--surface); }
-.acctpage-back { color: var(--text-muted); font-size: var(--fs-sm); font-weight: var(--fw-semibold); text-decoration: none; }
-.acctpage-back:hover { color: var(--accent); }
-.acctpage-brand { display: inline-flex; align-items: center; gap: var(--s2); color: var(--text);
-  font-weight: var(--fw-bold); font-size: var(--fs-base); text-decoration: none; }
-.acctpage-brand .logo { height: 30px; width: auto; flex: 0 0 auto; }
+.acctpage-back { display: inline-flex; align-items: center; text-decoration: none; }
+.acctpage-back:hover { text-decoration: none; }
 .acctpage-main { max-width: 620px; margin: 0 auto; padding: var(--s5) var(--s4) var(--s8); }
 .acctpage-title { font-size: var(--fs-2xl); font-weight: var(--fw-bold); color: var(--text); margin: var(--s3) 0 var(--s5); }
 .acct-sec { margin-bottom: var(--s4); }

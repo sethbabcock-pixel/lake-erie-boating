@@ -13,11 +13,14 @@ code { font-family: var(--font-mono); font-size: .9em; background: var(--surface
 /* ── Sidebar ── */
 .adm-side { position: sticky; top: 0; height: 100vh; display: flex; flex-direction: column;
   background: var(--surface-sunk); border-right: 1px solid var(--border); padding: var(--s4) var(--s3); overflow-y: auto; }
+/* Matches the main site header: brand mark + plain "Should I Boat" wordmark. */
 .adm-brand { display: flex; align-items: center; gap: var(--s3); padding: 0 var(--s2) var(--s4); }
-.adm-brand img { display: block; width: 52px; height: auto; }
-[data-theme="light"] .adm-brand img { filter: invert(1) brightness(.35); }
-.adm-brand b { display: block; font-size: var(--fs-sm); letter-spacing: -.01em; }
-.adm-brand span { display: block; font-size: 11px; color: var(--text-faint); text-transform: uppercase; letter-spacing: var(--tracking-wide); font-weight: var(--fw-semibold); }
+.adm-brand-link { display: flex; align-items: center; gap: 10px; min-width: 0; color: var(--text); text-decoration: none; }
+.adm-brand-link:hover { text-decoration: none; }
+.adm-brand img { display: block; height: 24px; width: auto; flex: 0 0 auto; }
+.adm-brand-text { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.adm-brand-text b { font-size: 1rem; font-weight: var(--fw-bold); letter-spacing: -0.01em; line-height: 1; white-space: nowrap; }
+.adm-brand-text span { font-size: 11px; line-height: 1; color: var(--text-faint); text-transform: uppercase; letter-spacing: var(--tracking-wide); font-weight: var(--fw-semibold); }
 .adm-navtoggle { display: none; margin-left: auto; background: none; border: 0; color: var(--text); padding: 6px; cursor: pointer; border-radius: var(--r-sm); }
 .adm-nav { display: flex; flex-direction: column; gap: 2px; }
 .adm-nav-group { font-size: 11px; font-weight: var(--fw-semibold); text-transform: uppercase; letter-spacing: var(--tracking-wide);
@@ -233,7 +236,6 @@ select.adm-input { padding-right: 28px; }
 .adm-gate { min-height: 100vh; display: grid; place-items: center; padding: var(--s4); }
 .adm-gate-card { width: min(400px, 100%); background: var(--surface); border: 1px solid var(--border); border-radius: var(--r-lg); padding: var(--s6); text-align: center; box-shadow: var(--shadow-lg); }
 .adm-gate-card img { width: 96px; height: auto; margin-bottom: var(--s3); }
-[data-theme="light"] .adm-gate-card img { filter: invert(1) brightness(.35); }
 .adm-gate-card h1 { font-size: var(--fs-xl); margin: 0 0 var(--s2); }
 .adm-gate-card p { color: var(--text-muted); font-size: var(--fs-sm); }
 .adm-gate-back { display: block; margin-top: var(--s4); font-size: var(--fs-sm); }
@@ -245,7 +247,7 @@ select.adm-input { padding-right: 28px; }
   .adm-form { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 @media (max-width: 860px) {
-  .adm { grid-template-columns: minmax(0, 1fr); }
+  .adm { grid-template-columns: minmax(0, 1fr); grid-template-rows: auto 1fr; }
   .adm-side { position: sticky; top: 0; z-index: 70; height: auto; flex-direction: column; padding: var(--s3) var(--s4); border-right: 0; border-bottom: 1px solid var(--border); }
   .adm-brand { padding: 0; }
   .adm-navtoggle { display: inline-flex; }

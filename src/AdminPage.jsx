@@ -28,11 +28,15 @@ const NAV = [
 const IDS = NAV.filter((n) => n.id).map((n) => n.id);
 const routeFromHash = () => { const h = window.location.hash.slice(1); return IDS.includes(h) ? h : "overview"; };
 
+// Brand mark for the current theme (white on dark, full-color on light),
+// matching the main site header.
+const markSrc = () => (typeof document !== "undefined" && document.documentElement.getAttribute("data-theme") === "light" ? "/boat-mark.png" : "/boat-mark-white.png");
+
 function Gate({ title, children }) {
   return (
     <div className="adm-gate">
       <div className="adm-gate-card">
-        <img src="/boat-mark-white.png" alt="" width="124" height="41" />
+        <img src={markSrc()} alt="" width="124" height="41" />
         <h1>{title}</h1>
         {children}
       </div>
@@ -147,8 +151,10 @@ export default function AdminPage() {
     <div className={`adm${navOpen ? " nav-open" : ""}`}>
       <aside className="adm-side">
         <div className="adm-brand">
-          <a href="/" aria-label="shouldiboat.com home"><img src="/boat-mark-white.png" alt="" width="88" height="29" /></a>
-          <div><b>shouldiboat</b><span>Admin</span></div>
+          <a className="adm-brand-link" href="/" aria-label="shouldiboat.com home">
+            <img src={markSrc()} alt="" width="88" height="29" />
+            <span className="adm-brand-text"><b>Should I Boat</b><span>Admin</span></span>
+          </a>
           <button className="adm-navtoggle" onClick={() => setNavOpen((o) => !o)} aria-label="Menu" aria-expanded={navOpen}><Icon name={navOpen ? "x" : "menu"} size={20} /></button>
         </div>
         <nav className="adm-nav">
