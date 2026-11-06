@@ -756,12 +756,82 @@ export async function fetchZoneAlerts(zones) {
   // Not deduped: two issuances of one event can cover different hours.
   return { byZone, ok: results.every((r) => r != null) };
 }
-const zoneAlertsFor = (za, spot) => (za && spot?.zone && za.byZone.get(spot.zone)) || [];
+// Land zones (NWS forecast zone + county) for a launch point. Land products —
+// flash flood, tornado, high wind, blizzard, severe thunderstorm warnings —
+// are issued for these, never for marine zones, so a marine-zone lookup alone
+// misses them. Same cached /points response the spot page's forecast uses
+// (keyed by the launch lat/lon), so steady state adds no NWS requests.
+// null = the lookup failed (unknown, not "none").
+const pointKey = (spot) => `${spot.lat},${spot.lon}`;
+// About half our launch points sit on the water itself: NWS maps them to a
+// marine forecast zone with no county. Step inland (away from the seaward
+// bearing, as fetchForecastsNear does) until a point lands in a county.
+// Barrier islands, keys and river launches can have water inland too, so
+// after the inland steps, search a small ring around the launch.
+const LAND_STEPS = [0, 0.02, 0.05, 0.1];
+const LAND_RING = [0.02, 0.05].flatMap((r) => [0, 45, 90, 135, 180, 225, 270, 315].map((b) => [r, b]));
+// The resolved zones are cached a week per launch point (counties don't move),
+// so steady state is one cache read per spot, not a /points walk.
+const landMemo = new Map();
+export async function landZonesFor(spot) {
+  if (spot?.lat == null || spot?.lon == null) return null;
+  const key = `https://land-zones.local/${spot.lat},${spot.lon},${spot.sea ?? ""},${spot.lake || ""}`;
+  const edge = typeof caches !== "undefined" && caches.default;
+  if (edge) {
+    const hit = await caches.default.match(new Request(key)).then((r) => (r ? r.json() : null)).catch(() => null);
+    if (Array.isArray(hit) && hit.length) return hit;
+  } else if (landMemo.has(key)) return landMemo.get(key);
+  const found = await resolveLandZones(spot);
+  if (found) {
+    if (edge) await caches.default.put(new Request(key), new Response(JSON.stringify(found), { headers: { "Cache-Control": "public, max-age=604800" } })).catch(() => {});
+    else landMemo.set(key, found);
+  }
+  return found; // null (unknown) is never cached, so a blip retries next time
+}
+async function resolveLandZones(spot) {
+  const kLon = 1 / Math.max(0.2, Math.cos((spot.lat * Math.PI) / 180));
+  const candidates = [
+    ...LAND_STEPS.map((step) => (step ? seawardPoint(spot, -step) : { lat: spot.lat, lon: spot.lon })),
+    ...LAND_RING.map(([r, b]) => ({ lat: round(spot.lat + Math.cos((b * Math.PI) / 180) * r, 4), lon: round(spot.lon + Math.sin((b * Math.PI) / 180) * r * kLon, 4) })),
+  ];
+  for (const pt of candidates) {
+    try {
+      const p = (await cachedJSON(`${NWS}/points/${pt.lat},${pt.lon}`, 86400))?.properties;
+      const county = String(p?.county || "").split("/").pop();
+      if (!ZONE_RE.test(county)) continue; // on the water: no county here
+      const fz = String(p?.forecastZone || "").split("/").pop();
+      return ZONE_RE.test(fz) ? [fz, county] : [county];
+    } catch (e) {
+      // a failed lookup is not "no county": try the next step, else unknown
+    }
+  }
+  return null;
+}
+// Alerts for many spots at once (directory, digest, weekend email): each
+// spot's marine zone plus its launch point's land zones, in one batched
+// zone query. Returns the fetchZoneAlerts shape plus land: Map(pointKey ->
+// zone ids | null).
+export async function fetchSpotsAlerts(spots) {
+  const land = new Map();
+  const list = (spots || []).filter(Boolean);
+  const zonesPerSpot = await pooled(list, 8, (s) => landZonesFor(s));
+  list.forEach((s, i) => land.set(pointKey(s), zonesPerSpot[i] ?? null));
+  const za = await fetchZoneAlerts([...list.map((s) => s.zone), ...zonesPerSpot.flat().filter(Boolean)]);
+  return { ...za, land };
+}
+const zoneAlertsFor = (za, spot) => {
+  if (!za || !spot) return [];
+  const zones = [spot.zone, ...((za.land && za.land.get(pointKey(spot))) || [])];
+  return zones.flatMap((z) => (z && za.byZone.get(z)) || []);
+};
 // Were this spot's zone alerts actually checked? Every directory spot is
 // marine (built pages require a marine zone), so a spot with no valid zone —
 // e.g. an old user-built record — had nothing looked up: missing data, not
 // "no advisories".
-const zoneAlertsOkFor = (za, spot) => !!za && za.ok && ZONE_RE.test(spot?.zone || "");
+// Land alerts count too: if the launch point's land zones couldn't be
+// resolved, its land warnings weren't checked either.
+const zoneAlertsOkFor = (za, spot) => !!za && za.ok && ZONE_RE.test(spot?.zone || "")
+  && (!za.land || za.land.get(pointKey(spot)) != null);
 
 // NWS re-issues the same advisory repeatedly (e.g. three "Air Quality Alert"
 // features minutes apart). Collapse to one card per event type, keeping the
@@ -1749,7 +1819,7 @@ export async function fetchSummary(env) {
   const entries = [...Object.entries(SPOTS), ...built.map((b) => [b.slug, { name: b.name, lat: b.lat, lon: b.lon, zone: b.zone, office: b.office, product: b.product, lake: b.lake, buoys: b.buoys || [], water: b.water || waterFromZone(b.zone, b.zoneName), sea: b.sea ?? null }])];
   const [grids, za] = await Promise.all([
     pooled(entries, 8, ([, s]) => fetchSpotGrid(s)),
-    fetchZoneAlerts(entries.map(([, s]) => s.zone)),
+    fetchSpotsAlerts(entries.map(([, s]) => s)),
   ]);
   await floorWithMarineText(entries, grids);
   const nowH = Math.floor(Date.now() / 3600000);
@@ -1765,7 +1835,7 @@ export async function fetchBuiltSummaries(env, slugs) {
   if (!resolved.length) return [];
   const [grids, za] = await Promise.all([
     pooled(resolved, 8, ([, s]) => fetchSpotGrid(s)),
-    fetchZoneAlerts(resolved.map(([, s]) => s.zone)),
+    fetchSpotsAlerts(resolved.map(([, s]) => s)),
   ]);
   await floorWithMarineText(resolved, grids).catch(() => {}); // same nearshore wave floor as the directory
   const nowH = Math.floor(Date.now() / 3600000);
@@ -1784,7 +1854,7 @@ export async function fetchWeeks(env, ids) {
   if (!entries.length) return {};
   const [grids, za] = await Promise.all([
     pooled(entries, 8, ([, s]) => fetchSpotGrid(s)),
-    fetchZoneAlerts(entries.map(([, s]) => s.zone)),
+    fetchSpotsAlerts(entries.map(([, s]) => s)),
   ]);
   await floorWithMarineText(entries, grids).catch(() => {});
   // Same per-day verdicts as the week strip (buildWeek → riskLevel: no wind
@@ -1816,7 +1886,7 @@ export async function fetchTodayWindows() {
   const entries = Object.entries(SPOTS);
   const [grids, za] = await Promise.all([
     pooled(entries, 8, ([, s]) => fetchSpotGrid(s)),
-    fetchZoneAlerts(entries.map(([, s]) => s.zone)),
+    fetchSpotsAlerts(entries.map(([, s]) => s)),
   ]);
   const nowH = Math.floor(Date.now() / 3600000);
   const out = {};

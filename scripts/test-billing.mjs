@@ -51,6 +51,9 @@ let alertsDown = false; // NWS alerts stub: the alerts endpoint fails
 let zoneAlert = null; // NWS alerts stub: "gale" = a Gale Warning on the zone query only; "down" = zone query fails
 let alertFeatures = null; // NWS alerts stub: every alerts query returns these raw features
 let alertTestStatus = null; // NWS alerts stub: every alerts query returns one Gale Warning with this status (e.g. "Test")
+let landAlert = null; // NWS alerts stub: an event name issued for the land county OHC043 (every mock launch point is in it)
+let pointsNoZones = false;
+let pointsOnWater = null; // NWS /points stub: a function (lat, lon) → true when that point is on the water (marine zone, no county) // NWS /points stub: omit the launch point's forecastZone/county
 let zoneAlertOnly = null; // with zoneAlert "gale": only these zones carry it (null = every queried zone)
 let zoneAlertSpan = null; // with zoneAlert "gale": { onsetH, endsH } hours from now (null = in effect now, open-ended)
 // NWS grid stub override: "gusty" = 13 kt gusting 24 kt, 1.5 ft (lake NO-GO on
@@ -90,7 +93,9 @@ function installFetchStub() {
       return jsonResp({ properties: { gridId: "CLE", gridX: 1, gridY: 1, timeZone: "America/New_York",
         forecastGridData: "https://api.weather.gov/gridpoints/CLE/1,1",
         forecast: "https://api.weather.gov/gridpoints/CLE/1,1/forecast",
-        forecastHourly: "https://api.weather.gov/gridpoints/CLE/1,1/forecast/hourly" } });
+        forecastHourly: "https://api.weather.gov/gridpoints/CLE/1,1/forecast/hourly",
+        // Land zones for the launch point (land warnings are issued for these).
+        ...(pointsNoZones ? {} : pointsOnWater && pointsOnWater(...u.split("/points/")[1].split(",").map(Number)) ? { forecastZone: "https://api.weather.gov/zones/forecast/LEZ144" } : { forecastZone: "https://api.weather.gov/zones/forecast/OHZ007", county: "https://api.weather.gov/zones/county/OHC043" }) } });
     }
     if (/api\.weather\.gov\/gridpoints\/[^/]+\/[^/]+$/.test(u)) {
       const start = new Date(Date.now() - 30 * 3600e3); start.setUTCMinutes(0, 0, 0);
@@ -116,6 +121,9 @@ function installFetchStub() {
     if (u.includes("api.weather.gov/alerts/active") && alertFeatures) return jsonResp({ features: alertFeatures });
     if (u.includes("api.weather.gov/alerts/active") && alertTestStatus) {
       return jsonResp({ features: [{ properties: { status: alertTestStatus, event: "Gale Warning", severity: "Moderate", headline: "TEST Gale Warning", sent: new Date().toISOString(), geocode: { UGC: ["LEZ143"] } } }] });
+    }
+    if (u.includes("api.weather.gov/alerts/active?zone=") && landAlert && decodeURIComponent(u).includes("OHC043")) {
+      return jsonResp({ features: [{ properties: { status: "Actual", event: landAlert, severity: "Severe", headline: `${landAlert} in effect`, sent: new Date().toISOString(), geocode: { UGC: ["OHC043"] } } }] });
     }
     if (u.includes("api.weather.gov/alerts/active?zone=") && zoneAlert === "down") return new Response("", { status: 503 });
     if (u.includes("api.weather.gov/alerts/active?zone=") && zoneAlert === "gale") {
@@ -1995,6 +2003,52 @@ async function run() {
     eq("flash flood: calm day under a Flash Flood Emergency is NO-GO", em.level, "NO-GO");
     const r = buildRecommendation({ buoy: null, alerts: [{ event: "Flash Flood Warning" }], wind: { speedKt: 6, gustKt: 8, source: "forecast", gustSrc: "forecast" }, waves: { ft: 1, source: "forecast" }, read: null, hours: [], profile: "lake" });
     check("flash flood: calm day under a Flash Flood Warning is CAUTION, with the reason", r.level === "CAUTION" && r.reasons.some((x) => /Active Flash Flood Warning/.test(x)), JSON.stringify(r));
+  }
+
+  // 62. Land warnings (issued for counties / land forecast zones, never for
+  //     marine zones) reach tiles, the digest window and the weekend outlook
+  //     via the launch point's land zones; unresolved land zones block GO.
+  {
+    const { fetchSummary, fetchTodayWindows, fetchWeeks, fetchBuiltSummaries, fetchSpotsAlerts, SPOTS } = await import("../functions/marine/conditions.js");
+    const env = { USERS: makeKV() };
+    stormMode = false; scaMode = false; alertsDown = false; gridMode = null; zoneAlert = null; zoneAlertOnly = null; zoneAlertSpan = null;
+
+    const calm = (await fetchSummary(env)).spots.find((x) => x.id === "sandusky");
+    eq("land alerts: calm day, no land warning → tile GO", calm?.level, "GO");
+    const sa = await fetchSpotsAlerts([SPOTS.sandusky]);
+    check("land alerts: launch point resolves to its forecast zone + county", JSON.stringify(sa.land.get(`${SPOTS.sandusky.lat},${SPOTS.sandusky.lon}`)) === JSON.stringify(["OHZ007", "OHC043"]), JSON.stringify([...sa.land]));
+
+    landAlert = "Tornado Warning";
+    eq("land alerts: Tornado Warning on the county → tile NO-GO", (await fetchSummary(env)).spots.find((x) => x.id === "sandusky")?.level, "NO-GO");
+    eq("land alerts: no digest window under a Tornado Warning", (await fetchTodayWindows()).sandusky, null);
+    eq("land alerts: weekend outlook today NO-GO", (await fetchWeeks(env, ["sandusky"])).sandusky?.[0]?.level, "NO-GO");
+
+    landAlert = "Flash Flood Warning";
+    eq("land alerts: Flash Flood Warning → tile CAUTION", (await fetchSummary(env)).spots.find((x) => x.id === "sandusky")?.level, "CAUTION");
+
+    landAlert = "Frost Advisory";
+    eq("land alerts: shore-side land note doesn't move the tile", (await fetchSummary(env)).spots.find((x) => x.id === "sandusky")?.level, "GO");
+    landAlert = null;
+
+    // A launch point whose /points has no land zones: land warnings unchecked → no GO.
+    pointsNoZones = true;
+    const kv = makeKV();
+    await kv.put("builtspot:noland-cove", JSON.stringify({ slug: "noland-cove", name: "No-Land Cove", lat: 41.4321, lon: -82.1234, zone: "LEZ145", lake: "Lake Erie", office: "CLE", product: "NSH", featured: true }));
+    const nl = (await fetchBuiltSummaries({ USERS: kv }, ["noland-cove"]))[0];
+    check("land alerts: launch point's land zones unresolved → tile not GO", nl && nl.level !== "GO", JSON.stringify(nl));
+    const nlw = (await fetchWeeks({ USERS: kv }, ["noland-cove"]))["noland-cove"] || [];
+    check("land alerts: … and weekend today not GO", nlw.length && nlw[0].level !== "GO", JSON.stringify(nlw.slice(0, 1)));
+    pointsNoZones = false;
+
+    // A launch on the water (marine forecast zone, no county) resolves to the
+    // county a step inland — never to the marine zone.
+    const { landZonesFor } = await import("../functions/marine/conditions.js");
+    pointsOnWater = (lat) => lat > 41.2; // everything north of 41.2 N is "lake"
+    const wet = await landZonesFor({ lat: 41.25, lon: -82.5, zone: "LEZ145", lake: "Lake Erie" });
+    check("land zones: on-water launch steps inland to its county", JSON.stringify(wet) === JSON.stringify(["OHZ007", "OHC043"]), JSON.stringify(wet));
+    pointsOnWater = () => true;
+    eq("land zones: no county anywhere nearby → null (unknown, not none)", await landZonesFor({ lat: 45.6789, lon: -84.321, zone: "LHZ345", lake: "Lake Huron" }), null);
+    pointsOnWater = null;
   }
 
   // ── Launch-facts card: a configured buoy is not a live buoy ──
