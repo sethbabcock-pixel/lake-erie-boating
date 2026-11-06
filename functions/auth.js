@@ -1407,7 +1407,12 @@ export async function handleAuth(request, env, url, ctx) {
         const recoverable = ["past_due", "unpaid", "incomplete"].includes(live.status);
         if (recoverable && obj.customer && live.customer === obj.customer && email) {
           const user = await env.USERS.get(emailKey(email), "json");
-          if (user) await saveUser(env, { ...user, stripeCustomerId: obj.customer, stripeSubId: obj.subscription });
+          // Never displace a current subscriber's sub: a stale retry for an
+          // old unpaid/past_due sub must not repoint stripeSubId away from
+          // the live one that granted ad-free.
+          if (user && (!user.adFree || !user.stripeSubId || user.stripeSubId === obj.subscription)) {
+            await saveUser(env, { ...user, stripeCustomerId: obj.customer, stripeSubId: obj.subscription });
+          }
         }
         return done({ received: true, ignored: true });
       }

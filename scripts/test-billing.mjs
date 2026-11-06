@@ -949,7 +949,7 @@ async function run() {
 
     // A stale checkout retry whose sub is canceled (or expired / gone) at
     // delivery must not overwrite the user's current subscription id.
-    for (const [st, tag] of [["canceled", "c"], ["incomplete_expired", "x"], ["missing", "m"]]) {
+    for (const [st, tag] of [["canceled", "c"], ["incomplete_expired", "x"], ["missing", "m"], ["past_due", "p"], ["unpaid", "u"], ["incomplete", "i"]]) {
       await seedUser(env, `cur${tag}@example.com`, { adFree: true, stripeCustomerId: `cus_cur${tag}`, stripeSubId: `sub_current${tag}` });
       subStatus[`sub_old${tag}`] = st; subCustomer[`sub_old${tag}`] = `cus_cur${tag}`;
       await call(stripeWebhookReq({ id: `evt_old${tag}`, type: "checkout.session.completed", data: { object: { ...session, client_reference_id: `cur${tag}@example.com`, customer: `cus_cur${tag}`, subscription: `sub_old${tag}` } } }, "whsec_right"), env);
