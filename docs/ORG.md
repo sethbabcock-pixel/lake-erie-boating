@@ -14,12 +14,14 @@ approve specs, pricing, outbound communication, and anything risky.
  ┌────────────┬───────────┬───────┴──────┬─────────────┬────────────┬───────────┐
 Product     Design     Engineering   Forecast &     Go-to-market   Revenue     Trust
                                      Safety
-product-    ux-        frontend-     marine-data-   seo-content-   revenue-    security-
-manager     designer   engineer      scientist      strategist     analyst     engineer
-                       backend-                     growth-                    legal-
-                       engineer                     marketer                   compliance
-                       devops-sre                   sales-                     customer-
-                       qa-engineer                  sponsorships               support
+product-    ux-        frontend-     marine-data-   product-mktg-  revenue-    security-
+manager     designer   engineer      scientist      manager        analyst     engineer
+                       backend-                     seo-content-               legal-
+                       engineer                     strategist                 compliance
+                       devops-sre                   growth-                    customer-
+                       qa-engineer                  marketer                   support
+                                                    sales-
+                                                    sponsorships
 ```
 
 ## Roster
