@@ -498,10 +498,12 @@ function NearYou({ summary, pt, prefs, onSelect, heading, limit = 6, radius = CO
   const top = best[0];
   // One-line answer before the cards: how many are GO, and the best bet.
   const n = reachable.length;
+  const nogo = reachable.filter((r) => r.s.level === "NO-GO").length;
   const answer = !top || !top.s.level ? null
     : go ? <><b>{go} of {n}</b> launches near {label} {go === 1 ? "is" : "are"} GO right now. Best bet: <b>{top.s.name}</b>, {fmtDrive(top.mi)} away.</>
     : top.s.level === "CAUTION" ? <>No GO launches near {label} right now. The calmest is <b>{top.s.name}</b> at CAUTION, {fmtDrive(top.mi)} away.</>
-    : <><b>Stay in today:</b> {n === 1 ? "the launch" : `all ${n} launches`} near {label} {n === 1 ? "is" : "are"} NO-GO right now. Check the week ahead on each launch for a better day.</>;
+    : nogo === n ? <><b>Stay in today:</b> {n === 1 ? "the launch" : `all ${n} launches`} near {label} {n === 1 ? "is" : "are"} NO-GO right now. Check the week ahead on each launch for a better day.</>
+    : <><b>Stay in today:</b> {nogo} of {n} launches near {label} {nogo === 1 ? "is" : "are"} NO-GO right now and the rest have no reading. Check the week ahead on each launch for a better day.</>;
   return (
     <section className="directory nearyou">
       <h2 className="directory-title">📍 {heading || <>Best bets near {label}</>}</h2>

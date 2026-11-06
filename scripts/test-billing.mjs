@@ -52,18 +52,28 @@ let alertsDown = false; // NWS alerts stub: the alerts endpoint fails
 // the gust); "nowind" = no wind/gust layers at all, calm 1 ft waves;
 // "gustonly" = a 9 kt gust but no sustained wind (grid or hourly) and no waves.
 let gridMode = null;
+let hourlyLagH = 0; // hourly stub: lead with this many already-past hours
+let ndbcFiles = {}; // NDBC realtime2 stub: station → file text (unlisted → 404)
 let subGetCancelState = false; // what a GET subscription retrieve reports
 let subStatus = {}; // sub id → status a GET retrieve reports ("missing" → 404); default active
 let subCustomer = {}; // sub id → customer a GET retrieve reports (default: none)
 let stripeDown = false; // every Stripe API call → 500
+let subInvoice = {}; // sub id → latest_invoice.status when expanded (default "paid")
+let subList = {}; // customer → [{ id, status, purpose, invoice }] for GET /v1/subscriptions?customer=
+let subListDown = false; // the list endpoint → 500
 const makeSub = (cancelAtPeriodEnd) => ({
   id: "sub_123", status: "active", cancel_at_period_end: cancelAtPeriodEnd,
   current_period_end: 1790000000, cancel_at: cancelAtPeriodEnd ? 1790000000 : null,
   items: { data: [{ price: { unit_amount: 299, currency: "usd", recurring: { interval: "month" } } }] },
 });
+let googleIdPayload = null; // claims the stubbed Google token exchange returns
 function installFetchStub() {
   globalThis.fetch = async (urlStr, opts = {}) => {
     const u = String(urlStr);
+    if (u.startsWith("https://oauth2.googleapis.com/token")) {
+      const b64 = Buffer.from(JSON.stringify(googleIdPayload || {})).toString("base64url");
+      return jsonResp({ id_token: `h.${b64}.s` });
+    }
     if (u.includes("api.brevo.com")) {
       emailCalls.push(JSON.parse(opts.body || "{}"));
       return jsonResp({ messageId: "<msg@brevo>" }, 201);
@@ -92,7 +102,7 @@ function installFetchStub() {
     }
     // Hourly point forecast (the spot page's timeline): 48 calm or stormy hours.
     if (/\/forecast\/hourly$/.test(u)) {
-      const t0 = new Date(); t0.setUTCMinutes(0, 0, 0);
+      const t0 = new Date(Date.now() - hourlyLagH * 3600e3); t0.setUTCMinutes(0, 0, 0);
       const periods = Array.from({ length: 48 }, (_, i) => ({ startTime: new Date(t0.getTime() + i * 3600e3).toISOString(), temperature: 60,
         windSpeed: stormMode ? "32 mph" : gridMode === "gusty" ? "15 mph" : gridMode === "gustonly" ? "" : "9 mph", windDirection: "SW", shortForecast: "Sunny", probabilityOfPrecipitation: { value: 0 } }));
       return jsonResp({ properties: { periods } });
@@ -102,7 +112,10 @@ function installFetchStub() {
       return jsonResp({ features: [{ properties: { event: "Small Craft Advisory", severity: "Minor", headline: "Small Craft Advisory in effect", sent: new Date().toISOString() } }] });
     }
     if (u.includes("api.weather.gov")) return jsonResp({ features: [], "@graph": [], properties: { periods: [] } });
-    if (u.includes("ndbc.noaa.gov")) return new Response("", { status: 404 });
+    if (u.includes("ndbc.noaa.gov")) {
+      const st = u.match(/realtime2\/([^/.]+)\.txt$/)?.[1];
+      return st && ndbcFiles[st] != null ? new Response(ndbcFiles[st], { status: 200 }) : new Response("", { status: 404 });
+    }
     const body = opts.body ? Object.fromEntries(new URLSearchParams(opts.body)) : null;
     stripeCalls.push({ url: u, method: opts.method || "GET", body });
     if (u.includes("/v1/checkout/sessions"))
@@ -110,12 +123,21 @@ function installFetchStub() {
     if (u.includes("/v1/billing_portal/sessions"))
       return jsonResp({ id: "bps_123", url: "https://billing.stripe.com/p/session/bps_123" });
     if (stripeDown) return jsonResp({ error: { message: "stripe is down" } }, 500);
+    if (/\/v1\/subscriptions\?/.test(u)) {
+      if (subListDown) return jsonResp({ error: { message: "list down" } }, 500);
+      const cus = new URL(u).searchParams.get("customer");
+      const data = (subList[cus] || []).map((x) => ({ id: x.id, customer: cus, status: x.status,
+        metadata: x.purpose ? { purpose: x.purpose } : {}, latest_invoice: { id: `in_${x.id}`, status: x.invoice || "paid" } }));
+      return jsonResp({ object: "list", data, has_more: false });
+    }
     if (u.includes("/v1/subscriptions/")) {
       // POST = update (cancel/resume) → mirror the request; GET = retrieve.
       if ((opts.method || "GET") === "POST") return jsonResp(makeSub(body?.cancel_at_period_end === "true"));
       const id = decodeURIComponent(u.split("/v1/subscriptions/")[1].split(/[/?]/)[0]);
       if (subStatus[id] === "missing") return jsonResp({ error: { type: "invalid_request_error", code: "resource_missing" } }, 404);
-      return jsonResp({ ...makeSub(subGetCancelState), status: subStatus[id] || "active", ...(subCustomer[id] ? { customer: subCustomer[id] } : {}) });
+      const expandInvoice = u.includes("expand") && decodeURIComponent(u).includes("latest_invoice");
+      return jsonResp({ ...makeSub(subGetCancelState), status: subStatus[id] || "active", ...(subCustomer[id] ? { customer: subCustomer[id] } : {}),
+        ...(expandInvoice ? { latest_invoice: { id: `in_${id}`, status: subInvoice[id] || "paid" } } : {}) });
     }
     if (u.includes("/v1/prices/"))
       return priceResolves
@@ -371,8 +393,12 @@ async function run() {
     await seedUser(env, "legacy@example.com", { adFree: false, stripeCustomerId: "cus_l" });
     await env.USERS.put("stripecust:cus_l", "legacy@example.com");
     const tagged = { type: "customer.subscription.updated", data: { object: { id: "sub_new", customer: "cus_l", status: "active", metadata: { purpose: "adfree" } } } };
+    // Realistic live state: Stripe reports the sub as this customer's and
+    // "active" while the ACH first payment is still processing (invoice open).
+    subCustomer = { sub_new: "cus_l" }; subInvoice = { sub_new: "open" };
     await call(stripeWebhookReq(tagged, "whsec_right"), env);
     check("webhook: legacy user + tagged unmatched sub does not grant", !(await env.USERS.get("user:legacy@example.com", "json")).adFree);
+    subCustomer = {}; subInvoice = {};
     const untagged = { type: "customer.subscription.updated", data: { object: { id: "sub_old", customer: "cus_l", status: "active" } } };
     await call(stripeWebhookReq(untagged, "whsec_right"), env);
     eq("webhook: legacy user + untagged sub uses fallback", (await env.USERS.get("user:legacy@example.com", "json")).adFree, true);
@@ -700,6 +726,68 @@ async function run() {
     eq("admin user: missing → 404", (await call(req("GET", "/api/admin/user?email=nobody@example.com", { cookie: admin }), env)).status, 404);
   }
 
+  // 27b. ADMIN_EMAIL takes a comma-separated list; listed admins must be verified
+  {
+    const env = { USERS: makeKV(), ADMIN_EMAIL: " Owner@Example.com, second@example.com ;third@example.com,not-an-email" };
+    const owner = await seedUser(env, "owner@example.com");
+    const second = await seedUser(env, "second@example.com", { via: "password", emailVerified: true });
+    const third = await seedUser(env, "third@example.com", { via: "password" }); // legacy: no emailVerified field
+    const pending = await seedUser(env, "pending@example.com", { via: "password", emailVerified: false });
+    const rando = await seedUser(env, "rando2@example.com");
+    eq("multi-admin: first (mixed case, padded) → 200", (await call(req("GET", "/api/admin/users", { cookie: owner }), env)).status, 200);
+    eq("multi-admin: second → 200", (await call(req("GET", "/api/admin/users", { cookie: second }), env)).status, 200);
+    eq("multi-admin: semicolon-separated → 200", (await call(req("GET", "/api/admin/users", { cookie: third }), env)).status, 200);
+    eq("multi-admin: unlisted → 403", (await call(req("GET", "/api/admin/users", { cookie: rando }), env)).status, 403);
+    eq("multi-admin: default admin not added when a list is set", (await call(req("GET", "/api/admin/users", { cookie: await seedUser(env, "seth.babcock@gmail.com") }), env)).status, 403);
+    // Listed but unverified (e.g. someone registered the address before the real admin)
+    env.ADMIN_EMAIL += ",pending@example.com";
+    eq("multi-admin: listed but unverified → 403", (await call(req("GET", "/api/admin/users", { cookie: pending }), env)).status, 403);
+    const me = await (await call(req("GET", "/auth/me", { cookie: second }), env)).json();
+    eq("multi-admin: /auth/me admin flag for second admin", me.user.admin, true);
+    const meP = await (await call(req("GET", "/auth/me", { cookie: pending }), env)).json();
+    check("multi-admin: /auth/me no admin flag when unverified", meP.user && meP.user.admin === false, JSON.stringify(meP));
+    // comp.by records whichever admin flipped it
+    await seedUser(env, "fam@example.com");
+    const r = await call(req("POST", "/api/admin/user", { cookie: second, body: { email: "fam@example.com", adFree: true } }), env);
+    eq("multi-admin: second admin can toggle Pro", r.status, 200);
+  }
+
+  // 27c. Unset / empty / all-invalid ADMIN_EMAIL falls back to the default owner
+  {
+    for (const v of [undefined, "", " , "]) {
+      const env = { USERS: makeKV(), ...(v === undefined ? {} : { ADMIN_EMAIL: v }) };
+      const owner = await seedUser(env, "seth.babcock@gmail.com");
+      eq(`multi-admin: default owner when ADMIN_EMAIL=${JSON.stringify(v)}`, (await call(req("GET", "/api/admin/users", { cookie: owner }), env)).status, 200);
+    }
+  }
+
+  // 27d. Admin notifications go to every listed admin when no notifyEmails are configured
+  {
+    const env = { USERS: makeKV(), ADMIN_EMAIL: "a1@example.com,a2@example.com", BREVO_API_KEY: "brevo_x", GOOGLE_CLIENT_ID: "gid", GOOGLE_CLIENT_SECRET: "gsec" };
+    emailCalls = [];
+    googleIdPayload = { email: "newbie@example.com", email_verified: true };
+    const cb = new URL(ORIGIN + "/auth/google/callback?code=c&state=s1");
+    const r = await call({ request: new Request(cb, { headers: { cookie: "sib_oauth=s1" } }), url: cb }, env);
+    eq("google: verified email → signed in (302)", r.status, 302);
+    const signup = emailCalls.find((c) => /New shouldiboat.com signup/.test(c.subject));
+    const to = signup ? signup.to.map((x) => x.email).sort() : [];
+    eq("multi-admin: signup notice goes to every admin", JSON.stringify(to), JSON.stringify(["a1@example.com", "a2@example.com"]));
+  }
+
+  // 27e. Google sign-in refuses an address Google hasn't verified
+  {
+    const env = { USERS: makeKV(), ADMIN_EMAIL: "boss@example.com", GOOGLE_CLIENT_ID: "gid", GOOGLE_CLIENT_SECRET: "gsec" };
+    for (const claim of [false, undefined]) {
+      googleIdPayload = { email: "boss@example.com", ...(claim === undefined ? {} : { email_verified: claim }) };
+      const cb = new URL(ORIGIN + "/auth/google/callback?code=c&state=s2");
+      const r = await call({ request: new Request(cb, { headers: { cookie: "sib_oauth=s2" } }), url: cb }, env);
+      eq(`google: email_verified=${claim} → 403`, r.status, 403);
+      check(`google: email_verified=${claim} sets no session`, !r.headers.get("Set-Cookie"));
+    }
+    check("google: unverified creates no account", !(await env.USERS.get("user:boss@example.com", "json")));
+    googleIdPayload = null;
+  }
+
   // 28. /auth/me exposes the admin flag (so the account page can link to /admin)
   {
     const env = { USERS: makeKV() }; // no ADMIN_EMAIL → owner default applies
@@ -925,11 +1013,180 @@ async function run() {
     // reverse index is written so a later `updated` (active) can grant.
     await seedUser(env, "pastdue@example.com");
     subStatus.sub_pd = "past_due";
+    emailCalls = [];
     const pd = { id: "evt_pd", type: "checkout.session.completed", data: { object: { ...session, client_reference_id: "pastdue@example.com", customer: "cus_pd", subscription: "sub_pd" } } };
     await call(stripeWebhookReq(pd, "whsec_right"), env);
     eq("past_due at checkout: no grant", (await env.USERS.get("user:pastdue@example.com", "json")).adFree, false);
     eq("past_due at checkout: reverse index written", await env.USERS.get("stripecust:cus_pd"), "pastdue@example.com");
-    subStatus = {}; subCustomer = {};
+    check("past_due at checkout: no welcome email", !emailCalls.some((c) => /Welcome to shouldiboat Pro/i.test(c.subject)));
+    // No customer on the live sub → can't confirm the match → nothing stored.
+    eq("past_due at checkout without customer match: stripeSubId not stored", (await env.USERS.get("user:pastdue@example.com", "json")).stripeSubId, undefined);
+    // With a confirmed customer, the sub is recorded (not granted) so the
+    // tagged subscription.updated that follows payment can grant.
+    subCustomer.sub_pd = "cus_pd";
+    await call(stripeWebhookReq({ ...pd, id: "evt_pd_retry" }, "whsec_right"), env);
+    let pdu = await env.USERS.get("user:pastdue@example.com", "json");
+    eq("past_due at checkout: still not granted", pdu.adFree, false);
+    eq("past_due at checkout: stripeSubId stored", pdu.stripeSubId, "sub_pd");
+    eq("past_due at checkout: stripeCustomerId stored", pdu.stripeCustomerId, "cus_pd");
+    subStatus.sub_pd = "active";
+    const paidUp = { id: "evt_pd_upd", type: "customer.subscription.updated", data: { object: { id: "sub_pd", customer: "cus_pd", status: "active", metadata: { purpose: "adfree" } } } };
+    eq("past_due → active update → 200", (await call(stripeWebhookReq(paidUp, "whsec_right"), env)).status, 200);
+    eq("past_due → active update grants ad-free", (await env.USERS.get("user:pastdue@example.com", "json")).adFree, true);
+
+    // A canceled-at-delivery checkout must not overwrite the user's current sub.
+    await seedUser(env, "current@example.com", { adFree: true, stripeCustomerId: "cus_cur", stripeSubId: "sub_cur_live" });
+    subStatus.sub_cur_old = "canceled"; subCustomer.sub_cur_old = "cus_cur";
+    await call(stripeWebhookReq({ id: "evt_cur_old", type: "checkout.session.completed", data: { object: { ...session, client_reference_id: "current@example.com", customer: "cus_cur", subscription: "sub_cur_old" } } }, "whsec_right"), env);
+    let cu = await env.USERS.get("user:current@example.com", "json");
+    eq("canceled checkout retry keeps current stripeSubId", cu.stripeSubId, "sub_cur_live");
+    eq("canceled checkout retry keeps ad-free", cu.adFree, true);
+    // Nor may a recoverable (past_due) other sub replace a granting one.
+    subStatus.sub_cur_pd = "past_due"; subCustomer.sub_cur_pd = "cus_cur";
+    await call(stripeWebhookReq({ id: "evt_cur_pd", type: "checkout.session.completed", data: { object: { ...session, client_reference_id: "current@example.com", customer: "cus_cur", subscription: "sub_cur_pd" } } }, "whsec_right"), env);
+    eq("past_due other-sub checkout keeps current stripeSubId", (await env.USERS.get("user:current@example.com", "json")).stripeSubId, "sub_cur_live");
+
+    // F1: two checkouts (two tabs) leave subs A (older) and B (newer) both
+    // pending. B is stored, then a stale retry for A repoints stripeSubId to
+    // A. When B is paid, its `updated` must still grant (adopt B).
+    await seedUser(env, "twotabs@example.com");
+    subStatus.sub_tA = "past_due"; subCustomer.sub_tA = "cus_tt";
+    subStatus.sub_tB = "past_due"; subCustomer.sub_tB = "cus_tt";
+    const tabSess = (sub) => ({ ...session, client_reference_id: "twotabs@example.com", customer: "cus_tt", subscription: sub });
+    await call(stripeWebhookReq({ id: "evt_tB", type: "checkout.session.completed", data: { object: tabSess("sub_tB") } }, "whsec_right"), env);
+    await call(stripeWebhookReq({ id: "evt_tA_retry", type: "checkout.session.completed", data: { object: tabSess("sub_tA") } }, "whsec_right"), env);
+    eq("two tabs: stale retry repointed to A (setup)", (await env.USERS.get("user:twotabs@example.com", "json")).stripeSubId, "sub_tA");
+    emailCalls = [];
+    subStatus.sub_tB = "active";
+    const bPaid = { id: "evt_tB_upd", type: "customer.subscription.updated", data: { object: { id: "sub_tB", customer: "cus_tt", status: "active", metadata: { purpose: "adfree" } } } };
+    eq("two tabs: B paid update → 200", (await call(stripeWebhookReq(bPaid, "whsec_right"), env)).status, 200);
+    let tt = await env.USERS.get("user:twotabs@example.com", "json");
+    eq("two tabs: B adopted → ad-free granted", tt.adFree, true);
+    eq("two tabs: B adopted → stripeSubId = B", tt.stripeSubId, "sub_tB");
+    eq("two tabs: adoption sends one welcome email", emailCalls.filter((c) => /Welcome to shouldiboat Pro/i.test(c.subject)).length, 1);
+    // Now granting via B: A's later updates/deletes and stale retries don't touch it.
+    subStatus.sub_tA = "canceled";
+    await call(stripeWebhookReq({ id: "evt_tA_del", type: "customer.subscription.deleted", data: { object: { id: "sub_tA", customer: "cus_tt", status: "canceled", metadata: { purpose: "adfree" } } } }, "whsec_right"), env);
+    await call(stripeWebhookReq({ id: "evt_tA_retry2", type: "checkout.session.completed", data: { object: tabSess("sub_tA") } }, "whsec_right"), env);
+    tt = await env.USERS.get("user:twotabs@example.com", "json");
+    eq("two tabs: A deleted/retried after → still ad-free", tt.adFree, true);
+    eq("two tabs: A deleted/retried after → stripeSubId stays B", tt.stripeSubId, "sub_tB");
+
+    // Adoption guards: event says active but Stripe says canceled → no grant.
+    await seedUser(env, "adoptstale@example.com", { stripeCustomerId: "cus_as", stripeSubId: "sub_as_old" });
+    await env.USERS.put("stripecust:cus_as", "adoptstale@example.com");
+    subStatus.sub_as_new = "canceled"; subCustomer.sub_as_new = "cus_as";
+    await call(stripeWebhookReq({ id: "evt_as", type: "customer.subscription.updated", data: { object: { id: "sub_as_new", customer: "cus_as", status: "active", metadata: { purpose: "adfree" } } } }, "whsec_right"), env);
+    eq("adopt: live canceled → no grant", (await env.USERS.get("user:adoptstale@example.com", "json")).adFree, false);
+    // Untagged sub on the customer → not adopted.
+    subStatus.sub_as_untag = "active"; subCustomer.sub_as_untag = "cus_as";
+    await call(stripeWebhookReq({ id: "evt_as_u", type: "customer.subscription.updated", data: { object: { id: "sub_as_untag", customer: "cus_as", status: "active" } } }, "whsec_right"), env);
+    eq("adopt: untagged sub → no grant", (await env.USERS.get("user:adoptstale@example.com", "json")).adFree, false);
+    // Live sub belongs to another customer → no grant.
+    subStatus.sub_as_x = "active"; subCustomer.sub_as_x = "cus_other";
+    await call(stripeWebhookReq({ id: "evt_as_x", type: "customer.subscription.updated", data: { object: { id: "sub_as_x", customer: "cus_as", status: "active", metadata: { purpose: "adfree" } } } }, "whsec_right"), env);
+    eq("adopt: live customer mismatch → no grant", (await env.USERS.get("user:adoptstale@example.com", "json")).adFree, false);
+    // ACH first payment still processing: sub "active" but invoice open → no grant.
+    subStatus.sub_as_ach = "active"; subCustomer.sub_as_ach = "cus_as"; subInvoice.sub_as_ach = "open";
+    stripeCalls = [];
+    await call(stripeWebhookReq({ id: "evt_as_ach", type: "customer.subscription.updated", data: { object: { id: "sub_as_ach", customer: "cus_as", status: "active", metadata: { purpose: "adfree" } } } }, "whsec_right"), env);
+    eq("adopt: invoice still open (ACH processing) → no grant", (await env.USERS.get("user:adoptstale@example.com", "json")).adFree, false);
+    check("adopt: retrieves sub with latest_invoice expanded", stripeCalls.some((c) => c.url.includes("sub_as_ach") && decodeURIComponent(c.url).includes("expand[]=latest_invoice")), JSON.stringify(stripeCalls.map((c) => c.url)));
+    subInvoice.sub_as_ach = "paid";
+    await call(stripeWebhookReq({ id: "evt_as_ach2", type: "customer.subscription.updated", data: { object: { id: "sub_as_ach", customer: "cus_as", status: "active", metadata: { purpose: "adfree" } } } }, "whsec_right"), env);
+    eq("adopt: invoice paid → grant", (await env.USERS.get("user:adoptstale@example.com", "json")).adFree, true);
+    await env.USERS.put("user:adoptstale@example.com", JSON.stringify({ ...(await env.USERS.get("user:adoptstale@example.com", "json")), adFree: false, stripeSubId: "sub_as_old" }));
+    // Stripe down during adoption → 503.
+    stripeDown = true;
+    const ad = await call(stripeWebhookReq({ id: "evt_as_down", type: "customer.subscription.updated", data: { object: { id: "sub_as_x", customer: "cus_as", status: "active", metadata: { purpose: "adfree" } } } }, "whsec_right"), env);
+    stripeDown = false;
+    eq("adopt: Stripe down → 503", ad.status, 503);
+    // Already ad-free via another sub → a second live sub isn't adopted.
+    await seedUser(env, "hasone@example.com", { adFree: true, stripeCustomerId: "cus_h1", stripeSubId: "sub_h1" });
+    await env.USERS.put("stripecust:cus_h1", "hasone@example.com");
+    subStatus.sub_h2 = "active"; subCustomer.sub_h2 = "cus_h1";
+    await call(stripeWebhookReq({ id: "evt_h2", type: "customer.subscription.updated", data: { object: { id: "sub_h2", customer: "cus_h1", status: "active", metadata: { purpose: "adfree" } } } }, "whsec_right"), env);
+    eq("adopt: already ad-free → stripeSubId unchanged", (await env.USERS.get("user:hasone@example.com", "json")).stripeSubId, "sub_h1");
+
+    // G1: paying for two subs (A recorded, B also live). A ends → switch to B
+    // instead of revoking, and alert the admins.
+    {
+      const genv = { USERS: makeKV(), STRIPE_WEBHOOK_SECRET: "whsec_right", STRIPE_SECRET_KEY: "sk_test_x", BREVO_API_KEY: "brevo_x", ADMIN_EMAIL: "owner@example.com" };
+      const seedTwo = async (em, cus) => {
+        await seedUser(genv, em, { adFree: true, stripeCustomerId: cus, stripeSubId: `${cus}_A` });
+        await genv.USERS.put(`stripecust:${cus}`, em);
+      };
+      const delA = (cus, id) => ({ id, type: "customer.subscription.deleted", data: { object: { id: `${cus}_A`, customer: cus, status: "canceled", metadata: { purpose: "adfree" } } } });
+      await seedTwo("double@example.com", "cus_g1");
+      subList.cus_g1 = [{ id: "cus_g1_A", status: "canceled", purpose: "adfree" }, { id: "cus_g1_B", status: "active", purpose: "adfree" }];
+      emailCalls = [];
+      eq("G1: recorded sub deleted → 200", (await call(stripeWebhookReq(delA("cus_g1", "evt_g1"), "whsec_right"), genv)).status, 200);
+      let g = await genv.USERS.get("user:double@example.com", "json");
+      eq("G1: still ad-free via the other live sub", g.adFree, true);
+      eq("G1: stripeSubId switched to B", g.stripeSubId, "cus_g1_B");
+      check("G1: admins alerted about the double subscription", emailCalls.some((c) => /Double Pro subscription/i.test(c.subject) && (c.to || []).some((r) => r.email === "owner@example.com")), JSON.stringify(emailCalls.map((c) => c.subject)));
+      check("G1: user gets no welcome email on switch", !emailCalls.some((c) => /Welcome to shouldiboat Pro/i.test(c.subject)));
+      // Then B ends too, nothing else live → revoked.
+      subList.cus_g1 = [{ id: "cus_g1_A", status: "canceled", purpose: "adfree" }, { id: "cus_g1_B", status: "canceled", purpose: "adfree" }];
+      await call(stripeWebhookReq({ id: "evt_g1_b", type: "customer.subscription.deleted", data: { object: { id: "cus_g1_B", customer: "cus_g1", status: "canceled", metadata: { purpose: "adfree" } } } }, "whsec_right"), genv);
+      eq("G1: last sub ends → revoked", (await genv.USERS.get("user:double@example.com", "json")).adFree, false);
+
+      // Non-qualifying others don't keep ad-free: unpaid invoice, untagged, past_due.
+      for (const [label, other] of [
+        ["open invoice", { id: "x", status: "active", purpose: "adfree", invoice: "open" }],
+        ["untagged", { id: "x", status: "active" }],
+        ["past_due", { id: "x", status: "past_due", purpose: "adfree" }],
+      ]) {
+        const cus = `cus_g1_${label.replace(/\W/g, "")}`;
+        await seedTwo(`g1${label.replace(/\W/g, "")}@example.com`, cus);
+        subList[cus] = [{ ...other, id: `${cus}_B` }];
+        await call(stripeWebhookReq(delA(cus, `evt_${cus}`), "whsec_right"), genv);
+        eq(`G1: other sub ${label} → revoked`, (await genv.USERS.get(`user:g1${label.replace(/\W/g, "")}@example.com`, "json")).adFree, false);
+      }
+      // H1: list endpoint down → 503 so Stripe retries; user keeps ad-free
+      // meanwhile; event not recorded. When Stripe recovers, the retry switches.
+      await seedTwo("g1retry@example.com", "cus_g1r");
+      subList.cus_g1r = [{ id: "cus_g1r_B", status: "active", purpose: "adfree" }];
+      subListDown = true;
+      const gr = await call(stripeWebhookReq(delA("cus_g1r", "evt_g1r"), "whsec_right"), genv);
+      eq("H1: list down → 503", gr.status, 503);
+      eq("H1: list down → ad-free kept while retrying", (await genv.USERS.get("user:g1retry@example.com", "json")).adFree, true);
+      check("H1: list down → event not recorded", !(await genv.USERS.get("stripeevt:evt_g1r")));
+      eq("H1: still down on a retry within 24h → 503", (await call(stripeWebhookReq(delA("cus_g1r", "evt_g1r"), "whsec_right"), genv)).status, 503);
+      subListDown = false;
+      eq("H1: Stripe back → retry 200", (await call(stripeWebhookReq(delA("cus_g1r", "evt_g1r"), "whsec_right"), genv)).status, 200);
+      let gru = await genv.USERS.get("user:g1retry@example.com", "json");
+      eq("H1: Stripe back → switched to B, still ad-free", gru.adFree && gru.stripeSubId, "cus_g1r_B");
+
+      // H1 bound: failing for over 24h → revoke anyway (Stripe stops retrying
+      // after ~3 days, so 503 forever would leave a canceled user ad-free).
+      await seedTwo("g1down@example.com", "cus_g1d");
+      subList.cus_g1d = [{ id: "cus_g1d_B", status: "active", purpose: "adfree" }];
+      subListDown = true;
+      eq("H1: first failure → 503", (await call(stripeWebhookReq(delA("cus_g1d", "evt_g1d"), "whsec_right"), genv)).status, 503);
+      await genv.USERS.put("stripeevtfail:evt_g1d", String(Date.now() - 25 * 3600e3)); // first failure 25h ago
+      const gd = await call(stripeWebhookReq(delA("cus_g1d", "evt_g1d"), "whsec_right"), genv);
+      subListDown = false;
+      eq("H1: failing >24h → 200", gd.status, 200);
+      eq("H1: failing >24h → revoked", (await genv.USERS.get("user:g1down@example.com", "json")).adFree, false);
+      check("H1: failing >24h → event recorded", !!(await genv.USERS.get("stripeevt:evt_g1d")));
+      // ...and B's next updated re-adopts it (F1 path).
+      subStatus.cus_g1d_B = "active"; subCustomer.cus_g1d_B = "cus_g1d";
+      await call(stripeWebhookReq({ id: "evt_g1d_upd", type: "customer.subscription.updated", data: { object: { id: "cus_g1d_B", customer: "cus_g1d", status: "active", metadata: { purpose: "adfree" } } } }, "whsec_right"), genv);
+      eq("G1: other sub's next update re-adopts", (await genv.USERS.get("user:g1down@example.com", "json")).adFree, true);
+      // A non-recorded sub's deletion never triggers the lookup.
+      stripeCalls = [];
+      await call(stripeWebhookReq({ id: "evt_g1_other", type: "customer.subscription.deleted", data: { object: { id: "sub_unrelated", customer: "cus_g1d", status: "canceled", metadata: { purpose: "adfree" } } } }, "whsec_right"), genv);
+      check("G1: unrelated sub deletion makes no list call", !stripeCalls.some((c) => /\/v1\/subscriptions\?/.test(c.url)));
+      eq("G1: unrelated sub deletion keeps ad-free", (await genv.USERS.get("user:g1down@example.com", "json")).adFree, true);
+      subList = {};
+    }
+
+    // Account deleted, then a late checkout retry: no reverse index re-created.
+    subStatus.sub_del = "active";
+    await call(stripeWebhookReq({ id: "evt_del", type: "checkout.session.completed", data: { object: { ...session, client_reference_id: "deleted@example.com", customer: "cus_del", subscription: "sub_del" } } }, "whsec_right"), env);
+    eq("no account: reverse index not written", await env.USERS.get("stripecust:cus_del"), null);
+    subStatus = {}; subCustomer = {}; subInvoice = {};
   }
 
   // 36. notifyEmails in site config drives admin notification recipients
@@ -1354,7 +1611,87 @@ async function run() {
     gridMode = null;
   }
 
-  // 57. Grid sampling: a spot's gridSteps override skips an enclosed inner-bay
+  // 56. Week strip rates forecast thunder (hour by hour, with that hour's rain
+  //     chance); the outlook never counts no-data hours as good.
+  {
+    const { buildWeek, computeOutlook, buildRecommendation } = await import("../functions/marine/conditions.js");
+    const nowH = Math.floor(Date.now() / 3600000);
+    // A calm 3-day grid (UTC), 8 kt / 1 ft / dry, with thunder injected per test.
+    const grid = (thunderHours = {}, precip = {}) => {
+      const mk = (v) => new Map(Array.from({ length: 72 }, (_, i) => [nowH + i, typeof v === "function" ? v(nowH + i) : v]));
+      return { tz: "UTC", windKt: mk(8), gustKt: mk(10), waveFt: mk(1), periodSec: mk(4), windDirDeg: mk(225),
+        precipPct: mk((h) => precip[h] ?? 0), thunder: mk((h) => !!thunderHours[h]) };
+    };
+    const day2 = (w) => w.find((d) => d.date === new Date((nowH + 30) * 3600e3).toISOString().slice(0, 10));
+    eq("week: calm day stays GO", day2(buildWeek(grid())).level, "GO");
+    const h = nowH + 30;
+    eq("week: thunder hour with 40% rain → day NO-GO", day2(buildWeek(grid({ [h]: true }, { [h]: 40 }))).level, "NO-GO");
+    eq("week: slight thunder chance (10% rain) → day CAUTION", day2(buildWeek(grid({ [h]: true }, { [h]: 10 }))).level, "CAUTION");
+    eq("week: dry thunder hour + unrelated wet hour → CAUTION, not NO-GO", day2(buildWeek(grid({ [h]: true }, { [h]: 5, [h + 3]: 40 }))).level, "CAUTION");
+    check("week: day reports thunder flag", day2(buildWeek(grid({ [h]: true }, { [h]: 40 }))).thunder === true);
+
+    const hr = (level, i) => ({ time: new Date((nowH + i) * 3600e3).toISOString(), level, short: "" });
+    const o1 = computeOutlook([hr(null, 0), hr("GO", 1), hr("GO", 2)]);
+    check("outlook: no data this hour → noData, 0 good hours", o1.noData === true && o1.goodHours === 0, JSON.stringify(o1));
+    const o2 = computeOutlook([hr("GO", 0), hr("GO", 1), hr(null, 2), hr("GO", 3)]);
+    check("outlook: good window stops at the first no-data hour", o2.goodHours === 2 && o2.dataEndsAt === hr(null, 2).time && !o2.headInBy, JSON.stringify(o2));
+    const o3 = computeOutlook([hr("GO", 0), hr("NO-GO", 1), hr(null, 2)]);
+    check("outlook: an earlier NO-GO still sets be-in-by", o3.goodHours === 1 && o3.headInBy === hr("NO-GO", 1).time, JSON.stringify(o3));
+    const storm = { ...hr("NO-GO", 2), short: "Chance Showers And Thunderstorms" };
+    const o4 = computeOutlook([hr(null, 0), hr(null, 1), storm]);
+    check("outlook: missing wind keeps a known storm cutoff", o4.noData === true && o4.goodHours === 0 && o4.headInBy === storm.time && o4.headInReason === "thunderstorms", JSON.stringify(o4));
+    const o5 = computeOutlook([hr("GO", 0), hr(null, 1), storm]);
+    const o6 = computeOutlook([hr("NO-GO", 0), hr(null, 1), hr("GO", 2)]);
+    check("outlook: NO-GO now then a data gap → be in now, no dataEndsAt", o6.goodHours === 0 && o6.headInBy === hr("NO-GO", 0).time && !o6.dataEndsAt, JSON.stringify(o6));
+    check("outlook: data gap before a storm keeps both", o5.goodHours === 1 && o5.dataEndsAt === hr(null, 1).time && o5.headInBy === storm.time, JSON.stringify(o5));
+
+    const r24 = buildRecommendation({ buoy: null, alerts: [], wind: { speedKt: null, gustKt: 24, source: null, gustSrc: "forecast" }, waves: { ft: null }, read: null, hours: [], profile: "lake" });
+    check("summary: gust-driven NO-GO with no other data reads as NO-GO, not 'no live data'", r24.level === "NO-GO" && !/No live data/.test(r24.summary), r24.summary);
+  }
+
+  // 57. Follow-ups: Great Lakes GO needs waves; sparse future days can't GO;
+  //     the hourly strip starts at the current hour.
+  {
+    const { riskLevel, buildWeek, onRequest } = await import("../functions/marine/conditions.js");
+    eq("riskLevel: Great Lakes, wind but no waves → no call (null), not GO", riskLevel(8, 10, 0, "", null, null, "lake"), null);
+    eq("riskLevel: Great Lakes, no waves but 24 kt gust → still NO-GO", riskLevel(8, 24, 0, "", null, null, "lake"), "NO-GO");
+    eq("riskLevel: Great Lakes, no waves, 16 kt → still CAUTION", riskLevel(16, null, 0, "", null, null, "lake"), "CAUTION");
+    eq("riskLevel: sheltered water rates on wind alone (no waves → GO)", riskLevel(8, 10, 0, "", null, null, "sheltered"), "GO");
+
+    // Grid in UTC: tomorrow fully covered, the day after only 6 hours.
+    const nowH = Math.floor(Date.now() / 3600000);
+    const dayStart = (k) => Math.floor(nowH / 24) * 24 + 24 * k;
+    const mk = () => ({ tz: "UTC", windKt: new Map(), gustKt: new Map(), precipPct: new Map(), waveFt: new Map(), periodSec: new Map() });
+    const g = mk();
+    const put = (h, w, gu, ft) => { g.windKt.set(h, w); g.gustKt.set(h, gu); g.waveFt.set(h, ft); g.periodSec.set(h, 4); g.precipPct.set(h, 0); };
+    for (let h = dayStart(1); h < dayStart(2); h++) put(h, 8, 10, 1);
+    for (let h = dayStart(2); h < dayStart(2) + 6; h++) put(h, 8, 10, 1);
+    for (let h = dayStart(3); h < dayStart(3) + 4; h++) put(h, 20, 26, 5); // sparse but rough
+    const wk = Object.fromEntries(buildWeek(g, "lake").map((d) => [d.date, d.level]));
+    const iso = (k) => new Date(dayStart(k) * 3600000).toISOString().slice(0, 10);
+    eq("week: fully covered calm day → GO", wk[iso(1)], "GO");
+    eq("week: sparsely covered calm day (6 h) → null, not GO", wk[iso(2)], null);
+    eq("week: sparse day that's rough still → NO-GO", wk[iso(3)], "NO-GO");
+    const g2 = mk();
+    for (let h = dayStart(1); h < dayStart(2); h++) { g2.windKt.set(h, 8); g2.gustKt.set(h, 10); g2.precipPct.set(h, 0); }
+    for (let h = dayStart(1); h < dayStart(1) + 3; h++) { g2.waveFt.set(h, 1); g2.periodSec.set(h, 4); }
+    const wk2 = Object.fromEntries(buildWeek(g2, "lake").map((d) => [d.date, d.level]));
+    eq("week: Great Lakes day with full wind but 3 h of waves → null, not GO", wk2[iso(1)], null);
+    eq("week: same coverage on sheltered water → GO (wind-only by design)", Object.fromEntries(buildWeek(g2, "sheltered").map((d) => [d.date, d.level]))[iso(1)], "GO");
+    const { buildRecommendation } = await import("../functions/marine/conditions.js");
+    const hr = (profile) => buildRecommendation({ buoy: null, alerts: [], wind: { speedKt: 8, gustKt: 10, source: "forecast", gustSrc: "forecast" }, waves: { ft: null }, read: null, hours: [], profile }).level;
+    eq("headline: Great Lakes, light wind, no wave data → CAUTION, not GO", hr("lake"), "CAUTION");
+    eq("headline: sheltered, light wind, no wave data → GO (wind-only by design)", hr("sheltered"), "GO");
+
+    stormMode = false; scaMode = false; alertsDown = false; gridMode = null;
+    hourlyLagH = 3;
+    const pg = await (await onRequest({ request: new Request("https://shouldiboat.com/marine/conditions?spot=sandusky"), env: { USERS: makeKV() } })).json();
+    hourlyLagH = 0;
+    const firstH = pg.hourly?.[0] && Math.floor(Date.parse(pg.hourly[0].time) / 3600000);
+    check("hourly strip: past hours dropped, starts at the current hour", firstH === nowH || firstH === nowH + 1, `got ${firstH}, now ${nowH}`);
+  }
+
+  // 58. Grid sampling: a spot's gridSteps override skips an enclosed inner-bay
   //     cell; spots without one (all of Lake Erie) sample exactly as before.
   {
     const { SPOTS, gridStepsFor, gridSamplePoints } = await import("../functions/marine/conditions.js");
@@ -1391,6 +1728,117 @@ async function run() {
     const coastId = Object.keys(SPOTS).find((id) => SPOTS[id].water && SPOTS[id].water !== "lake" && (SPOTS[id].buoys || []).length);
     const chtml = JSON.stringify(seoForPath(`/spot/${coastId}`));
     check("seo: coastal page has no Great Lakes winter note", /Buoy stations/.test(chtml) && !/pulled in winter/.test(chtml) && !/Live (observations|data)/.test(chtml), coastId);
+  }
+
+  // 58. Buoy fallback: a fresh temps-only station (no wind, no waves) must not
+  //     stand in for the live buoy. The walk continues to a later station that
+  //     reports wind/waves, and when none does the verdict says it is running
+  //     on the forecast (wind.source / waves.source, not the buoy object).
+  {
+    const { fetchBuoy, buildRecommendation, onRequest } = await import("../functions/marine/conditions.js");
+    // NDBC realtime2 line: YY MM DD hh mm WDIR WSPD GST WVHT DPD APD MWD PRES ATMP WTMP DEWP VIS PTDY TIDE
+    const ndbc = ({ ageMin = 20, wdir = "MM", wspd = "MM", gst = "MM", wvht = "MM", dpd = "MM", atmp = "MM", wtmp = "MM" } = {}) => {
+      const t = new Date(Date.now() - ageMin * 60000);
+      const p2 = (n) => String(n).padStart(2, "0");
+      return "#YY  MM DD hh mm WDIR WSPD GST  WVHT   DPD   APD MWD   PRES  ATMP  WTMP  DEWP  VIS PTDY  TIDE\n#yr  mo dy hr mn degT m/s  m/s     m   sec   sec degT   hPa  degC  degC  degC  nmi  hPa    ft\n"
+        + [t.getUTCFullYear(), p2(t.getUTCMonth() + 1), p2(t.getUTCDate()), p2(t.getUTCHours()), p2(t.getUTCMinutes()), wdir, wspd, gst, wvht, dpd, "MM", "MM", "1015.0", atmp, wtmp, "MM", "MM", "MM", "MM"].join(" ") + "\n";
+    };
+    const TEMPS = ndbc({ atmp: "12.0", wtmp: "10.0" }); // temps-only: 50°F water, 53.6°F air
+    const MET = ndbc({ wdir: "220", wspd: "5.0", gst: "6.0", wvht: "0.5", dpd: "4", atmp: "14.0" }); // ~10 kt, 1.6 ft, no water temp
+
+    ndbcFiles = { TMPS1: TEMPS, METB1: MET };
+    let r = await fetchBuoy(["TMPS1", "METB1"]);
+    eq("fetchBuoy: temps-only first station is skipped for the wind/wave buoy", r.buoy?.station, "METB1");
+    eq("fetchBuoy: temps-only station kept for the tiles", r.tempsObs?.station, "TMPS1");
+    r = await fetchBuoy(["TMPS1"]);
+    eq("fetchBuoy: temps-only alone → no live buoy", r.buoy, null);
+    eq("fetchBuoy: temps-only alone → temps still available", r.tempsObs?.waterTempF, 50);
+    ndbcFiles = { WAVE1: ndbc({ wvht: "1.0", dpd: "5" }) };
+    r = await fetchBuoy(["WAVE1"]);
+    eq("fetchBuoy: waves-only station is accepted", r.buoy?.station, "WAVE1");
+    ndbcFiles = { GUST1: ndbc({ gst: "8.0", atmp: "12.0" }) };
+    r = await fetchBuoy(["GUST1"]);
+    eq("fetchBuoy: gust-only station still counts as a met station", r.buoy?.station, "GUST1");
+    ndbcFiles = { OLD01: ndbc({ ageMin: 240, wspd: "5.0" }), METB1: MET };
+    r = await fetchBuoy(["OLD01", "METB1"]);
+    eq("fetchBuoy: stale (>3 h) station still skipped", r.buoy?.station, "METB1");
+    ndbcFiles = {};
+    r = await fetchBuoy(["GONE1"]);
+    check("fetchBuoy: nothing reporting → { buoy: null, tempsObs: null }", r.buoy === null && r.tempsObs === null, JSON.stringify(r));
+
+    const FC_NOTE = /No live buoy here; using the NWS forecast/;
+    const recOf = (buoy, wind, waves) => buildRecommendation({ buoy, alerts: [], wind, waves, read: null, hours: [], profile: "lake" });
+    const tempsBuoy = { station: "TMPS1", windKt: null, waveHeightFt: null, waterTempF: 70 };
+    let rr = recOf(tempsBuoy, { speedKt: 8, source: "forecast" }, { ft: 1, source: "forecast" });
+    check("headline: temps-only buoy object, forecast wind+waves → forecast-only reason shown", rr.reasons.some((x) => FC_NOTE.test(x)), JSON.stringify(rr.reasons));
+    rr = recOf({ station: "METB1", windKt: 9 }, { speedKt: 9, source: "buoy" }, { ft: 1, source: "forecast" });
+    check("headline: buoy wind → no forecast-only reason", !rr.reasons.some((x) => FC_NOTE.test(x)), JSON.stringify(rr.reasons));
+    rr = recOf({ station: "WAVE1", waveHeightFt: 1 }, { speedKt: 9, source: "forecast" }, { ft: 1, source: "buoy" });
+    check("headline: buoy waves → no forecast-only reason", !rr.reasons.some((x) => FC_NOTE.test(x)), JSON.stringify(rr.reasons));
+    rr = recOf({ station: "GUST1", windGustKt: 16 }, { speedKt: 8, gustKt: 16, source: "forecast", gustSrc: "buoy" }, { ft: 1, source: "forecast" });
+    check("headline: buoy gust only → no forecast-only reason (agrees with the facts card)", !rr.reasons.some((x) => FC_NOTE.test(x)), JSON.stringify(rr.reasons));
+    rr = recOf(null, { speedKt: null, source: null }, { ft: null, source: null });
+    check("headline: no data → CAUTION, no forecast-only reason (no-data reason covers it)", rr.level === "CAUTION" && !rr.reasons.some((x) => FC_NOTE.test(x)), JSON.stringify(rr));
+
+    // End to end through the spot page (stubbed NWS: calm, 9 mph SW, 1 ft).
+    const page = async (spot) => (await onRequest({ request: new Request(`https://shouldiboat.com/marine/conditions?spot=${spot}`), env: {} })).json();
+    const sandusky = (await import("../functions/marine/conditions.js")).SPOTS.sandusky;
+    const saved = sandusky.buoys;
+    try {
+      sandusky.buoys = ["TMPS1", "METB1"];
+      ndbcFiles = { TMPS1: TEMPS, METB1: MET };
+      let d = await page("sandusky");
+      eq("page: fallback met buoy supplies wind", d.wind?.source, "buoy");
+      eq("page: fallback met buoy supplies waves", d.waves?.source, "buoy");
+      eq("page: buoy is the met station", d.buoy?.station, "METB1");
+      eq("page: water tile from the temps-only station", d.temps?.waterSource, "NDBC TMPS1");
+      eq("page: air tile from the earlier-listed station", d.temps?.airSource, "NDBC TMPS1");
+      eq("page: earlier-listed station's water temp wins", d.temps?.waterF, 50);
+      eq("page: facts card calls the fallback met buoy live", d.facts?.liveData?.live, "METB1");
+      eq("page: facts card lists the temps-only station as not reporting wind/waves", d.facts?.liveData?.offline?.join(), "TMPS1");
+      check("page: facts card sources agree with the verdict", d.facts?.liveData?.windFrom === "buoy" && d.facts?.liveData?.wavesFrom === "buoy", JSON.stringify(d.facts?.liveData));
+      check("page: no forecast-only reason when the fallback buoy reports", !d.recommendation.reasons.some((x) => FC_NOTE.test(x)), JSON.stringify(d.recommendation.reasons));
+
+      sandusky.buoys = ["TMPS1"];
+      d = await page("sandusky");
+      eq("page: temps-only → buoy null", d.buoy, null);
+      // (The stub serves no daily point forecast, so forecast wind is null here.)
+      check("page: temps-only → wind not credited to a buoy", d.wind?.source !== "buoy", JSON.stringify(d.wind));
+      eq("page: temps-only → waves from forecast", d.waves?.source, "forecast");
+      eq("page: temps-only → water tile still from the station", d.temps?.waterSource, "NDBC TMPS1");
+      eq("page: temps-only → water tile value", d.temps?.waterF, 50);
+      check("page: temps-only → forecast-only reason shown", d.recommendation.reasons.some((x) => FC_NOTE.test(x)), JSON.stringify(d.recommendation.reasons));
+      check("page: temps-only → cold-water reason still from the station", d.recommendation.reasons.some((x) => /Water 50°F/.test(x)), JSON.stringify(d.recommendation.reasons));
+      eq("page: temps-only → sources.buoy says no live buoy", d.sources?.buoy, "no live buoy");
+      eq("page: temps-only → facts card shows no live buoy", d.facts?.liveData?.live, null);
+      eq("page: temps-only → facts card waves from forecast", d.facts?.liveData?.wavesFrom, "forecast");
+    } finally {
+      sandusky.buoys = saved;
+      ndbcFiles = {};
+    }
+  }
+
+  // ── Wind-only buoy: forecast waves are called out, never a level change ──
+  {
+    const { buildRecommendation } = await import("../functions/marine/conditions.js");
+    const WAVES_FC = /Waves are from the NWS forecast/;
+    const NO_BUOY = /No live buoy here/;
+    const rec = (wind, waves, profile = "lake") => buildRecommendation({ buoy: { station: "X" }, alerts: [], wind, waves, read: null, hours: [], profile });
+    const buoyWind = { speedKt: 6, gustKt: 8, source: "buoy", gustSrc: "buoy" };
+    const a = rec(buoyWind, { ft: 0.8, source: "forecast" });
+    check("wind-only buoy: forecast-waves caveat shown", a.reasons.some((x) => WAVES_FC.test(x)), JSON.stringify(a.reasons));
+    check("wind-only buoy: no 'No live buoy' line", !a.reasons.some((x) => NO_BUOY.test(x)), JSON.stringify(a.reasons));
+    const a0 = rec(buoyWind, { ft: 0.8, source: "buoy" });
+    eq("wind-only buoy: caveat doesn't change the level", a.level, a0.level);
+    check("wind+wave buoy: no forecast-waves caveat", !a0.reasons.some((x) => WAVES_FC.test(x)), JSON.stringify(a0.reasons));
+    const g = rec({ speedKt: 6, gustKt: 8, source: "forecast", gustSrc: "buoy" }, { ft: 0.8, source: "forecast" });
+    check("gust-only buoy: forecast-waves caveat shown", g.reasons.some((x) => WAVES_FC.test(x)), JSON.stringify(g.reasons));
+    const n = rec(buoyWind, { ft: null, source: null });
+    check("wind-only buoy, no wave data: no forecast-waves caveat (waves aren't from anywhere)", !n.reasons.some((x) => WAVES_FC.test(x)) && n.level !== "GO", JSON.stringify(n));
+    const f = buildRecommendation({ buoy: null, alerts: [], wind: { speedKt: 6, source: "forecast" }, waves: { ft: 0.8, source: "forecast" }, read: null, hours: [], profile: "lake" });
+    check("no buoy: only the 'No live buoy' line, not both", f.reasons.some((x) => NO_BUOY.test(x)) && !f.reasons.some((x) => WAVES_FC.test(x)), JSON.stringify(f.reasons));
+    const o = rec(buoyWind, { ft: 1, source: "forecast" }, "ocean");
+    check("wind-only shore station on the coast: caveat shown too", o.reasons.some((x) => WAVES_FC.test(x)), JSON.stringify(o.reasons));
   }
 
   console.log(results.join("\n"));

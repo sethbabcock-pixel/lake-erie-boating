@@ -11,6 +11,8 @@ import { fmtWaves, waveFeel, compassToDeg } from "./units.js";
 import { regionBySlug, regionFromPath, regionForLake, nearMetroBySlug, nearMetroFromPath, LAKE_GUIDES } from "./regions.js";
 
 const fmt = (v, unit) => (v == null ? "—" : `${v}${unit || ""}`);
+// Whole knots for display (buoy wind arrives to 0.1 kt; verdicts use the raw value).
+const kt = (v) => (v == null ? null : Math.round(v));
 // No level = no call (missing data): neutral, never painted as GO.
 const verdictClass = (lvl) => (lvl === "NO-GO" ? "nogo" : lvl === "CAUTION" ? "caution" : lvl === "GO" ? "go" : "unknown");
 const fmtHour = (t, withMin) =>
@@ -23,7 +25,8 @@ function comfortCheck(prefs, windKt, waveFt) {
   if (maxW == null && maxK == null) return null;
   const over = [];
   if (maxW != null && waveFt != null && waveFt > maxW) over.push(`waves ${waveFt} ft over your ${maxW} ft`);
-  if (maxK != null && windKt != null && windKt > maxK) over.push(`wind ${windKt} kt over your ${maxK} kt`);
+  // Whole knots, but keep the decimal if rounding would hide the overage (20.4 over 20).
+  if (maxK != null && windKt != null && windKt > maxK) over.push(`wind ${kt(windKt) > maxK ? kt(windKt) : windKt} kt over your ${maxK} kt`);
   const limits = [maxW != null ? `≤${maxW} ft` : null, maxK != null ? `≤${maxK} kt` : null].filter(Boolean).join(" · ");
   return { ok: over.length === 0, over, limits };
 }
@@ -423,7 +426,7 @@ function obsAge(ld) {
   if (m == null) return null;
   return m < 60 ? `${m} min ago` : `${Math.floor(m / 60)} h${m % 60 ? ` ${m % 60} min` : ""} ago`;
 }
-const notReported = (ids) => <>{stationList(ids)} {ids.length > 1 ? "haven't" : "hasn't"} reported in the last 3 hours</>;
+const notReported = (ids) => <>{stationList(ids)} {ids.length > 1 ? "haven't" : "hasn't"} reported wind or waves in the last 3 hours</>;
 function BuoyFact({ facts }) {
   const buoys = facts.buoys || [];
   const ld = facts.liveData;
@@ -490,7 +493,7 @@ function ShareButton({ spot, rec, wind, wv }) {
   const [copied, setCopied] = useState(false);
   const share = async () => {
     track("event", "share_verdict", { spot: spot.id, level: rec.level });
-    const text = `${spot.name}: ${rec.level} right now. Wind ${wind.speedKt ?? "–"} kt, waves ${wv.ft ?? "–"} ft.`;
+    const text = `${spot.name}: ${rec.level} right now. Wind ${kt(wind.speedKt) ?? "–"} kt, waves ${wv.ft ?? "–"} ft.`;
     const url = spot.adHoc
       ? `https://shouldiboat.com/preview?lat=${spot.lat}&lon=${spot.lon}&name=${encodeURIComponent(spot.name)}`
       : `https://shouldiboat.com/spot/${encodeURIComponent(spot.id)}`;
@@ -525,7 +528,7 @@ function WrongCallLink({ spot, rec, wind, wv, updatedAt }) {
   const body = [
     `Spot: ${spot.name} (${spot.id})`,
     `Our call: ${rec.level}`,
-    `Wind ${wind?.speedKt ?? "–"} kt${wind?.gustKt != null ? `, gusts ${wind.gustKt} kt` : ""}; waves ${wv?.ft ?? "–"} ft`,
+    `Wind ${kt(wind?.speedKt) ?? "–"} kt${wind?.gustKt != null ? `, gusts ${kt(wind.gustKt)} kt` : ""}; waves ${wv?.ft ?? "–"} ft`,
     `Data updated: ${updatedAt ? new Date(updatedAt).toLocaleString() : "unknown"}`,
     `Page: ${url}`,
     "",
@@ -579,7 +582,7 @@ function WeekStrip({ week, marineForecast }) {
             <button key={d.date} onClick={() => setSel(sel === i ? null : i)} aria-expanded={sel === i}
               className={`wday ${verdictClass(d.level)} ${f.weekend ? "weekend" : ""} ${sel === i ? "sel" : ""}`} title={`${f.wd} ${f.md}, tap for the day's forecast`}>
               <div className="wd-name">{i === 0 ? "Today" : f.wd}{f.weekend && <span className="wd-star">•</span>}</div>
-              <div className={`wd-level ${verdictClass(d.level)}`}>{d.level === "NO-GO" ? "NO" : d.level || "—"}</div>
+              <div className={`wd-level ${verdictClass(d.level)}`} title={d.thunder ? "Thunderstorms forecast" : undefined}>{d.thunder ? <><span aria-hidden="true">⚡</span><span className="sr-only">storms </span></> : ""}{d.level === "NO-GO" ? "NO" : d.level || "—"}</div>
               <div className="wd-m"><b>{d.windKt ?? "—"}</b><small>kt</small></div>
               <div className="wd-m wave"><b>{d.waveFt ?? "—"}</b><small>ft{d.periodSec ? ` @${d.periodSec}s` : ""}</small></div>
               <div className="wd-p">
@@ -633,7 +636,12 @@ function EmailNudge({ auth }) {
 // The gold "yellow time" — when to head back in.
 function OutlookPill({ outlook }) {
   if (!outlook) return null;
+  // A known storm/NO-GO cutoff always shows, even alongside missing wind data.
+  const cutoff = outlook.headInBy ? <> · be in by <b>{fmtHour(outlook.headInBy, true)}</b> · {outlook.headInReason || "weather turns"}</> : null;
+  if (outlook.noData) return <span className={`opill${cutoff ? " warn" : ""}`}><IconClock /> no wind data this hour{cutoff}</span>;
   if (outlook.goodHours === 0) return <span className="opill bad"><IconNoGo /> not right now</span>;
+  if (outlook.dataEndsAt)
+    return <span className="opill warn"><IconClock /> wind data runs out at <b>{fmtHour(outlook.dataEndsAt, true)}</b>{cutoff || " · check back"}</span>;
   if (outlook.headInBy)
     return <span className="opill warn"><IconClock /> be in by <b>{fmtHour(outlook.headInBy, true)}</b> · {outlook.headInReason || "weather turns"}</span>;
   return <span className="opill good"><IconClock /> good for {outlook.goodHours}h+</span>;
@@ -1073,6 +1081,9 @@ export default function App() {
   const wind = data?.wind || {};
   const wv = data?.waves || {};
   const buoy = data?.buoy;
+  // Credit the buoy only when it actually supplied wind, gusts or waves; a station
+  // that reported just temperatures leaves the verdict on the forecast.
+  const buoyLive = !!buoy && (wind.source === "buoy" || wind.gustSrc === "buoy" || wv.source === "buoy");
   const wr = data?.windRead;
   const comfort = data ? comfortCheck(auth.user?.prefs, wind.speedKt, wv.ft) : null;
 
@@ -1207,8 +1218,8 @@ export default function App() {
             <div className="grid stats">
               <div className="stat hero">
                 <div className="k">Wind</div>
-                <div className="v">{fmt(wind.speedKt, "")}<small>kt</small> <Trend t={trendOf(data.hourly?.[0]?.windKt, data.hourly?.[3]?.windKt)} /></div>
-                <div className="sub">{[wind.dir, wind.gustKt ? `gust ${wind.gustKt}${wind.gustSrc === "forecast" && wind.source !== "forecast" ? " (forecast)" : ""}` : null, wind.source].filter(Boolean).join(" · ") || "—"}</div>
+                <div className="v">{fmt(kt(wind.speedKt), "")}<small>kt</small> <Trend t={trendOf(data.hourly?.[0]?.windKt, data.hourly?.[3]?.windKt)} /></div>
+                <div className="sub">{[wind.dir, wind.gustKt ? `gust ${kt(wind.gustKt)}${wind.gustSrc === "forecast" && wind.source !== "forecast" ? " (forecast)" : ""}` : null, wind.source].filter(Boolean).join(" · ") || "—"}</div>
               </div>
               <div className="stat">
                 <div className="k">Waves</div>
@@ -1312,11 +1323,11 @@ export default function App() {
               </>
             )}
 
-            <GearBlock waterTempF={buoy ? buoy.waterTempF : null} airTempF={buoy ? buoy.airTempF : null} windKt={wind ? wind.speedKt : null} level={rec ? rec.level : null} />
+            <GearBlock waterTempF={data.temps?.waterF ?? null} airTempF={data.temps?.airF ?? null} windKt={wind ? wind.speedKt : null} level={rec ? rec.level : null} />
             {showAds && <AdSlot name="detailMid" />}
 
             <footer className="meta">
-              Source: {buoy ? `Buoy ${buoy.station} · ${buoy.ageMinutes != null ? `${buoy.ageMinutes} min ago` : "latest"}` : "forecast only"}
+              Source: {buoyLive ? `Buoy ${buoy.station} · ${buoy.ageMinutes != null ? `${buoy.ageMinutes} min ago` : "latest"}` : "forecast only"}
               {" · NWS & NDBC (NOAA), Windy. Updated "}{new Date(data.updatedAt).toLocaleTimeString()}
               <span className="buildtag" title="Deployed version">{typeof __BUILD__ !== "undefined" ? ` · v ${__BUILD__}` : ""}</span>
               <button onClick={() => loadSpot(active)}><IconRefresh /> Refresh</button>

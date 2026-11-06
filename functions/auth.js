@@ -113,7 +113,7 @@ function getCookie(request, name) {
 // One paid plan. The stored entitlement flag stays `adFree` (every existing
 // subscriber already has it, and the webhook sets it), so "Pro" = adFree. Safety
 // information is never paywalled: verdicts, the week ahead, the daily digest and
-// NO-GO alerts stay free. Pro adds convenience: no ads, unlimited starred ports,
+// NO-GO alerts stay free. Pro adds convenience: no Google ads, unlimited starred ports,
 // GO alerts (a starred port turns GO mid-day) and the Thursday weekend outlook.
 export const FREE_FAVORITES_MAX = 3;
 export const PRO_PREFS = ["goAlerts", "weekendEmail"]; // prefs only Pro members can switch on
@@ -133,9 +133,17 @@ const DEFAULT_SITE_CONFIG = {
   ads: ADSENSE_DEFAULTS, // AdSense on/off, publisher ID, slot IDs (src/ads-config.js)
 };
 // Site owner — admin by default so /admin works with no Cloudflare setup.
-// Override (or add more admins) with the ADMIN_EMAIL env var.
+// Admins come from the ADMIN_EMAIL Worker variable: one address, or several
+// separated by commas (e.g. "a@x.com, b@y.com"). Unset or empty → DEFAULT_ADMIN.
+// Deliberately not editable from /admin, so one admin can't add another.
 const DEFAULT_ADMIN = "seth.babcock@gmail.com";
-const isAdmin = (env, u) => !!(u && u.email === (env.ADMIN_EMAIL || DEFAULT_ADMIN).trim().toLowerCase());
+const adminList = (env) => {
+  const list = String(env.ADMIN_EMAIL || "").split(/[\s,;]+/).map((e) => e.trim().toLowerCase()).filter(validEmail);
+  return list.length ? [...new Set(list)] : [DEFAULT_ADMIN];
+};
+// An admin must have proved they own the address: an unverified password
+// account (explicit emailVerified === false) never gets admin, even if listed.
+const isAdmin = (env, u) => !!(u && u.emailVerified !== false && adminList(env).includes(String(u.email || "").toLowerCase()));
 // Admin views of a user — never expose the password hash/salt or tokens.
 const adminUserSummary = (u) => ({
   email: u.email, created: u.created || null, via: u.via || "password",
@@ -260,9 +268,13 @@ async function stripeGET(env, path) {
 // Is this subscription live (active/trialing) right now, per Stripe?
 // → { ok, status, customer } on a definite answer (404 = gone → ok:false);
 // → null when Stripe is unreachable or errors, so the caller can fail closed.
-async function stripeSubLive(env, subId) {
+// With { invoice: true } it also expands latest_invoice and reports
+// invoicePaid (a delayed ACH/SEPA first payment can leave the sub "active"
+// while its invoice is still open/processing).
+async function stripeSubLive(env, subId, { invoice = false } = {}) {
   try {
-    const r = await fetch(`https://api.stripe.com/v1/subscriptions/${encodeURIComponent(subId)}`, {
+    const q = invoice ? "?expand[]=latest_invoice" : "";
+    const r = await fetch(`https://api.stripe.com/v1/subscriptions/${encodeURIComponent(subId)}${q}`, {
       headers: { Authorization: `Bearer ${env.STRIPE_SECRET_KEY}` },
       signal: AbortSignal.timeout(8000),
     });
@@ -271,7 +283,33 @@ async function stripeSubLive(env, subId) {
     const s = await r.json();
     if (!s || typeof s.status !== "string") return null;
     const customer = typeof s.customer === "string" ? s.customer : s.customer?.id || null;
-    return { ok: s.status === "active" || s.status === "trialing", status: s.status, customer };
+    const invoicePaid = s.latest_invoice && typeof s.latest_invoice === "object" ? s.latest_invoice.status === "paid" : null;
+    return { ok: s.status === "active" || s.status === "trialing", status: s.status, customer, invoicePaid };
+  } catch (e) {
+    return null;
+  }
+}
+// Another live, paid ad-free subscription on this customer (not `excludeId`)?
+// Used when the recorded one ends, so a user paying for two isn't cut off.
+// → { id } (another qualifying sub), { id: null } (none), or null when
+// Stripe can't answer (callers retry, then fall back to revoking).
+async function stripeOtherLiveAdfreeSub(env, customer, excludeId) {
+  if (!customer) return { id: null };
+  try {
+    const q = `customer=${encodeURIComponent(customer)}&status=all&limit=20&expand[]=data.latest_invoice`;
+    const r = await fetch(`https://api.stripe.com/v1/subscriptions?${q}`, {
+      headers: { Authorization: `Bearer ${env.STRIPE_SECRET_KEY}` },
+      signal: AbortSignal.timeout(8000),
+    });
+    if (!r.ok) return null;
+    const list = await r.json();
+    const subs = Array.isArray(list?.data) ? list.data : [];
+    const hit = subs.find((s) => s && s.id && s.id !== excludeId
+      && (s.customer === customer || s.customer?.id === customer)
+      && s.metadata?.purpose === "adfree"
+      && (s.status === "active" || s.status === "trialing")
+      && s.latest_invoice && typeof s.latest_invoice === "object" && s.latest_invoice.status === "paid");
+    return { id: hit ? hit.id : null };
   } catch (e) {
     return null;
   }
@@ -374,14 +412,14 @@ async function adminEmails(env) {
   const cfg = await env.USERS.get("site:config", "json").catch(() => null);
   const fromCfg = cfg && Array.isArray(cfg.notifyEmails) ? cfg.notifyEmails : [];
   const legacy = await env.USERS.get("admin:emails", "json").catch(() => null);
-  const list = fromCfg.length ? fromCfg : (Array.isArray(legacy) && legacy.length ? legacy : [env.ADMIN_EMAIL || DEFAULT_ADMIN]);
+  const list = fromCfg.length ? fromCfg : (Array.isArray(legacy) && legacy.length ? legacy : adminList(env));
   return [...new Set(list.map((e) => String(e).trim().toLowerCase()).filter(Boolean))];
 }
 // Footer for non-essential (relationship/marketing) email only — NOT for
 // transactional mail like verification, password reset, or receipts.
 export const emailFooter = (unsubUrl) => unsubUrl ? `<p style="color:#99a;font-size:12px;margin-top:24px;font-family:system-ui,sans-serif">You're receiving this because you have a shouldiboat.com account. <a href="${unsubUrl}" style="color:#99a">Unsubscribe from non-essential emails</a>.</p>` : "";
-const welcomeHtml = (unsubUrl) => `<div style="font-family:system-ui,sans-serif"><h2>Welcome aboard</h2><p>Thanks for joining <b>shouldiboat.com</b>, your quick GO / CAUTION / NO-GO call for boating conditions.</p><ul><li>Save your favorite launch spots</li><li>Set comfort limits tuned to your boat</li><li>Go Pro anytime: no ads, unlimited ports, GO alerts, and a weekend outlook email</li></ul><p><a href="https://shouldiboat.com" style="display:inline-block;background:#008BA8;color:#fff;padding:10px 18px;border-radius:8px;text-decoration:none">Open shouldiboat.com</a></p></div>${emailFooter(unsubUrl)}`;
-const adFreeHtml = () => `<div style="font-family:system-ui,sans-serif"><h2>Welcome to Pro</h2><p>Thanks for supporting shouldiboat.com. Your Pro plan is active:</p><ul><li><b>No display ads</b>, anywhere on the site</li><li><b>Unlimited starred ports</b></li><li><b>GO alerts</b>: an email when a starred port turns GO during the day</li><li><b>Weekend outlook</b>: every Thursday, Saturday and Sunday at your ports</li></ul><p>Switch the alerts on in your <a href="https://shouldiboat.com/account">account</a>, where you can also manage or cancel anytime.</p></div>`;
+const welcomeHtml = (unsubUrl) => `<div style="font-family:system-ui,sans-serif"><h2>Welcome aboard</h2><p>Thanks for joining <b>shouldiboat.com</b>, your quick GO / CAUTION / NO-GO call for boating conditions.</p><ul><li>Save your favorite launch spots</li><li>Set comfort limits tuned to your boat</li><li>Go Pro anytime: no Google ads, unlimited ports, GO alerts, and a weekend outlook email</li></ul><p><a href="https://shouldiboat.com" style="display:inline-block;background:#008BA8;color:#fff;padding:10px 18px;border-radius:8px;text-decoration:none">Open shouldiboat.com</a></p></div>${emailFooter(unsubUrl)}`;
+const adFreeHtml = () => `<div style="font-family:system-ui,sans-serif"><h2>Welcome to Pro</h2><p>Thanks for supporting shouldiboat.com. Your Pro plan is active:</p><ul><li><b>No Google display ads</b> anywhere on the site (local sponsor banners, always labeled, may still appear)</li><li><b>Unlimited starred ports</b></li><li><b>GO alerts</b>: an email when a starred port turns GO during the day</li><li><b>Weekend outlook</b>: every Thursday, Saturday and Sunday at your ports</li></ul><p>Switch the alerts on in your <a href="https://shouldiboat.com/account">account</a>, where you can also manage or cancel anytime.</p></div>`;
 const verifyHtml = (link) => `<div style="font-family:system-ui,-apple-system,sans-serif;max-width:520px;color:#1a2b38">
   <h2 style="margin:0 0 10px">Confirm your email address</h2>
   <p style="line-height:1.55;margin:0 0 14px">Thanks for creating a <b>shouldiboat.com</b> account, the quick GO / CAUTION / NO-GO call for boating conditions. To finish setting up your account, please confirm this is your email address.</p>
@@ -1180,6 +1218,9 @@ export async function handleAuth(request, env, url, ctx) {
     const payload = JSON.parse(atob(tok.id_token.split(".")[1].replace(/-/g, "+").replace(/_/g, "/")));
     const email = (payload.email || "").toLowerCase();
     if (!email) return new Response("No email from Google", { status: 502 });
+    // Only trust an address Google has verified; otherwise anyone could sign in
+    // as (or claim admin for) an address they don't control.
+    if (payload.email_verified !== true && payload.email_verified !== "true") return new Response("Your Google account's email address isn't verified.", { status: 403 });
     let user = await env.USERS.get(emailKey(email), "json");
     if (!user) {
       user = { id: randHex(8), email, created: new Date().toISOString(), prefs: {}, favorites: [], adFree: false, via: "google", emailVerified: true };
@@ -1391,12 +1432,29 @@ export async function handleAuth(request, env, url, ctx) {
       // confirm the subscription is live right now before granting. Fail
       // closed: if Stripe can't answer, return 503 so Stripe retries later.
       const email = (obj.client_reference_id || obj.customer_email || obj.customer_details?.email || "").toLowerCase();
-      // Reverse index first: even if the sub isn't live right now (e.g.
-      // past_due), a later subscription.updated can still find the user.
-      if (obj.customer && email) await env.USERS.put(`stripecust:${obj.customer}`, email);
+      const owner = email ? await env.USERS.get(emailKey(email), "json") : null;
+      // Reverse index first, so a later subscription.updated can find the user
+      // even if the sub isn't live right now (e.g. past_due). Only for an
+      // existing account: a late retry must not re-create the index (and keep
+      // the email in KV) after the account was deleted.
+      if (obj.customer && owner) await env.USERS.put(`stripecust:${obj.customer}`, email);
       const live = await stripeSubLive(env, obj.subscription);
       if (live === null) return json({ error: "Could not confirm subscription with Stripe; retry later." }, 503);
-      if (!live.ok || (obj.customer && live.customer && live.customer !== obj.customer)) return done({ received: true, ignored: true });
+      const customerOk = !(obj.customer && live.customer && live.customer !== obj.customer);
+      if (!live.ok || !customerOk) {
+        // Paid checkout, but the sub isn't active/trialing yet (e.g. a retry
+        // that lands while it's past_due). Record it as the user's ad-free
+        // subscription WITHOUT granting, so the subscription.updated that
+        // follows payment can match it and grant (it re-checks live status).
+        // Only for recoverable states, with a confirmed customer match, and
+        // never over a different subscription that's currently granting.
+        const recoverable = ["past_due", "unpaid", "incomplete"].includes(live.status);
+        const strictCustomer = !!(obj.customer && live.customer === obj.customer);
+        if (owner && recoverable && strictCustomer && !(owner.adFree && owner.stripeSubId && owner.stripeSubId !== obj.subscription)) {
+          await saveUser(env, { ...owner, stripeCustomerId: obj.customer, stripeSubId: obj.subscription });
+        }
+        return done({ received: true, ignored: true });
+      }
       const prev = await setAdFree(email, true, { stripeCustomerId: obj.customer || null, stripeSubId: obj.subscription });
       // Welcome only on a real state change, not on every redelivery.
       if (prev && (!prev.adFree || prev.stripeSubId !== obj.subscription)) {
@@ -1422,7 +1480,59 @@ export async function handleAuth(request, env, url, ctx) {
           if (live === null) return json({ error: "Could not confirm subscription with Stripe; retry later." }, 503);
           active = ["active", "trialing", "past_due"].includes(live.status);
         }
+        // The recorded sub ended while the user was ad-free. If they're still
+        // paying for another tagged, live, paid ad-free sub on the same
+        // customer (e.g. two checkouts from two tabs), switch to it instead of
+        // revoking, and tell the admins: a double subscription is a billing
+        // issue (refund/cancel one).
+        // If Stripe can't answer, return 503 so Stripe retries rather than cut
+        // off a user who may still be paying. Stripe stops retrying after ~3
+        // days, so this is bounded: once the lookup has been failing for this
+        // event for 24h, revoke anyway (safe direction; the other sub's next
+        // `updated` re-adopts it).
+        if (!active && user.adFree && user.stripeSubId && user.stripeSubId === obj.id) {
+          const found = await stripeOtherLiveAdfreeSub(env, obj.customer, obj.id);
+          let other = found ? found.id : null;
+          if (found === null && evtKey) {
+            const failKey = `stripeevtfail:${event.id}`;
+            const firstFail = Number(await env.USERS.get(failKey)) || 0;
+            if (!firstFail) await env.USERS.put(failKey, String(Date.now()), { expirationTtl: 7 * 86400 });
+            if (!firstFail || Date.now() - firstFail < 24 * 3600e3) {
+              return json({ error: "Could not check other subscriptions with Stripe; retry later." }, 503);
+            }
+          }
+          if (other) {
+            await setAdFree(email, true, { stripeSubId: other });
+            await runBg(ctx, notify(env, "double_subscription", { email, customer: obj.customer, ended: obj.id, now: other }, {
+              to: await adminEmails(env), subject: "Double Pro subscription · shouldiboat.com",
+              html: `<div style="font-family:system-ui,sans-serif"><p><b>${htmlEscape(email)}</b> had two Pro subscriptions on customer <code>${htmlEscape(String(obj.customer))}</code>. <code>${htmlEscape(String(obj.id))}</code> ended; ad-free now follows <code>${htmlEscape(other)}</code>. Check whether a refund is owed.</p></div>`,
+              ttlDays: 30,
+            }));
+            return done();
+          }
+        }
         await setAdFree(email, active);
+      } else if (user && event.type === "customer.subscription.updated" && purpose === "adfree" && obj.id
+                 && !user.adFree && ["active", "trialing"].includes(obj.status)
+                 && (!user.stripeCustomerId || user.stripeCustomerId === obj.customer)) {
+        // A tagged ad-free subscription on this user's own customer became
+        // live, but it isn't the one we recorded. This happens when a stale
+        // checkout retry for an older, still-pending subscription repointed
+        // stripeSubId (e.g. two checkouts from two tabs), or the checkout
+        // event was never delivered. The user isn't ad-free, so adopt it:
+        // confirm live with Stripe (active/trialing, same customer), then
+        // record and grant. Never replaces a subscription that's granting.
+        // The latest invoice must be paid: with no checkout event to show the
+        // payment settled, an ACH/SEPA sub that is "active" while its first
+        // payment is still processing must not grant early.
+        const live = await stripeSubLive(env, obj.id, { invoice: true });
+        if (live === null) return json({ error: "Could not confirm subscription with Stripe; retry later." }, 503);
+        if (live.ok && live.customer === obj.customer && live.invoicePaid === true) {
+          const prev = await setAdFree(email, true, { stripeCustomerId: obj.customer, stripeSubId: obj.id });
+          if (prev && !prev.adFree) {
+            await runBg(ctx, notify(env, "adfree_activated", { email }, { to: email, subject: "Welcome to shouldiboat Pro", html: adFreeHtml(), ttlDays: 30 }));
+          }
+        }
       }
     }
     return done();

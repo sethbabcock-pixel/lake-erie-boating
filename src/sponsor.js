@@ -2,7 +2,7 @@
 // modeled on FlightAware's sponsored homepage. Two fill sources, in order:
 //   1. A direct-sold campaign in TAKEOVERS whose date window includes today.
 //   2. Google Ad Manager (programmatic) — inert until GAM.networkCode is set.
-// If neither fills, the house hero shows (no skin). Ad-free users never see the
+// If neither fills, the house hero shows (no skin). Pro (ad-free) users never see the
 // programmatic (GAM) takeover; direct-sold brand campaigns show to everyone
 // unless the campaign sets hideForAdFree.
 
