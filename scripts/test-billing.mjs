@@ -49,6 +49,9 @@ let stormMode = false; // Open-Meteo stub: every spot NO-GO (true) vs calm GO (f
 let scaMode = false; // NWS alerts stub: an active Small Craft Advisory at every point
 let alertsDown = false; // NWS alerts stub: the alerts endpoint fails
 let subGetCancelState = false; // what a GET subscription retrieve reports
+let subStatus = {}; // sub id → status a GET retrieve reports ("missing" → 404); default active
+let subCustomer = {}; // sub id → customer a GET retrieve reports (default: none)
+let stripeDown = false; // every Stripe API call → 500
 const makeSub = (cancelAtPeriodEnd) => ({
   id: "sub_123", status: "active", cancel_at_period_end: cancelAtPeriodEnd,
   current_period_end: 1790000000, cancel_at: cancelAtPeriodEnd ? 1790000000 : null,
@@ -102,10 +105,13 @@ function installFetchStub() {
       return jsonResp({ id: "cs_test_123", url: "https://checkout.stripe.com/c/pay/cs_test_123" });
     if (u.includes("/v1/billing_portal/sessions"))
       return jsonResp({ id: "bps_123", url: "https://billing.stripe.com/p/session/bps_123" });
+    if (stripeDown) return jsonResp({ error: { message: "stripe is down" } }, 500);
     if (u.includes("/v1/subscriptions/")) {
       // POST = update (cancel/resume) → mirror the request; GET = retrieve.
       if ((opts.method || "GET") === "POST") return jsonResp(makeSub(body?.cancel_at_period_end === "true"));
-      return jsonResp(makeSub(subGetCancelState));
+      const id = decodeURIComponent(u.split("/v1/subscriptions/")[1].split(/[/?]/)[0]);
+      if (subStatus[id] === "missing") return jsonResp({ error: { type: "invalid_request_error", code: "resource_missing" } }, 404);
+      return jsonResp({ ...makeSub(subGetCancelState), status: subStatus[id] || "active", ...(subCustomer[id] ? { customer: subCustomer[id] } : {}) });
     }
     if (u.includes("/v1/prices/"))
       return priceResolves
@@ -817,6 +823,109 @@ async function run() {
     check("webhook: sends Pro welcome email", emailCalls.some((c) => /Welcome to shouldiboat Pro/i.test(c.subject)), JSON.stringify(emailCalls.map((c) => c.subject)));
     const notifs = [...env.USERS._map.keys()].filter((k) => k.startsWith("admin:notification:")).map((k) => JSON.parse(env.USERS._map.get(k)));
     check("webhook: adfree_activated notification logged", notifs.some((n) => n.type === "adfree_activated"), JSON.stringify(notifs.map((n) => n.type)));
+  }
+
+  // 35b. Redeliveries: Stripe retries for up to 3 days with a fresh signature
+  // timestamp. A checkout event retried after cancellation must not re-grant;
+  // a repeated event id is a no-op; redelivery sends only one welcome email.
+  {
+    const env = { USERS: makeKV(), STRIPE_WEBHOOK_SECRET: "whsec_right", STRIPE_SECRET_KEY: "sk_test_x", BREVO_API_KEY: "brevo_x" };
+    await seedUser(env, "redeliver@example.com");
+    emailCalls = []; stripeCalls = []; subStatus = {}; subCustomer = { sub_rd: "cus_rd" };
+    const session = { mode: "subscription", payment_status: "paid", metadata: { purpose: "adfree" }, client_reference_id: "redeliver@example.com", customer: "cus_rd", subscription: "sub_rd" };
+    const completed = { id: "evt_rd_1", type: "checkout.session.completed", data: { object: session } };
+    eq("redelivery: first completed → 200", (await call(stripeWebhookReq(completed, "whsec_right"), env)).status, 200);
+    check("redelivery: grant retrieves the subscription from Stripe", stripeCalls.some((c) => c.method === "GET" && c.url.endsWith("/v1/subscriptions/sub_rd")), JSON.stringify(stripeCalls.map((c) => c.url)));
+    eq("redelivery: first completed grants ad-free", (await env.USERS.get("user:redeliver@example.com", "json")).adFree, true);
+    check("redelivery: event id recorded", !!(await env.USERS.get("stripecust:cus_rd")) && !!(await env.USERS.get("stripeevt:evt_rd_1")));
+
+    // Same event id again → no-op (no Stripe call, no email, no write).
+    stripeCalls = [];
+    const dup = await call(stripeWebhookReq(completed, "whsec_right"), env);
+    eq("dedupe: duplicate event id → 200", dup.status, 200);
+    eq("dedupe: duplicate flagged", (await dup.json()).duplicate, true);
+    eq("dedupe: duplicate makes no Stripe call", stripeCalls.length, 0);
+
+    // A different event id for the same, already-granted session (e.g.
+    // completed then async_payment_succeeded) → still only one welcome email.
+    const again = { id: "evt_rd_2", type: "checkout.session.async_payment_succeeded", data: { object: session } };
+    eq("redelivery: second event for same session → 200", (await call(stripeWebhookReq(again, "whsec_right"), env)).status, 200);
+    eq("redelivery: only one welcome email", emailCalls.filter((c) => /Welcome to shouldiboat Pro/i.test(c.subject)).length, 1);
+    eq("redelivery: one adfree_activated notification", [...env.USERS._map.keys()].filter((k) => k.startsWith("admin:notification:")).map((k) => JSON.parse(env.USERS._map.get(k))).filter((n) => n.type === "adfree_activated").length, 1);
+
+    // Cancel → revoked. Then a retried completed (new event id, as when the
+    // first delivery failed) arrives: Stripe now reports the sub canceled.
+    const deleted = { id: "evt_rd_3", type: "customer.subscription.deleted", data: { object: { id: "sub_rd", customer: "cus_rd", status: "canceled", metadata: { purpose: "adfree" } } } };
+    await call(stripeWebhookReq(deleted, "whsec_right"), env);
+    eq("redelivery: deletion revokes ad-free", (await env.USERS.get("user:redeliver@example.com", "json")).adFree, false);
+    subStatus.sub_rd = "canceled";
+    emailCalls = [];
+    const late = { id: "evt_rd_late", type: "checkout.session.completed", data: { object: session } };
+    const lr = await call(stripeWebhookReq(late, "whsec_right"), env);
+    eq("redelivery after deletion → 200", lr.status, 200);
+    eq("redelivery after deletion: ignored", (await lr.json()).ignored, true);
+    eq("redelivery after deletion does NOT re-grant", (await env.USERS.get("user:redeliver@example.com", "json")).adFree, false);
+    check("redelivery after deletion sends no email", !emailCalls.some((c) => /Welcome to shouldiboat Pro/i.test(c.subject)));
+    check("redelivery after deletion is recorded (not retried)", !!(await env.USERS.get("stripeevt:evt_rd_late")));
+
+    // Subscription gone entirely (404) → no grant.
+    await seedUser(env, "gone@example.com");
+    subStatus.sub_gone = "missing";
+    const gone = { id: "evt_gone", type: "checkout.session.completed", data: { object: { ...session, client_reference_id: "gone@example.com", customer: "cus_gone", subscription: "sub_gone" } } };
+    eq("missing subscription → 200", (await call(stripeWebhookReq(gone, "whsec_right"), env)).status, 200);
+    eq("missing subscription does NOT grant", (await env.USERS.get("user:gone@example.com", "json")).adFree, false);
+
+    // Live subscription but for a different customer than the session → no grant.
+    await seedUser(env, "mixup@example.com");
+    subCustomer.sub_mix = "cus_someone_else";
+    const mix = { id: "evt_mix", type: "checkout.session.completed", data: { object: { ...session, client_reference_id: "mixup@example.com", customer: "cus_mix", subscription: "sub_mix" } } };
+    await call(stripeWebhookReq(mix, "whsec_right"), env);
+    eq("customer mismatch does NOT grant", (await env.USERS.get("user:mixup@example.com", "json")).adFree, false);
+
+    // Trialing counts as live.
+    await seedUser(env, "trial@example.com");
+    subStatus.sub_trial = "trialing";
+    const trial = { id: "evt_trial", type: "checkout.session.completed", data: { object: { ...session, client_reference_id: "trial@example.com", customer: "cus_trial", subscription: "sub_trial" } } };
+    await call(stripeWebhookReq(trial, "whsec_right"), env);
+    eq("trialing subscription grants", (await env.USERS.get("user:trial@example.com", "json")).adFree, true);
+
+    // Stripe unreachable → fail closed with 503, no grant, event NOT recorded
+    // (so Stripe's retry is processed once Stripe is back).
+    await seedUser(env, "outage@example.com");
+    const outage = { id: "evt_outage", type: "checkout.session.completed", data: { object: { ...session, client_reference_id: "outage@example.com", customer: "cus_out", subscription: "sub_out" } } };
+    stripeDown = true;
+    const or = await call(stripeWebhookReq(outage, "whsec_right"), env);
+    stripeDown = false;
+    eq("stripe down → 503", or.status, 503);
+    eq("stripe down: no grant", (await env.USERS.get("user:outage@example.com", "json")).adFree, false);
+    check("stripe down: event not recorded", !(await env.USERS.get("stripeevt:evt_outage")));
+    eq("stripe back: retry → 200", (await call(stripeWebhookReq(outage, "whsec_right"), env)).status, 200);
+    eq("stripe back: retry grants", (await env.USERS.get("user:outage@example.com", "json")).adFree, true);
+
+    // A stale `updated` (status active) retried after `deleted` must not re-grant.
+    await seedUser(env, "stale@example.com", { adFree: false, stripeCustomerId: "cus_st", stripeSubId: "sub_st" });
+    await env.USERS.put("stripecust:cus_st", "stale@example.com");
+    subStatus.sub_st = "canceled";
+    const staleUpd = { id: "evt_st", type: "customer.subscription.updated", data: { object: { id: "sub_st", customer: "cus_st", status: "active", metadata: { purpose: "adfree" } } } };
+    eq("stale updated → 200", (await call(stripeWebhookReq(staleUpd, "whsec_right"), env)).status, 200);
+    eq("stale updated after deletion does NOT re-grant", (await env.USERS.get("user:stale@example.com", "json")).adFree, false);
+    subStatus.sub_st = "past_due";
+    await call(stripeWebhookReq({ ...staleUpd, id: "evt_st2" }, "whsec_right"), env);
+    eq("updated with live past_due keeps ad-free on", (await env.USERS.get("user:stale@example.com", "json")).adFree, true);
+    stripeDown = true;
+    const sd = await call(stripeWebhookReq({ ...staleUpd, id: "evt_st3" }, "whsec_right"), env);
+    stripeDown = false;
+    eq("updated grant with Stripe down → 503", sd.status, 503);
+
+    // A paid checkout whose sub is past_due at delivery: no grant, but the
+    // reverse index is written so a later `updated` (active) can grant.
+    await seedUser(env, "pastdue@example.com");
+    subStatus.sub_pd = "past_due";
+    const pd = { id: "evt_pd", type: "checkout.session.completed", data: { object: { ...session, client_reference_id: "pastdue@example.com", customer: "cus_pd", subscription: "sub_pd" } } };
+    await call(stripeWebhookReq(pd, "whsec_right"), env);
+    eq("past_due at checkout: no grant", (await env.USERS.get("user:pastdue@example.com", "json")).adFree, false);
+    eq("past_due at checkout: reverse index written", await env.USERS.get("stripecust:cus_pd"), "pastdue@example.com");
+    subStatus = {}; subCustomer = {};
   }
 
   // 36. notifyEmails in site config drives admin notification recipients

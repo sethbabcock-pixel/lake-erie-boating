@@ -257,6 +257,25 @@ async function stripeGET(env, path) {
   });
   return r.json();
 }
+// Is this subscription live (active/trialing) right now, per Stripe?
+// → { ok, status, customer } on a definite answer (404 = gone → ok:false);
+// → null when Stripe is unreachable or errors, so the caller can fail closed.
+async function stripeSubLive(env, subId) {
+  try {
+    const r = await fetch(`https://api.stripe.com/v1/subscriptions/${encodeURIComponent(subId)}`, {
+      headers: { Authorization: `Bearer ${env.STRIPE_SECRET_KEY}` },
+      signal: AbortSignal.timeout(8000),
+    });
+    if (r.status === 404) return { ok: false, status: "missing", customer: null };
+    if (!r.ok) return null;
+    const s = await r.json();
+    if (!s || typeof s.status !== "string") return null;
+    const customer = typeof s.customer === "string" ? s.customer : s.customer?.id || null;
+    return { ok: s.status === "active" || s.status === "trialing", status: s.status, customer };
+  } catch (e) {
+    return null;
+  }
+}
 async function stripeDELETE(env, path) {
   const r = await fetch(`https://api.stripe.com/v1/${path}`, {
     method: "DELETE",
@@ -1337,11 +1356,24 @@ export async function handleAuth(request, env, url, ctx) {
     let event;
     try { event = JSON.parse(raw); } catch { return json({ error: "Bad payload" }, 400); }
     const obj = event?.data?.object || {};
+    // Stripe delivers at least once and retries for up to 3 days, re-signing
+    // each retry with a fresh `t`, so the replay window doesn't catch them.
+    // Skip any event id we've already processed. It's recorded only after the
+    // event is handled, so a 5xx below still lets Stripe retry.
+    const evtKey = typeof event?.id === "string" && event.id ? `stripeevt:${event.id}` : null;
+    if (evtKey && await env.USERS.get(evtKey)) return json({ received: true, duplicate: true });
+    const done = async (body = { received: true }) => {
+      if (evtKey) await env.USERS.put(evtKey, "1", { expirationTtl: 7 * 86400 });
+      return json(body);
+    };
+    // Returns the user as it was before the write (null if none), so callers
+    // can tell whether anything actually changed.
     const setAdFree = async (email, value, extra = {}) => {
-      if (!email) return;
+      if (!email) return null;
       const user = await env.USERS.get(emailKey(email), "json");
-      if (!user) return;
+      if (!user) return null;
       await saveUser(env, { ...user, adFree: value, ...extra });
+      return user;
     };
     // Only the ad-free subscription may flip ad-free. Other checkouts on the
     // same Stripe account (e.g. one-time merch payments) must not grant it or
@@ -1354,11 +1386,22 @@ export async function handleAuth(request, env, url, ctx) {
       // subscription, and be paid. With async methods (ACH/SEPA) `completed`
       // can arrive `unpaid`; the grant then waits for `async_payment_succeeded`.
       const paid = obj.payment_status === "paid" || obj.payment_status === "no_payment_required";
-      if (obj.mode !== "subscription" || !obj.subscription || purpose !== "adfree" || !paid) return json({ received: true, ignored: true });
+      if (obj.mode !== "subscription" || !obj.subscription || purpose !== "adfree" || !paid) return done({ received: true, ignored: true });
+      // The checkout snapshot can be days old (a retry after cancellation), so
+      // confirm the subscription is live right now before granting. Fail
+      // closed: if Stripe can't answer, return 503 so Stripe retries later.
       const email = (obj.client_reference_id || obj.customer_email || obj.customer_details?.email || "").toLowerCase();
-      if (obj.customer && email) await env.USERS.put(`stripecust:${obj.customer}`, email); // reverse index for later events
-      await setAdFree(email, true, { stripeCustomerId: obj.customer || null, stripeSubId: obj.subscription });
-      if (email) await runBg(ctx, notify(env, "adfree_activated", { email }, { to: email, subject: "Welcome to shouldiboat Pro", html: adFreeHtml(), ttlDays: 30 }));
+      // Reverse index first: even if the sub isn't live right now (e.g.
+      // past_due), a later subscription.updated can still find the user.
+      if (obj.customer && email) await env.USERS.put(`stripecust:${obj.customer}`, email);
+      const live = await stripeSubLive(env, obj.subscription);
+      if (live === null) return json({ error: "Could not confirm subscription with Stripe; retry later." }, 503);
+      if (!live.ok || (obj.customer && live.customer && live.customer !== obj.customer)) return done({ received: true, ignored: true });
+      const prev = await setAdFree(email, true, { stripeCustomerId: obj.customer || null, stripeSubId: obj.subscription });
+      // Welcome only on a real state change, not on every redelivery.
+      if (prev && (!prev.adFree || prev.stripeSubId !== obj.subscription)) {
+        await runBg(ctx, notify(env, "adfree_activated", { email }, { to: email, subject: "Welcome to shouldiboat Pro", html: adFreeHtml(), ttlDays: 30 }));
+      }
     } else if ((event.type === "customer.subscription.updated" || event.type === "customer.subscription.deleted") && !notAdFree) {
       const email = await env.USERS.get(`stripecust:${obj.customer}`);
       const user = email ? await env.USERS.get(emailKey(email), "json") : null;
@@ -1370,11 +1413,19 @@ export async function handleAuth(request, env, url, ctx) {
       // stripeSubId when its paid checkout grants, so it must match. Otherwise
       // a legacy user's new, still-unpaid ACH subscription could grant early.
       if (user && (user.stripeSubId === obj.id || (!user.stripeSubId && purpose == null))) {
-        const active = event.type !== "customer.subscription.deleted" && ["active", "trialing", "past_due"].includes(obj.status);
+        let active = event.type !== "customer.subscription.deleted" && ["active", "trialing", "past_due"].includes(obj.status);
+        // Events can arrive late or out of order (a retried `updated` after
+        // `deleted`), so a grant is confirmed against Stripe's live state.
+        // Revokes need no check: failing toward revocation is safe.
+        if (active && obj.id) {
+          const live = await stripeSubLive(env, obj.id);
+          if (live === null) return json({ error: "Could not confirm subscription with Stripe; retry later." }, 503);
+          active = ["active", "trialing", "past_due"].includes(live.status);
+        }
         await setAdFree(email, active);
       }
     }
-    return json({ received: true });
+    return done();
   }
 
   return json({ error: "Not found" }, 404);
