@@ -74,6 +74,8 @@ async function route(request, env, ctx) {
   // the www redirect above applies to page loads, not just API calls — which
   // means assets must be served here instead of by the assets-first layer.
   if ((request.method === "GET" || request.method === "HEAD") && env.ASSETS) {
+    // Old privacy URL: a real redirect, not a thin meta-refresh stub page.
+    if (p === "/privacy" || p === "/privacy.html") return Response.redirect(`${url.origin}/legal#privacy`, 301);
     // SEO pages (home + /spot/<id>): serve the shell with per-page <head> meta
     // so each spot is its own indexable result, not one generic SPA page. A
     // /spot/<slug> that isn't a curated spot may be a user-built page (KV) —
