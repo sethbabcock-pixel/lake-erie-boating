@@ -59,6 +59,48 @@ export const CAMS = [
   { name: "Saxon Harbor, WI · Marina", lat: 46.565, lon: -90.437, ipcamlive: "saxonharbor", lake: "Lake Superior" },
   { name: "Whitefish Point · Shipwreck Museum", lat: 46.771, lon: -84.958, wetmet: "977a312d5da91e21bc63f295c0b12cc7", lake: "Lake Superior" },
   { name: "Isle Royale · Mott Island (NPS)", lat: 48.108, lon: -88.556, img: "https://www.nps.gov/webcams-isro/mottmain.jpg", link: "https://www.nps.gov/isro/learn/photosmultimedia/webcams.htm", lake: "Lake Superior" },
+  // Florida Atlantic Coast (2026-11 water-cam audit — every entry is a 24/7 water view;
+  // YouTube confirmed it exists + allows embedding; the player hides any that are offline)
+  { name: "St. Augustine · Matanzas River & Bridge of Lions", lat: 29.892, lon: -81.31, yt: "uLJBad4vSno", lake: "Florida Atlantic Coast" },
+  { name: "St. Augustine Beach · Surf Station surf cam", lat: 29.85, lon: -81.264, yt: "H2q_DJc33kg", lake: "Florida Atlantic Coast" },
+  { name: "Port Canaveral · Harbor (Gator's Dockside)", lat: 28.41, lon: -80.62, yt: "mQnOcuGV334", lake: "Florida Atlantic Coast" },
+  { name: "Cocoa Beach · Surf", lat: 28.32, lon: -80.607, yt: "6QmQtFXG9vM", lake: "Florida Atlantic Coast" },
+  { name: "Cocoa Beach · Surfer's View", lat: 28.33, lon: -80.607, yt: "gAvFqhNwZm0", lake: "Florida Atlantic Coast" },
+  { name: "Fort Lauderdale · Beach (PTZtv)", lat: 26.1, lon: -80.105, yt: "pXx3YQVSUGg", lake: "Florida Atlantic Coast" },
+  { name: "Miami · PortMiami channel", lat: 25.77, lon: -80.16, yt: "i8ScwT2PT-0", lake: "Florida Atlantic Coast" },
+  { name: "Miami · Biscayne Bay", lat: 25.79, lon: -80.18, yt: "4mM_w7P5cWw", lake: "Florida Atlantic Coast" },
+  // Florida Keys
+  { name: "Islamorada · Little Basin (Florida Bay)", lat: 24.93, lon: -80.62, yt: "HfSOXLUtYmA", lake: "Florida Keys" },
+  { name: "Islamorada · Charter boat docks", lat: 24.93, lon: -80.6, yt: "8ShFKuTCmhQ", lake: "Florida Keys" },
+  { name: "Islamorada · Lazy Days oceanfront", lat: 24.91, lon: -80.64, yt: "5pFDytRb4Qc", lake: "Florida Keys" },
+  { name: "Marathon · Sombrero Beach", lat: 24.69, lon: -81.08, yt: "jE4og3o_SXs", lake: "Florida Keys" },
+  { name: "Marathon · Sunset Grille (7 Mile Bridge)", lat: 24.705, lon: -81.115, yt: "SXMC-MzSncI", lake: "Florida Keys" },
+  { name: "Key West · Harbor (PTZtv)", lat: 24.56, lon: -81.808, yt: "iHJbTrQSZys", lake: "Florida Keys" },
+  { name: "Key West · Bight Marina", lat: 24.561, lon: -81.801, yt: "Y5ypYTZs-7o", lake: "Florida Keys" },
+  // Florida Gulf Coast
+  { name: "Clearwater Beach · Frenchy's", lat: 27.98, lon: -82.83, yt: "rxBBRLWF0mM", lake: "Florida Gulf Coast" },
+  { name: "Clearwater Beach · Pier 60 (FOX 13)", lat: 27.977, lon: -82.829, yt: "S8-G3uJOqZw", lake: "Florida Gulf Coast" },
+  { name: "St. Petersburg · Waterfront (FOX 13)", lat: 27.76, lon: -82.633, yt: "OeYHEp9_KYk", lake: "Florida Gulf Coast" },
+  { name: "Siesta Key · Beach", lat: 27.265, lon: -82.553, yt: "GU5CkKxOPbM", lake: "Florida Gulf Coast" },
+  { name: "Panama City Beach · Pineapple Willy's Pier", lat: 30.18, lon: -85.81, yt: "0pLm61T8qCU", lake: "Florida Gulf Coast" },
+  { name: "Destin · Gulf beach", lat: 30.38, lon: -86.48, yt: "_Zqi24i0fl4", lake: "Florida Gulf Coast" },
+  { name: "Pensacola Beach · Pier", lat: 30.328, lon: -87.142, yt: "O6fLjzZLALY", lake: "Florida Gulf Coast" },
+  { name: "Pensacola · Bay", lat: 30.4, lon: -87.2, yt: "O-tdY-lbISg", lake: "Florida Gulf Coast" },
+  // Alabama & Mississippi Coast
+  { name: "Gulf Shores → Fairhope · Coastal SkyCams (rotating)", lat: 30.35, lon: -87.75, yt: "3Rp_9FUKH4I", lake: "Alabama & Mississippi Coast" },
+  // Louisiana & Texas Coast
+  { name: "Galveston · Seawall beach (ABC13)", lat: 29.29, lon: -94.79, yt: "HkHhXsWci7Q", lake: "Louisiana & Texas Coast" },
+  { name: "South Padre · North Beach (Sand Rose)", lat: 26.13, lon: -97.17, yt: "kJ_EXhKsH30", lake: "Louisiana & Texas Coast" },
+  // Georgia & South Carolina / North Carolina / Chesapeake
+  { name: "Nags Head · Jennette's Pier", lat: 35.91, lon: -75.6, yt: "sgnlB7lhknM", lake: "North Carolina Coast" },
+  { name: "Kitty Hawk · Oceanfront (Twiddy)", lat: 36.07, lon: -75.7, yt: "WEhuDqlxHmM", lake: "North Carolina Coast" },
+  // Southern California Coast
+  { name: "San Diego Bay · Shelter Island", lat: 32.714, lon: -117.227, yt: "ct7IRmzDggk", lake: "Southern California Coast" },
+  { name: "Channel Islands Harbor · Coastal Café", lat: 34.165, lon: -119.225, yt: "oJ9CLuRwuuk", lake: "Southern California Coast" },
+  // Hawaii & Puerto Rico
+  { name: "Kona · Keauhou Bay", lat: 19.56, lon: -155.96, yt: "RxDQLIwxyhA", lake: "Hawaii" },
+  { name: "Maui · Wailea Beach", lat: 20.68, lon: -156.44, yt: "mrUciA_XZxA", lake: "Hawaii" },
+  { name: "San Juan · Isla Verde beach", lat: 18.445, lon: -66.02, yt: "taI7GiyvDxE", lake: "Puerto Rico" },
 ];
 
 // Extra cam directories to link out to, per lake (sites that block embedding).

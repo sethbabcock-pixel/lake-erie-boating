@@ -123,7 +123,7 @@ export default function AdminPage() {
   if (status === "forbidden") return (
     <Gate title="Not authorized">
       <p>{msg || "This account isn't the admin."}</p>
-      <p className="adm-muted">Signed in as {auth.user?.email}. The admin is set by the <code>ADMIN_EMAIL</code> variable on the Worker.</p>
+      <p className="adm-muted">Signed in as {auth.user?.email}. Admins are listed in the <code>ADMIN_EMAIL</code> variable on the Worker (separate several with commas), and the account's email must be verified.</p>
       <a className="adm-gate-back" href="/">← Back to shouldiboat.com</a>
     </Gate>
   );
