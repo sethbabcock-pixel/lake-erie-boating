@@ -1967,6 +1967,17 @@ async function run() {
     alertTestStatus = null;
   }
 
+  // 61. Flash Flood Warning is CAUTION (debris/current at river ramps); the
+  //     watch, statement and other flood products stay shore-side notes.
+  {
+    const { alertLevel, buildRecommendation } = await import("../functions/marine/conditions.js");
+    eq("flash flood: warning → CAUTION", alertLevel({ event: "Flash Flood Warning" }), "CAUTION");
+    eq("flash flood: emergency → CAUTION", alertLevel({ event: "Flash Flood Emergency" }), "CAUTION");
+    for (const ev of ["Flash Flood Watch", "Flash Flood Statement", "Flood Warning", "Flood Watch", "Flood Advisory", "Coastal Flood Warning", "Lakeshore Flood Warning"]) eq(`flash flood: ${ev} stays a note`, alertLevel({ event: ev }), null);
+    const r = buildRecommendation({ buoy: null, alerts: [{ event: "Flash Flood Warning" }], wind: { speedKt: 6, gustKt: 8, source: "forecast", gustSrc: "forecast" }, waves: { ft: 1, source: "forecast" }, read: null, hours: [], profile: "lake" });
+    check("flash flood: calm day under a Flash Flood Warning is CAUTION, with the reason", r.level === "CAUTION" && r.reasons.some((x) => /Active Flash Flood Warning/.test(x)), JSON.stringify(r));
+  }
+
   // ── Launch-facts card: a configured buoy is not a live buoy ──
   {
     const { SPOTS, spotFacts } = await import("../functions/marine/conditions.js");

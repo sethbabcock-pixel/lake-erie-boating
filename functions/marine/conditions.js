@@ -659,7 +659,13 @@ const NO_GO_ALERTS = ["gale", "storm", "special marine", "hurricane", "typhoon",
   "blizzard warning", "snow squall warning", "lake effect snow warning", "high surf warning"];
 export function alertLevel(a) {
   const ev = (a?.event || "").toLowerCase();
-  if (!ev || NOTE_ONLY.test(ev)) return null;
+  if (!ev) return null;
+  // A Flash Flood Warning means flooding is happening or imminent: debris and
+  // fast current at river-mouth and estuary ramps. CAUTION, not a shore-only
+  // note. Flash Flood Watches/Statements stay notes (common in summer; they
+  // would pin coastal launches at CAUTION).
+  if (ev === "flash flood warning") return "CAUTION";
+  if (NOTE_ONLY.test(ev)) return null;
   if (ev.includes("watch")) return "CAUTION";
   if (NO_GO_ALERTS.some((k) => ev.includes(k))) return "NO-GO";
   return "CAUTION";
