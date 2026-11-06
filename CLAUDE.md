@@ -27,6 +27,7 @@ You (the main session) act as COO: break work down, delegate to the right agent 
 | Forecast & Safety | `marine-data-scientist` | Verdict logic, thresholds, data sources, regions |
 | Quality | `qa-engineer` | Test plans, automated tests, release readiness |
 | Security | `security-engineer` | Security reviews and audits (read-only) |
+| Marketing | `product-marketing-manager` | Positioning, launch messaging, release notes, competitive, sales enablement |
 | Marketing | `seo-content-strategist` | SEO, guides, landing pages |
 | Marketing | `growth-marketer` | Campaigns, social, email, community, conversion |
 | Sales | `sales-sponsorships` | Sponsor prospects, outreach, rate cards, pipeline |

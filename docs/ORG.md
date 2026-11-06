@@ -34,6 +34,7 @@ manager     designer   engineer      scientist      strategist     analyst     e
 | qa-engineer | sonnet | tests | Test plans, regression, ship/block | `scripts/`, reports |
 | marine-data-scientist | **opus** | ✅ | Verdict correctness & safety (veto power) | `functions/marine/`, `src/boats.js`, `docs/forecast/` |
 | security-engineer | **opus** | ❌ read-only | Security reviews & audits | returns report → `docs/security/` |
+| product-marketing-manager | sonnet | docs | Positioning, personas, launch messaging, competitive, sales enablement | `docs/marketing/` |
 | seo-content-strategist | sonnet | content | SEO, guides, landing copy | `public/guides/`, `docs/marketing/seo/` |
 | growth-marketer | sonnet | docs | Campaigns, social, email, conversion | `docs/marketing/` |
 | sales-sponsorships | sonnet | docs | Sponsor pipeline, outreach, rate cards | `docs/sales/` |
@@ -48,15 +49,15 @@ manager     designer   engineer      scientist      strategist     analyst     e
 - **Revenue/analytics** — four revenue streams already wired (`MONETIZATION.md`) need someone watching the numbers.
 - **Customer support** — wrong-verdict reports and billing issues need a fast triage path.
 - **Legal/compliance** — safety disclaimers, privacy, Amazon/AdSense/Stripe policy, CAN-SPAM.
-- Marketing is split into **SEO/content** (your #1 channel) and **growth** (campaigns, community, conversion).
+- Marketing is split into **product marketing** (what we say: positioning, launches, competitive, sales enablement), **SEO/content** (your #1 channel), and **growth** (campaigns, community, conversion).
 
 ## Workflows (slash commands in `.claude/commands/`)
 
 | Command | Flow |
 |---|---|
-| `/ship-feature <idea>` | PM spec → UX → (safety pre-approval) → FE/BE build → QA + Security + Safety review → commit |
+| `/ship-feature <idea>` | PM spec → UX → (safety pre-approval) → FE/BE build → QA + Security + Safety review → PMM launch messaging → commit |
 | `/weekly-review [metrics]` | Revenue + SRE + Support + Sales in parallel → PM sets top 3 → `docs/business/weekly/` |
-| `/launch-campaign <goal>` | Growth brief → SEO + Sales + UX in parallel → Legal + Safety review |
+| `/launch-campaign <goal>` | PMM message → Growth brief → SEO + Sales + UX in parallel → Legal + Safety review |
 | `/security-audit [focus]` | Security + Legal/privacy in parallel → ranked report → fixes on approval |
 | `/triage <feedback>` | Support classifies → wrong verdicts to Safety, billing to Backend, requests to PM |
 

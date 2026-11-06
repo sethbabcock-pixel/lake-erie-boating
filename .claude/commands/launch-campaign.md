@@ -5,7 +5,8 @@ argument-hint: <campaign goal, e.g. "spring Lake Erie season opener">
 
 Plan this shouldiboat.com campaign: $ARGUMENTS
 
-1. **growth-marketer** — campaign brief (goal, metric, audience, channels, calendar) in `docs/marketing/campaigns/`.
+1. **product-marketing-manager** — the message: audience, value proposition, and key copy points for this campaign.
+   Then **growth-marketer** — campaign brief built on that message (goal, metric, audience, channels, calendar) in `docs/marketing/campaigns/`.
 2. In parallel:
    - **seo-content-strategist** — supporting guide/landing page plan or drafts.
    - **sales-sponsorships** — a sponsor angle for the campaign (who to pitch, offer, outreach drafts).
