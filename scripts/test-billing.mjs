@@ -1305,6 +1305,27 @@ async function run() {
     eq("headline: gust only (24 kt), no sustained wind → still NO-GO", rec({ speedKt: null, gustKt: 24, source: null, gustSrc: "forecast" }), "NO-GO");
     const r = buildRecommendation({ buoy: null, alerts: [], wind: { speedKt: 7, gustKt: 16, source: "buoy", gustSrc: "forecast" }, waves: { ft: 1 }, read: null, hours: [], profile: "lake" });
     check("headline: forecast gust driving the call is tagged (forecast)", r.reasons.some((x) => /16 kt \(forecast\)/.test(x)), JSON.stringify(r.reasons));
+    // Half the data is never GO: wind without waves, or waves without wind.
+    const full = (wind, waves, buoy = null, profile = "lake") => buildRecommendation({ buoy, alerts: [], wind, waves, read: null, hours: [], profile });
+    const wavesOnly = full({ speedKt: null, gustKt: null, source: null }, { ft: 1, source: "buoy" }, { station: "45005" });
+    eq("headline: waves-only buoy, NWS wind down → CAUTION", wavesOnly.level, "CAUTION");
+    check("headline: waves-only says wind is unavailable", wavesOnly.reasons.some((x) => /wind data is unavailable/i.test(x)), JSON.stringify(wavesOnly.reasons));
+    const windOnly = full({ speedKt: 7, gustKt: 9, source: "buoy", gustSrc: "buoy" }, { ft: null, source: null }, { station: "45005" });
+    eq("headline: wind-only buoy, no wave grid/text → CAUTION, not GO", windOnly.level, "CAUTION");
+    check("headline: wind-only says wave data is unavailable", windOnly.reasons.some((x) => /Wave data is unavailable/.test(x)), JSON.stringify(windOnly.reasons));
+    check("headline: wind-only still prints the light-wind line", windOnly.reasons.some((x) => /Wind ~9 kt, light/.test(x)), JSON.stringify(windOnly.reasons));
+    eq("headline: forecast wind, no waves, no buoy → CAUTION", rec({ speedKt: 6, source: "forecast" }), "CAUTION");
+    eq("headline: ocean, wind but no seas → CAUTION", full({ speedKt: 6, source: "forecast" }, { ft: null }, null, "ocean").level, "CAUTION");
+    eq("headline: sheltered, wind but no waves → CAUTION", full({ speedKt: 6, source: "forecast" }, { ft: null }, null, "sheltered").level, "CAUTION");
+    eq("headline: wind-only 24 kt → still NO-GO (cap never lowers)", rec({ speedKt: 24, source: "buoy" }), "NO-GO");
+    const both = full({ speedKt: 7, gustKt: 9, source: "buoy", gustSrc: "buoy" }, { ft: 1, source: "buoy" }, { station: "45005" });
+    eq("headline: wind + waves both calm → GO", both.level, "GO");
+    check("headline: full data has no 'unavailable' line", !both.reasons.some((x) => /unavailable/.test(x)), JSON.stringify(both.reasons));
+    const buoyWavesFcWind = full({ speedKt: 8, gustKt: null, source: "forecast" }, { ft: 1, source: "buoy" }, { station: "45005" });
+    eq("headline: waves buoy + forecast wind 8 kt → GO", buoyWavesFcWind.level, "GO");
+    check("headline: waves buoy + forecast wind says wind is from the forecast", buoyWavesFcWind.reasons.some((x) => /Wind ~8 kt from the NWS forecast/.test(x)), JSON.stringify(buoyWavesFcWind.reasons));
+    const noBuoyFc = full({ speedKt: 8, source: "forecast" }, { ft: 1, source: "forecast" });
+    check("headline: no buoy → no duplicate 'from the forecast' wind line", !noBuoyFc.reasons.some((x) => /from the NWS forecast \(buoy/.test(x)), JSON.stringify(noBuoyFc.reasons));
   }
 
   // 56. Lake gusts count everywhere a verdict is made (tile, week, digest

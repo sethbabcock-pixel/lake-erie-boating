@@ -1222,6 +1222,9 @@ export function buildRecommendation({ buoy, alerts, wind, waves, read, hours, pr
     else if (topWind >= 17) bump("CAUTION", `Wind ~${round(topWind, 0)} kt${tag}`);
     else if (topWind >= 12) bump("CAUTION", `Breezy ~${round(topWind, 0)} kt${tag}`);
     else if (wv == null) reasons.push(`Wind ~${round(topWind, 0)} kt${tag}, light`);
+    // A buoy reporting waves but not wind: the calm-wind number came from the
+    // NWS forecast, and no wind line prints otherwise, so say where it's from.
+    else if (buoy && wind?.source === "forecast") reasons.push(`Wind ~${round(topWind, 0)} kt from the NWS forecast (buoy not reporting wind)`);
   }
 
   // Wind DIRECTION on the lake's fetch — only matters once there's some wind.
@@ -1275,6 +1278,10 @@ export function buildRecommendation({ buoy, alerts, wind, waves, read, hours, pr
   } else if (wind?.speedKt == null) {
     // Waves alone (or a lone gust) can't make GO: wind is the decisive signal.
     bump("CAUTION", "Live wind data is unavailable right now. Check the NWS marine forecast before you launch");
+  } else if (wv == null) {
+    // Wind without waves is half the picture: no buoy wave sensor, no grid
+    // wave cell and no wave numbers in the zone text. Never GO on that.
+    bump("CAUTION", "Wave data is unavailable right now. Check the NWS marine forecast before you launch");
   } else if (reasons.length === 0) {
     reasons.push("Calm conditions reported");
   }
