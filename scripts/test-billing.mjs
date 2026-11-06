@@ -1080,6 +1080,12 @@ async function run() {
     eq("riskLevel: ocean rates sustained + gust separately (12 g18 → GO)", riskLevel(12, 18, 0, "", 2, 10, "ocean"), "GO");
     eq("riskLevel: ocean gust 28 → NO-GO", riskLevel(12, 28, 0, "", 2, 10, "ocean"), "NO-GO");
     eq("riskLevel: thunder with no wind data → still NO-GO", riskLevel(null, null, 40, "thunderstorms", null, null, "lake"), "NO-GO");
+    const { buildRecommendation } = await import("../functions/marine/conditions.js");
+    const rec = (wind, waves = { ft: null }) => buildRecommendation({ buoy: null, alerts: [], wind, waves, read: null, hours: [], profile: "lake" }).level;
+    eq("headline: gust only (8 kt), no sustained wind, no waves → CAUTION, not GO", rec({ speedKt: null, gustKt: 8, source: null, gustSrc: "forecast" }), "CAUTION");
+    eq("headline: gust only (24 kt), no sustained wind → still NO-GO", rec({ speedKt: null, gustKt: 24, source: null, gustSrc: "forecast" }), "NO-GO");
+    const r = buildRecommendation({ buoy: null, alerts: [], wind: { speedKt: 7, gustKt: 16, source: "buoy", gustSrc: "forecast" }, waves: { ft: 1 }, read: null, hours: [], profile: "lake" });
+    check("headline: forecast gust driving the call is tagged (forecast)", r.reasons.some((x) => /16 kt \(forecast\)/.test(x)), JSON.stringify(r.reasons));
   }
 
   console.log(results.join("\n"));

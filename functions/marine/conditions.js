@@ -1128,7 +1128,7 @@ function computeOutlook(hours) {
 // ---- Recommendation engine ----
 // Thresholds tuned for small/mid recreational power boats (16-26 ft) on the
 // notoriously short, steep chop of Lake Erie's shallow western/central basin.
-function buildRecommendation({ buoy, alerts, wind, waves, read, hours, profile = "lake", waterF = null }) {
+export function buildRecommendation({ buoy, alerts, wind, waves, read, hours, profile = "lake", waterF = null }) {
   const reasons = [];
   let level = "GO"; // GO < CAUTION < NO-GO
   const bump = (to, why) => {
@@ -1177,7 +1177,10 @@ function buildRecommendation({ buoy, alerts, wind, waves, read, hours, profile =
   // factors in (the decisive signal when wave data is missing).
   const topWind = Math.max(wind?.speedKt ?? 0, wind?.gustKt ?? 0);
   if (topWind) {
-    const tag = wind?.source === "forecast" ? " (forecast)" : "";
+    // Tag forecast numbers, including a grid gust driving the call while a
+    // buoy reports the sustained wind.
+    const gustLeads = wind?.gustSrc === "forecast" && (wind?.gustKt ?? 0) > (wind?.speedKt ?? 0);
+    const tag = wind?.source === "forecast" || gustLeads ? " (forecast)" : "";
     // Ocean: no "breezy" step at 12 kt; a 12-15 kt sea breeze is a normal
     // coastal afternoon, and the seas rule above carries the wave risk.
     if (profile === "ocean") {
@@ -1238,7 +1241,9 @@ function buildRecommendation({ buoy, alerts, wind, waves, read, hours, profile =
   // No wind AND no waves means the upstream feeds failed (NOAA outage, timeout),
   // not that it's calm. Never call GO on missing data — fail to CAUTION and
   // say why, so a blank page can't read as "looks good".
-  const noData = wv == null && wind?.speedKt == null && wind?.gustKt == null;
+  // A gust alone is not wind data: with no sustained wind and no waves there is
+  // no basis for a call (a strong gust still escalates via topWind above).
+  const noData = wv == null && wind?.speedKt == null;
   if (noData) {
     bump("CAUTION", "Live wind and wave data are unavailable right now. Check the NWS marine forecast before you launch");
   } else if (reasons.length === 0) {
@@ -1676,6 +1681,7 @@ export async function onRequest(context) {
     // hourly strip already rates on it), so a no-buoy lake port's headline
     // can't read GO under gusts the timeline calls CAUTION.
     gustKt: buoy?.windGustKt ?? hourly[0]?.gustKt ?? null,
+    gustSrc: buoy?.windGustKt != null ? "buoy" : hourly[0]?.gustKt != null ? "forecast" : null,
     dir: buoy?.windDir ?? forecastWind?.dir ?? null,
     source: buoy?.windKt != null ? "buoy" : forecastWind?.speedKt != null ? "forecast" : null,
   };
