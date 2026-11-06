@@ -752,13 +752,108 @@ async function run() {
     eq("multi-admin: second admin can toggle Pro", r.status, 200);
   }
 
-  // 27c. Unset / empty / all-invalid ADMIN_EMAIL falls back to the default owner
+  // 27c. Unset / empty ADMIN_EMAIL falls back to the default owner; set but
+  // with no valid address (a typo) fails closed — nobody is admin
   {
-    for (const v of [undefined, "", " , "]) {
+    for (const v of [undefined, "", "   "]) {
       const env = { USERS: makeKV(), ...(v === undefined ? {} : { ADMIN_EMAIL: v }) };
       const owner = await seedUser(env, "seth.babcock@gmail.com");
       eq(`multi-admin: default owner when ADMIN_EMAIL=${JSON.stringify(v)}`, (await call(req("GET", "/api/admin/users", { cookie: owner }), env)).status, 200);
     }
+    const warn = console.warn; console.warn = () => {};
+    for (const v of [" , ", "someone@typo"]) {
+      const env = { USERS: makeKV(), ADMIN_EMAIL: v };
+      const owner = await seedUser(env, "seth.babcock@gmail.com");
+      eq(`multi-admin: all-invalid ADMIN_EMAIL=${JSON.stringify(v)} locks /admin`, (await call(req("GET", "/api/admin/users", { cookie: owner }), env)).status, 403);
+    }
+    console.warn = warn;
+  }
+
+  // 27f. Pre-hijack: a squatter registers an address with a password and never
+  // verifies; when the real owner signs in with Google, the account is promoted
+  // to a verified Google account and the squatter's password is dropped
+  {
+    const env = { USERS: makeKV(), ADMIN_EMAIL: "boss2@example.com", GOOGLE_CLIENT_ID: "gid", GOOGLE_CLIENT_SECRET: "gsec", BREVO_API_KEY: "brevo_x" };
+    const reg = await call(req("POST", "/auth/register", { body: { email: "boss2@example.com", password: "Squatter-pass-123!" } }), env);
+    eq("pre-hijack: squatter registration pending", reg.status, 200);
+    googleIdPayload = { email: "boss2@example.com", email_verified: true };
+    const cb = new URL(ORIGIN + "/auth/google/callback?code=c&state=s3");
+    const r = await call({ request: new Request(cb, { headers: { cookie: "sib_oauth=s3" } }), url: cb }, env);
+    eq("pre-hijack: owner Google sign-in → 302", r.status, 302);
+    const u = await env.USERS.get("user:boss2@example.com", "json");
+    check("pre-hijack: squatter password removed", !u.pass && !u.salt && !u.passIter, JSON.stringify(Object.keys(u)));
+    eq("pre-hijack: account now verified via Google", `${u.via}/${u.emailVerified}`, "google/true");
+    const login = await call(req("POST", "/auth/login", { body: { email: "boss2@example.com", password: "Squatter-pass-123!" } }), env);
+    check("pre-hijack: squatter password no longer signs in", login.status === 401, String(login.status));
+    const tok = /sib_session=([^;]+)/.exec(r.headers.get("Set-Cookie") || "")?.[1];
+    const me = await (await call(req("GET", "/auth/me", { cookie: `sib_session=${tok}` }), env)).json();
+    eq("pre-hijack: owner is admin after Google sign-in", me.user && me.user.admin, true);
+    // A real member who skipped verification but used the account (Google
+    // sign-in before it was checked) keeps everything, including paid Pro
+    await seedUser(env, "skipper@example.com", { via: "password", emailVerified: false, pass: "h", salt: "s", adFree: true, stripeSubId: "sub_sk", stripeCustomerId: "cus_sk", favorites: ["sandusky"] });
+    googleIdPayload = { email: "skipper@example.com", email_verified: true };
+    const cbS = new URL(ORIGIN + "/auth/google/callback?code=c&state=s5");
+    await call({ request: new Request(cbS, { headers: { cookie: "sib_oauth=s5" } }), url: cbS }, env);
+    const sk = await env.USERS.get("user:skipper@example.com", "json");
+    eq("pre-hijack: used unverified account keeps Pro + subscription", `${sk.adFree}/${sk.stripeSubId}/${sk.favorites[0]}`, "true/sub_sk/sandusky");
+    check("pre-hijack: used unverified account promoted, password dropped", sk.emailVerified === true && !sk.pass);
+    // A verified password account is NOT replaced by Google sign-in
+    await seedUser(env, "keep@example.com", { via: "password", emailVerified: true, pass: "h", salt: "s", prefs: { boatName: "mine" } });
+    googleIdPayload = { email: "keep@example.com", email_verified: true };
+    const cb2 = new URL(ORIGIN + "/auth/google/callback?code=c&state=s4");
+    await call({ request: new Request(cb2, { headers: { cookie: "sib_oauth=s4" } }), url: cb2 }, env);
+    const k = await env.USERS.get("user:keep@example.com", "json");
+    eq("pre-hijack: verified account kept as-is", `${k.pass}/${k.prefs.boatName}`, "h/mine");
+    googleIdPayload = null;
+  }
+
+  // 27g. Daily cleanup removes password sign-ups never confirmed within 48h
+  {
+    const env = { USERS: makeKV() };
+    const now = new Date("2026-11-10T10:00:00Z");
+    await seedUser(env, "stale-squat@example.com", { via: "password", emailVerified: false, created: "2026-11-07T09:00:00Z" });
+    await seedUser(env, "fresh-pending@example.com", { via: "password", emailVerified: false, created: "2026-11-09T12:00:00Z" });
+    await seedUser(env, "legacy-old@example.com", { via: "password", created: "2025-01-01T00:00:00Z" }); // no emailVerified field
+    await seedUser(env, "verified-old@example.com", { via: "password", emailVerified: true, created: "2025-01-01T00:00:00Z" });
+    await seedUser(env, "used-unverified@example.com", { via: "password", emailVerified: false, created: "2026-10-01T00:00:00Z", adFree: true, stripeSubId: "sub_u", favorites: ["sandusky"] });
+    await seedUser(env, "old-nocreated@example.com", { via: "password", emailVerified: false, created: null });
+    await runScheduled(env, 15, now); // not the digest hour → no cleanup
+    check("cleanup: only on the daily digest run", !!(await env.USERS.get("user:stale-squat@example.com")));
+    await runScheduled(env, 10, now);
+    check("cleanup: stale unverified sign-up removed", !(await env.USERS.get("user:stale-squat@example.com")));
+    check("cleanup: recent unverified sign-up kept", !!(await env.USERS.get("user:fresh-pending@example.com")));
+    check("cleanup: legacy (grandfathered) account kept", !!(await env.USERS.get("user:legacy-old@example.com")));
+    check("cleanup: verified account kept", !!(await env.USERS.get("user:verified-old@example.com")));
+    check("cleanup: unverified account with signs of use kept", !!(await env.USERS.get("user:used-unverified@example.com")));
+    check("cleanup: record without a created date kept", !!(await env.USERS.get("user:old-nocreated@example.com")));
+  }
+
+  // 27h. Verifying a listed admin address by email drops the password set at
+  // registration (it may be a squatter's); the clicker still gets a session
+  {
+    const env = { USERS: makeKV(), ADMIN_EMAIL: "newadmin@example.com", BREVO_API_KEY: "brevo_x" };
+    await call(req("POST", "/auth/register", { body: { email: "newadmin@example.com", password: "Squatter-pass-123!" } }), env);
+    const vkey = [...env.USERS._map.keys()].find((k) => k.startsWith("verify:") && env.USERS._map.get(k) === "newadmin@example.com");
+    const r = await call(req("POST", "/auth/verify", { body: { token: vkey.slice(7) } }), env);
+    eq("admin verify: → 200", r.status, 200);
+    check("admin verify: session issued", /sib_session=/.test(r.headers.get("Set-Cookie") || ""));
+    check("admin verify: registration password dropped", !(await env.USERS.get("user:newadmin@example.com", "json")).pass);
+    eq("admin verify: old password can't sign in", (await call(req("POST", "/auth/login", { body: { email: "newadmin@example.com", password: "Squatter-pass-123!" } }), env)).status, 401);
+    // ...and the admin can set their own via Forgot password (not locked out)
+    await call(req("POST", "/auth/forgot", { body: { email: "newadmin@example.com" } }), env);
+    const rkey = [...env.USERS._map.keys()].find((k) => k.startsWith("reset:") && env.USERS._map.get(k) === "newadmin@example.com");
+    check("admin verify: forgot password sends a reset link", !!rkey);
+    eq("admin verify: reset → 200", (await call(req("POST", "/auth/reset", { body: { token: rkey.slice(6), password: "Owner-chosen-123!" } }), env)).status, 200);
+    eq("admin verify: owner's new password signs in", (await call(req("POST", "/auth/login", { body: { email: "newadmin@example.com", password: "Owner-chosen-123!" } }), env)).status, 200);
+    // Google accounts still get no reset link
+    await seedUser(env, "googly@example.com", { via: "google", emailVerified: true });
+    await call(req("POST", "/auth/forgot", { body: { email: "googly@example.com" } }), env);
+    check("forgot: Google account gets no reset link", ![...env.USERS._map.entries()].some(([k, v]) => k.startsWith("reset:") && v === "googly@example.com"));
+    // A normal (non-admin) address keeps its password on verify
+    await call(req("POST", "/auth/register", { body: { email: "normal@example.com", password: "Normal-pass-123!" } }), env);
+    const nkey = [...env.USERS._map.keys()].find((k) => k.startsWith("verify:") && env.USERS._map.get(k) === "normal@example.com");
+    await call(req("POST", "/auth/verify", { body: { token: nkey.slice(7) } }), env);
+    eq("verify: normal address keeps its password", (await call(req("POST", "/auth/login", { body: { email: "normal@example.com", password: "Normal-pass-123!" } }), env)).status, 200);
   }
 
   // 27d. Admin notifications go to every listed admin when no notifyEmails are configured
