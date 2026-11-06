@@ -510,7 +510,8 @@ function sunTimes(lat, lon, date = new Date()) {
 // 7-day planning outlook from the grid: per-day max wind/gust/precip/wave in
 // the SPOT's local calendar. Powers the "week ahead / weekend" strip — a
 // per-day verdict so a boater can pick Saturday on Wednesday.
-function buildWeek(grid, profile = "lake") {
+const MIN_DAY_WIND_HOURS = 12; // hours of wind (and, on the Great Lakes, wave) forecast a future day needs to be rated GO
+export function buildWeek(grid, profile = "lake") {
   if (!grid) return [];
   const toLocal = localParts(grid.tz);
   const days = new Map();
@@ -519,7 +520,9 @@ function buildWeek(grid, profile = "lake") {
   for (const h of keys) {
     const { date } = toLocal(h);
     let d = days.get(date);
-    if (!d) days.set(date, (d = { date, windKt: null, gustKt: null, precipPct: null, waveFt: null, periodSec: null }));
+    if (!d) days.set(date, (d = { date, windKt: null, gustKt: null, precipPct: null, waveFt: null, periodSec: null, windHours: 0, waveHours: 0 }));
+    if (grid.windKt.get(h) != null) d.windHours++;
+    if (grid.waveFt.get(h) != null) d.waveHours++;
     d.windKt = max(d.windKt, grid.windKt.get(h));
     d.gustKt = max(d.gustKt, grid.gustKt.get(h));
     d.precipPct = max(d.precipPct, grid.precipPct.get(h));
@@ -531,15 +534,25 @@ function buildWeek(grid, profile = "lake") {
     .filter((d) => d.date >= today)
     .sort((a, b) => (a.date < b.date ? -1 : 1))
     .slice(0, 7)
-    .map((d) => ({
+    .map((d) => {
+      const level = riskLevel(round(d.windKt, 0), round(d.gustKt, 0), d.precipPct ?? 0, "", round(d.waveFt, 1), round(d.periodSec, 0), profile);
+      // A future day the grid only partly covers (often the last one) has a
+      // max taken over a few hours: it can't make GO, though what it does
+      // show can still make CAUTION/NO-GO. Today is exempt: its remaining
+      // hours are what matter and they're covered.
+      // Great Lakes days also need the waves covered (the NWS wave grid often
+      // ends before the wind grid), not a max over a couple of hours.
+      const sparse = d.date !== today && (d.windHours < MIN_DAY_WIND_HOURS || (profile === "lake" && d.waveHours < MIN_DAY_WIND_HOURS));
+      return {
       date: d.date,
       windKt: round(d.windKt, 0),
       gustKt: round(d.gustKt, 0),
       precipPct: d.precipPct == null ? null : Math.round(d.precipPct),
       waveFt: round(d.waveFt, 1),
       periodSec: round(d.periodSec, 0),
-      level: riskLevel(round(d.windKt, 0), round(d.gustKt, 0), d.precipPct ?? 0, "", round(d.waveFt, 1), round(d.periodSec, 0), profile),
-    }));
+      level: sparse && level === "GO" ? null : level,
+      };
+    });
 }
 
 async function fetchMarineForecast(zone) {
@@ -1122,6 +1135,9 @@ export function riskLevel(windKt, gustKt, precipPct, short, waveFt, periodSec, p
     lvl = hourRisk(top < 0 ? null : top, precipPct, short, waveFt, periodSec, profile);
   }
   if (windKt == null && lvl === "GO") return null;
+  // Great Lakes: waves are half the call (short steep chop), so no wave data
+  // → no GO either. Inland/sheltered waters rate on wind alone by design.
+  if (profile === "lake" && waveFt == null && lvl === "GO") return null;
   return lvl;
 }
 
@@ -1275,6 +1291,10 @@ export function buildRecommendation({ buoy, alerts, wind, waves, read, hours, pr
   } else if (wind?.speedKt == null) {
     // Waves alone (or a lone gust) can't make GO: wind is the decisive signal.
     bump("CAUTION", "Live wind data is unavailable right now. Check the NWS marine forecast before you launch");
+  } else if (profile === "lake" && wv == null) {
+    // Great Lakes: waves are half the call (tiles/hours show "—" here), so
+    // wind alone can't make the headline GO either.
+    bump("CAUTION", "Wave data is unavailable right now. On the Great Lakes, check the NWS nearshore forecast before you launch");
   } else if (reasons.length === 0) {
     reasons.push("Calm conditions reported");
   }
@@ -1687,8 +1707,12 @@ export async function onRequest(context) {
   const sun = sunTimes(spot.lat, spot.lon);
   // Merge hourly wave height (NWS grid) into the NWS hourly rows, then rate
   // risk. Keyed by epoch hour, so spots outside Eastern time line up too.
+  // Drop hours that have already passed (the NWS hourly product can lead with
+  // them), so the strip's first row, the outlook, and the headline's
+  // imminent-hazard check all start at the current hour.
+  const nowEH = Math.floor(Date.now() / 3600000);
   const hourly = withRisk(
-    fc.hourly.map((h) => {
+    fc.hourly.filter((h) => Math.floor(Date.parse(h.time) / 3600000) >= nowEH).map((h) => {
       const eh = Math.floor(Date.parse(h.time) / 3600000);
       return {
         ...h,
@@ -1707,7 +1731,6 @@ export async function onRequest(context) {
   // "Now or imminent" rows of the hourly strip (this hour or the next, like the
   // directory tiles), picked by timestamp: the hourly product can lead with
   // hours that have already passed.
-  const nowEH = Math.floor(Date.now() / 3600000);
   const nowRows = hourly.filter((h) => { const eh = Math.floor(Date.parse(h.time) / 3600000); return eh === nowEH || eh === nowEH + 1; });
   const nowGusts = nowRows.map((h) => h.gustKt).filter((v) => v != null);
   const gridNowGust = nowGusts.length ? Math.max(...nowGusts) : null;
