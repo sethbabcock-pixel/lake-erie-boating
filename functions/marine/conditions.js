@@ -62,16 +62,16 @@ export const SPOTS = {
 
   // ── Other Great Lakes (US shores). zone/office resolved from NWS; buoys
   // optional (wind from forecast, waves from the NWS grid cover spots w/o buoys).
-  rochester: { name: "Rochester", lat: 43.22, lon: -77.62, zone: "LOZ043", office: "BUF", buoys: ["45012"], lake: "Lake Ontario" },
-  "sodus-bay": { name: "Sodus Bay", lat: 43.27, lon: -76.97, zone: "LOZ043", office: "BUF", buoys: ["45012"], lake: "Lake Ontario" },
-  oswego: { name: "Oswego", lat: 43.47, lon: -76.51, zone: "LOZ044", office: "BUF", buoys: ["45012"], lake: "Lake Ontario" },
+  rochester: { name: "Rochester", lat: 43.22, lon: -77.62, zone: "LOZ043", office: "BUF", buoys: ["45012"], lake: "Lake Ontario", sea: 0 },
+  "sodus-bay": { name: "Sodus Bay", lat: 43.27, lon: -76.97, zone: "LOZ043", office: "BUF", buoys: ["45012"], lake: "Lake Ontario", sea: 0 },
+  oswego: { name: "Oswego", lat: 43.47, lon: -76.51, zone: "LOZ044", office: "BUF", buoys: ["45012"], lake: "Lake Ontario", sea: 330 },
   "sackets-harbor": { name: "Sackets Harbor", lat: 43.94, lon: -76.12, zone: "LOZ045", office: "BUF", buoys: [], lake: "Lake Ontario" },
-  olcott: { name: "Olcott / Wilson", lat: 43.34, lon: -78.72, zone: "LOZ042", office: "BUF", buoys: [], lake: "Lake Ontario" },
+  olcott: { name: "Olcott / Wilson", lat: 43.34, lon: -78.72, zone: "LOZ042", office: "BUF", buoys: [], lake: "Lake Ontario", sea: 0 },
 
-  "port-huron": { name: "Port Huron", lat: 42.98, lon: -82.42, zone: "LHZ443", office: "DTX", buoys: [], lake: "Lake Huron", waterBuoys: ["45209", "AGCM4"] },
-  tawas: { name: "Tawas Bay", lat: 44.26, lon: -83.44, zone: "LHZ345", office: "APX", buoys: [], lake: "Lake Huron" },
-  alpena: { name: "Alpena / Thunder Bay", lat: 45.06, lon: -83.42, zone: "LHZ348", office: "APX", buoys: ["45003"], lake: "Lake Huron", waterBuoys: ["LPNM4", "45212"] },
-  "harbor-beach": { name: "Harbor Beach", lat: 43.84, lon: -82.64, zone: "LHZ442", office: "DTX", buoys: [], lake: "Lake Huron", waterBuoys: ["HRBM4", "45149"] },
+  "port-huron": { name: "Port Huron", lat: 42.98, lon: -82.42, zone: "LHZ443", office: "DTX", buoys: [], lake: "Lake Huron", sea: 15, waterBuoys: ["45209", "AGCM4"] },
+  tawas: { name: "Tawas Bay", lat: 44.26, lon: -83.44, zone: "LHZ345", office: "APX", buoys: [], lake: "Lake Huron", sea: 150 },
+  alpena: { name: "Alpena / Thunder Bay", lat: 45.06, lon: -83.42, zone: "LHZ348", office: "APX", buoys: ["45003"], lake: "Lake Huron", sea: 100, waterBuoys: ["LPNM4", "45212"] },
+  "harbor-beach": { name: "Harbor Beach", lat: 43.84, lon: -82.64, zone: "LHZ442", office: "DTX", buoys: [], lake: "Lake Huron", sea: 80, waterBuoys: ["HRBM4", "45149"] },
   mackinaw: { name: "Mackinaw City / Straits", lat: 45.78, lon: -84.72, zone: "LHZ345", office: "APX", buoys: [], lake: "Lake Michigan", waterBuoys: ["MACM4", "45194"] },
 
   chicago: { name: "Chicago", lat: 41.89, lon: -87.60, zone: "LMZ741", office: "LOT", buoys: ["45198"], lake: "Lake Michigan", waterBuoys: ["45170"] },
