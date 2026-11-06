@@ -1949,6 +1949,8 @@ async function run() {
   {
     const { alertLevel, fetchAlerts, SPOTS } = await import("../functions/marine/conditions.js");
     for (const ev of ["Tornado Warning", "High Wind Warning", "Extreme Wind Warning", "Heavy Freezing Spray Warning"]) eq(`classifier: ${ev} → NO-GO`, alertLevel({ event: ev }), "NO-GO");
+    for (const ev of ["Blizzard Warning", "Snow Squall Warning", "Lake Effect Snow Warning", "High Surf Warning", "Typhoon Warning", "Winter Storm Warning", "Ice Storm Warning", "Storm Surge Warning", "Tsunami Advisory"]) eq(`classifier: ${ev} → NO-GO`, alertLevel({ event: ev }), "NO-GO");
+    for (const ev of ["High Surf Advisory", "Winter Weather Advisory", "Typhoon Watch", "Winter Storm Watch", "Dense Fog Advisory", "Low Water Advisory", "Brisk Wind Advisory", "Lake Wind Advisory", "Extreme Cold Warning", "Ashfall Warning", "Tropical Cyclone Local Statement"]) eq(`classifier: ${ev} → CAUTION`, alertLevel({ event: ev }), "CAUTION");
     eq("classifier: Freezing Spray Advisory → CAUTION", alertLevel({ event: "Freezing Spray Advisory" }), "CAUTION");
     eq("classifier: High Wind Watch → CAUTION", alertLevel({ event: "High Wind Watch" }), "CAUTION");
     eq("classifier: Tornado Watch → CAUTION", alertLevel({ event: "Tornado Watch" }), "CAUTION");
@@ -1959,6 +1961,9 @@ async function run() {
     alertTestStatus = "Test";
     const t = await fetchAlerts(SPOTS.sandusky);
     check("NWS test message is ignored (no alert, lookup ok)", t.ok && t.alerts.length === 0, JSON.stringify(t));
+    alertTestStatus = "Exercise";
+    const x = await fetchAlerts(SPOTS.sandusky);
+    check("NWS exercise message is ignored", x.ok && x.alerts.length === 0, JSON.stringify(x));
     alertTestStatus = null;
   }
 

@@ -649,8 +649,14 @@ const NOTE_ONLY = /air quality|rip current|beach hazard|coastal flood|lakeshore 
 // lowercased NWS event name, alongside the broad gale/storm/hurricane terms.
 // Tornado and high/extreme wind warnings mean damaging wind at the launch;
 // heavy freezing spray ices a boat's topsides fast (late-season Great Lakes).
-const NO_GO_ALERTS = ["gale", "storm", "special marine", "hurricane", "hazardous seas", "tsunami",
-  "tornado warning", "high wind warning", "extreme wind warning", "heavy freezing spray warning"];
+// Blizzard, snow squall and lake effect snow warnings mean near-zero
+// visibility in strong wind over near-freezing water (lake effect bands come
+// with the fetch-aligned wind that builds Great Lakes chop). A high surf
+// warning makes inlet/bar crossings and beach launches unsafe. "typhoon"
+// keeps the tropical set complete (watches are caught above as CAUTION).
+const NO_GO_ALERTS = ["gale", "storm", "special marine", "hurricane", "typhoon", "hazardous seas", "tsunami",
+  "tornado warning", "high wind warning", "extreme wind warning", "heavy freezing spray warning",
+  "blizzard warning", "snow squall warning", "lake effect snow warning", "high surf warning"];
 export function alertLevel(a) {
   const ev = (a?.event || "").toLowerCase();
   if (!ev || NOTE_ONLY.test(ev)) return null;
