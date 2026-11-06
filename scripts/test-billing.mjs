@@ -1076,14 +1076,33 @@ async function run() {
         await call(stripeWebhookReq(delA(cus, `evt_${cus}`), "whsec_right"), genv);
         eq(`G1: other sub ${label} → revoked`, (await genv.USERS.get(`user:g1${label.replace(/\W/g, "")}@example.com`, "json")).adFree, false);
       }
-      // List endpoint down → revoke (safe direction), event recorded, no 5xx.
+      // H1: list endpoint down → 503 so Stripe retries; user keeps ad-free
+      // meanwhile; event not recorded. When Stripe recovers, the retry switches.
+      await seedTwo("g1retry@example.com", "cus_g1r");
+      subList.cus_g1r = [{ id: "cus_g1r_B", status: "active", purpose: "adfree" }];
+      subListDown = true;
+      const gr = await call(stripeWebhookReq(delA("cus_g1r", "evt_g1r"), "whsec_right"), genv);
+      eq("H1: list down → 503", gr.status, 503);
+      eq("H1: list down → ad-free kept while retrying", (await genv.USERS.get("user:g1retry@example.com", "json")).adFree, true);
+      check("H1: list down → event not recorded", !(await genv.USERS.get("stripeevt:evt_g1r")));
+      eq("H1: still down on a retry within 24h → 503", (await call(stripeWebhookReq(delA("cus_g1r", "evt_g1r"), "whsec_right"), genv)).status, 503);
+      subListDown = false;
+      eq("H1: Stripe back → retry 200", (await call(stripeWebhookReq(delA("cus_g1r", "evt_g1r"), "whsec_right"), genv)).status, 200);
+      let gru = await genv.USERS.get("user:g1retry@example.com", "json");
+      eq("H1: Stripe back → switched to B, still ad-free", gru.adFree && gru.stripeSubId, "cus_g1r_B");
+
+      // H1 bound: failing for over 24h → revoke anyway (Stripe stops retrying
+      // after ~3 days, so 503 forever would leave a canceled user ad-free).
       await seedTwo("g1down@example.com", "cus_g1d");
       subList.cus_g1d = [{ id: "cus_g1d_B", status: "active", purpose: "adfree" }];
       subListDown = true;
+      eq("H1: first failure → 503", (await call(stripeWebhookReq(delA("cus_g1d", "evt_g1d"), "whsec_right"), genv)).status, 503);
+      await genv.USERS.put("stripeevtfail:evt_g1d", String(Date.now() - 25 * 3600e3)); // first failure 25h ago
       const gd = await call(stripeWebhookReq(delA("cus_g1d", "evt_g1d"), "whsec_right"), genv);
       subListDown = false;
-      eq("G1: list down → 200", gd.status, 200);
-      eq("G1: list down → revoked", (await genv.USERS.get("user:g1down@example.com", "json")).adFree, false);
+      eq("H1: failing >24h → 200", gd.status, 200);
+      eq("H1: failing >24h → revoked", (await genv.USERS.get("user:g1down@example.com", "json")).adFree, false);
+      check("H1: failing >24h → event recorded", !!(await genv.USERS.get("stripeevt:evt_g1d")));
       // ...and B's next updated re-adopts it (F1 path).
       subStatus.cus_g1d_B = "active"; subCustomer.cus_g1d_B = "cus_g1d";
       await call(stripeWebhookReq({ id: "evt_g1d_upd", type: "customer.subscription.updated", data: { object: { id: "cus_g1d_B", customer: "cus_g1d", status: "active", metadata: { purpose: "adfree" } } } }, "whsec_right"), genv);
