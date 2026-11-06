@@ -4,7 +4,7 @@ GO / CAUTION / NO-GO boating conditions app (Lake Erie + coastal regions), built
 
 ## Stack (quick facts)
 - React 18 + Vite frontend in `src/` (multi-page: `index.html`, `account.html`, `admin.html`); static pages/guides in `public/`.
-- Cloudflare Worker backend: `worker.js` → `functions/marine/conditions.js` (verdicts), `functions/auth.js` (accounts, Stripe, admin API), `functions/digest.js` (hourly cron alerts/digest), `functions/seo.js`. KV binding `USERS`. Config in `wrangler.jsonc` (README's Pages instructions are outdated).
+- Cloudflare Worker backend: `worker.js` → `functions/marine/conditions.js` (verdicts), `functions/auth.js` (accounts, Stripe, admin API), `functions/digest.js` (hourly cron alerts/digest), `functions/seo.js`. KV binding `USERS`. Config in `wrangler.jsonc`.
 - Commands: `npm run build`, `npm test` (offline billing/auth harness), `npm run check:cams` (needs network).
 - Monetization: see `MONETIZATION.md`.
 
