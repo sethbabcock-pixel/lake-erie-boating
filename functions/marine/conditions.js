@@ -421,9 +421,6 @@ const GRID_STEPS = [0.035, 0.1, 0.22];
 // ~4 mi out (still well inside the NWS 0-20 NM coastal zone).
 const OCEAN_GRID_STEPS = [0.06, 0.1, 0.22];
 async function fetchSpotGrid(spot) {
-  return prunePeriods(await fetchSpotGridRaw(spot));
-}
-async function fetchSpotGridRaw(spot) {
   // Open water (lakes, bays, sounds, ocean): nudge seaward until we hit a
   // marine cell that carries waves. Inland waters have no wave grid, so just
   // sample the point once (wind/gusts/precip/temp exist on land; waves blank).
@@ -829,18 +826,15 @@ function zoneNumbers(spec) {
 // Physical sanity check for a wave period: a wave can't be steeper than about
 // 1:7 (height / deep-water wavelength, wavelength ≈ 1.56·T² m) before it breaks.
 // The grid's period layer and the nearshore wave floor come from different
-// sources, so a raised height can sit on a tiny period ("7 ft @ 1s"). Those
-// pairs are dropped (shown as "—") rather than shown or used in the verdict.
+// sources, so a raised height can sit on a tiny period ("7 ft @ 1s"). DISPLAY
+// ONLY: such a period is blanked ("—") in what the page shows, but the verdict
+// is always computed from the raw series first (a missing period must never
+// soften a call: short period is what makes seas steep).
 export function plausiblePeriod(waveFt, sec) {
   if (sec == null || !(sec > 0)) return null;
   if (sec < 1.5) return null;
   if (waveFt != null && waveFt * 0.3048 > (1.56 * sec * sec) / 7) return null;
   return sec;
-}
-function prunePeriods(grid) {
-  if (!grid || !grid.periodSec) return grid;
-  for (const [h, sec] of grid.periodSec) if (plausiblePeriod(grid.waveFt.get(h), sec) == null) grid.periodSec.delete(h);
-  return grid;
 }
 
 function applyMarineWaveFloor(grid, marine) {
@@ -870,7 +864,6 @@ function applyMarineWaveFloor(grid, marine) {
     const g = grid.waveFt.get(h);
     if (g == null || floor > g) grid.waveFt.set(h, floor);
   }
-  prunePeriods(grid);
 }
 
 // Water temperature (°F) parsed from the NSH text, which lists a few ports:
@@ -1451,7 +1444,7 @@ function summaryTile(id, s, g, nowH) {
   const level = windKt == null && waveFt == null ? null : hourRisk(windKt, precipPct, thunder ? "thunderstorms" : "", waveFt, periodSec, waterProfile(s), { sustained: windKt, gust: gustKt });
   // lat/lon travel with each spot so the homepage can find the nearest launch
   // from a ZIP or the browser's location without a second request.
-  return { id, name: s.name, lake: s.lake || "Lake Erie", lat: s.lat, lon: s.lon, level, windKt, gustKt, dir, waveFt, periodSec };
+  return { id, name: s.name, lake: s.lake || "Lake Erie", lat: s.lat, lon: s.lon, level, windKt, gustKt, dir, waveFt, periodSec: plausiblePeriod(waveFt, periodSec) }; // level above used the raw period
 }
 
 // Lightweight GO/CAUTION/NO-GO + wind/wave for every spot, for the homepage
@@ -1657,7 +1650,7 @@ export async function onRequest(context) {
   const nowFt = buoy?.waveHeightFt ?? currentWaveFt ?? null;
   const waves = {
     ft: nowFt,
-    periodSec: plausiblePeriod(nowFt, buoy?.dominantPeriodSec ?? gridNowPeriod ?? null),
+    periodSec: buoy?.dominantPeriodSec ?? gridNowPeriod ?? null,
     source: buoy?.waveHeightFt != null ? "buoy" : currentWaveFt != null ? "forecast" : null,
   };
 
@@ -1667,27 +1660,29 @@ export async function onRequest(context) {
   const waterTempF = buoy?.waterTempF ?? waterStation?.f ?? nshWaterTempF(noaaReport?.text, spot);
   const airTempF = buoy?.airTempF ?? hourly[0]?.tempF ?? null;
   const temps = {
-    waterF: round(waterTempF, 0),
+    waterF: round(waterTempF, 0), // display; the verdict gets the unrounded value below
     waterSource: buoy?.waterTempF != null ? "buoy" : waterStation?.f != null ? `NDBC ${waterStation.station}` : waterTempF != null ? "NWS" : null,
     airF: round(airTempF, 0),
     airSource: buoy?.airTempF != null ? "buoy" : airTempF != null ? "NWS" : null,
   };
 
   const read = windReadFor(spot, wind.dir);
-  const recommendation = buildRecommendation({ buoy, alerts, wind, waves, read, hours: hourly, profile, waterF: temps.waterF });
+  const recommendation = buildRecommendation({ buoy, alerts, wind, waves, read, hours: hourly, profile, waterF: waterTempF ?? null });
 
+  // Display-only cleanup, AFTER every verdict above is computed from raw data.
+  const showPeriod = (ft, sec) => plausiblePeriod(ft, sec);
   return json({
     spot: { id: spotId, name: spot.name, zone: spot.zone, lat: spot.lat, lon: spot.lon, lake: spot.lake || "Lake Erie", adHoc: !!spot.adHoc, zoneName: spot.zoneName || null, built: !!spot.built, slug: spot.slug || null, featured: !!spot.featured },
     updatedAt: new Date().toISOString(),
     recommendation,
     wind,
-    waves,
+    waves: { ...waves, periodSec: showPeriod(waves.ft, waves.periodSec) },
     temps,
     windRead: read,
     facts: spotFacts(spot),
-    hourly,
+    hourly: hourly.map((h) => ({ ...h, periodSec: showPeriod(h.waveFt, h.periodSec) })),
     outlook,
-    week,
+    week: week.map((d) => ({ ...d, periodSec: showPeriod(d.waveFt, d.periodSec) })),
     sun,
     buoy,
     alerts: alerts || [],
