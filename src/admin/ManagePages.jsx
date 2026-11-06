@@ -27,16 +27,36 @@ function UserDetail({ email, onBack, onChanged }) {
           <div>
             <div className="adm-kv"><span>Member since</span><b>{fmtDate(u.created)}</b></div>
             <div className="adm-kv"><span>Sign-in</span><b>{u.via === "google" ? "Google" : "Email & password"}</b></div>
-            <div className="adm-kv"><span>Plan</span><b>{u.adFree ? "Pro" : "Free"}</b></div>
+            <div className="adm-kv"><span>Plan</span><b>{!u.adFree ? "Free" : u.hasSubscription ? "Pro (paid)" : "Pro (free comp)"}</b></div>
+            {u.adFree && !u.hasSubscription && (
+              <div className="adm-kv"><span>Comped by</span><b>{u.comp?.by ? `${u.comp.by}${u.comp.at ? `, ${fmtDate(u.comp.at)}` : ""}` : "Not recorded (before comps were tracked)"}</b></div>
+            )}
             <div className="adm-kv"><span>Stripe</span><b>{u.hasSubscription ? "Active subscription" : u.hasStripeCustomer ? "Customer, no active sub" : "—"}</b></div>
             <div className="adm-kv"><span>Boat</span><b>{p.boatName || p.boatType || "—"}</b></div>
             <div className="adm-kv"><span>Comfort limits</span><b>{[p.maxWaveFt != null ? `${p.maxWaveFt} ft` : null, p.maxWindKt != null ? `${p.maxWindKt} kt` : null].filter(Boolean).join(" · ") || "—"}</b></div>
             <div className="adm-kv"><span>Saved ports</span><b>{(u.favoriteSpots || []).length}</b></div>
           </div>
           <div className="adm-stack">
-            <Switch checked={u.adFree} disabled={busy} label="Pro"
-              sub="Manual override. Doesn't start or cancel Stripe billing."
+            <Switch checked={u.adFree} disabled={busy} label={u.hasSubscription ? "Pro" : "Free Pro (comp)"}
+              sub={u.hasSubscription
+                ? "This member pays through Stripe. This switch doesn't change their billing."
+                : "On gives this member every Pro feature for free. No charge, no card, nothing in Stripe."}
               onChange={(v) => act({ adFree: v }, (d) => { setU(d.user); onChanged(d.user); })} />
+            {u.hasSubscription ? (
+              <div className="adm-warnbox" role="note">
+                <b>Paying member.</b> Turning this off <b>doesn't stop their charges</b>, and Stripe may switch Pro back on at
+                their next renewal. To stop charges,
+                cancel the subscription in the Stripe Dashboard (or they can on their Account page). To comp them
+                instead, cancel first, wait until the subscription has ended, then turn this on. If you turn it on
+                before the subscription ends, the cancellation switches Pro off again.
+              </div>
+            ) : (
+              <p className="adm-muted">
+                {u.hasStripeCustomer && !u.adFree && "This account has bought before. Check Stripe that it has no active subscription before comping. "}
+                Use this for family, friends and testers. They need an account first. Their Account page shows Pro
+                with no billing, and they can't be sent to checkout while it's on. Turn it off any time to take Pro away.
+              </p>
+            )}
             <div className="adm-actions">
               <button className="adm-btn ghost sm" disabled={busy || u.via === "google"}
                 onClick={() => act({ action: "sendReset" }, (d) => setMsg(d.emailSent ? "Reset link emailed." : `Logged, but not emailed (${d.emailError || "BREVO_API_KEY not set"}).`))}>
@@ -88,7 +108,7 @@ export function UsersPage() {
                   <div className="adm-row-sub">{u.via === "google" ? "Google" : "Email"}{u.boatType ? ` · ${u.boatType}` : ""}{u.favorites ? ` · ${u.favorites} saved` : ""}</div>
                 </div>
                 <span className="adm-muted">{fmtDate(u.created)}</span>
-                <Badge tone={u.adFree ? "ok" : "neutral"}>{u.adFree ? (u.hasSubscription ? "Pro (paid)" : "Pro (comp)") : "Free"}</Badge>
+                <Badge tone={u.adFree ? "ok" : "neutral"}>{u.adFree ? (u.hasSubscription ? "Pro (paid)" : "Pro (free comp)") : "Free"}</Badge>
               </button>
             ))}
           </div>

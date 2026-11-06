@@ -146,6 +146,7 @@ const adminUserView = (u) => ({
   ...adminUserSummary(u),
   stripeCustomerId: u.stripeCustomerId || null,
   hasStripeCustomer: !!u.stripeCustomerId,
+  comp: u.adFree && u.comp ? { by: u.comp.by || null, at: u.comp.at || null } : null,
   prefs: u.prefs || {},
   favoriteSpots: u.favorites || [],
 });
@@ -1055,7 +1056,21 @@ export async function handleAuth(request, env, url, ctx) {
       });
       return json({ ok: true, emailSent: r.emailSent, emailError: r.emailError });
     }
-    if (typeof body.adFree === "boolean") target.adFree = body.adFree; // manual override; doesn't touch Stripe
+    // Manual override; never starts, changes or cancels Stripe billing. Turning
+    // Pro on for someone with no subscription records it as a free comp (who,
+    // when) so other admins can tell comps from paying members.
+    if (typeof body.adFree === "boolean") {
+      // A former subscriber from before ended subscriptions were cleared may
+      // still carry a dead stripeSubId. Turning Pro on checks Stripe and drops
+      // it if the subscription has ended, so the grant is recorded as a comp.
+      if (body.adFree && target.stripeSubId && env.STRIPE_SECRET_KEY) {
+        const sub = await stripeGET(env, `subscriptions/${encodeURIComponent(target.stripeSubId)}`).catch(() => null);
+        if (sub && (sub.error?.code === "resource_missing" || ["canceled", "incomplete_expired"].includes(sub.status))) target.stripeSubId = null;
+      }
+      target.adFree = body.adFree;
+      if (body.adFree && !target.stripeSubId) target.comp = { by: u.email, at: new Date().toISOString() };
+      else delete target.comp;
+    }
     await env.USERS.put(emailKey(target.email), JSON.stringify(target));
     return json({ user: adminUserView(target) });
   }
@@ -1357,7 +1372,7 @@ export async function handleAuth(request, env, url, ctx) {
       if (obj.mode !== "subscription" || !obj.subscription || purpose !== "adfree" || !paid) return json({ received: true, ignored: true });
       const email = (obj.client_reference_id || obj.customer_email || obj.customer_details?.email || "").toLowerCase();
       if (obj.customer && email) await env.USERS.put(`stripecust:${obj.customer}`, email); // reverse index for later events
-      await setAdFree(email, true, { stripeCustomerId: obj.customer || null, stripeSubId: obj.subscription });
+      await setAdFree(email, true, { stripeCustomerId: obj.customer || null, stripeSubId: obj.subscription, comp: undefined }); // now paid, not a comp
       if (email) await runBg(ctx, notify(env, "adfree_activated", { email }, { to: email, subject: "Welcome to shouldiboat Pro", html: adFreeHtml(), ttlDays: 30 }));
     } else if ((event.type === "customer.subscription.updated" || event.type === "customer.subscription.deleted") && !notAdFree) {
       const email = await env.USERS.get(`stripecust:${obj.customer}`);
@@ -1369,9 +1384,15 @@ export async function handleAuth(request, env, url, ctx) {
       // only for untagged (legacy) subscriptions: a tagged one is stored as
       // stripeSubId when its paid checkout grants, so it must match. Otherwise
       // a legacy user's new, still-unpaid ACH subscription could grant early.
-      if (user && (user.stripeSubId === obj.id || (!user.stripeSubId && purpose == null))) {
+      // A comped member (no recorded subscription) is never touched by the
+      // fallback, so a late or retried event for an ended subscription can't
+      // switch a comp off.
+      const matched = !!user && !!user.stripeSubId && user.stripeSubId === obj.id;
+      if (user && (matched || (!user.stripeSubId && purpose == null && !user.comp))) {
         const active = event.type !== "customer.subscription.deleted" && ["active", "trialing", "past_due"].includes(obj.status);
-        await setAdFree(email, active);
+        // When the recorded subscription ends, forget it: the member is no longer
+        // a subscriber (Account page, admin "paid" badge), and can be comped.
+        await setAdFree(email, active, event.type === "customer.subscription.deleted" && matched ? { stripeSubId: null } : {});
       }
     }
     return json({ received: true });

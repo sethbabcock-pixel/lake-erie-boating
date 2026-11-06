@@ -102,6 +102,7 @@ function installFetchStub() {
       return jsonResp({ id: "cs_test_123", url: "https://checkout.stripe.com/c/pay/cs_test_123" });
     if (u.includes("/v1/billing_portal/sessions"))
       return jsonResp({ id: "bps_123", url: "https://billing.stripe.com/p/session/bps_123" });
+    if (u.includes("/v1/subscriptions/sub_gone")) return jsonResp({ error: { code: "resource_missing", message: "No such subscription" } });
     if (u.includes("/v1/subscriptions/")) {
       // POST = update (cancel/resume) → mirror the request; GET = retrieve.
       if ((opts.method || "GET") === "POST") return jsonResp(makeSub(body?.cancel_at_period_end === "true"));
@@ -379,6 +380,38 @@ async function run() {
     const evt2 = { type: "customer.subscription.deleted", data: { object: { id: "sub_adfree", customer: "cus_2", status: "canceled" } } };
     await call(stripeWebhookReq(evt2, "whsec_right"), env);
     eq("webhook: own sub deleted revokes ad-free", (await env.USERS.get("user:two@example.com", "json")).adFree, false);
+  }
+
+  // 6e2. When the recorded subscription ends, stripeSubId is cleared; then the
+  // member can be comped and a retried delete can't switch the comp off.
+  {
+    const env = { USERS: makeKV(), STRIPE_WEBHOOK_SECRET: "whsec_right", ADMIN_EMAIL: "admin@example.com" };
+    const admin = await seedUser(env, "admin@example.com");
+    await seedUser(env, "former@example.com", { adFree: true, stripeCustomerId: "cus_f", stripeSubId: "sub_f1" });
+    await env.USERS.put("stripecust:cus_f", "former@example.com");
+    const del = { type: "customer.subscription.deleted", data: { object: { id: "sub_f1", customer: "cus_f", status: "canceled" } } };
+    await call(stripeWebhookReq(del, "whsec_right"), env);
+    let u = await env.USERS.get("user:former@example.com", "json");
+    eq("webhook: own sub deleted revokes", u.adFree, false);
+    check("webhook: own sub deleted clears stripeSubId", !u.stripeSubId);
+    const on = await (await call(req("POST", "/api/admin/user", { cookie: admin, body: { email: "former@example.com", adFree: true } }), env)).json();
+    eq("comp: former subscriber is comped", on.user.comp?.by, "admin@example.com");
+    eq("comp: former subscriber has no subscription", on.user.hasSubscription, false);
+    await call(stripeWebhookReq(del, "whsec_right"), env); // tagged-less retry of the old delete
+    eq("comp: retried old delete keeps comp on", (await env.USERS.get("user:former@example.com", "json")).adFree, true);
+    const upd = { type: "customer.subscription.updated", data: { object: { id: "sub_x", customer: "cus_f", status: "canceled" } } };
+    await call(stripeWebhookReq(upd, "whsec_right"), env);
+    eq("comp: unrelated sub event keeps comp on", (await env.USERS.get("user:former@example.com", "json")).adFree, true);
+  }
+
+  // 6e3. Admin comp of a member with a dead stripeSubId (ended before this fix) checks Stripe and clears it
+  {
+    const env = { USERS: makeKV(), ADMIN_EMAIL: "admin@example.com", STRIPE_SECRET_KEY: "sk_test_abc" };
+    const admin = await seedUser(env, "admin@example.com");
+    await seedUser(env, "stale@example.com", { adFree: false, stripeCustomerId: "cus_g", stripeSubId: "sub_gone" });
+    const on = await (await call(req("POST", "/api/admin/user", { cookie: admin, body: { email: "stale@example.com", adFree: true } }), env)).json();
+    eq("comp: dead stripeSubId cleared", on.user.hasSubscription, false);
+    eq("comp: dead stripeSubId → recorded as comp", on.user.comp?.by, "admin@example.com");
   }
 
   // 6f. Webhook with no secret configured → 503, never verified against an empty key
@@ -685,6 +718,14 @@ async function run() {
     eq("admin user: toggle persists to KV", stored.adFree, false);
     const on = await (await call(req("POST", "/api/admin/user", { cookie: admin, body: { email: "alice@example.com", adFree: true } }), env)).json();
     eq("admin user: grant ad-free to free user", on.user.adFree, true);
+    eq("admin user: comp records the granting admin", on.user.comp?.by, "admin@example.com");
+    check("admin user: comp records a time", !!on.user.comp?.at);
+    const offAgain = await (await call(req("POST", "/api/admin/user", { cookie: admin, body: { email: "alice@example.com", adFree: false } }), env)).json();
+    eq("admin user: turning comp off clears it", offAgain.user.comp, null);
+    check("admin user: comp cleared in KV", !(await env.USERS.get("user:alice@example.com", "json")).comp);
+    // Bob pays through Stripe: turning Pro back on for him is not a comp.
+    const bobOn = await (await call(req("POST", "/api/admin/user", { cookie: admin, body: { email: "bob@example.com", adFree: true } }), env)).json();
+    eq("admin user: paying member is not marked comp", bobOn.user.comp, null);
 
     // missing user → 404
     eq("admin user: missing → 404", (await call(req("GET", "/api/admin/user?email=nobody@example.com", { cookie: admin }), env)).status, 404);

@@ -151,6 +151,25 @@ never upgraded.
 The entitlement flag is still `adFree` on the user record (`isPro()` in
 `functions/auth.js`), so no migration is needed.
 
+### Giving someone free Pro (comps)
+
+For family, friends and testers. No codes, and nothing happens in Stripe.
+
+1. The person creates an account on the site.
+2. Go to **/admin → Users**, search for their email, open them, and switch on
+   **Free Pro (comp)**.
+3. They get every Pro feature right away. They're never charged: there's no card and no
+   subscription, and checkout refuses accounts that are already Pro. The list shows
+   them as **Pro (free comp)**, and their detail page shows which admin comped
+   them and when.
+4. Switch it off any time to take Pro away.
+
+**Don't comp someone who's already paying.** The switch doesn't touch Stripe
+billing, so a paying member keeps being charged. Cancel their subscription in
+Stripe first and wait for it to end, then switch on the comp. Once it has
+ended, the account shows as Free with no subscription. If you comp them before
+it ends, the cancellation turns Pro off again.
+
 ## 4. Direct sponsorships — `/admin` (no code)
 
 The hero "takeover" is sold inventory — far higher value than AdSense for a
