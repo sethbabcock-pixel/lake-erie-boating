@@ -604,6 +604,11 @@ const toAlert = (f) => ({
   sent: f.properties?.sent || f.properties?.effective || null,
   onset: f.properties?.onset || f.properties?.effective || null,
   ends: f.properties?.ends || f.properties?.expires,
+  // The event's own end, null when NWS gives none ("until further notice",
+  // e.g. hurricane/tropical warnings). `ends` above falls back to `expires`,
+  // which is only when the PRODUCT lapses (often hours before the event ends),
+  // so timing uses this instead (see alertSpan).
+  eventEnds: f.properties?.ends ?? null,
   zones: f.properties?.geocode?.UGC || [],
 });
 async function alertsAt(query) {
@@ -645,9 +650,15 @@ export function alertLevel(a) {
   return "CAUTION";
 }
 // [start, end) in epoch ms. No onset = already in effect; no end = open-ended.
+// A warning/watch/advisory with no event end (NWS "until further notice") is
+// open-ended: its `expires` is just the product's re-issue time, and treating
+// that as the end would show GO hours under a warning that is still in force.
+// Statements (Marine/Special Weather Statement) carry no event end by design;
+// for those `expires` is the meaningful end.
 function alertSpan(a) {
   const s = Date.parse(a.onset || "");
-  const e = Date.parse(a.ends || "");
+  const ufn = "eventEnds" in a && a.eventEnds == null && /warning|watch|advisory/i.test(a.event || "");
+  const e = ufn ? NaN : Date.parse(a.ends || "");
   return [Number.isFinite(s) ? s : -Infinity, Number.isFinite(e) ? e : Infinity];
 }
 // The worst alert level in effect at any time in [fromMs, toMs).
@@ -661,11 +672,13 @@ function alertLevelBetween(alerts, fromMs, toMs) {
   }
   return lvl;
 }
-// When the alerts lookup failed, how far ahead to refuse GO: alerts are
-// issued roughly a day ahead, so a missing feed hides about that much.
-const ALERTS_UNKNOWN_CAP_H = 24;
+// When the alerts lookup failed, how far ahead to refuse GO: a missing feed
+// hides whatever has already been issued. Small Craft Advisories usually lead
+// by 12-36 h, but gale/storm and tropical watches are issued up to ~48 h ahead,
+// so 48 h covers essentially every product that could exist.
+const ALERTS_UNKNOWN_CAP_H = 48;
 // Raise hourly rows ({time, level}) to any alert in effect that hour; when
-// alerts couldn't be checked, the next day's GO hours become CAUTION.
+// alerts couldn't be checked, GO hours within ALERTS_UNKNOWN_CAP_H become CAUTION.
 export function applyAlertsToHours(hours, alerts, alertsOk = true, nowMs = Date.now()) {
   return (hours || []).map((h) => {
     const t = Date.parse(h.time);
@@ -686,11 +699,13 @@ export function applyAlertsToWeek(week, alerts, alertsOk, tz, nowMs = Date.now()
     const to = Number.isFinite(e) ? toLocal(Math.floor((e - 1) / 3600e3)).date : "9999-12-31";
     return { from, to, level: alertLevel(a) };
   });
-  const today = toLocal(Math.floor(nowMs / 3600e3)).date;
+  // Alerts unknown: no GO on any local day the hourly cap reaches (same
+  // window as applyAlertsToHours, so the two strips agree).
+  const capTo = toLocal(Math.floor((nowMs + ALERTS_UNKNOWN_CAP_H * 3600e3 - 1) / 3600e3)).date;
   return week.map((d) => {
     let level = d.level;
     for (const sp of spans) if (d.date >= sp.from && d.date <= sp.to) level = worseLevel(level, sp.level);
-    if (!alertsOk && d.date === today && level === "GO") level = "CAUTION";
+    if (!alertsOk && d.date <= capTo && level === "GO") level = "CAUTION";
     return level === d.level ? d : { ...d, level, alert: true };
   });
 }
@@ -713,6 +728,11 @@ export async function fetchZoneAlerts(zones) {
   return { byZone, ok: results.every((r) => r != null) };
 }
 const zoneAlertsFor = (za, spot) => (za && spot?.zone && za.byZone.get(spot.zone)) || [];
+// Were this spot's zone alerts actually checked? Every directory spot is
+// marine (built pages require a marine zone), so a spot with no valid zone —
+// e.g. an old user-built record — had nothing looked up: missing data, not
+// "no advisories".
+const zoneAlertsOkFor = (za, spot) => !!za && za.ok && ZONE_RE.test(spot?.zone || "");
 
 // NWS re-issues the same advisory repeatedly (e.g. three "Air Quality Alert"
 // features minutes apart). Collapse to one card per event type, keeping the
@@ -1642,6 +1662,7 @@ async function handleCamStatus(url, env) {
 // directory. Per-spot NWS grid fetches through a small pool; /points lookups
 // are edge-cached a day and the whole result ~10 min, so the API isn't hammered.
 // One directory/email tile (verdict + wind/wave) from a spot and its grid.
+const TILE_ALERT_LOOKAHEAD_H = 6; // ~a half-day trip
 function summaryTile(id, s, g, nowH, za = null) {
   const windKt = round(sampleNear(g?.windKt, nowH), 0);
   const gustKt = round(sampleNear(g?.gustKt, nowH), 0);
@@ -1658,9 +1679,13 @@ function summaryTile(id, s, g, nowH, za = null) {
   let level = riskLevel(windKt, gustKt, precipPct, thunder ? "thunderstorms" : "", waveFt, periodSec, waterProfile(s));
   // An advisory in effect for the spot's zone now or next hour (same window
   // as above) raises the tile; if the zone alerts couldn't be checked, no GO.
+  // An alert starting within the next few hours (a trip launched now is still
+  // out when it begins) can't leave the tile at GO either: at least CAUTION.
   if (za) {
-    level = worseLevel(level, alertLevelBetween(zoneAlertsFor(za, s), nowH * 3600e3, (nowH + 2) * 3600e3));
-    if (!za.ok && level === "GO") level = "CAUTION";
+    const zoneAlerts = zoneAlertsFor(za, s);
+    level = worseLevel(level, alertLevelBetween(zoneAlerts, nowH * 3600e3, (nowH + 2) * 3600e3));
+    if (level === "GO" && alertLevelBetween(zoneAlerts, nowH * 3600e3, (nowH + TILE_ALERT_LOOKAHEAD_H) * 3600e3)) level = "CAUTION";
+    if (!zoneAlertsOkFor(za, s) && level === "GO") level = "CAUTION";
   }
   // lat/lon travel with each spot so the homepage can find the nearest launch
   // from a ZIP or the browser's location without a second request.
@@ -1732,7 +1757,7 @@ export async function fetchWeeks(env, ids) {
   await floorWithMarineText(entries, grids).catch(() => {});
   // Same per-day verdicts as the week strip (buildWeek → riskLevel: no wind
   // data is "—", lake gusts count), raised by the zone's active alerts.
-  return Object.fromEntries(entries.map(([id, s], i) => [id, applyAlertsToWeek(buildWeek(grids[i], waterProfile(s)), zoneAlertsFor(za, s), za.ok, grids[i]?.tz)]));
+  return Object.fromEntries(entries.map(([id, s], i) => [id, applyAlertsToWeek(buildWeek(grids[i], waterProfile(s)), zoneAlertsFor(za, s), zoneAlertsOkFor(za, s), grids[i]?.tz)]));
 }
 
 // The full spot-page verdict (alerts, gusts, buoy, nearshore text) for one
@@ -1766,7 +1791,7 @@ export async function fetchTodayWindows() {
   entries.forEach(([id, s], i) => {
     const g = grids[i];
     // No grid, or the zone alerts couldn't be checked: offer no GO window.
-    if (!g || !za.ok) { out[id] = null; return; }
+    if (!g || !zoneAlertsOkFor(za, s)) { out[id] = null; return; }
     const spotAlerts = zoneAlertsFor(za, s);
     const toLocal = localParts(g.tz);
     const today = toLocal(nowH).date;

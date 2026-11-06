@@ -1846,7 +1846,7 @@ async function run() {
 
     const now = Date.now(), H = 3600e3;
     const t0 = Math.floor(now / H) * H;
-    const hrs = Array.from({ length: 30 }, (_, i) => ({ time: new Date(t0 + i * H).toISOString(), level: "GO", short: "" }));
+    const hrs = Array.from({ length: 60 }, (_, i) => ({ time: new Date(t0 + i * H).toISOString(), level: "GO", short: "" }));
     const sca = { event: "Small Craft Advisory", onset: new Date(t0 + 2 * H).toISOString(), ends: new Date(t0 + 5 * H).toISOString() };
     const h1 = applyAlertsToHours(hrs, [sca], true, now);
     eq("hours: before the advisory stays GO", h1[1].level, "GO");
@@ -1856,8 +1856,23 @@ async function run() {
     const o = computeOutlook(applyAlertsToHours(hrs, [gale], true, now));
     check("outlook: be in by the gale's onset, reason 'a marine warning'", o.headInBy === hrs[3].time && o.goodHours === 3 && o.headInReason === "a marine warning", JSON.stringify(o));
     const h2 = applyAlertsToHours(hrs, [], false, now);
-    check("hours: alerts unknown → next 24 h not GO", h2.slice(0, 24).every((h) => h.level === "CAUTION"), JSON.stringify(h2.slice(0, 24).map((h) => h.level)));
-    eq("hours: alerts unknown → beyond 24 h unchanged", h2[25].level, "GO");
+    check("hours: alerts unknown → next 48 h not GO", h2.slice(0, 48).every((h) => h.level === "CAUTION"), JSON.stringify(h2.slice(0, 48).map((h) => h.level)));
+    eq("hours: alerts unknown → beyond 48 h unchanged", h2[49].level, "GO");
+    // NWS "until further notice": no event end. toAlert keeps ends = expires for
+    // the card, but timing must not end the warning at the product's expiry.
+    const ufn = { event: "Hurricane Warning", onset: null, ends: new Date(t0 + 3 * H).toISOString(), eventEnds: null };
+    const hU = applyAlertsToHours(hrs, [ufn], true, now);
+    check("hours: until-further-notice warning stays in force past its product expiry", hU[10].level === "NO-GO" && hU[59].level === "NO-GO", JSON.stringify([hU[10].level, hU[59].level]));
+    const stmt = { event: "Marine Weather Statement", onset: null, ends: new Date(t0 + 2 * H).toISOString(), eventEnds: null };
+    const hS = applyAlertsToHours(hrs, [stmt], true, now);
+    check("hours: a statement (no event end by design) ends at its expiry", hS[1].level === "CAUTION" && hS[3].level === "GO", JSON.stringify([hS[1].level, hS[3].level]));
+    // DST: an SCA spanning the fall-back night (2026-11-01 01:00 EDT repeats).
+    const dstHrs = Array.from({ length: 8 }, (_, i) => ({ time: new Date(Date.parse("2026-11-01T04:00:00Z") + i * H).toISOString(), level: "GO" }));
+    const dstSca = { event: "Small Craft Advisory", onset: "2026-11-01T01:00:00-04:00", ends: "2026-11-01T03:00:00-05:00" }; // 05Z → 08Z
+    const hD = applyAlertsToHours(dstHrs, [dstSca], true, Date.parse("2026-11-01T04:00:00Z"));
+    eq("hours: across the DST change, exactly the 3 UTC hours of the advisory", hD.map((h) => h.level).join(","), "GO,CAUTION,CAUTION,CAUTION,GO,GO,GO,GO");
+    const dstWk = applyAlertsToWeek([{ date: "2026-10-31", level: "GO" }, { date: "2026-11-01", level: "GO" }, { date: "2026-11-02", level: "GO" }], [{ event: "Gale Warning", onset: "2026-10-31T23:30:00-04:00", ends: "2026-11-01T23:00:00-05:00" }], true, "America/New_York", Date.parse("2026-10-31T12:00:00Z"));
+    eq("week: across the DST change, the gale's local days (onset in EDT, end in EST)", dstWk.map((d) => d.level).join(","), "NO-GO,NO-GO,GO");
     const sca2 = { event: "Small Craft Advisory", onset: new Date(t0 + 20 * H).toISOString(), ends: new Date(t0 + 22 * H).toISOString() };
     const h3 = applyAlertsToHours(hrs, [sca, sca2], true, now);
     check("hours: two issuances of one event each cover their own hours", h3[3].level === "CAUTION" && h3[21].level === "CAUTION" && h3[10].level === "GO", JSON.stringify([h3[3].level, h3[10].level, h3[21].level]));
@@ -1865,12 +1880,12 @@ async function run() {
     eq("hours: an alert never lowers a level", nowFirst.level, "NO-GO");
 
     const iso = (k) => new Date(t0 + k * 24 * H).toLocaleDateString("en-CA", { timeZone: "America/New_York" });
-    const wk = [0, 1, 2].map((k) => ({ date: iso(k), level: "GO" }));
+    const wk = [0, 1, 2, 3, 4].map((k) => ({ date: iso(k), level: "GO" }));
     const tomorrowGale = { event: "Gale Warning", onset: new Date(Date.parse(`${iso(1)}T12:00:00-05:00`)).toISOString(), ends: new Date(Date.parse(`${iso(1)}T20:00:00-05:00`)).toISOString() };
     const w1 = applyAlertsToWeek(wk, [tomorrowGale], true, "America/New_York", now);
     check("week: gale tomorrow → tomorrow NO-GO, other days GO", w1[0].level === "GO" && w1[1].level === "NO-GO" && w1[2].level === "GO", JSON.stringify(w1.map((d) => d.level)));
     const w2 = applyAlertsToWeek(wk, [], false, "America/New_York", now);
-    check("week: alerts unknown → today not GO, later days unchanged", w2[0].level === "CAUTION" && w2[1].level === "GO", JSON.stringify(w2.map((d) => d.level)));
+    check("week: alerts unknown → the days the 48 h hourly cap reaches are not GO, later days unchanged", w2[0].level === "CAUTION" && w2[1].level === "CAUTION" && w2[4].level === "GO", JSON.stringify(w2.map((d) => d.level)));
 
     zoneAlert = "gale"; zoneAlertOnly = ["LEZ143"];
     const many = Array.from({ length: 30 }, (_, i) => `LEZ${String(100 + i).padStart(3, "0")}`).concat(["LEZ143", "bogus", null]);
@@ -1893,11 +1908,29 @@ async function run() {
     check("spot page: outlook is not GO now", page.outlook?.nowLevel !== "GO", JSON.stringify(page.outlook));
     eq("spot page: week strip today is NO-GO", page.week?.[0]?.level, "NO-GO");
 
+    // Tile lookahead: a gale starting within 6 h makes the tile at least CAUTION.
+    zoneAlertSpan = { onsetH: 1, endsH: 12 };
+    eq("tiles: gale starting next hour → NO-GO", (await fetchSummary(env)).spots.find((x) => x.id === "sandusky")?.level, "NO-GO");
+    zoneAlertSpan = { onsetH: 4, endsH: 12 };
+    eq("tiles: gale starting in 4 h → CAUTION, not GO", (await fetchSummary(env)).spots.find((x) => x.id === "sandusky")?.level, "CAUTION");
+    zoneAlertSpan = { onsetH: 9, endsH: 12 };
+    eq("tiles: gale starting in 9 h → tile follows the weather (GO)", (await fetchSummary(env)).spots.find((x) => x.id === "sandusky")?.level, "GO");
+
     zoneAlertSpan = { onsetH: 6, endsH: 12 };
     const later = await (await onRequest({ request: new Request("https://shouldiboat.com/marine/conditions?spot=sandusky"), env })).json();
     eq("spot page: gale starting in 6 h → headline still lists it", later.recommendation?.level, "NO-GO");
     const ix = (later.hourly || []).findIndex((h) => h.level === "NO-GO");
     check("spot page: strip turns NO-GO when the gale starts, GO before", ix >= 5 && ix <= 7 && later.hourly[0].level === "GO", JSON.stringify((later.hourly || []).slice(0, 9).map((h) => h.level)));
+
+    // A built spot saved without a zone had no alerts checked: never GO.
+    zoneAlert = null; zoneAlertOnly = null; zoneAlertSpan = null;
+    const kvNz = makeKV();
+    await kvNz.put("builtspot:nozone-cove", JSON.stringify({ slug: "nozone-cove", name: "No-Zone Cove", lat: 41.5, lon: -82.0, lake: "Lake Erie", office: "CLE", product: "NSH", featured: true }));
+    const { fetchBuiltSummaries } = await import("../functions/marine/conditions.js");
+    const nz = (await fetchBuiltSummaries({ USERS: kvNz }, ["nozone-cove"]))[0];
+    check("zone-less built spot: tile is not GO (alerts unchecked)", nz && nz.level !== "GO", JSON.stringify(nz));
+    const nzWeek = (await fetchWeeks({ USERS: kvNz }, ["nozone-cove"]))["nozone-cove"] || [];
+    check("zone-less built spot: today is not GO in the weekend outlook", nzWeek.length && nzWeek[0].level !== "GO", JSON.stringify(nzWeek.slice(0, 2)));
 
     zoneAlert = "down"; zoneAlertOnly = null; zoneAlertSpan = null;
     const tilesDown = (await fetchSummary(env)).spots;
