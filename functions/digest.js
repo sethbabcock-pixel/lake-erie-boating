@@ -103,6 +103,8 @@ function weekendHtml(rows, unsubUrl) {
   </div>${emailFooter(unsubUrl)}`;
 }
 
+const UNVERIFIED_TTL_MS = 48 * 3600 * 1000;
+
 // List every user record (paginated; fine at launch scale).
 async function allUsers(env) {
   const users = [];
@@ -125,7 +127,16 @@ export async function runScheduled(env, utcHour, now = new Date()) {
   const isAlertWindow = utcHour >= ALERT_UTC_FROM && utcHour <= ALERT_UTC_TO;
   if (!isDigestRun && !isAlertWindow) return { skipped: "outside windows" };
 
-  const users = await allUsers(env);
+  let users = await allUsers(env);
+  // Once a day, remove password sign-ups that were never confirmed within 48h.
+  // Their verification links are long expired; keeping them lets someone hold
+  // ("squat") an address they don't own until its real owner signs up.
+  if (isDigestRun) {
+    const cutoff = now.getTime() - UNVERIFIED_TTL_MS;
+    const stale = users.filter((u) => u.emailVerified === false && u.via !== "google" && Date.parse(u.created || "") < cutoff);
+    for (const u of stale) await env.USERS.delete(`user:${u.email}`).catch(() => {});
+    if (stale.length) users = users.filter((u) => !stale.includes(u));
+  }
   const summary = await fetchSummary(env); // curated + featured built pages
   const byId = Object.fromEntries((summary.spots || []).map((s) => [s.id, s]));
   // Favorited user-built pages that aren't already covered (not featured yet):

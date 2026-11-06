@@ -752,13 +752,69 @@ async function run() {
     eq("multi-admin: second admin can toggle Pro", r.status, 200);
   }
 
-  // 27c. Unset / empty / all-invalid ADMIN_EMAIL falls back to the default owner
+  // 27c. Unset / empty ADMIN_EMAIL falls back to the default owner; set but
+  // with no valid address (a typo) fails closed — nobody is admin
   {
-    for (const v of [undefined, "", " , "]) {
+    for (const v of [undefined, "", "   "]) {
       const env = { USERS: makeKV(), ...(v === undefined ? {} : { ADMIN_EMAIL: v }) };
       const owner = await seedUser(env, "seth.babcock@gmail.com");
       eq(`multi-admin: default owner when ADMIN_EMAIL=${JSON.stringify(v)}`, (await call(req("GET", "/api/admin/users", { cookie: owner }), env)).status, 200);
     }
+    const warn = console.warn; console.warn = () => {};
+    for (const v of [" , ", "someone@typo"]) {
+      const env = { USERS: makeKV(), ADMIN_EMAIL: v };
+      const owner = await seedUser(env, "seth.babcock@gmail.com");
+      eq(`multi-admin: all-invalid ADMIN_EMAIL=${JSON.stringify(v)} locks /admin`, (await call(req("GET", "/api/admin/users", { cookie: owner }), env)).status, 403);
+    }
+    console.warn = warn;
+  }
+
+  // 27f. Pre-hijack: a squatter registers an address with a password and never
+  // verifies; when the real owner signs in with Google, the squatter's record
+  // (password included) is discarded and the owner gets a fresh account
+  {
+    const env = { USERS: makeKV(), ADMIN_EMAIL: "boss2@example.com", GOOGLE_CLIENT_ID: "gid", GOOGLE_CLIENT_SECRET: "gsec", BREVO_API_KEY: "brevo_x" };
+    const reg = await call(req("POST", "/auth/register", { body: { email: "boss2@example.com", password: "Squatter-pass-123!" } }), env);
+    eq("pre-hijack: squatter registration pending", reg.status, 200);
+    await env.USERS.put("user:boss2@example.com", JSON.stringify({ ...(await env.USERS.get("user:boss2@example.com", "json")), prefs: { boatName: "squat" }, favorites: ["x"] }));
+    googleIdPayload = { email: "boss2@example.com", email_verified: true };
+    const cb = new URL(ORIGIN + "/auth/google/callback?code=c&state=s3");
+    const r = await call({ request: new Request(cb, { headers: { cookie: "sib_oauth=s3" } }), url: cb }, env);
+    eq("pre-hijack: owner Google sign-in → 302", r.status, 302);
+    const u = await env.USERS.get("user:boss2@example.com", "json");
+    check("pre-hijack: squatter password removed", !u.pass && !u.salt && !u.passIter, JSON.stringify(Object.keys(u)));
+    eq("pre-hijack: account now verified via Google", `${u.via}/${u.emailVerified}`, "google/true");
+    check("pre-hijack: squatter prefs/favorites discarded", !u.prefs.boatName && !(u.favorites || []).length);
+    const login = await call(req("POST", "/auth/login", { body: { email: "boss2@example.com", password: "Squatter-pass-123!" } }), env);
+    check("pre-hijack: squatter password no longer signs in", login.status === 401, String(login.status));
+    const tok = /sib_session=([^;]+)/.exec(r.headers.get("Set-Cookie") || "")?.[1];
+    const me = await (await call(req("GET", "/auth/me", { cookie: `sib_session=${tok}` }), env)).json();
+    eq("pre-hijack: owner is admin after Google sign-in", me.user && me.user.admin, true);
+    // A verified password account is NOT replaced by Google sign-in
+    await seedUser(env, "keep@example.com", { via: "password", emailVerified: true, pass: "h", salt: "s", prefs: { boatName: "mine" } });
+    googleIdPayload = { email: "keep@example.com", email_verified: true };
+    const cb2 = new URL(ORIGIN + "/auth/google/callback?code=c&state=s4");
+    await call({ request: new Request(cb2, { headers: { cookie: "sib_oauth=s4" } }), url: cb2 }, env);
+    const k = await env.USERS.get("user:keep@example.com", "json");
+    eq("pre-hijack: verified account kept as-is", `${k.pass}/${k.prefs.boatName}`, "h/mine");
+    googleIdPayload = null;
+  }
+
+  // 27g. Daily cleanup removes password sign-ups never confirmed within 48h
+  {
+    const env = { USERS: makeKV() };
+    const now = new Date("2026-11-10T10:00:00Z");
+    await seedUser(env, "stale-squat@example.com", { via: "password", emailVerified: false, created: "2026-11-07T09:00:00Z" });
+    await seedUser(env, "fresh-pending@example.com", { via: "password", emailVerified: false, created: "2026-11-09T12:00:00Z" });
+    await seedUser(env, "legacy-old@example.com", { via: "password", created: "2025-01-01T00:00:00Z" }); // no emailVerified field
+    await seedUser(env, "verified-old@example.com", { via: "password", emailVerified: true, created: "2025-01-01T00:00:00Z" });
+    await runScheduled(env, 15, now); // not the digest hour → no cleanup
+    check("cleanup: only on the daily digest run", !!(await env.USERS.get("user:stale-squat@example.com")));
+    await runScheduled(env, 10, now);
+    check("cleanup: stale unverified sign-up removed", !(await env.USERS.get("user:stale-squat@example.com")));
+    check("cleanup: recent unverified sign-up kept", !!(await env.USERS.get("user:fresh-pending@example.com")));
+    check("cleanup: legacy (grandfathered) account kept", !!(await env.USERS.get("user:legacy-old@example.com")));
+    check("cleanup: verified account kept", !!(await env.USERS.get("user:verified-old@example.com")));
   }
 
   // 27d. Admin notifications go to every listed admin when no notifyEmails are configured

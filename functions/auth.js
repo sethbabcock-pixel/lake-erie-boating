@@ -134,12 +134,18 @@ const DEFAULT_SITE_CONFIG = {
 };
 // Site owner — admin by default so /admin works with no Cloudflare setup.
 // Admins come from the ADMIN_EMAIL Worker variable: one address, or several
-// separated by commas (e.g. "a@x.com, b@y.com"). Unset or empty → DEFAULT_ADMIN.
+// separated by commas (e.g. "a@x.com, b@y.com"). Unset or empty → DEFAULT_ADMIN;
+// set but with no valid address → nobody (fails closed).
 // Deliberately not editable from /admin, so one admin can't add another.
 const DEFAULT_ADMIN = "seth.babcock@gmail.com";
 const adminList = (env) => {
-  const list = String(env.ADMIN_EMAIL || "").split(/[\s,;]+/).map((e) => e.trim().toLowerCase()).filter(validEmail);
-  return list.length ? [...new Set(list)] : [DEFAULT_ADMIN];
+  const raw = String(env.ADMIN_EMAIL || "").trim();
+  if (!raw) return [DEFAULT_ADMIN];
+  // Set but with no valid address (e.g. a typo) → no admins, rather than
+  // silently handing admin back to the default owner.
+  const list = raw.split(/[\s,;]+/).map((e) => e.trim().toLowerCase()).filter(validEmail);
+  if (!list.length) console.warn("ADMIN_EMAIL is set but contains no valid email; /admin is locked.");
+  return [...new Set(list)];
 };
 // An admin must have proved they own the address: an unverified password
 // account (explicit emailVerified === false) never gets admin, even if listed.
@@ -1222,6 +1228,12 @@ export async function handleAuth(request, env, url, ctx) {
     // as (or claim admin for) an address they don't control.
     if (payload.email_verified !== true && payload.email_verified !== "true") return new Response("Your Google account's email address isn't verified.", { status: 403 });
     let user = await env.USERS.get(emailKey(email), "json");
+    // An unverified password account for this address was never proven to be
+    // its owner's; anyone can register any address. Google has now verified the
+    // owner, so discard that record (password, prefs and all) and start fresh.
+    // Otherwise a squatter's password would start working once the owner
+    // verified, which could hand them the owner's account (or admin).
+    if (user && user.emailVerified === false) user = null;
     if (!user) {
       user = { id: randHex(8), email, created: new Date().toISOString(), prefs: {}, favorites: [], adFree: false, via: "google", emailVerified: true };
       await env.USERS.put(emailKey(email), JSON.stringify(user));
