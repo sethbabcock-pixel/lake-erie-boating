@@ -1457,7 +1457,11 @@ async function fetchWindyCams(env, lat, lon, lake) {
     if (!r.ok) return null;
     const d = await r.json();
     const list = d?.webcams || d?.result?.webcams || [];
-    const WATER = /beach|harbou?r|\bbay\b|coast|lake|river|marina|\bpier\b|\bport\b|water|island|\bsea\b/i;
+    // Boaters need to see the water. Windy's "nearest" list is mostly traffic
+    // and city cams (St. Augustine's top hit was an I-95 cam), so a cam is only
+    // used when its categories or title say water AND nothing says road.
+    const WATER = /beach|harbou?r|\bbay\b|coast|lake|river|marina|\bpier\b|\bport\b|water|island|\bsea\b|ocean|inlet|surf|sound|channel|lagoon|dock|boat|yacht|lighthouse|waterfront|shore|jetty|intracoastal/i;
+    const ROAD = /traffic|highway|\bhwy\b|interstate|\bI-?\s?\d{1,3}\b|\b(?:US|SR|FL|CR)[-\s]?\d{1,3}\b|freeway|expressway|turnpike|parkway|\bpkwy\b|\bexit\b|intersection|\broad\b|\brd\b|\bstreet\b|\bave(?:nue)?\b|\bblvd\b|\bdot\b|\bfdot\b|toll|\bmile marker\b/i;
     const scored = [];
     for (const w of list) {
       const id = w.webcamId ?? w.id;
@@ -1479,18 +1483,19 @@ async function fetchWindyCams(env, lat, lon, lake) {
       const label = `${title}${city && !title.toLowerCase().includes(String(city).toLowerCase()) ? ` · ${city}` : ""}`.slice(0, 72);
       const catStr = (w.categories || []).map((c) => `${c?.id || ""} ${c?.name || ""}`).join(" ");
       const watery = WATER.test(catStr) || WATER.test(title);
-      const traffic = /traffic/i.test(catStr);
+      if (!watery || ROAD.test(catStr) || ROAD.test(title)) continue;
       scored.push({
-        watery, live: !!live, traffic,
+        live: !!live,
         cam: {
           name: `${label} (${live ? "Windy" : "Windy · replay"})`, lat: loc.latitude ?? lat, lon: loc.longitude ?? lon, lake,
           embed, link: w.urls?.detail || w.urls?.provider || `https://www.windy.com/webcams/${id}`, source: "windy",
         },
       });
     }
-    // Water first, live before replay, traffic cams last; ties keep Windy's
-    // nearest-first order. Cut to 5 after ranking.
-    scored.sort((a, b) => (b.watery - a.watery) || (a.traffic - b.traffic) || (b.live - a.live));
+    // Water views only (filtered above); live before replay; ties keep
+    // Windy's nearest-first order. Cut to 5 after ranking. An empty list is
+    // fine — the panel shows the directory links instead of a wrong view.
+    scored.sort((a, b) => b.live - a.live);
     const out = scored.slice(0, 5).map((s) => s.cam);
     out.raw = list.length;
     return out;
