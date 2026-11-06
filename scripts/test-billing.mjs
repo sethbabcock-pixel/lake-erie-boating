@@ -839,6 +839,16 @@ async function run() {
     check("admin verify: session issued", /sib_session=/.test(r.headers.get("Set-Cookie") || ""));
     check("admin verify: registration password dropped", !(await env.USERS.get("user:newadmin@example.com", "json")).pass);
     eq("admin verify: old password can't sign in", (await call(req("POST", "/auth/login", { body: { email: "newadmin@example.com", password: "Squatter-pass-123!" } }), env)).status, 401);
+    // ...and the admin can set their own via Forgot password (not locked out)
+    await call(req("POST", "/auth/forgot", { body: { email: "newadmin@example.com" } }), env);
+    const rkey = [...env.USERS._map.keys()].find((k) => k.startsWith("reset:") && env.USERS._map.get(k) === "newadmin@example.com");
+    check("admin verify: forgot password sends a reset link", !!rkey);
+    eq("admin verify: reset → 200", (await call(req("POST", "/auth/reset", { body: { token: rkey.slice(6), password: "Owner-chosen-123!" } }), env)).status, 200);
+    eq("admin verify: owner's new password signs in", (await call(req("POST", "/auth/login", { body: { email: "newadmin@example.com", password: "Owner-chosen-123!" } }), env)).status, 200);
+    // Google accounts still get no reset link
+    await seedUser(env, "googly@example.com", { via: "google", emailVerified: true });
+    await call(req("POST", "/auth/forgot", { body: { email: "googly@example.com" } }), env);
+    check("forgot: Google account gets no reset link", ![...env.USERS._map.entries()].some(([k, v]) => k.startsWith("reset:") && v === "googly@example.com"));
     // A normal (non-admin) address keeps its password on verify
     await call(req("POST", "/auth/register", { body: { email: "normal@example.com", password: "Normal-pass-123!" } }), env);
     const nkey = [...env.USERS._map.keys()].find((k) => k.startsWith("verify:") && env.USERS._map.get(k) === "normal@example.com");

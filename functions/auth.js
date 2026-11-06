@@ -147,6 +147,10 @@ function adminList(env) {
   if (!list.length && !adminList.warned) { adminList.warned = true; console.warn("ADMIN_EMAIL is set but contains no valid email; /admin is locked."); }
   return [...new Set(list)];
 }
+// Who may get a password-reset link: anyone with a password, or a verified
+// password-type account without one. The link goes to the inbox, which is the
+// proof of ownership.
+const canSetPassword = (u) => !!(u && (u.pass || (u.via !== "google" && u.emailVerified !== false)));
 // An admin must have proved they own the address: an unverified password
 // account (explicit emailVerified === false) never gets admin, even if listed.
 const isAdmin = (env, u) => !!(u && u.emailVerified !== false && adminList(env).includes(String(u.email || "").toLowerCase()));
@@ -509,7 +513,10 @@ export async function handleAuth(request, env, url, ctx) {
     const e = (email || "").trim().toLowerCase();
     if (validEmail(e)) {
       const user = await env.USERS.get(emailKey(e), "json");
-      if (user && user.pass) { // password accounts only; Google users sign in with Google
+      // Password accounts, plus verified non-Google accounts left without one
+      // (an admin address whose registration password was dropped on verify).
+      // Google users sign in with Google.
+      if (user && canSetPassword(user)) {
         const token = randHex(20);
         await env.USERS.put(`reset:${token}`, e, { expirationTtl: 3600 });
         const link = `${siteBase(env, url)}/?reset=${token}`;
@@ -555,7 +562,8 @@ export async function handleAuth(request, env, url, ctx) {
     user.emailVerified = true;
     // For an admin address, a verification click must never activate a
     // password the clicker didn't set (a squatter may have registered it).
-    // Drop it: the admin signs in with Google or sets one via "Forgot password".
+    // Drop it: the admin signs in with Google or sets one via "Forgot password"
+    // (allowed for this record by canSetPassword).
     if (firstTime && user.pass && adminList(env).includes(email)) { delete user.pass; delete user.salt; delete user.passIter; }
     await env.USERS.put(emailKey(email), JSON.stringify(user));
     await env.USERS.delete(`verify:${token}`);
@@ -1112,7 +1120,7 @@ export async function handleAuth(request, env, url, ctx) {
     // POST: either email a password-reset link, or toggle account flags.
     const body = await request.json().catch(() => ({}));
     if (body.action === "sendReset") {
-      if (!target.pass) return json({ error: "This user signs in with Google, so there's no password to reset." }, 400);
+      if (!canSetPassword(target)) return json({ error: "This user signs in with Google, so there's no password to reset." }, 400);
       const token = randHex(20);
       await env.USERS.put(`reset:${token}`, target.email, { expirationTtl: 3600 });
       const link = `${siteBase(env, url)}/?reset=${token}`;
