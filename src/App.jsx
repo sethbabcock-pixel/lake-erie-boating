@@ -423,7 +423,7 @@ function obsAge(ld) {
   if (m == null) return null;
   return m < 60 ? `${m} min ago` : `${Math.floor(m / 60)} h${m % 60 ? ` ${m % 60} min` : ""} ago`;
 }
-const notReported = (ids) => <>{stationList(ids)} {ids.length > 1 ? "haven't" : "hasn't"} reported in the last 3 hours</>;
+const notReported = (ids) => <>{stationList(ids)} {ids.length > 1 ? "haven't" : "hasn't"} reported wind or waves in the last 3 hours</>;
 function BuoyFact({ facts }) {
   const buoys = facts.buoys || [];
   const ld = facts.liveData;
@@ -1078,6 +1078,9 @@ export default function App() {
   const wind = data?.wind || {};
   const wv = data?.waves || {};
   const buoy = data?.buoy;
+  // Credit the buoy only when it actually supplied wind, gusts or waves; a station
+  // that reported just temperatures leaves the verdict on the forecast.
+  const buoyLive = !!buoy && (wind.source === "buoy" || wind.gustSrc === "buoy" || wv.source === "buoy");
   const wr = data?.windRead;
   const comfort = data ? comfortCheck(auth.user?.prefs, wind.speedKt, wv.ft) : null;
 
@@ -1317,11 +1320,11 @@ export default function App() {
               </>
             )}
 
-            <GearBlock waterTempF={buoy ? buoy.waterTempF : null} airTempF={buoy ? buoy.airTempF : null} windKt={wind ? wind.speedKt : null} level={rec ? rec.level : null} />
+            <GearBlock waterTempF={data.temps?.waterF ?? null} airTempF={data.temps?.airF ?? null} windKt={wind ? wind.speedKt : null} level={rec ? rec.level : null} />
             {showAds && <AdSlot name="detailMid" />}
 
             <footer className="meta">
-              Source: {buoy ? `Buoy ${buoy.station} · ${buoy.ageMinutes != null ? `${buoy.ageMinutes} min ago` : "latest"}` : "forecast only"}
+              Source: {buoyLive ? `Buoy ${buoy.station} · ${buoy.ageMinutes != null ? `${buoy.ageMinutes} min ago` : "latest"}` : "forecast only"}
               {" · NWS & NDBC (NOAA), Windy. Updated "}{new Date(data.updatedAt).toLocaleTimeString()}
               <span className="buildtag" title="Deployed version">{typeof __BUILD__ !== "undefined" ? ` · v ${__BUILD__}` : ""}</span>
               <button onClick={() => loadSpot(active)}><IconRefresh /> Refresh</button>

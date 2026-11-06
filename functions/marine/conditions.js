@@ -235,19 +235,29 @@ function parseBuoy(text, station) {
   };
 }
 
-async function fetchBuoy(buoys) {
-  for (const station of buoys) {
+// Walk spot.buoys in preference order and return { buoy, tempsObs }:
+//   buoy     — the first fresh (<3 h) observation that reports wind/gust OR waves,
+//              the only kind that may drive the verdict, or null.
+//   tempsObs — the first fresh observation at all (it may report only water/
+//              air temperature), kept for the Water/Air tiles.
+// A temps-only station must not stop the walk: a later fallback buoy may carry
+// the wind/wave sensors, and accepting it would also hide that the verdict is
+// running on the NWS forecast alone.
+export async function fetchBuoy(buoys) {
+  let tempsObs = null;
+  for (const station of buoys || []) {
     try {
       const text = await getText(`https://www.ndbc.noaa.gov/data/realtime2/${station}.txt`);
       const obs = parseBuoy(text, station);
-      // Skip stale (>3h) or empty observations; try the next fallback buoy.
-      if (obs && obs.ageMinutes != null && obs.ageMinutes < 180) return obs;
-      if (obs && obs.ageMinutes == null) return obs;
+      // Skip stale (>3h) or unparseable observations; try the next fallback buoy.
+      if (!obs || !(obs.ageMinutes == null || obs.ageMinutes < 180)) continue;
+      if (!tempsObs && (obs.waterTempF != null || obs.airTempF != null)) tempsObs = obs;
+      if (obs.windKt != null || obs.windGustKt != null || obs.waveHeightFt != null) return { buoy: obs, tempsObs: tempsObs || obs };
     } catch (e) {
       // try next buoy
     }
   }
-  return null;
+  return { buoy: null, tempsObs };
 }
 
 // Water temperature from the nearest station that reports one (spot.waterBuoys),
@@ -1059,8 +1069,9 @@ export function spotFacts(spot, obs) {
   let liveData = { checked: false, live: null, ageMinutes: null, observedAt: null, offline: [], windFrom: null, wavesFrom: null };
   if (obs) {
     const live = obs.buoy && obs.buoy.station && buoys.includes(obs.buoy.station) ? obs.buoy.station : null;
-    // fetchBuoy tries stations in order and stops at the first fresh one, so
-    // every station ahead of the live one (or all, if none) failed or was stale.
+    // fetchBuoy tries stations in order and stops at the first fresh one that
+    // reports wind or waves, so every station ahead of the live one (or all, if
+    // none) failed, was stale, or reported only temperatures.
     // Stations after the live one were never checked, so they're omitted.
     const idx = live ? buoys.indexOf(live) : buoys.length;
     liveData = {
@@ -1322,7 +1333,10 @@ export function buildRecommendation({ buoy, alerts, wind, waves, read, hours, pr
   } else if (reasons.length === 0) {
     reasons.push("Calm conditions reported");
   }
-  if (!buoy && !noData) reasons.push("No live buoy here; using the NWS forecast, so verify before launch");
+  // Say so whenever neither wind nor waves came from a live buoy, even if some
+  // station reported temperatures: the verdict is then the forecast alone.
+  const liveObs = wind?.source === "buoy" || wind?.gustSrc === "buoy" || waves?.source === "buoy";
+  if (!liveObs && !noData) reasons.push("No live buoy here; using the NWS forecast, so verify before launch");
 
   // The "no data" line only when that's the whole story: a gust or storm that
   // drove the call higher gets the normal summary for its level.
@@ -1712,7 +1726,7 @@ export async function onRequest(context) {
 
   // Fetch all sources concurrently; each resolves to null on failure so one
   // bad source never sinks the whole response.
-  const [buoy, fc, marine, alerts, noaaReport, grid, waterStation] = await Promise.all([
+  const [{ buoy, tempsObs }, fc, marine, alerts, noaaReport, grid, waterStation] = await Promise.all([
     fetchBuoy(spot.buoys),
     fetchForecastsNear(spot),
     fetchMarineForecast(spot.zone),
@@ -1795,13 +1809,18 @@ export async function onRequest(context) {
   // Water temp: live buoy, else the NSH text (which lists a few ports). Air
   // temp: live buoy, else the current hour of the NWS point forecast. So the
   // Water/Air tiles aren't blank at the many spots with no reporting buoy.
-  const waterTempF = buoy?.waterTempF ?? waterStation?.f ?? nshWaterTempF(noaaReport?.text, spot);
-  const airTempF = buoy?.airTempF ?? nowRow?.tempF ?? null;
+  // A temps-only station on spot.buoys (no wind/wave sensors) still feeds the
+  // tiles, labelled by station since it isn't the page's live buoy. It is
+  // listed ahead of the met buoy (usually closer inshore, where autumn water
+  // runs colder), so its reading wins, as it did before this split.
+  const tempsStation = tempsObs && tempsObs !== buoy ? tempsObs : null;
+  const waterTempF = tempsStation?.waterTempF ?? buoy?.waterTempF ?? waterStation?.f ?? nshWaterTempF(noaaReport?.text, spot);
+  const airTempF = tempsStation?.airTempF ?? buoy?.airTempF ?? nowRow?.tempF ?? null;
   const temps = {
     waterF: round(waterTempF, 0), // display; the verdict gets the unrounded value below
-    waterSource: buoy?.waterTempF != null ? "buoy" : waterStation?.f != null ? `NDBC ${waterStation.station}` : waterTempF != null ? "NWS" : null,
+    waterSource: tempsStation?.waterTempF != null ? `NDBC ${tempsStation.station}` : buoy?.waterTempF != null ? "buoy" : waterStation?.f != null ? `NDBC ${waterStation.station}` : waterTempF != null ? "NWS" : null,
     airF: round(airTempF, 0),
-    airSource: buoy?.airTempF != null ? "buoy" : airTempF != null ? "NWS" : null,
+    airSource: tempsStation?.airTempF != null ? `NDBC ${tempsStation.station}` : buoy?.airTempF != null ? "buoy" : airTempF != null ? "NWS" : null,
   };
 
   const read = windReadFor(spot, wind.dir);
