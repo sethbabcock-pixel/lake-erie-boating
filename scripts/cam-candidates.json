@@ -1,650 +1,290 @@
 [
 {
-"spot": "jacksonville",
-"name": "Jacksonville Beach Pier \u00b7 North",
-"lake": "Florida Atlantic Coast",
-"lat": 30.283,
-"lon": -81.386,
+"spot": "clearwater",
+"name": "Clearwater \u00b7 Frenchy's",
+"lake": "Florida Gulf Coast",
+"lat": 27.98,
+"lon": -82.83,
 "kind": "yt",
-"id": "JLvCEDGJr-s"
+"id": "rxBBRLWF0mM"
 },
 {
-"spot": "jacksonville",
-"name": "Jacksonville Beach Pier \u00b7 South",
-"lake": "Florida Atlantic Coast",
-"lat": 30.283,
-"lon": -81.386,
+"spot": "clearwater",
+"name": "Clearwater \u00b7 Pier 60",
+"lake": "Florida Gulf Coast",
+"lat": 27.977,
+"lon": -82.829,
 "kind": "yt",
-"id": "yfh4hJCJGyY"
+"id": "S8-G3uJOqZw"
 },
 {
-"spot": "jacksonville",
-"name": "Jacksonville Beach Pier \u00b7 Overview",
-"lake": "Florida Atlantic Coast",
-"lat": 30.283,
-"lon": -81.386,
+"spot": "clearwater",
+"name": "Clearwater Marina",
+"lake": "Florida Gulf Coast",
+"lat": 27.976,
+"lon": -82.826,
 "kind": "yt",
-"id": "0BLeGz498o0"
+"id": "okJHGep38Q8"
 },
 {
-"spot": "st-augustine",
-"name": "St. Augustine Beach \u00b7 Surf Station 3rd St",
-"lake": "Florida Atlantic Coast",
-"lat": 29.857,
-"lon": -81.265,
+"spot": "tampa-bay",
+"name": "John's Pass \u00b7 Hubbard's",
+"lake": "Florida Gulf Coast",
+"lat": 27.783,
+"lon": -82.782,
 "kind": "yt",
-"id": "B0JYDF1L-us"
+"id": "GjPinp3Szp8"
 },
 {
-"spot": "st-augustine",
-"name": "St. Augustine \u00b7 Matanzas River / Bridge of Lions",
-"lake": "Florida Atlantic Coast",
-"lat": 29.892,
-"lon": -81.31,
+"spot": "tampa-bay",
+"name": "USF St. Pete",
+"lake": "Florida Gulf Coast",
+"lat": 27.76,
+"lon": -82.633,
 "kind": "yt",
-"id": "uLJBad4vSno"
+"id": "OeYHEp9_KYk"
 },
 {
-"spot": "st-augustine",
-"name": "St. Augustine Beach \u00b7 Surf Station south",
-"lake": "Florida Atlantic Coast",
-"lat": 29.85,
-"lon": -81.264,
+"spot": "tampa-bay",
+"name": "Sunshine Skyway",
+"lake": "Florida Gulf Coast",
+"lat": 27.62,
+"lon": -82.65,
 "kind": "yt",
-"id": "H2q_DJc33kg"
+"id": "EsVpdBILTyo"
 },
 {
-"spot": "ponce-inlet",
-"name": "Ponce Inlet \u00b7 NE lifeguard tower",
-"lake": "Florida Atlantic Coast",
-"lat": 29.085,
-"lon": -80.925,
-"kind": "yt",
-"id": "vOSftjwNZOM"
+"spot": "sarasota",
+"name": "Siesta Beach channel",
+"lake": "Florida Gulf Coast",
+"lat": 27.265,
+"lon": -82.553,
+"kind": "ytChannel",
+"id": "UCgPDwePWls1uuZx0109bWzg"
 },
 {
-"spot": "ponce-inlet",
-"name": "Ponce Inlet Cam",
-"lake": "Florida Atlantic Coast",
-"lat": 29.085,
-"lon": -80.925,
+"spot": "sarasota",
+"name": "Siesta Key Beach",
+"lake": "Florida Gulf Coast",
+"lat": 27.265,
+"lon": -82.553,
 "kind": "yt",
-"id": "m2h9w_wVfCI"
+"id": "GU5CkKxOPbM"
 },
 {
-"spot": "ponce-inlet",
-"name": "Ponce Inlet \u00b7 Northeast beach",
-"lake": "Florida Atlantic Coast",
-"lat": 29.09,
-"lon": -80.925,
+"spot": "fort-myers-beach",
+"name": "FMB \u00b7 Margaritaville",
+"lake": "Florida Gulf Coast",
+"lat": 26.45,
+"lon": -81.95,
 "kind": "yt",
-"id": "gzvgk91gEeg"
+"id": "2qd9j2CbIpg"
 },
 {
-"spot": "ponce-inlet",
-"name": "New Smyrna Beach \u00b7 North",
-"lake": "Florida Atlantic Coast",
-"lat": 29.06,
-"lon": -80.91,
+"spot": "fort-myers-beach",
+"name": "FMB \u00b7 Lynn Hall",
+"lake": "Florida Gulf Coast",
+"lat": 26.452,
+"lon": -81.954,
 "kind": "yt",
-"id": "4NTKuMeGqVk"
+"id": "1zRC81EV0KY"
 },
 {
-"spot": "ponce-inlet",
-"name": "New Smyrna Beach \u00b7 South",
-"lake": "Florida Atlantic Coast",
-"lat": 29.03,
-"lon": -80.89,
+"spot": "fort-myers-beach",
+"name": "Sanibel Lighthouse",
+"lake": "Florida Gulf Coast",
+"lat": 26.452,
+"lon": -82.014,
 "kind": "yt",
-"id": "Mc27Z8jfPtY"
+"id": "ZtrNffrXPdw"
 },
 {
-"spot": "port-canaveral",
-"name": "Port Canaveral \u00b7 Gator's Dockside",
-"lake": "Florida Atlantic Coast",
-"lat": 28.41,
-"lon": -80.62,
+"spot": "naples",
+"name": "Naples Pier ?",
+"lake": "Florida Gulf Coast",
+"lat": 26.13,
+"lon": -81.81,
 "kind": "yt",
-"id": "mQnOcuGV334"
+"id": "u2Yht0edvt0"
 },
 {
-"spot": "port-canaveral",
-"name": "Cocoa Beach \u00b7 HD Beach Cams",
-"lake": "Florida Atlantic Coast",
-"lat": 28.32,
-"lon": -80.607,
+"spot": "panama-city",
+"name": "PCB \u00b7 Pineapple Willy's",
+"lake": "Florida Gulf Coast",
+"lat": 30.18,
+"lon": -85.81,
 "kind": "yt",
-"id": "6QmQtFXG9vM"
+"id": "WpodbALJuew"
 },
 {
-"spot": "port-canaveral",
-"name": "Cocoa Beach \u00b7 Surfer's View",
-"lake": "Florida Atlantic Coast",
-"lat": 28.33,
-"lon": -80.607,
+"spot": "panama-city",
+"name": "PCB \u00b7 Pineapple Willy's alt",
+"lake": "Florida Gulf Coast",
+"lat": 30.18,
+"lon": -85.81,
 "kind": "yt",
-"id": "gAvFqhNwZm0"
+"id": "0pLm61T8qCU"
 },
 {
-"spot": "jupiter",
-"name": "Juno Beach Pier",
-"lake": "Florida Atlantic Coast",
-"lat": 26.893,
-"lon": -80.055,
+"spot": "destin",
+"name": "Okaloosa Island",
+"lake": "Florida Gulf Coast",
+"lat": 30.395,
+"lon": -86.6,
 "kind": "yt",
-"id": "-pJs7rSo8JM"
+"id": "y5k8f4VEOrc"
 },
 {
-"spot": "fort-lauderdale",
-"name": "Fort Lauderdale Beach (PTZtv)",
-"lake": "Florida Atlantic Coast",
+"spot": "destin",
+"name": "Destin beach",
+"lake": "Florida Gulf Coast",
+"lat": 30.38,
+"lon": -86.48,
+"kind": "yt",
+"id": "_Zqi24i0fl4"
+},
+{
+"spot": "pensacola",
+"name": "Pensacola Beach resort",
+"lake": "Florida Gulf Coast",
+"lat": 30.328,
+"lon": -87.142,
+"kind": "yt",
+"id": "dWIFTK7o31k"
+},
+{
+"spot": "pensacola",
+"name": "Pensacola Pier HD",
+"lake": "Florida Gulf Coast",
+"lat": 30.328,
+"lon": -87.142,
+"kind": "yt",
+"id": "O6fLjzZLALY"
+},
+{
+"spot": "pensacola",
+"name": "Pensacola Bay",
+"lake": "Florida Gulf Coast",
+"lat": 30.4,
+"lon": -87.2,
+"kind": "yt",
+"id": "O-tdY-lbISg"
+},
+{
+"spot": "orange-beach",
+"name": "Perdido Key",
+"lake": "Alabama & Mississippi Coast",
+"lat": 30.285,
+"lon": -87.5,
+"kind": "yt",
+"id": "qVzKF34qUYg"
+},
+{
+"spot": "orange-beach",
+"name": "AWN Coastal SkyCams",
+"lake": "Alabama & Mississippi Coast",
+"lat": 30.26,
+"lon": -87.68,
+"kind": "yt",
+"id": "3Rp_9FUKH4I"
+},
+{
+"spot": "orange-beach",
+"name": "Orange Beach weather cam",
+"lake": "Alabama & Mississippi Coast",
+"lat": 30.27,
+"lon": -87.58,
+"kind": "yt",
+"id": "Crr5HmqNmws"
+},
+{
+"spot": "mobile-bay",
+"name": "Daphne \u00b7 Mobile Bay delta",
+"lake": "Alabama & Mississippi Coast",
+"lat": 30.64,
+"lon": -87.92,
+"kind": "yt",
+"id": "wdF5QD20IkY"
+},
+{
+"spot": "galveston",
+"name": "Galveston Seawall surf",
+"lake": "Louisiana & Texas Coast",
+"lat": 29.29,
+"lon": -94.79,
+"kind": "yt",
+"id": "HkHhXsWci7Q"
+},
+{
+"spot": "galveston",
+"name": "Galveston Seawall beach",
+"lake": "Louisiana & Texas Coast",
+"lat": 29.29,
+"lon": -94.79,
+"kind": "yt",
+"id": "8dnNnBPD6Ko"
+},
+{
+"spot": "galveston",
+"name": "Galveston Beach",
+"lake": "Louisiana & Texas Coast",
+"lat": 29.29,
+"lon": -94.79,
+"kind": "yt",
+"id": "fXaSfOOLEaU"
+},
+{
+"spot": "port-aransas",
+"name": "Port A \u00b7 KIII",
+"lake": "Louisiana & Texas Coast",
+"lat": 27.83,
+"lon": -97.05,
+"kind": "yt",
+"id": "9l8N1qXqqJw"
+},
+{
+"spot": "port-aransas",
+"name": "Port A surf",
+"lake": "Louisiana & Texas Coast",
+"lat": 27.83,
+"lon": -97.05,
+"kind": "yt",
+"id": "HsW1tZvYsQY"
+},
+{
+"spot": "south-padre",
+"name": "SPI Surf Co 4K",
+"lake": "Louisiana & Texas Coast",
+"lat": 26.08,
+"lon": -97.155,
+"kind": "yt",
+"id": "YbKEWlhWN5c"
+},
+{
+"spot": "south-padre",
+"name": "SPI Beach House",
+"lake": "Louisiana & Texas Coast",
 "lat": 26.1,
-"lon": -80.105,
+"lon": -97.16,
 "kind": "yt",
-"id": "pXx3YQVSUGg"
+"id": "1BakUjv1j1Q"
 },
 {
-"spot": "fort-lauderdale",
-"name": "Fort Lauderdale \u00b7 Elbo Room",
-"lake": "Florida Atlantic Coast",
-"lat": 26.119,
-"lon": -80.104,
+"spot": "south-padre",
+"name": "SPI Laguna Madre",
+"lake": "Louisiana & Texas Coast",
+"lat": 26.1,
+"lon": -97.17,
 "kind": "yt",
-"id": "UV94XxNvBdw"
+"id": "6rjCN6d1YHw"
 },
 {
-"spot": "miami",
-"name": "PortMiami \u00b7 Government Cut (PTZtv)",
-"lake": "Florida Atlantic Coast",
-"lat": 25.765,
-"lon": -80.14,
+"spot": "south-padre",
+"name": "SPI Sand Rose",
+"lake": "Louisiana & Texas Coast",
+"lat": 26.13,
+"lon": -97.17,
 "kind": "yt",
-"id": "DxZziUUr6CY"
-},
-{
-"spot": "miami",
-"name": "Port Miami Live",
-"lake": "Florida Atlantic Coast",
-"lat": 25.77,
-"lon": -80.16,
-"kind": "yt",
-"id": "cmwnXWjvseI"
-},
-{
-"spot": "miami",
-"name": "Port Miami Cam 2",
-"lake": "Florida Atlantic Coast",
-"lat": 25.77,
-"lon": -80.16,
-"kind": "yt",
-"id": "i8ScwT2PT-0"
-},
-{
-"spot": "biscayne-bay",
-"name": "Biscayne Bay skyline channel",
-"lake": "Florida Atlantic Coast",
-"lat": 25.78,
-"lon": -80.18,
-"kind": "ytChannel",
-"id": "UCzJHUaw-9jRSwTsBXgKNGGA"
-},
-{
-"spot": "biscayne-bay",
-"name": "MacArthur Causeway \u00b7 Biscayne Bay",
-"lake": "Florida Atlantic Coast",
-"lat": 25.785,
-"lon": -80.165,
-"kind": "yt",
-"id": "JXK_SbezUx4"
-},
-{
-"spot": "biscayne-bay",
-"name": "Miami \u00b7 Biscayne Bay",
-"lake": "Florida Atlantic Coast",
-"lat": 25.79,
-"lon": -80.18,
-"kind": "yt",
-"id": "4mM_w7P5cWw"
-},
-{
-"spot": "biscayne-bay",
-"name": "Key Biscayne Beach",
-"lake": "Florida Atlantic Coast",
-"lat": 25.69,
-"lon": -80.16,
-"kind": "yt",
-"id": "kuqSymepVTk"
-},
-{
-"spot": "key-largo",
-"name": "Key Largo Marina",
-"lake": "Florida Keys",
-"lat": 25.1,
-"lon": -80.43,
-"kind": "yt",
-"id": "T7nRMTfWsIs"
-},
-{
-"spot": "key-largo",
-"name": "Key Largo \u00b7 Snook's Bayside",
-"lake": "Florida Keys",
-"lat": 25.11,
-"lon": -80.44,
-"kind": "yt",
-"id": "tIYUOWF1N4s"
-},
-{
-"spot": "islamorada",
-"name": "Islamorada \u00b7 Worldwide Sportsman",
-"lake": "Florida Keys",
-"lat": 24.93,
-"lon": -80.62,
-"kind": "yt",
-"id": "HfSOXLUtYmA"
-},
-{
-"spot": "islamorada",
-"name": "Islamorada \u00b7 Charter Boats",
-"lake": "Florida Keys",
-"lat": 24.93,
-"lon": -80.6,
-"kind": "yt",
-"id": "8ShFKuTCmhQ"
-},
-{
-"spot": "islamorada",
-"name": "Islamorada \u00b7 Lazy Days",
-"lake": "Florida Keys",
-"lat": 24.91,
-"lon": -80.64,
-"kind": "yt",
-"id": "5pFDytRb4Qc"
-},
-{
-"spot": "marathon",
-"name": "Marathon \u00b7 Sombrero Beach",
-"lake": "Florida Keys",
-"lat": 24.69,
-"lon": -81.08,
-"kind": "yt",
-"id": "jE4og3o_SXs"
-},
-{
-"spot": "marathon",
-"name": "Marathon \u00b7 Sunset Grille",
-"lake": "Florida Keys",
-"lat": 24.705,
-"lon": -81.115,
-"kind": "yt",
-"id": "SXMC-MzSncI"
-},
-{
-"spot": "key-west",
-"name": "Key West Harbor (PTZtv)",
-"lake": "Florida Keys",
-"lat": 24.56,
-"lon": -81.808,
-"kind": "yt",
-"id": "iHJbTrQSZys"
-},
-{
-"spot": "key-west",
-"name": "Key West Bight Marina",
-"lake": "Florida Keys",
-"lat": 24.561,
-"lon": -81.801,
-"kind": "yt",
-"id": "Y5ypYTZs-7o"
-},
-{
-"spot": "key-west",
-"name": "Key West Harbor \u00b7 Marker",
-"lake": "Florida Keys",
-"lat": 24.561,
-"lon": -81.804,
-"kind": "yt",
-"id": "OZ5iz2GsAjo"
-},
-{
-"spot": "key-west",
-"name": "Key West \u00b7 Southernmost Point",
-"lake": "Florida Keys",
-"lat": 24.546,
-"lon": -81.797,
-"kind": "yt",
-"id": "kUo0fMChS4A"
-},
-{
-"spot": "oceanside",
-"name": "Oceanside \u00b7 Harbor (channel)",
-"lake": "Southern California Coast",
-"lat": 33.207,
-"lon": -117.393,
-"kind": "ytChannel",
-"id": "UCwtwNjuQsTiCK8EUJtJd8YQ"
-},
-{
-"spot": "oceanside",
-"name": "Oceanside \u00b7 Harbor feed",
-"lake": "Southern California Coast",
-"lat": 33.207,
-"lon": -117.393,
-"kind": "yt",
-"id": "QvGUq-pPny4"
-},
-{
-"spot": "oceanside",
-"name": "Oceanside \u00b7 Harbor alt",
-"lake": "Southern California Coast",
-"lat": 33.207,
-"lon": -117.393,
-"kind": "yt",
-"id": "fLAyY1SJV6I"
-},
-{
-"spot": "oceanside",
-"name": "Oceanside \u00b7 Mission Pacific west",
-"lake": "Southern California Coast",
-"lat": 33.196,
-"lon": -117.381,
-"kind": "yt",
-"id": "OYqo4dqYjh0"
-},
-{
-"spot": "san-diego",
-"name": "San Diego Bay \u00b7 Shelter Island N",
-"lake": "Southern California Coast",
-"lat": 32.714,
-"lon": -117.227,
-"kind": "yt",
-"id": "ct7IRmzDggk"
-},
-{
-"spot": "san-diego",
-"name": "San Diego Bay \u00b7 Shelter Island E",
-"lake": "Southern California Coast",
-"lat": 32.714,
-"lon": -117.227,
-"kind": "yt",
-"id": "OUB8NDFSmFI"
-},
-{
-"spot": "san-diego",
-"name": "San Diego \u00b7 rotating",
-"lake": "Southern California Coast",
-"lat": 32.72,
-"lon": -117.2,
-"kind": "yt",
-"id": "edz0ux7JClE"
-},
-{
-"spot": "channel-islands",
-"name": "Channel Islands Harbor \u00b7 Coastal Cafe",
-"lake": "Southern California Coast",
-"lat": 34.165,
-"lon": -119.225,
-"kind": "yt",
-"id": "oJ9CLuRwuuk"
-},
-{
-"spot": "channel-islands",
-"name": "Channel Islands Harbor \u00b7 Coastal Cafe wildlife",
-"lake": "Southern California Coast",
-"lat": 34.165,
-"lon": -119.225,
-"kind": "yt",
-"id": "tT72v_0WT-s"
-},
-{
-"spot": "marina-del-rey",
-"name": "Marina del Rey \u00b7 Harbor (channel)",
-"lake": "Southern California Coast",
-"lat": 33.965,
-"lon": -118.455,
-"kind": "ytChannel",
-"id": "UC_q1QpS3VcDjPTBMEYHdCkQ"
-},
-{
-"spot": "marina-del-rey",
-"name": "Marina del Rey \u00b7 Harbor",
-"lake": "Southern California Coast",
-"lat": 33.965,
-"lon": -118.455,
-"kind": "yt",
-"id": "AvCv7eSFW-M"
-},
-{
-"spot": "long-beach",
-"name": "Seal Beach \u00b7 Harbor",
-"lake": "Southern California Coast",
-"lat": 33.74,
-"lon": -118.105,
-"kind": "yt",
-"id": "SDwgoqA60Vc"
-},
-{
-"spot": "newport-beach",
-"name": "Newport \u00b7 Lido Marina Village",
-"lake": "Southern California Coast",
-"lat": 33.615,
-"lon": -117.93,
-"kind": "yt",
-"id": "y1nU8vlkAHY"
-},
-{
-"spot": "dana-point",
-"name": "Dana Point \u00b7 Harbor inlet",
-"lake": "Southern California Coast",
-"lat": 33.458,
-"lon": -117.699,
-"kind": "yt",
-"id": "HeJha-V6oAk"
-},
-{
-"spot": "dana-point",
-"name": "Dana Point \u00b7 Doheny",
-"lake": "Southern California Coast",
-"lat": 33.461,
-"lon": -117.688,
-"kind": "yt",
-"id": "0f474Ajruyk"
-},
-{
-"spot": "wrightsville",
-"name": "Wrightsville \u00b7 ICW",
-"lake": "North Carolina Coast",
-"lat": 34.22,
-"lon": -77.8,
-"kind": "yt",
-"id": "plV6BNCkWLA"
-},
-{
-"spot": "wrightsville",
-"name": "Wrightsville \u00b7 Mercer's Pier south",
-"lake": "North Carolina Coast",
-"lat": 34.214,
-"lon": -77.787,
-"kind": "yt",
-"id": "Va84nIGXwBo"
-},
-{
-"spot": "wrightsville",
-"name": "Wrightsville \u00b7 Mercer's Pier",
-"lake": "North Carolina Coast",
-"lat": 34.214,
-"lon": -77.787,
-"kind": "yt",
-"id": "u5vP2NwNwLk"
-},
-{
-"spot": "wrightsville",
-"name": "Surfchex beach",
-"lake": "North Carolina Coast",
-"lat": 34.21,
-"lon": -77.79,
-"kind": "yt",
-"id": "cW6unU5owxg"
-},
-{
-"spot": "murrells-inlet",
-"name": "Murrells Inlet",
-"lake": "Georgia & South Carolina Coast",
-"lat": 33.55,
-"lon": -79.04,
-"kind": "yt",
-"id": "dqWo91ZcPw0"
-},
-{
-"spot": "charleston",
-"name": "Charleston Waterways multi",
-"lake": "Georgia & South Carolina Coast",
-"lat": 32.78,
-"lon": -79.92,
-"kind": "yt",
-"id": "YzYhknUK6Aw"
-},
-{
-"spot": "st-simons",
-"name": "St. Simons Pier",
-"lake": "Georgia & South Carolina Coast",
-"lat": 31.15,
-"lon": -81.37,
-"kind": "yt",
-"id": "yALAEd2bTZg"
-},
-{
-"spot": "morehead-city",
-"name": "Atlantic Beach \u00b7 Oceanana Pier",
-"lake": "North Carolina Coast",
-"lat": 34.7,
-"lon": -76.73,
-"kind": "yt",
-"id": "fWj-2XsYHjk"
-},
-{
-"spot": "oregon-inlet",
-"name": "Nags Head \u00b7 Jennette's Pier",
-"lake": "North Carolina Coast",
-"lat": 35.91,
-"lon": -75.6,
-"kind": "yt",
-"id": "sgnlB7lhknM"
-},
-{
-"spot": "oregon-inlet",
-"name": "Kitty Hawk \u00b7 Twiddy",
-"lake": "North Carolina Coast",
-"lat": 36.07,
-"lon": -75.7,
-"kind": "yt",
-"id": "WEhuDqlxHmM"
-},
-{
-"spot": "middle-river",
-"name": "Middle River weathercam",
-"lake": "Chesapeake Bay",
-"lat": 39.31,
-"lon": -76.42,
-"kind": "yt",
-"id": "O7rCzM0sLIU"
-},
-{
-"spot": "honolulu",
-"name": "Honolulu \u00b7 Ala Moana 4K",
-"lake": "Hawaii",
-"lat": 21.29,
-"lon": -157.85,
-"kind": "yt",
-"id": "dL1_kuNPMNw"
-},
-{
-"spot": "honolulu",
-"name": "Honolulu \u00b7 Ala Moana alt",
-"lake": "Hawaii",
-"lat": 21.29,
-"lon": -157.85,
-"kind": "yt",
-"id": "76QHa3ZWLXU"
-},
-{
-"spot": "honolulu",
-"name": "Honolulu \u00b7 Magic Island",
-"lake": "Hawaii",
-"lat": 21.29,
-"lon": -157.85,
-"kind": "yt",
-"id": "1V9nWQHwIwQ"
-},
-{
-"spot": "honolulu",
-"name": "Waikiki \u00b7 Hilton",
-"lake": "Hawaii",
-"lat": 21.28,
-"lon": -157.83,
-"kind": "yt",
-"id": "RA1XLw0jBtg"
-},
-{
-"spot": "honolulu",
-"name": "Waikiki \u00b7 Marriott",
-"lake": "Hawaii",
-"lat": 21.27,
-"lon": -157.82,
-"kind": "yt",
-"id": "yW0OOEO9usE"
-},
-{
-"spot": "kona",
-"name": "Kona \u00b7 Keauhou Bay",
-"lake": "Hawaii",
-"lat": 19.56,
-"lon": -155.96,
-"kind": "yt",
-"id": "RxDQLIwxyhA"
-},
-{
-"spot": "kona",
-"name": "Kona \u00b7 Outrigger",
-"lake": "Hawaii",
-"lat": 19.56,
-"lon": -155.96,
-"kind": "yt",
-"id": "NuSeULdWhtE"
-},
-{
-"spot": "maalaea",
-"name": "Wailea Beach",
-"lake": "Hawaii",
-"lat": 20.68,
-"lon": -156.44,
-"kind": "yt",
-"id": "mrUciA_XZxA"
-},
-{
-"spot": "maalaea",
-"name": "Wailea Beach Resort",
-"lake": "Hawaii",
-"lat": 20.68,
-"lon": -156.44,
-"kind": "yt",
-"id": "cWRSJ3EGuuo"
-},
-{
-"spot": "maalaea",
-"name": "Maui Live Cam channel",
-"lake": "Hawaii",
-"lat": 20.79,
-"lon": -156.51,
-"kind": "ytChannel",
-"id": "UCIQVWkOilfxoQSFcban_d-A"
-},
-{
-"spot": "san-juan",
-"name": "San Juan \u00b7 Royal Sonesta",
-"lake": "Puerto Rico",
-"lat": 18.445,
-"lon": -66.02,
-"kind": "yt",
-"id": "taI7GiyvDxE"
+"id": "kJ_EXhKsH30"
 }
 ]
