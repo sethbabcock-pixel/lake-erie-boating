@@ -52,6 +52,7 @@ let alertsDown = false; // NWS alerts stub: the alerts endpoint fails
 // the gust); "nowind" = no wind/gust layers at all, calm 1 ft waves;
 // "gustonly" = a 9 kt gust but no sustained wind (grid or hourly) and no waves.
 let gridMode = null;
+let hourlyLagH = 0; // hourly stub: lead with this many already-past hours
 let subGetCancelState = false; // what a GET subscription retrieve reports
 let subStatus = {}; // sub id → status a GET retrieve reports ("missing" → 404); default active
 let subCustomer = {}; // sub id → customer a GET retrieve reports (default: none)
@@ -92,7 +93,7 @@ function installFetchStub() {
     }
     // Hourly point forecast (the spot page's timeline): 48 calm or stormy hours.
     if (/\/forecast\/hourly$/.test(u)) {
-      const t0 = new Date(); t0.setUTCMinutes(0, 0, 0);
+      const t0 = new Date(Date.now() - hourlyLagH * 3600e3); t0.setUTCMinutes(0, 0, 0);
       const periods = Array.from({ length: 48 }, (_, i) => ({ startTime: new Date(t0.getTime() + i * 3600e3).toISOString(), temperature: 60,
         windSpeed: stormMode ? "32 mph" : gridMode === "gusty" ? "15 mph" : gridMode === "gustonly" ? "" : "9 mph", windDirection: "SW", shortForecast: "Sunny", probabilityOfPrecipitation: { value: 0 } }));
       return jsonResp({ properties: { periods } });
@@ -925,10 +926,43 @@ async function run() {
     // reverse index is written so a later `updated` (active) can grant.
     await seedUser(env, "pastdue@example.com");
     subStatus.sub_pd = "past_due";
+    emailCalls = [];
     const pd = { id: "evt_pd", type: "checkout.session.completed", data: { object: { ...session, client_reference_id: "pastdue@example.com", customer: "cus_pd", subscription: "sub_pd" } } };
     await call(stripeWebhookReq(pd, "whsec_right"), env);
     eq("past_due at checkout: no grant", (await env.USERS.get("user:pastdue@example.com", "json")).adFree, false);
     eq("past_due at checkout: reverse index written", await env.USERS.get("stripecust:cus_pd"), "pastdue@example.com");
+    check("past_due at checkout: no welcome email", !emailCalls.some((c) => /Welcome to shouldiboat Pro/i.test(c.subject)));
+    // No customer on the live sub → can't confirm the match → nothing stored.
+    eq("past_due at checkout without customer match: stripeSubId not stored", (await env.USERS.get("user:pastdue@example.com", "json")).stripeSubId, undefined);
+    // With a confirmed customer, the sub is recorded (not granted) so the
+    // tagged subscription.updated that follows payment can grant.
+    subCustomer.sub_pd = "cus_pd";
+    await call(stripeWebhookReq({ ...pd, id: "evt_pd_retry" }, "whsec_right"), env);
+    let pdu = await env.USERS.get("user:pastdue@example.com", "json");
+    eq("past_due at checkout: still not granted", pdu.adFree, false);
+    eq("past_due at checkout: stripeSubId stored", pdu.stripeSubId, "sub_pd");
+    eq("past_due at checkout: stripeCustomerId stored", pdu.stripeCustomerId, "cus_pd");
+    subStatus.sub_pd = "active";
+    const paidUp = { id: "evt_pd_upd", type: "customer.subscription.updated", data: { object: { id: "sub_pd", customer: "cus_pd", status: "active", metadata: { purpose: "adfree" } } } };
+    eq("past_due → active update → 200", (await call(stripeWebhookReq(paidUp, "whsec_right"), env)).status, 200);
+    eq("past_due → active update grants ad-free", (await env.USERS.get("user:pastdue@example.com", "json")).adFree, true);
+
+    // A canceled-at-delivery checkout must not overwrite the user's current sub.
+    await seedUser(env, "current@example.com", { adFree: true, stripeCustomerId: "cus_cur", stripeSubId: "sub_cur_live" });
+    subStatus.sub_cur_old = "canceled"; subCustomer.sub_cur_old = "cus_cur";
+    await call(stripeWebhookReq({ id: "evt_cur_old", type: "checkout.session.completed", data: { object: { ...session, client_reference_id: "current@example.com", customer: "cus_cur", subscription: "sub_cur_old" } } }, "whsec_right"), env);
+    let cu = await env.USERS.get("user:current@example.com", "json");
+    eq("canceled checkout retry keeps current stripeSubId", cu.stripeSubId, "sub_cur_live");
+    eq("canceled checkout retry keeps ad-free", cu.adFree, true);
+    // Nor may a recoverable (past_due) other sub replace a granting one.
+    subStatus.sub_cur_pd = "past_due"; subCustomer.sub_cur_pd = "cus_cur";
+    await call(stripeWebhookReq({ id: "evt_cur_pd", type: "checkout.session.completed", data: { object: { ...session, client_reference_id: "current@example.com", customer: "cus_cur", subscription: "sub_cur_pd" } } }, "whsec_right"), env);
+    eq("past_due other-sub checkout keeps current stripeSubId", (await env.USERS.get("user:current@example.com", "json")).stripeSubId, "sub_cur_live");
+
+    // Account deleted, then a late checkout retry: no reverse index re-created.
+    subStatus.sub_del = "active";
+    await call(stripeWebhookReq({ id: "evt_del", type: "checkout.session.completed", data: { object: { ...session, client_reference_id: "deleted@example.com", customer: "cus_del", subscription: "sub_del" } } }, "whsec_right"), env);
+    eq("no account: reverse index not written", await env.USERS.get("stripecust:cus_del"), null);
     subStatus = {}; subCustomer = {};
   }
 
@@ -1390,6 +1424,72 @@ async function run() {
 
     const r24 = buildRecommendation({ buoy: null, alerts: [], wind: { speedKt: null, gustKt: 24, source: null, gustSrc: "forecast" }, waves: { ft: null }, read: null, hours: [], profile: "lake" });
     check("summary: gust-driven NO-GO with no other data reads as NO-GO, not 'no live data'", r24.level === "NO-GO" && !/No live data/.test(r24.summary), r24.summary);
+  }
+
+  // 57. Follow-ups: Great Lakes GO needs waves; sparse future days can't GO;
+  //     the hourly strip starts at the current hour.
+  {
+    const { riskLevel, buildWeek, onRequest } = await import("../functions/marine/conditions.js");
+    eq("riskLevel: Great Lakes, wind but no waves → no call (null), not GO", riskLevel(8, 10, 0, "", null, null, "lake"), null);
+    eq("riskLevel: Great Lakes, no waves but 24 kt gust → still NO-GO", riskLevel(8, 24, 0, "", null, null, "lake"), "NO-GO");
+    eq("riskLevel: Great Lakes, no waves, 16 kt → still CAUTION", riskLevel(16, null, 0, "", null, null, "lake"), "CAUTION");
+    eq("riskLevel: sheltered water rates on wind alone (no waves → GO)", riskLevel(8, 10, 0, "", null, null, "sheltered"), "GO");
+
+    // Grid in UTC: tomorrow fully covered, the day after only 6 hours.
+    const nowH = Math.floor(Date.now() / 3600000);
+    const dayStart = (k) => Math.floor(nowH / 24) * 24 + 24 * k;
+    const mk = () => ({ tz: "UTC", windKt: new Map(), gustKt: new Map(), precipPct: new Map(), waveFt: new Map(), periodSec: new Map() });
+    const g = mk();
+    const put = (h, w, gu, ft) => { g.windKt.set(h, w); g.gustKt.set(h, gu); g.waveFt.set(h, ft); g.periodSec.set(h, 4); g.precipPct.set(h, 0); };
+    for (let h = dayStart(1); h < dayStart(2); h++) put(h, 8, 10, 1);
+    for (let h = dayStart(2); h < dayStart(2) + 6; h++) put(h, 8, 10, 1);
+    for (let h = dayStart(3); h < dayStart(3) + 4; h++) put(h, 20, 26, 5); // sparse but rough
+    const wk = Object.fromEntries(buildWeek(g, "lake").map((d) => [d.date, d.level]));
+    const iso = (k) => new Date(dayStart(k) * 3600000).toISOString().slice(0, 10);
+    eq("week: fully covered calm day → GO", wk[iso(1)], "GO");
+    eq("week: sparsely covered calm day (6 h) → null, not GO", wk[iso(2)], null);
+    eq("week: sparse day that's rough still → NO-GO", wk[iso(3)], "NO-GO");
+    const g2 = mk();
+    for (let h = dayStart(1); h < dayStart(2); h++) { g2.windKt.set(h, 8); g2.gustKt.set(h, 10); g2.precipPct.set(h, 0); }
+    for (let h = dayStart(1); h < dayStart(1) + 3; h++) { g2.waveFt.set(h, 1); g2.periodSec.set(h, 4); }
+    const wk2 = Object.fromEntries(buildWeek(g2, "lake").map((d) => [d.date, d.level]));
+    eq("week: Great Lakes day with full wind but 3 h of waves → null, not GO", wk2[iso(1)], null);
+    eq("week: same coverage on sheltered water → GO (wind-only by design)", Object.fromEntries(buildWeek(g2, "sheltered").map((d) => [d.date, d.level]))[iso(1)], "GO");
+    const { buildRecommendation } = await import("../functions/marine/conditions.js");
+    const hr = (profile) => buildRecommendation({ buoy: null, alerts: [], wind: { speedKt: 8, gustKt: 10, source: "forecast", gustSrc: "forecast" }, waves: { ft: null }, read: null, hours: [], profile }).level;
+    eq("headline: Great Lakes, light wind, no wave data → CAUTION, not GO", hr("lake"), "CAUTION");
+    eq("headline: sheltered, light wind, no wave data → GO (wind-only by design)", hr("sheltered"), "GO");
+
+    stormMode = false; scaMode = false; alertsDown = false; gridMode = null;
+    hourlyLagH = 3;
+    const pg = await (await onRequest({ request: new Request("https://shouldiboat.com/marine/conditions?spot=sandusky"), env: { USERS: makeKV() } })).json();
+    hourlyLagH = 0;
+    const firstH = pg.hourly?.[0] && Math.floor(Date.parse(pg.hourly[0].time) / 3600000);
+    check("hourly strip: past hours dropped, starts at the current hour", firstH === nowH || firstH === nowH + 1, `got ${firstH}, now ${nowH}`);
+  }
+
+  // ── Launch-facts card: a configured buoy is not a live buoy ──
+  {
+    const { SPOTS, spotFacts } = await import("../functions/marine/conditions.js");
+    const { seoForPath } = await import("../functions/seo.js");
+    const fc = { source: "forecast" };
+    const off = spotFacts(SPOTS.duluth, { buoy: null, wind: fc, waves: fc }).liveData;
+    check("facts: pulled buoy (Duluth 45027) → not live, listed offline", off.checked && off.live === null && off.offline.join() === "45027", JSON.stringify(off));
+    const on = spotFacts({ buoys: ["45176", "45164", "45005"] }, { buoy: { station: "45164", ageMinutes: 30, observedAt: "2026-07-01T12:00:00Z" }, wind: { source: "buoy" }, waves: fc }).liveData;
+    check("facts: fallback buoy live → earlier station offline, later unchecked omitted", on.live === "45164" && on.offline.join() === "45176" && on.ageMinutes === 30 && on.wavesFrom === "forecast", JSON.stringify(on));
+    const stray = spotFacts({ buoys: ["45004"] }, { buoy: { station: "99999", ageMinutes: 5 }, wind: fc, waves: fc }).liveData;
+    check("facts: buoy not in the spot's list is never called live", stray.live === null, JSON.stringify(stray));
+    const dbl = spotFacts(SPOTS.duluth, { buoy: null, wind: { source: null }, waves: { source: null } }).liveData;
+    check("facts: buoy pulled AND forecast down → sources null, not 'forecast'", dbl.windFrom === null && dbl.wavesFrom === null, JSON.stringify(dbl));
+    const temps = spotFacts({ buoys: ["45005"] }, { buoy: { station: "45005", ageMinutes: -3, observedAt: "bad" }, wind: fc, waves: { source: null } }).liveData;
+    check("facts: fresh buoy with temps only → live, wind forecast, waves null; skewed age clamped; bad time dropped", temps.live === "45005" && temps.windFrom === "forecast" && temps.wavesFrom === null && temps.ageMinutes === 0 && temps.observedAt === null, JSON.stringify(temps));
+    check("facts: no conditions fetch → liveData.checked false", spotFacts(SPOTS.marquette).liveData.checked === false);
+    const html = JSON.stringify(seoForPath("/spot/marquette"));
+    check("seo: spot page never advertises a buoy as live", !/Live (observations|data)/.test(html) && /Buoy stations/.test(html));
+    check("seo: Great Lakes page mentions winter buoy pulls", /pulled in winter/.test(html));
+    const coastId = Object.keys(SPOTS).find((id) => SPOTS[id].water && SPOTS[id].water !== "lake" && (SPOTS[id].buoys || []).length);
+    const chtml = JSON.stringify(seoForPath(`/spot/${coastId}`));
+    check("seo: coastal page has no Great Lakes winter note", /Buoy stations/.test(chtml) && !/pulled in winter/.test(chtml) && !/Live (observations|data)/.test(chtml), coastId);
   }
 
   console.log(results.join("\n"));

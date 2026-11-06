@@ -1391,12 +1391,29 @@ export async function handleAuth(request, env, url, ctx) {
       // confirm the subscription is live right now before granting. Fail
       // closed: if Stripe can't answer, return 503 so Stripe retries later.
       const email = (obj.client_reference_id || obj.customer_email || obj.customer_details?.email || "").toLowerCase();
-      // Reverse index first: even if the sub isn't live right now (e.g.
-      // past_due), a later subscription.updated can still find the user.
-      if (obj.customer && email) await env.USERS.put(`stripecust:${obj.customer}`, email);
+      const owner = email ? await env.USERS.get(emailKey(email), "json") : null;
+      // Reverse index first, so a later subscription.updated can find the user
+      // even if the sub isn't live right now (e.g. past_due). Only for an
+      // existing account: a late retry must not re-create the index (and keep
+      // the email in KV) after the account was deleted.
+      if (obj.customer && owner) await env.USERS.put(`stripecust:${obj.customer}`, email);
       const live = await stripeSubLive(env, obj.subscription);
       if (live === null) return json({ error: "Could not confirm subscription with Stripe; retry later." }, 503);
-      if (!live.ok || (obj.customer && live.customer && live.customer !== obj.customer)) return done({ received: true, ignored: true });
+      const customerOk = !(obj.customer && live.customer && live.customer !== obj.customer);
+      if (!live.ok || !customerOk) {
+        // Paid checkout, but the sub isn't active/trialing yet (e.g. a retry
+        // that lands while it's past_due). Record it as the user's ad-free
+        // subscription WITHOUT granting, so the subscription.updated that
+        // follows payment can match it and grant (it re-checks live status).
+        // Only for recoverable states, with a confirmed customer match, and
+        // never over a different subscription that's currently granting.
+        const recoverable = ["past_due", "unpaid", "incomplete"].includes(live.status);
+        const strictCustomer = !!(obj.customer && live.customer === obj.customer);
+        if (owner && recoverable && strictCustomer && !(owner.adFree && owner.stripeSubId && owner.stripeSubId !== obj.subscription)) {
+          await saveUser(env, { ...owner, stripeCustomerId: obj.customer, stripeSubId: obj.subscription });
+        }
+        return done({ received: true, ignored: true });
+      }
       const prev = await setAdFree(email, true, { stripeCustomerId: obj.customer || null, stripeSubId: obj.subscription });
       // Welcome only on a real state change, not on every redelivery.
       if (prev && (!prev.adFree || prev.stripeSubId !== obj.subscription)) {
