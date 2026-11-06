@@ -49,6 +49,7 @@ let stormMode = false; // Open-Meteo stub: every spot NO-GO (true) vs calm GO (f
 let scaMode = false; // NWS alerts stub: an active Small Craft Advisory at every point
 let alertsDown = false; // NWS alerts stub: the alerts endpoint fails
 let zoneAlert = null; // NWS alerts stub: "gale" = a Gale Warning on the zone query only; "down" = zone query fails
+let alertTestStatus = null; // NWS alerts stub: every alerts query returns one Gale Warning with this status (e.g. "Test")
 let zoneAlertOnly = null; // with zoneAlert "gale": only these zones carry it (null = every queried zone)
 let zoneAlertSpan = null; // with zoneAlert "gale": { onsetH, endsH } hours from now (null = in effect now, open-ended)
 // NWS grid stub override: "gusty" = 13 kt gusting 24 kt, 1.5 ft (lake NO-GO on
@@ -111,6 +112,9 @@ function installFetchStub() {
       return jsonResp({ properties: { periods } });
     }
     if (u.includes("api.weather.gov/alerts/active") && alertsDown) return new Response("", { status: 503 });
+    if (u.includes("api.weather.gov/alerts/active") && alertTestStatus) {
+      return jsonResp({ features: [{ properties: { status: alertTestStatus, event: "Gale Warning", severity: "Moderate", headline: "TEST Gale Warning", sent: new Date().toISOString(), geocode: { UGC: ["LEZ143"] } } }] });
+    }
     if (u.includes("api.weather.gov/alerts/active?zone=") && zoneAlert === "down") return new Response("", { status: 503 });
     if (u.includes("api.weather.gov/alerts/active?zone=") && zoneAlert === "gale") {
       const asked = decodeURIComponent(u.split("zone=")[1] || "").split(",");
@@ -1938,6 +1942,24 @@ async function run() {
     const winsDown = await fetchTodayWindows();
     check("digest: zone alerts unknown → no GO windows", Object.values(winsDown).every((w) => w == null));
     zoneAlert = null;
+  }
+
+  // 60. Alert classifier: wind/ice warnings that end a trip are NO-GO; no
+  //     existing level is loosened; NWS test messages never count.
+  {
+    const { alertLevel, fetchAlerts, SPOTS } = await import("../functions/marine/conditions.js");
+    for (const ev of ["Tornado Warning", "High Wind Warning", "Extreme Wind Warning", "Heavy Freezing Spray Warning"]) eq(`classifier: ${ev} → NO-GO`, alertLevel({ event: ev }), "NO-GO");
+    eq("classifier: Freezing Spray Advisory → CAUTION", alertLevel({ event: "Freezing Spray Advisory" }), "CAUTION");
+    eq("classifier: High Wind Watch → CAUTION", alertLevel({ event: "High Wind Watch" }), "CAUTION");
+    eq("classifier: Tornado Watch → CAUTION", alertLevel({ event: "Tornado Watch" }), "CAUTION");
+    eq("classifier: Wind Advisory → CAUTION", alertLevel({ event: "Wind Advisory" }), "CAUTION");
+    for (const [ev, lvl] of [["Gale Warning", "NO-GO"], ["Storm Warning", "NO-GO"], ["Severe Thunderstorm Warning", "NO-GO"], ["Special Marine Warning", "NO-GO"], ["Hurricane Force Wind Warning", "NO-GO"], ["Small Craft Advisory", "CAUTION"], ["Gale Watch", "CAUTION"], ["Freeze Warning", null], ["Rip Current Statement", null]]) {
+      eq(`classifier unchanged: ${ev}`, alertLevel({ event: ev }), lvl);
+    }
+    alertTestStatus = "Test";
+    const t = await fetchAlerts(SPOTS.sandusky);
+    check("NWS test message is ignored (no alert, lookup ok)", t.ok && t.alerts.length === 0, JSON.stringify(t));
+    alertTestStatus = null;
   }
 
   // ── Launch-facts card: a configured buoy is not a live buoy ──
