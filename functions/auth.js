@@ -1378,6 +1378,16 @@ export async function handleAuth(request, env, url, ctx) {
     // Only the ad-free subscription may flip ad-free. Other checkouts on the
     // same Stripe account (e.g. one-time merch payments) must not grant it or
     // overwrite a subscriber's stored subscription id.
+    // Live status of the user's stored sub when it differs from the one on
+    // this event: "none" when there's nothing else stored, null when Stripe
+    // can't answer (caller fails closed with 503), else Stripe's status
+    // ("missing" for a 404).
+    const SUB_HOLDS = ["active", "trialing", "past_due"];
+    const storedSubStatus = async (user) => {
+      if (!user || !user.stripeSubId || user.stripeSubId === obj.subscription) return "none";
+      const s = await stripeSubLive(env, user.stripeSubId);
+      return s ? s.status : null;
+    };
     const purpose = obj.metadata?.purpose;
     const notAdFree = purpose != null && purpose !== "adfree";
     if (event.type === "checkout.session.completed" || event.type === "checkout.session.async_payment_succeeded") {
@@ -1407,18 +1417,38 @@ export async function handleAuth(request, env, url, ctx) {
         const recoverable = ["past_due", "unpaid", "incomplete"].includes(live.status);
         if (recoverable && obj.customer && live.customer === obj.customer && email) {
           const user = await env.USERS.get(emailKey(email), "json");
-          // Never displace a current subscriber's sub: a stale retry for an
-          // old unpaid/past_due sub must not repoint stripeSubId away from
-          // the live one that granted ad-free.
-          if (user && (!user.adFree || !user.stripeSubId || user.stripeSubId === obj.subscription)) {
+          // Never displace a sub that is still live or still in grace: a
+          // stale retry for an old unpaid/past_due sub must not repoint
+          // stripeSubId away from the one that granted (or will grant)
+          // ad-free. Checked against Stripe, not the adFree flag, so an
+          // admin revoke or a sub still waiting to be granted is protected.
+          const stored = await storedSubStatus(user);
+          if (stored === null) return json({ error: "Could not confirm subscription with Stripe; retry later." }, 503);
+          if (user && !SUB_HOLDS.includes(stored)) {
             await saveUser(env, { ...user, stripeCustomerId: obj.customer, stripeSubId: obj.subscription });
           }
         }
         return done({ received: true, ignored: true });
       }
-      const prev = await setAdFree(email, true, { stripeCustomerId: obj.customer || null, stripeSubId: obj.subscription });
+      // The incoming sub is live. If the user already has a different
+      // ad-free sub that is active/trialing, keep tracking that one (its
+      // events stay authoritative) and flag the duplicate to the admin so
+      // it can be refunded/canceled by hand. Never auto-cancel here.
+      const user = email ? await env.USERS.get(emailKey(email), "json") : null;
+      const stored = await storedSubStatus(user);
+      if (stored === null) return json({ error: "Could not confirm subscription with Stripe; retry later." }, 503);
+      const keepStored = stored === "active" || stored === "trialing";
+      if (SUB_HOLDS.includes(stored)) {
+        await runBg(ctx, notify(env, "adfree_duplicate_subscription",
+          { email, customer: obj.customer || null, trackedSub: keepStored ? user.stripeSubId : obj.subscription, untrackedSub: keepStored ? obj.subscription : user.stripeSubId },
+          { to: await adminEmails(env), subject: "Duplicate shouldiboat Pro subscription",
+            html: `<div style="font-family:system-ui,sans-serif"><h2>Duplicate Pro subscription</h2><p><b>${htmlEscape(email)}</b> has two live ad-free subscriptions on customer <code>${htmlEscape(obj.customer || "?")}</code>. Tracking <code>${htmlEscape(keepStored ? user.stripeSubId : obj.subscription)}</code>; please refund/cancel <code>${htmlEscape(keepStored ? obj.subscription : user.stripeSubId)}</code> in Stripe.</p></div>`,
+            ttlDays: 30 }));
+      }
+      const extra = keepStored ? { stripeCustomerId: obj.customer || null } : { stripeCustomerId: obj.customer || null, stripeSubId: obj.subscription };
+      const prev = await setAdFree(email, true, extra);
       // Welcome only on a real state change, not on every redelivery.
-      if (prev && (!prev.adFree || prev.stripeSubId !== obj.subscription)) {
+      if (prev && (!prev.adFree || (!keepStored && prev.stripeSubId !== obj.subscription))) {
         await runBg(ctx, notify(env, "adfree_activated", { email }, { to: email, subject: "Welcome to shouldiboat Pro", html: adFreeHtml(), ttlDays: 30 }));
       }
     } else if ((event.type === "customer.subscription.updated" || event.type === "customer.subscription.deleted") && !notAdFree) {
