@@ -173,6 +173,7 @@ async function run() {
     check("checkout: returns Stripe url", typeof data.url === "string" && data.url.includes("checkout.stripe.com"), data.url);
     const sent = stripeCalls.find((c) => c.url.includes("checkout/sessions"));
     eq("checkout: mode=subscription", sent?.body?.mode, "subscription");
+    eq("checkout: tags purpose=adfree", sent?.body?.["metadata[purpose]"], "adfree");
     eq("checkout: uses STRIPE_PRICE_ID override", sent?.body?.["line_items[0][price]"], "price_test_abc");
     eq("checkout: client_reference_id = email", sent?.body?.client_reference_id, "buyer@example.com");
     eq("checkout: passes customer_email for new buyer", sent?.body?.customer_email, "buyer@example.com");
@@ -203,7 +204,7 @@ async function run() {
     await seedUser(env, "buyer@example.com");
     const evt = {
       type: "checkout.session.completed",
-      data: { object: { client_reference_id: "buyer@example.com", customer: "cus_123", subscription: "sub_123" } },
+      data: { object: { mode: "subscription", client_reference_id: "buyer@example.com", customer: "cus_123", subscription: "sub_123" } },
     };
     const r = await call(stripeWebhookReq(evt, "whsec_right"), env);
     eq("webhook: completed → 200", r.status, 200);
@@ -212,6 +213,63 @@ async function run() {
     eq("webhook: stores stripeCustomerId", u.stripeCustomerId, "cus_123");
     eq("webhook: stores stripeSubId", u.stripeSubId, "sub_123");
     eq("webhook: writes reverse index", await env.USERS.get("stripecust:cus_123"), "buyer@example.com");
+  }
+
+  // 6b. A non-ad-free checkout (one-time merch payment) must not grant ad-free
+  {
+    const env = { USERS: makeKV(), STRIPE_WEBHOOK_SECRET: "whsec_right", BREVO_API_KEY: "brevo_x" };
+    await seedUser(env, "shopper@example.com");
+    emailCalls = [];
+    const evt = { type: "checkout.session.completed", data: { object: { mode: "payment", client_reference_id: "shopper@example.com", customer: "cus_m1", subscription: null, metadata: { purpose: "merch" } } } };
+    const r = await call(stripeWebhookReq(evt, "whsec_right"), env);
+    eq("webhook: merch payment → 200", r.status, 200);
+    const u = await env.USERS.get("user:shopper@example.com", "json");
+    check("webhook: merch payment does not grant ad-free", !u.adFree, JSON.stringify(u.adFree));
+    check("webhook: merch payment sends no ad-free email", !emailCalls.some((c) => /ad-free/i.test(c.subject)));
+  }
+
+  // 6c. An existing subscriber buying merch keeps their stored subscription
+  {
+    const env = { USERS: makeKV(), STRIPE_WEBHOOK_SECRET: "whsec_right" };
+    await seedUser(env, "sub@example.com", { adFree: true, stripeCustomerId: "cus_s1", stripeSubId: "sub_keep" });
+    const evt = { type: "checkout.session.completed", data: { object: { mode: "payment", client_reference_id: "sub@example.com", customer: "cus_s1", subscription: null } } };
+    await call(stripeWebhookReq(evt, "whsec_right"), env);
+    const u = await env.USERS.get("user:sub@example.com", "json");
+    eq("webhook: merch keeps stripeSubId", u.stripeSubId, "sub_keep");
+    eq("webhook: merch keeps ad-free on", u.adFree, true);
+  }
+
+  // 6d. A subscription checkout tagged for another purpose is ignored too
+  {
+    const env = { USERS: makeKV(), STRIPE_WEBHOOK_SECRET: "whsec_right" };
+    await seedUser(env, "club@example.com");
+    const evt = { type: "checkout.session.completed", data: { object: { mode: "subscription", subscription: "sub_x", client_reference_id: "club@example.com", metadata: { purpose: "merch-club" } } } };
+    await call(stripeWebhookReq(evt, "whsec_right"), env);
+    const u = await env.USERS.get("user:club@example.com", "json");
+    check("webhook: other-purpose subscription does not grant ad-free", !u.adFree);
+  }
+
+  // 6e. Deleting a different subscription on the same customer keeps ad-free
+  {
+    const env = { USERS: makeKV(), STRIPE_WEBHOOK_SECRET: "whsec_right" };
+    await seedUser(env, "two@example.com", { adFree: true, stripeCustomerId: "cus_2", stripeSubId: "sub_adfree" });
+    await env.USERS.put("stripecust:cus_2", "two@example.com");
+    const evt = { type: "customer.subscription.deleted", data: { object: { id: "sub_other", customer: "cus_2", status: "canceled" } } };
+    await call(stripeWebhookReq(evt, "whsec_right"), env);
+    eq("webhook: other sub deleted keeps ad-free", (await env.USERS.get("user:two@example.com", "json")).adFree, true);
+    const evt2 = { type: "customer.subscription.deleted", data: { object: { id: "sub_adfree", customer: "cus_2", status: "canceled" } } };
+    await call(stripeWebhookReq(evt2, "whsec_right"), env);
+    eq("webhook: own sub deleted revokes ad-free", (await env.USERS.get("user:two@example.com", "json")).adFree, false);
+  }
+
+  // 6f. Webhook with no secret configured → 503, never verified against an empty key
+  {
+    const env = { USERS: makeKV() };
+    await seedUser(env, "forge@example.com");
+    const evt = { type: "checkout.session.completed", data: { object: { mode: "subscription", subscription: "sub_f", client_reference_id: "forge@example.com" } } };
+    const r = await call(stripeWebhookReq(evt, ""), env);
+    eq("webhook: missing secret → 503", r.status, 503);
+    check("webhook: missing secret grants nothing", !(await env.USERS.get("user:forge@example.com", "json")).adFree);
   }
 
   // 7. subscription.deleted → revokes ad-free (via reverse index)
@@ -635,7 +693,7 @@ async function run() {
     const env = { USERS: makeKV(), STRIPE_WEBHOOK_SECRET: "whsec_right", BREVO_API_KEY: "brevo_x" };
     await seedUser(env, "newpaid@example.com");
     emailCalls = [];
-    const evt = { type: "checkout.session.completed", data: { object: { client_reference_id: "newpaid@example.com", customer: "cus_9", subscription: "sub_9" } } };
+    const evt = { type: "checkout.session.completed", data: { object: { mode: "subscription", client_reference_id: "newpaid@example.com", customer: "cus_9", subscription: "sub_9" } } };
     await call(stripeWebhookReq(evt, "whsec_right"), env);
     check("webhook: sends ad-free email", emailCalls.some((c) => /ad-free/i.test(c.subject)), JSON.stringify(emailCalls.map((c) => c.subject)));
     const notifs = [...env.USERS._map.keys()].filter((k) => k.startsWith("admin:notification:")).map((k) => JSON.parse(env.USERS._map.get(k)));
