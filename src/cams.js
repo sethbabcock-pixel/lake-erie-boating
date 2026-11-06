@@ -63,7 +63,6 @@ export const CAMS = [
   // YouTube confirmed it exists + allows embedding; the player hides any that are offline)
   { name: "St. Augustine · Matanzas River & Bridge of Lions", lat: 29.892, lon: -81.31, yt: "uLJBad4vSno", lake: "Florida Atlantic Coast" },
   { name: "St. Augustine Beach · Surf Station surf cam", lat: 29.85, lon: -81.264, yt: "H2q_DJc33kg", lake: "Florida Atlantic Coast" },
-  { name: "Ponce Inlet · Northeast beach (Volusia County)", lat: 29.09, lon: -80.925, yt: "gzvgk91gEeg", lake: "Florida Atlantic Coast" },
   { name: "Port Canaveral · Harbor (Gator's Dockside)", lat: 28.41, lon: -80.62, yt: "mQnOcuGV334", lake: "Florida Atlantic Coast" },
   { name: "Cocoa Beach · Surf", lat: 28.32, lon: -80.607, yt: "6QmQtFXG9vM", lake: "Florida Atlantic Coast" },
   { name: "Cocoa Beach · Surfer's View", lat: 28.33, lon: -80.607, yt: "gAvFqhNwZm0", lake: "Florida Atlantic Coast" },
@@ -83,10 +82,7 @@ export const CAMS = [
   { name: "Clearwater Beach · Pier 60 (FOX 13)", lat: 27.977, lon: -82.829, yt: "S8-G3uJOqZw", lake: "Florida Gulf Coast" },
   { name: "St. Petersburg · Waterfront (FOX 13)", lat: 27.76, lon: -82.633, yt: "OeYHEp9_KYk", lake: "Florida Gulf Coast" },
   { name: "Siesta Key · Beach", lat: 27.265, lon: -82.553, yt: "GU5CkKxOPbM", lake: "Florida Gulf Coast" },
-  { name: "Fort Myers Beach · Gulf (Margaritaville)", lat: 26.45, lon: -81.95, yt: "2qd9j2CbIpg", lake: "Florida Gulf Coast" },
-  { name: "Sanibel · Lighthouse Beach", lat: 26.452, lon: -82.014, yt: "ZtrNffrXPdw", lake: "Florida Gulf Coast" },
   { name: "Panama City Beach · Pineapple Willy's Pier", lat: 30.18, lon: -85.81, yt: "0pLm61T8qCU", lake: "Florida Gulf Coast" },
-  { name: "Okaloosa Island · Gulf beach", lat: 30.395, lon: -86.6, yt: "y5k8f4VEOrc", lake: "Florida Gulf Coast" },
   { name: "Destin · Gulf beach", lat: 30.38, lon: -86.48, yt: "_Zqi24i0fl4", lake: "Florida Gulf Coast" },
   { name: "Pensacola Beach · Pier", lat: 30.328, lon: -87.142, yt: "O6fLjzZLALY", lake: "Florida Gulf Coast" },
   { name: "Pensacola · Bay", lat: 30.4, lon: -87.2, yt: "O-tdY-lbISg", lake: "Florida Gulf Coast" },
@@ -94,24 +90,13 @@ export const CAMS = [
   { name: "Gulf Shores → Fairhope · Coastal SkyCams (rotating)", lat: 30.35, lon: -87.75, yt: "3Rp_9FUKH4I", lake: "Alabama & Mississippi Coast" },
   // Louisiana & Texas Coast
   { name: "Galveston · Seawall beach (ABC13)", lat: 29.29, lon: -94.79, yt: "HkHhXsWci7Q", lake: "Louisiana & Texas Coast" },
-  { name: "Galveston · Seawall surf", lat: 29.29, lon: -94.79, yt: "8dnNnBPD6Ko", lake: "Louisiana & Texas Coast" },
-  { name: "Port Aransas · Beach", lat: 27.83, lon: -97.05, yt: "9l8N1qXqqJw", lake: "Louisiana & Texas Coast" },
   { name: "South Padre · North Beach (Sand Rose)", lat: 26.13, lon: -97.17, yt: "kJ_EXhKsH30", lake: "Louisiana & Texas Coast" },
-  { name: "South Padre · Laguna Madre bay", lat: 26.1, lon: -97.17, yt: "6rjCN6d1YHw", lake: "Louisiana & Texas Coast" },
   // Georgia & South Carolina / North Carolina / Chesapeake
-  { name: "Murrells Inlet · Inlet (WPDE)", lat: 33.55, lon: -79.04, yt: "dqWo91ZcPw0", lake: "Georgia & South Carolina Coast" },
   { name: "Nags Head · Jennette's Pier", lat: 35.91, lon: -75.6, yt: "sgnlB7lhknM", lake: "North Carolina Coast" },
   { name: "Kitty Hawk · Oceanfront (Twiddy)", lat: 36.07, lon: -75.7, yt: "WEhuDqlxHmM", lake: "North Carolina Coast" },
-  { name: "Middle River · Weathercam", lat: 39.31, lon: -76.42, yt: "O7rCzM0sLIU", lake: "Chesapeake Bay" },
   // Southern California Coast
-  { name: "Oceanside · Harbor", lat: 33.207, lon: -117.393, yt: "QvGUq-pPny4", lake: "Southern California Coast" },
-  { name: "Oceanside · Beach & pier (looking west)", lat: 33.196, lon: -117.381, yt: "OYqo4dqYjh0", lake: "Southern California Coast" },
   { name: "San Diego Bay · Shelter Island", lat: 32.714, lon: -117.227, yt: "ct7IRmzDggk", lake: "Southern California Coast" },
   { name: "Channel Islands Harbor · Coastal Café", lat: 34.165, lon: -119.225, yt: "oJ9CLuRwuuk", lake: "Southern California Coast" },
-  { name: "Channel Islands Harbor · Wildlife cam", lat: 34.165, lon: -119.225, yt: "tT72v_0WT-s", lake: "Southern California Coast" },
-  { name: "Seal Beach · Harbor & marina", lat: 33.74, lon: -118.105, yt: "SDwgoqA60Vc", lake: "Southern California Coast" },
-  { name: "Dana Point · Harbor inlet", lat: 33.458, lon: -117.699, yt: "HeJha-V6oAk", lake: "Southern California Coast" },
-  { name: "Dana Point · Doheny surf", lat: 33.461, lon: -117.688, yt: "0f474Ajruyk", lake: "Southern California Coast" },
   // Hawaii & Puerto Rico
   { name: "Kona · Keauhou Bay", lat: 19.56, lon: -155.96, yt: "RxDQLIwxyhA", lake: "Hawaii" },
   { name: "Maui · Wailea Beach", lat: 20.68, lon: -156.44, yt: "mrUciA_XZxA", lake: "Hawaii" },
