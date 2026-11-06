@@ -23,7 +23,10 @@ you need to decide whether to head out, in one place.
 - **Formal NOAA report** — the official NWS marine forecast text.
 - **Accounts** — saved ports, daily verdict digest and NO-GO alert emails, and
   a $2.99/mo ad-free subscription via Stripe (see `MONETIZATION.md`).
-- **Boating guides** under `/guides/` and server-rendered SEO pages per spot/region.
+- **Boating guides** under `/guides/` and server-rendered SEO pages per region.
+  Launch pages (`/spot/*`) are server-rendered too but `noindex` and out of the
+  sitemap: ~90 pages on one template read as thin content to AdSense, so the
+  index is the homepage, region pages and the editorial guides.
 - **Admin** at `/admin` (ads, sponsorships, users).
 
 ## Data sources

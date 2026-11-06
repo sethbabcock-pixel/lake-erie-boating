@@ -3,7 +3,7 @@ import Takeover from "./Takeover.jsx";
 import { IconStar } from "./icons.jsx";
 import { fmtWaves } from "./units.js";
 import { AdSlot } from "./monetize.jsx";
-import { LAKE_ORDER, NEAR_METROS, seasonalRegions, seasonalLakeOrder, regionBySlug } from "./regions.js";
+import { LAKE_ORDER, NEAR_METROS, seasonalRegions, seasonalLakeOrder, regionBySlug, regionGuides } from "./regions.js";
 
 const vclass = (v) => (v === "NO-GO" ? "nogo" : v === "CAUTION" ? "caution" : v === "GO" ? "go" : "unknown");
 
@@ -316,6 +316,12 @@ function RegionDirectory({ summary, q, onSelect, deepLake, region, onRegion }) {
       <RegionNav region={region} onRegion={onRegion} />
       <h2 className="directory-title">{region ? region.title : "All locations"}</h2>
       {region && <p className="directory-blurb">{region.blurb}</p>}
+      {region && (
+        <p className="directory-blurb">
+          Read before you go:{" "}
+          {regionGuides(region).map((g, i) => <span key={g.href}>{i ? " · " : ""}<a href={g.href}>{g.text}</a></span>)}
+        </p>
+      )}
       {summary == null && (
         // Reserve the directory's height with skeleton cards so the footer
         // doesn't jump when live conditions load (kills the homepage CLS).
