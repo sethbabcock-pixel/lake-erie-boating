@@ -1,6 +1,7 @@
 // Canonical wave formatting — the height and the time between waves always
 // travel together, everywhere waves appear: "2.5 ft @ 4s".
-export const fmtWaves = (ft, sec) => (ft == null ? "—" : `${ft} ft${sec ? ` @ ${sec}s` : ""}`);
+// 0 ft reads as broken next to a verdict; the grid rounds a flat calm to 0.
+export const fmtWaves = (ft, sec) => (ft == null ? "—" : ft === 0 ? "<0.5 ft" : `${ft} ft${sec ? ` @ ${sec}s` : ""}`);
 
 // 16-point compass → degrees (direction the wind comes FROM).
 const COMPASS_16 = ["N","NNE","NE","ENE","E","ESE","SE","SSE","S","SSW","SW","WSW","W","WNW","NW","NNW"];

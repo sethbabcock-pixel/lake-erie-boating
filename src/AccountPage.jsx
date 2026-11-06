@@ -2,6 +2,7 @@ import React, { useEffect, useState } from "react";
 import { useAuth, AuthModal } from "./auth.jsx";
 import { BOAT_TYPES, boatById, effectiveLimits } from "./boats.js";
 import { track } from "./monetize.jsx";
+import { ProUpsell, PlanCompare } from "./Pro.jsx";
 
 const fmtDate = (unixSec) =>
   unixSec ? new Date(unixSec * 1000).toLocaleDateString(undefined, { year: "numeric", month: "long", day: "numeric" }) : null;
@@ -22,6 +23,11 @@ function SubscriptionCard({ auth }) {
     if (d.error) setErr(d.error);
   };
   useEffect(() => { load(); /* eslint-disable-next-line */ }, [auth.user]);
+  // /account#pro (the menu's "Go Pro" link): the card renders after auth loads,
+  // so the browser's own hash scroll misses it.
+  useEffect(() => {
+    if (auth.user && window.location.hash === "#pro") document.getElementById("pro")?.scrollIntoView({ block: "start" });
+  }, [auth.user]);
 
   const act = async (action) => {
     setBusy(true); setErr("");
@@ -35,17 +41,13 @@ function SubscriptionCard({ auth }) {
 
   if (!auth.billing) return null;
 
-  // Free plan → upsell
+  // Free plan → Pro upsell
   if (!auth.user.adFree) {
     return (
-      <section className="card acct-sec">
-        <h2>Subscription</h2>
-        <p className="acct-lead">You're on the <b>free plan</b>, so the site is ad-supported.</p>
-        <p className="acct-note">Go ad-free for $2.99/month. Cancel anytime; you keep ad-free access through the end of the period you paid for.</p>
-        <button className="cbtn" disabled={busy} onClick={async () => { track("event", "subscribe_click", { where: "account_page" }); setBusy(true); setErr(""); try { await auth.checkout(); } catch (e) { setErr(e.message); setBusy(false); } }}>
-          {busy ? "…" : "Go ad-free · $2.99/mo"}
-        </button>
-        {err && <div className="modal-err" style={{ marginTop: 8 }}>{err}</div>}
+      <section className="card acct-sec" id="pro">
+        <h2>Go Pro</h2>
+        <p className="acct-lead">You're on the <b>free plan</b>: every verdict, the week ahead, the daily email and NO-GO alerts, supported by ads.</p>
+        <ProUpsell auth={auth} where="account_page" />
       </section>
     );
   }
@@ -56,13 +58,13 @@ function SubscriptionCard({ auth }) {
   return (
     <section className="card acct-sec">
       <h2>Subscription</h2>
-      <div className="acct-badge ok">Ad-free ✓</div>
+      <div className="acct-badge ok">Pro ✓</div>
 
       {sub === undefined && <p className="acct-note">Loading subscription details…</p>}
 
       {sub && !sub.cancelAtPeriodEnd && (
         <>
-          <p className="acct-lead">{price ? `${price}/${sub.interval || "month"}` : "Ad-free plan"}, active.</p>
+          <p className="acct-lead">{price ? `Pro, ${price}/${sub.interval || "month"}` : "Pro plan"}, active.</p>
           {through && <p className="acct-note">Renews on <b>{through}</b>.</p>}
         </>
       )}
@@ -70,12 +72,12 @@ function SubscriptionCard({ auth }) {
       {sub && sub.cancelAtPeriodEnd && (
         <>
           <p className="acct-lead">Your subscription is set to cancel.</p>
-          <p className="acct-note acct-through">You keep ad-free access through <b>{through || "the end of the current period"}</b>, then your account reverts to the free plan.</p>
+          <p className="acct-note acct-through">You keep Pro through <b>{through || "the end of the current period"}</b>, then your account reverts to the free plan.</p>
         </>
       )}
 
       {sub === null && (
-        <p className="acct-note">You're ad-free, but we couldn't load the billing schedule. You can manage it in the billing portal.</p>
+        <p className="acct-note">You're on Pro, but we couldn't load the billing schedule. You can manage it in the billing portal.</p>
       )}
 
       <div className="acct-actions">
@@ -84,7 +86,7 @@ function SubscriptionCard({ auth }) {
         )}
         {sub && !sub.cancelAtPeriodEnd && confirming && (
           <div className="acct-confirm">
-            <span>Cancel ad-free?{through ? ` You'll keep it through ${through}.` : ""}</span>
+            <span>Cancel Pro?{through ? ` You'll keep it through ${through}.` : ""}</span>
             <div className="acct-confirm-btns">
               <button className="cbtn" disabled={busy} onClick={() => act("cancel")}>{busy ? "…" : "Yes, cancel"}</button>
               <button className="cbtn ghost" disabled={busy} onClick={() => setConfirming(false)}>Keep it</button>
@@ -109,6 +111,7 @@ function EmailCard({ auth }) {
   const prefs = u?.prefs || {};
   const [busy, setBusy] = useState(false);
   const favCount = (u?.favorites || []).length;
+  const pro = !!u?.adFree;
   const setPref = async (k, v) => { setBusy(true); try { await auth.savePrefs({ [k]: v }); } finally { setBusy(false); } };
   return (
     <section className="card acct-sec">
@@ -130,6 +133,15 @@ function EmailCard({ auth }) {
             <input type="checkbox" checked={!!prefs.alertEmails} disabled={busy} onChange={(e) => setPref("alertEmails", e.target.checked)} />
             <span><b>NO-GO alerts</b>: a heads-up when a starred port turns rough. One per port per day, daytime only.</span>
           </label>
+          <label className={`acct-toggle${pro ? "" : " locked"}`}>
+            <input type="checkbox" checked={pro && !!prefs.goAlerts} disabled={busy || !pro} onChange={(e) => setPref("goAlerts", e.target.checked)} />
+            <span><b>GO alerts</b> <span className="pro-tag sm">Pro</span>: an email when a starred port turns GO during the day. One per port per day.</span>
+          </label>
+          <label className={`acct-toggle${pro ? "" : " locked"}`}>
+            <input type="checkbox" checked={pro && !!prefs.weekendEmail} disabled={busy || !pro} onChange={(e) => setPref("weekendEmail", e.target.checked)} />
+            <span><b>Weekend outlook</b> <span className="pro-tag sm">Pro</span>: Saturday and Sunday at your ports, every Thursday evening.</span>
+          </label>
+          {!pro && <p className="acct-note"><a href="#pro">Go Pro</a> to turn on GO alerts and the weekend outlook.</p>}
           <p className="acct-note">
             {favCount
               ? `Covers your ${favCount} starred port${favCount > 1 ? "s" : ""}.`
@@ -275,7 +287,7 @@ function DangerZone({ auth }) {
       <h2>Delete account</h2>
       <p className="acct-note">Permanently deletes your account, boat profile, and saved spots. This can't be undone.</p>
       {hasSub && (
-        <p className="acct-note"><b>Heads up:</b> deleting your account cancels your ad-free subscription immediately. As with any cancellation, payments already made aren't refunded.</p>
+        <p className="acct-note"><b>Heads up:</b> deleting your account cancels your Pro subscription immediately. As with any cancellation, payments already made aren't refunded.</p>
       )}
       {!open ? (
         <div className="acct-actions">
@@ -303,7 +315,7 @@ function DangerZone({ auth }) {
 // ── Page shell ────────────────────────────────────────────────────────────────
 export default function AccountPage() {
   const auth = useAuth();
-  const [modal, setModal] = useState(false);
+  const [modal, setModal] = useState(false); // false | "login" | "register"
   const dark = (typeof document !== "undefined" ? document.documentElement.getAttribute("data-theme") : "dark") !== "light";
 
   const created = auth.user?.created ? new Date(auth.user.created).toLocaleDateString(undefined, { year: "numeric", month: "long", day: "numeric" }) : null;
@@ -324,11 +336,11 @@ export default function AccountPage() {
         {auth.user === undefined && <p className="acct-note">Loading…</p>}
 
         {auth.user === null && (
-          <section className="card acct-sec">
-            <h2>Sign in</h2>
-            <p className="acct-lead">Sign in to manage your boat profile, comfort limits, and subscription.</p>
-            <button className="cbtn" onClick={() => setModal(true)}>Sign in</button>
-            {modal && <AuthModal auth={auth} onClose={() => setModal(false)} />}
+          <section className="card acct-sec" id="pro">
+            <h2>Plans</h2>
+            <p className="acct-lead">Sign in to manage your starred ports, boat profile, emails and subscription. New here? Start free.</p>
+            <PlanCompare onStart={() => setModal("register")} onSignIn={() => setModal("login")} />
+            {modal && <AuthModal key={modal} auth={auth} initialMode={modal} onClose={() => setModal(false)} />}
           </section>
         )}
 
@@ -337,7 +349,7 @@ export default function AccountPage() {
             <section className="card acct-sec">
               <h2>Account</h2>
               <div className="acct-kv"><span>Email</span><b>{auth.user.email}</b></div>
-              <div className="acct-kv"><span>Plan</span><b>{auth.user.adFree ? "Ad-free" : "Free"}</b></div>
+              <div className="acct-kv"><span>Plan</span><b>{auth.user.adFree ? "Pro" : "Free"}</b></div>
               {created && <div className="acct-kv"><span>Member since</span><b>{created}</b></div>}
               <div className="acct-kv"><span>Sign-in</span><b>{auth.user.via === "google" ? "Google" : "Email & password"}</b></div>
             </section>

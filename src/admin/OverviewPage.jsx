@@ -22,8 +22,8 @@ export default function OverviewPage({ cfg, go, counts }) {
   if (!cfg.ads.enabled) attention.push({ state: "bad", title: "Display ads are switched off", to: "ads" });
   else if (!liveAds) attention.push({ state: "bad", title: "No ad placements are live", to: "ads" });
   const b = billing.data;
-  if (b && !b.secretKey?.present) attention.push({ state: "warn", title: "Stripe isn't configured, so the ad-free plan can't be bought", to: "system" });
-  if (b && b.secretKey?.present && !b.webhookSecret?.present) attention.push({ state: "warn", title: "Stripe webhook secret missing: paid subscriptions won't switch to ad-free", to: "system" });
+  if (b && !b.secretKey?.present) attention.push({ state: "warn", title: "Stripe isn't configured, so the Pro plan can't be bought", to: "system" });
+  if (b && b.secretKey?.present && !b.webhookSecret?.present) attention.push({ state: "warn", title: "Stripe webhook secret missing: paid subscriptions won't switch to Pro", to: "system" });
   if (b && !b.email?.present) attention.push({ state: "warn", title: "Email delivery is off (BREVO_API_KEY not set)", to: "system" });
   if (counts.pages) attention.push({ state: "info", title: `${counts.pages} built page${counts.pages === 1 ? "" : "s"} waiting to be reviewed`, to: "pages" });
   if (counts.inbox) attention.push({ state: "info", title: `${counts.inbox} location and cam request${counts.inbox === 1 ? "" : "s"} in the inbox`, to: "inbox" });
@@ -39,7 +39,7 @@ export default function OverviewPage({ cfg, go, counts }) {
         <Stat label="Visitors today" value={s ? fmtNum(s.visitorsToday) : "—"} sub={s ? `${fmtNum(s.visitors30)} in 30 days` : ""} />
         <Stat label="Page views · 30d" value={s ? fmtNum(s.visits30) : "—"} sub="first-party, cookieless" />
         <Stat label="Accounts" value={s ? fmtNum(s.totalUsers) : "—"} sub={s ? `+${s.new7d} this week` : ""} />
-        <Stat label="Ad-free subscribers" value={s ? fmtNum(s.adFree) : "—"} sub={s ? `${s.conversionPct}% of accounts` : ""} tone={s && s.adFree ? "ok" : undefined} />
+        <Stat label="Pro subscribers" value={s ? fmtNum(s.adFree) : "—"} sub={s ? `${s.conversionPct}% of accounts` : ""} tone={s && s.adFree ? "ok" : undefined} />
       </div>
 
       <div className="adm-grid2 wide-left">

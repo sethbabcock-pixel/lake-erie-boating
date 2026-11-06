@@ -22,7 +22,8 @@ you need to decide whether to head out, in one place.
 - **Weather map** (embedded Windy) and **live webcams** per spot.
 - **Formal NOAA report** — the official NWS marine forecast text.
 - **Accounts** — saved ports, daily verdict digest and NO-GO alert emails, and
-  a $2.99/mo ad-free subscription via Stripe (see `MONETIZATION.md`).
+  a **Pro** subscription via Stripe: no ads, unlimited starred ports, GO alerts
+  and a weekend outlook email (see `MONETIZATION.md`).
 - **Boating guides** under `/guides/` and server-rendered SEO pages per region.
   Launch pages (`/spot/*`) are server-rendered too but `noindex` and out of the
   sitemap: ~90 pages on one template read as thin content to AdSense, so the
@@ -46,7 +47,7 @@ Conditions data is free and needs no API key:
 worker.js                       # Worker entry: routing, www→apex redirect, security headers, cron
 functions/marine/conditions.js  # GET /marine/conditions — NOAA aggregation + verdicts
 functions/auth.js               # /auth, /api, /stripe: accounts, Stripe billing, admin API, Brevo email
-functions/digest.js             # hourly cron: NO-GO alerts + daily 6am ET digest
+functions/digest.js             # hourly cron: daily digest, NO-GO + GO alerts, weekend outlook
 functions/seo.js                # robots.txt, sitemap.xml, per-page <head>/SSR content
 src/                            # Vite + React 18 frontend
 index.html, account.html, admin.html   # multi-page Vite entries → dist/
@@ -71,7 +72,8 @@ locally in `.dev.vars` (copy `.dev.vars.example`).
 | `BREVO_API_KEY` | Transactional email (resets, digests, alerts) |
 | `WINDY_WEBCAMS_KEY` | Optional — nearest Windy webcam for spots without a curated cam |
 | `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` | Optional — Google sign-in |
-| `EMAIL_FROM`, `ADMIN_EMAIL`, `OAUTH_REDIRECT_BASE`, `STRIPE_PRICE_ID` | Optional overrides |
+| `STRIPE_PRICE_ID`, `STRIPE_PRICE_ID_YEARLY` | Pro monthly / yearly price IDs (yearly optional) |
+| `EMAIL_FROM`, `ADMIN_EMAIL`, `OAUTH_REDIRECT_BASE` | Optional overrides |
 
 Everything degrades gracefully when an optional key is absent.
 

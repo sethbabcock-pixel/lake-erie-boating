@@ -24,7 +24,8 @@
 //   POST /api/admin/upload          -> admin image upload (stored in KV)
 //   GET  /api/asset/<id>            -> serve an uploaded image
 //   GET  /api/billing-status        -> admin-only Stripe config diagnostics
-//   POST /api/checkout              -> start Stripe Checkout (ad-free)
+//   GET  /api/plans                 -> public Pro plan prices (live from Stripe)
+//   POST /api/checkout {plan}       -> start Stripe Checkout (Pro, month|year)
 //   GET  /api/subscription          -> current subscription details
 //   POST /api/subscription {action} -> cancel | resume (at period end)
 //   POST /api/portal                -> Stripe billing portal
@@ -108,7 +109,17 @@ function getCookie(request, name) {
   return m ? m[1] : null;
 }
 
-const publicUser = (u) => ({ email: u.email, prefs: u.prefs || {}, favorites: u.favorites || [], adFree: !!u.adFree, via: u.via || "password", created: u.created || null, hasSubscription: !!u.stripeSubId, emailVerified: u.emailVerified !== false, emailOptOut: !!u.emailOptOut });
+// ── Pro plan ──────────────────────────────────────────────────────────────────
+// One paid plan. The stored entitlement flag stays `adFree` (every existing
+// subscriber already has it, and the webhook sets it), so "Pro" = adFree. Safety
+// information is never paywalled: verdicts, the week ahead, the daily digest and
+// NO-GO alerts stay free. Pro adds convenience: no ads, unlimited starred ports,
+// GO alerts (a starred port turns GO mid-day) and the Thursday weekend outlook.
+export const FREE_FAVORITES_MAX = 3;
+export const PRO_PREFS = ["goAlerts", "weekendEmail"]; // prefs only Pro members can switch on
+export const isPro = (u) => !!(u && u.adFree);
+
+const publicUser = (u) => ({ email: u.email, prefs: u.prefs || {}, favorites: u.favorites || [], adFree: !!u.adFree, pro: isPro(u), limits: { favorites: isPro(u) ? null : FREE_FAVORITES_MAX }, via: u.via || "password", created: u.created || null, hasSubscription: !!u.stripeSubId, emailVerified: u.emailVerified !== false, emailOptOut: !!u.emailOptOut });
 
 // ── Admin-managed site config (homepage hero + sponsor takeovers) ─────────────
 const isoDay = (d = new Date()) =>
@@ -208,8 +219,30 @@ async function saveUser(env, u) {
   await env.USERS.put(emailKey(u.email), JSON.stringify(store));
 }
 
-// ── Stripe (ad-free $2.99/mo) ────────────────────────────────────────────────
-const STRIPE_PRICE = "price_1TmmTRD2Xq09ZtSPFFRrN1jH"; // $2.99/mo recurring
+// ── Stripe (Pro plan) ────────────────────────────────────────────────────────
+const STRIPE_PRICE = "price_1TmmTRD2Xq09ZtSPFFRrN1jH"; // $2.99/mo recurring (original ad-free price)
+// Monthly: STRIPE_PRICE_ID overrides the built-in price. Yearly: optional
+// STRIPE_PRICE_ID_YEARLY; when unset the yearly option is simply hidden.
+const priceFor = (env, plan) => plan === "year" ? (env.STRIPE_PRICE_ID_YEARLY || "") : (env.STRIPE_PRICE_ID || STRIPE_PRICE);
+
+// Public plan list with live amounts from Stripe (edge-cached for an hour), so
+// the price shown on the site is always the price Checkout will charge.
+async function loadPlans(env) {
+  if (!env.STRIPE_SECRET_KEY) return [];
+  const ids = [["month", priceFor(env, "month")], ["year", priceFor(env, "year")]].filter(([, id]) => id);
+  const cache = typeof caches !== "undefined" && caches.default ? caches.default : null;
+  const key = new Request(`https://sib-plans.local/${ids.map(([, id]) => id).join(",")}`);
+  if (cache) { const hit = await cache.match(key).catch(() => null); if (hit) return hit.json(); }
+  const plans = [];
+  for (const [plan, id] of ids) {
+    const r = await stripeGET(env, `prices/${encodeURIComponent(id)}`).catch(() => null);
+    if (r && r.id && r.active !== false) plans.push({ id: plan, amount: r.unit_amount ?? null, currency: r.currency || "usd", interval: r.recurring?.interval || plan });
+  }
+  // Cache misses too (briefly): a misconfigured price or a Stripe outage must
+  // not turn every public GET into Stripe API calls.
+  if (cache) await cache.put(key, new Response(JSON.stringify(plans), { headers: { "Cache-Control": `public, max-age=${plans.length ? 3600 : 60}` } })).catch(() => {});
+  return plans;
+}
 async function stripeAPI(env, path, params) {
   const r = await fetch(`https://api.stripe.com/v1/${path}`, {
     method: "POST",
@@ -318,7 +351,7 @@ async function adminEmails(env) {
 // transactional mail like verification, password reset, or receipts.
 export const emailFooter = (unsubUrl) => unsubUrl ? `<p style="color:#99a;font-size:12px;margin-top:24px;font-family:system-ui,sans-serif">You're receiving this because you have a shouldiboat.com account. <a href="${unsubUrl}" style="color:#99a">Unsubscribe from non-essential emails</a>.</p>` : "";
 const welcomeHtml = (unsubUrl) => `<div style="font-family:system-ui,sans-serif"><h2>Welcome aboard</h2><p>Thanks for joining <b>shouldiboat.com</b>, your quick GO / CAUTION / NO-GO call for boating conditions.</p><ul><li>Save your favorite launch spots</li><li>Set comfort limits tuned to your boat</li><li>Go ad-free anytime for $2.99/mo</li></ul><p><a href="https://shouldiboat.com" style="display:inline-block;background:#008BA8;color:#fff;padding:10px 18px;border-radius:8px;text-decoration:none">Open shouldiboat.com</a></p></div>${emailFooter(unsubUrl)}`;
-const adFreeHtml = () => `<div style="font-family:system-ui,sans-serif"><h2>You're ad-free</h2><p>Thanks for supporting shouldiboat.com. Your subscription is active and the ads are gone. You can manage or cancel anytime from your <a href="https://shouldiboat.com/account">account</a>.</p></div>`;
+const adFreeHtml = () => `<div style="font-family:system-ui,sans-serif"><h2>Welcome to Pro</h2><p>Thanks for supporting shouldiboat.com. Your Pro plan is active:</p><ul><li><b>No display ads</b>, anywhere on the site</li><li><b>Unlimited starred ports</b></li><li><b>GO alerts</b>: an email when a starred port turns GO during the day</li><li><b>Weekend outlook</b>: every Thursday, Saturday and Sunday at your ports</li></ul><p>Switch the alerts on in your <a href="https://shouldiboat.com/account">account</a>, where you can also manage or cancel anytime.</p></div>`;
 const verifyHtml = (link) => `<div style="font-family:system-ui,-apple-system,sans-serif;max-width:520px;color:#1a2b38">
   <h2 style="margin:0 0 10px">Confirm your email address</h2>
   <p style="line-height:1.55;margin:0 0 14px">Thanks for creating a <b>shouldiboat.com</b> account, the quick GO / CAUTION / NO-GO call for boating conditions. To finish setting up your account, please confirm this is your email address.</p>
@@ -1050,8 +1083,23 @@ export async function handleAuth(request, env, url, ctx) {
     const u = await userFromRequest(env, request);
     if (!u) return json({ error: "Not signed in." }, 401);
     const body = await request.json().catch(() => ({}));
-    if (path === "/api/prefs" && body.prefs && typeof body.prefs === "object") u.prefs = body.prefs;
-    if (path === "/api/favorites" && Array.isArray(body.favorites)) u.favorites = body.favorites.slice(0, 50);
+    if (path === "/api/prefs" && body.prefs && typeof body.prefs === "object") {
+      const next = { ...body.prefs };
+      // Pro-only toggles can't be switched on from a free account (keep any
+      // existing value, so a lapsed member's settings come back if they return).
+      if (!isPro(u)) for (const k of PRO_PREFS) if (next[k] && !(u.prefs || {})[k]) delete next[k];
+      u.prefs = next;
+    }
+    if (path === "/api/favorites" && Array.isArray(body.favorites)) {
+      const next = [...new Set(body.favorites.filter((x) => typeof x === "string"))].slice(0, 50);
+      const had = (u.favorites || []).length;
+      // Free plan: up to FREE_FAVORITES_MAX starred ports. Never strip ports a
+      // member already has (e.g. after a Pro lapse); only block adding past the cap.
+      if (!isPro(u) && next.length > Math.max(FREE_FAVORITES_MAX, had)) {
+        return json({ error: `The free plan covers ${FREE_FAVORITES_MAX} starred ports. Go Pro for unlimited.`, upgrade: true, limit: FREE_FAVORITES_MAX, user: publicUser(u) }, 402);
+      }
+      u.favorites = next;
+    }
     const { _token, ...store } = u;
     await env.USERS.put(emailKey(u.email), JSON.stringify(store));
     return json({ user: publicUser(u) });
@@ -1119,15 +1167,25 @@ export async function handleAuth(request, env, url, ctx) {
     return new Response(null, { status: 302, headers: { Location: "/", "Set-Cookie": cookie("sib_session", token, SESSION_DAYS * 86400) } });
   }
 
-  // ---- Stripe: start checkout for ad-free ----
+  // ---- Pro plans (public): live prices for the upgrade UI ----
+  if (path === "/api/plans" && request.method === "GET") {
+    return json({ billing: !!env.STRIPE_SECRET_KEY, plans: await loadPlans(env), freeFavorites: FREE_FAVORITES_MAX });
+  }
+
+  // ---- Stripe: start checkout for Pro ----
   if (path === "/api/checkout" && request.method === "POST") {
     if (!env.STRIPE_SECRET_KEY) return json({ error: "Billing is not configured yet." }, 503);
     const u = await userFromRequest(env, request);
     if (!u) return json({ error: "Not signed in." }, 401);
-    if (u.adFree) return json({ error: "You're already ad-free." }, 400);
+    if (u.adFree) return json({ error: "You're already on Pro." }, 400);
+    const reqBody = await request.json().catch(() => ({}));
+    const plan = reqBody && reqBody.plan === "year" ? "year" : "month";
+    const priceId = priceFor(env, plan);
+    if (!priceId) return json({ error: "The yearly plan isn't available yet." }, 400);
     const params = {
       mode: "subscription",
-      "line_items[0][price]": env.STRIPE_PRICE_ID || STRIPE_PRICE, // env override lets you use a test-mode price
+      "line_items[0][price]": priceId,
+      "metadata[plan]": plan,
 
       "line_items[0][quantity]": "1",
       success_url: `${url.origin}/?upgraded=1`,
@@ -1165,6 +1223,7 @@ export async function handleAuth(request, env, url, ctx) {
       webhookSecret: { present: !!env.STRIPE_WEBHOOK_SECRET },
       priceId,
       priceOverride: !!env.STRIPE_PRICE_ID,
+      yearlyPriceId: env.STRIPE_PRICE_ID_YEARLY || null,
       email: { present: !!env.BREVO_API_KEY, provider: "brevo" },
     };
     // If we have a key, resolve the price live so you can confirm it actually
@@ -1176,6 +1235,12 @@ export async function handleAuth(request, env, url, ctx) {
       status.price = r && r.id
         ? { resolved: true, active: r.active, amount: r.unit_amount, currency: r.currency, interval: r.recurring?.interval || null, livemode: r.livemode }
         : { resolved: false, error: r?.error?.message || "lookup failed" };
+      if (env.STRIPE_PRICE_ID_YEARLY) {
+        const y = await stripeGET(env, `prices/${encodeURIComponent(env.STRIPE_PRICE_ID_YEARLY)}`).catch(() => null);
+        status.yearlyPrice = y && y.id
+          ? { resolved: true, active: y.active, amount: y.unit_amount, currency: y.currency, interval: y.recurring?.interval || null, livemode: y.livemode }
+          : { resolved: false, error: y?.error?.message || "lookup failed" };
+      }
       status.ready = !!sk && !!env.STRIPE_WEBHOOK_SECRET && status.price.resolved === true && status.price.active === true;
     } else {
       status.ready = false;
@@ -1278,7 +1343,7 @@ export async function handleAuth(request, env, url, ctx) {
       const email = (obj.client_reference_id || obj.customer_email || obj.customer_details?.email || "").toLowerCase();
       if (obj.customer && email) await env.USERS.put(`stripecust:${obj.customer}`, email); // reverse index for later events
       await setAdFree(email, true, { stripeCustomerId: obj.customer || null, stripeSubId: obj.subscription });
-      if (email) await runBg(ctx, notify(env, "adfree_activated", { email }, { to: email, subject: "You're ad-free on shouldiboat.com", html: adFreeHtml(), ttlDays: 30 }));
+      if (email) await runBg(ctx, notify(env, "adfree_activated", { email }, { to: email, subject: "Welcome to shouldiboat Pro", html: adFreeHtml(), ttlDays: 30 }));
     } else if ((event.type === "customer.subscription.updated" || event.type === "customer.subscription.deleted") && !notAdFree) {
       const email = await env.USERS.get(`stripecust:${obj.customer}`);
       const user = email ? await env.USERS.get(emailKey(email), "json") : null;

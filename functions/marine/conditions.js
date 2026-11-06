@@ -823,6 +823,23 @@ function zoneNumbers(spec) {
 // magnitude — and makes the headline, the hour-by-hour strip, and the week all
 // agree with the nearshore report. Marine periods run in ~12h day/night blocks
 // starting from "now", so we bucket each hour into a period by local half-day.
+// Physical sanity check for a wave period: a wave can't be steeper than about
+// 1:7 (height / deep-water wavelength, wavelength ≈ 1.56·T² m) before it breaks.
+// The grid's period layer and the nearshore wave floor come from different
+// sources, so a raised height can sit on a tiny period ("7 ft @ 1s"). DISPLAY
+// ONLY: such a period is blanked ("—") in what the page shows, but the verdict
+// is always computed from the raw series first (a missing period must never
+// soften a call: short period is what makes seas steep).
+export function plausiblePeriod(waveFt, sec) {
+  if (sec == null || !(sec > 0)) return null;
+  if (sec < 1.5) return null;
+  // Periods arrive rounded to whole seconds, so allow +0.5 s before calling a
+  // pair impossible: real Lake Erie chop like 3–4 ft @ 2 s must stay visible.
+  const T = sec + 0.5;
+  if (waveFt != null && waveFt * 0.3048 > (1.56 * T * T) / 7) return null;
+  return sec;
+}
+
 function applyMarineWaveFloor(grid, marine) {
   if (!grid || !marine || !marine.length) return;
   // Drop leading advisory / synopsis entries (e.g. a "Dense Smoke Advisory"
@@ -890,7 +907,9 @@ function nshPeriodsForZone(text, zone) {
     const re = /\.([A-Z][A-Z ]+?)\.\.\.\s*([\s\S]*?)(?=\.[A-Z][A-Z ]+?\.\.\.|$)/g;
     let m;
     while ((m = re.exec(body))) {
-      const forecast = m[2].replace(/\s+/g, " ").trim();
+      // The last period runs into the product's "$$" terminator (and any trailing
+      // boilerplate after it): cut there so it never shows in the forecast card.
+      const forecast = m[2].split("$$")[0].replace(/\s+/g, " ").trim();
       if (forecast) periods.push({ name: titleCase(m[1].trim()), forecast });
     }
     return periods.slice(0, 5);
@@ -1148,15 +1167,15 @@ function buildRecommendation({ buoy, alerts, wind, waves, read, hours, profile =
       // Ocean trade/sea-breeze gusts run well above the sustained wind, and NWS
       // coastal advisories key on sustained speed, so rate them separately.
       const w = wind?.speedKt ?? 0, gu = wind?.gustKt ?? 0;
-      const desc = `${round(w)} kt${gu > w ? `, gusts ${round(gu)}` : ""}${tag}`;
+      const desc = `${round(w, 0)} kt${gu > w ? `, gusts ${round(gu, 0)}` : ""}${tag}`;
       if (w >= 22 || gu >= 28) bump("NO-GO", `Wind ~${desc}`);
       else if (w >= 17 || gu >= 24) bump("CAUTION", `Wind ~${desc}`);
       else if (w >= 15 || gu >= 20) bump("CAUTION", `Breezy ~${desc}`);
     }
-    else if (topWind >= 22) bump("NO-GO", `Wind/gusts ~${round(topWind)} kt${tag}`);
-    else if (topWind >= 17) bump("CAUTION", `Wind ~${round(topWind)} kt${tag}`);
-    else if (topWind >= 12) bump("CAUTION", `Breezy ~${round(topWind)} kt${tag}`);
-    else if (wv == null) reasons.push(`Wind ~${round(topWind)} kt${tag}, light`);
+    else if (topWind >= 22) bump("NO-GO", `Wind/gusts ~${round(topWind, 0)} kt${tag}`);
+    else if (topWind >= 17) bump("CAUTION", `Wind ~${round(topWind, 0)} kt${tag}`);
+    else if (topWind >= 12) bump("CAUTION", `Breezy ~${round(topWind, 0)} kt${tag}`);
+    else if (wv == null) reasons.push(`Wind ~${round(topWind, 0)} kt${tag}, light`);
   }
 
   // Wind DIRECTION on the lake's fetch — only matters once there's some wind.
@@ -1428,7 +1447,7 @@ function summaryTile(id, s, g, nowH) {
   const level = windKt == null && waveFt == null ? null : hourRisk(windKt, precipPct, thunder ? "thunderstorms" : "", waveFt, periodSec, waterProfile(s), { sustained: windKt, gust: gustKt });
   // lat/lon travel with each spot so the homepage can find the nearest launch
   // from a ZIP or the browser's location without a second request.
-  return { id, name: s.name, lake: s.lake || "Lake Erie", lat: s.lat, lon: s.lon, level, windKt, gustKt, dir, waveFt, periodSec };
+  return { id, name: s.name, lake: s.lake || "Lake Erie", lat: s.lat, lon: s.lon, level, windKt, gustKt, dir, waveFt, periodSec: plausiblePeriod(waveFt, periodSec) }; // level above used the raw period
 }
 
 // Lightweight GO/CAUTION/NO-GO + wind/wave for every spot, for the homepage
@@ -1468,8 +1487,53 @@ export async function fetchBuiltSummaries(env, slugs) {
   for (const slug of [...new Set(slugs)]) { const b = await getBuiltSpot(env, slug); if (b) resolved.push([slug, b]); }
   if (!resolved.length) return [];
   const grids = await pooled(resolved, 8, ([, s]) => fetchSpotGrid(s));
+  await floorWithMarineText(resolved, grids).catch(() => {}); // same nearshore wave floor as the directory
   const nowH = Math.floor(Date.now() / 3600000);
   return resolved.map(([id, s], i) => summaryTile(id, s, grids[i], nowH));
+}
+
+// 7-day outlook (same per-day verdicts as the spot page's week strip) for
+// specific ports, curated or user-built: { id: [{date, level, windKt, ...}] }.
+// Powers the Pro weekend-outlook email; only the requested ports are fetched.
+export async function fetchWeeks(env, ids) {
+  const entries = [];
+  for (const id of [...new Set(ids)]) {
+    if (SPOTS[id]) entries.push([id, SPOTS[id]]);
+    else { const b = await getBuiltSpot(env, id).catch(() => null); if (b) entries.push([id, b]); }
+  }
+  if (!entries.length) return {};
+  const grids = await pooled(entries, 8, ([, s]) => fetchSpotGrid(s));
+  await floorWithMarineText(entries, grids).catch(() => {});
+  // For the weekend email, a day only reads GO with wind data, and on lakes the
+  // gusts count (as the hour-by-hour strip does). Never more generous than the
+  // week strip; a day without wind data shows "—", not GO.
+  return Object.fromEntries(entries.map(([id, s], i) => {
+    const profile = waterProfile(s);
+    return [id, buildWeek(grids[i], profile).map((d) => {
+      if (d.windKt == null) return { ...d, level: null };
+      if (profile === "ocean") return d;
+      const top = Math.max(d.windKt, d.gustKt ?? -1);
+      const lvl = hourRisk(top, d.precipPct ?? 0, "", d.waveFt, d.periodSec, profile);
+      const rank = { GO: 0, CAUTION: 1, "NO-GO": 2 };
+      return { ...d, level: rank[lvl] > rank[d.level] ? lvl : d.level };
+    })];
+  }));
+}
+
+// The full spot-page verdict (alerts, gusts, buoy, nearshore text) for one
+// port, as the page computes it. The GO alert email re-checks with this before
+// sending, so an email never says GO when the page wouldn't. null on failure.
+export async function fetchSpotVerdict(env, id) {
+  const r = await onRequest({ request: new Request(`https://shouldiboat.com/marine/conditions?spot=${encodeURIComponent(id)}`), env }).catch(() => null);
+  if (!r || !r.ok) return null;
+  const d = await r.json().catch(() => null);
+  if (!d || !d.recommendation) return null;
+  const level = d.recommendation.level || null;
+  // An email may only say GO when nothing is missing: the alerts feed answered
+  // (a failed lookup isn't "no advisories"), and the current hour of the
+  // timeline (grid gusts, thunder, rain chance) agrees with the headline.
+  if (level === "GO" && (!d.alertsOk || d.outlook?.nowLevel !== "GO")) return "CAUTION";
+  return level;
 }
 
 // Today's best GO window for every port (for the daily digest email): per-spot
@@ -1616,8 +1680,9 @@ export async function onRequest(context) {
   const gridNowPeriod = hourly[0]?.periodSec ?? null;
   const textWaveFt = parseForecastWaves(marinePeriods) ?? null;
   const currentWaveFt = gridNowFt ?? textWaveFt;
+  const nowFt = buoy?.waveHeightFt ?? currentWaveFt ?? null;
   const waves = {
-    ft: buoy?.waveHeightFt ?? currentWaveFt ?? null,
+    ft: nowFt,
     periodSec: buoy?.dominantPeriodSec ?? gridNowPeriod ?? null,
     source: buoy?.waveHeightFt != null ? "buoy" : currentWaveFt != null ? "forecast" : null,
   };
@@ -1628,30 +1693,33 @@ export async function onRequest(context) {
   const waterTempF = buoy?.waterTempF ?? waterStation?.f ?? nshWaterTempF(noaaReport?.text, spot);
   const airTempF = buoy?.airTempF ?? hourly[0]?.tempF ?? null;
   const temps = {
-    waterF: waterTempF ?? null,
+    waterF: round(waterTempF, 0), // display; the verdict gets the unrounded value below
     waterSource: buoy?.waterTempF != null ? "buoy" : waterStation?.f != null ? `NDBC ${waterStation.station}` : waterTempF != null ? "NWS" : null,
-    airF: airTempF ?? null,
+    airF: round(airTempF, 0),
     airSource: buoy?.airTempF != null ? "buoy" : airTempF != null ? "NWS" : null,
   };
 
   const read = windReadFor(spot, wind.dir);
-  const recommendation = buildRecommendation({ buoy, alerts, wind, waves, read, hours: hourly, profile, waterF: temps.waterF });
+  const recommendation = buildRecommendation({ buoy, alerts, wind, waves, read, hours: hourly, profile, waterF: waterTempF ?? null });
 
+  // Display-only cleanup, AFTER every verdict above is computed from raw data.
+  const showPeriod = (ft, sec) => plausiblePeriod(ft, sec);
   return json({
     spot: { id: spotId, name: spot.name, zone: spot.zone, lat: spot.lat, lon: spot.lon, lake: spot.lake || "Lake Erie", adHoc: !!spot.adHoc, zoneName: spot.zoneName || null, built: !!spot.built, slug: spot.slug || null, featured: !!spot.featured },
     updatedAt: new Date().toISOString(),
     recommendation,
     wind,
-    waves,
+    waves: { ...waves, periodSec: showPeriod(waves.ft, waves.periodSec) },
     temps,
     windRead: read,
     facts: spotFacts(spot),
-    hourly,
+    hourly: hourly.map((h) => ({ ...h, periodSec: showPeriod(h.waveFt, h.periodSec) })),
     outlook,
-    week,
+    week: week.map((d) => ({ ...d, periodSec: showPeriod(d.waveFt, d.periodSec) })),
     sun,
     buoy,
     alerts: alerts || [],
+    alertsOk: alerts != null, // false = the NWS alerts feed failed (not "no alerts")
     marineForecast: marinePeriods,
     pointForecast: point || [],
     noaaReport,

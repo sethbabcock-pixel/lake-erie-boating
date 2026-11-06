@@ -130,6 +130,6 @@ export default {
   },
   // Hourly cron (wrangler.jsonc triggers): daily digest + NO-GO alert emails.
   async scheduled(event, env, ctx) {
-    ctx.waitUntil(runScheduled(env, new Date(event.scheduledTime).getUTCHours()).catch(() => {}));
+    ctx.waitUntil(runScheduled(env, new Date(event.scheduledTime).getUTCHours(), new Date(event.scheduledTime)).catch(() => {}));
   },
 };

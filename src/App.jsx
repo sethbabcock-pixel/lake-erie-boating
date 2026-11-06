@@ -4,6 +4,7 @@ import WxIcon from "./WxIcon.jsx";
 import { IconStar, IconCheck, IconClock, IconNoGo, IconAlert, IconSunrise, IconSunset, IconDoc, IconRefresh } from "./icons.jsx";
 import { useAdsense, useAnalytics, getConsent, updateConsentMode, AdSlot, GearBlock, ConsentBanner, StickyFooterAd, track } from "./monetize.jsx";
 import { useAuth, Account, AuthModal } from "./auth.jsx";
+import { UpgradeModal } from "./Pro.jsx";
 import Takeover from "./Takeover.jsx";
 import Landing from "./Landing.jsx";
 import { fmtWaves, waveFeel, compassToDeg } from "./units.js";
@@ -91,7 +92,8 @@ const WaveGlyph = () => (
 // One NWS nearshore period as icon + wind/wave chips + weather sentence.
 // Shared by the full forecast card and the week-ahead day panel.
 function MarinePeriodRow({ p }) {
-  const m = parseMarine(p.forecast);
+  // Belt and braces: strip an NWS "$$" product terminator from any source.
+  const m = parseMarine(String(p.forecast || "").split("$$")[0].trim());
   return (
     <div className="mrow">
       <div className="mrow-head"><WxIcon short={p.forecast} size={24} /><span className="mrow-name">{p.name}</span></div>
@@ -675,18 +677,25 @@ function HourStrip({ hours, headInBy }) {
               {h.gustKt ?? "—"}
             </div>
           ))}
-          {/* waves — Windy-style bands: one centered number per equal-height run.
-              "<1" reads as the calm it is, not as missing data. */}
+          {/* waves — Windy-style bands for equal-height runs, labeled at each
+              band's start and every 4 hours along it, so a long steady stretch
+              never scrolls by as a bare colored bar (waves are the number
+              boaters look for). "<1" reads as the calm it is, not missing data. */}
           <Label unit="ft">Waves</Label>
-          {hours.map((h, idx) => {
-            const b = waveBand[idx];
-            return (
-              <div key={h.time} className={cls(h, `hx-tint-${waveTint(h.waveFt)} hx-wb ${b.start ? "wb-s" : ""} ${b.end ? "wb-e" : ""}`)}
-                title={`${fmtHour(h.time)} · ${h.waveFt == null ? "no data" : `${h.waveFt} ft`}`}>
-                {b.mid ? <b>{h.waveFt == null ? "—" : h.waveFt < 1 ? "<1" : h.waveFt}</b> : null}
-              </div>
-            );
-          })}
+          {(() => {
+            let runStart = 0;
+            return hours.map((h, idx) => {
+              const b = waveBand[idx];
+              if (b.start) runStart = idx;
+              const show = (idx - runStart) % 4 === 0;
+              return (
+                <div key={h.time} className={cls(h, `hx-tint-${waveTint(h.waveFt)} hx-wb ${b.start ? "wb-s" : ""} ${b.end ? "wb-e" : ""}`)}
+                  title={`${fmtHour(h.time)} · ${h.waveFt == null ? "no data" : `${h.waveFt} ft`}`}>
+                  {show ? <b>{h.waveFt == null ? "—" : h.waveFt < 1 ? "<1" : h.waveFt}</b> : null}
+                </div>
+              );
+            });
+          })()}
           {/* period — some waters' NWS grids carry no wavePeriod layer at all
               (e.g. Chesapeake); a permanently blank row reads as broken, so
               only render it when at least one hour has data. Values stay
@@ -732,10 +741,8 @@ function MapCard({ spot }) {
   );
 }
 
-// Conversion gate: signed-out visitors get the verdict + current conditions
-// free; the full toolkit (hour-by-hour, cams, maps, forecasts) needs a free
-// account. The skeleton behind the card is decorative — gated data is simply
-// not rendered, so nothing leaks into the DOM.
+// Line icons for the signup nudge. (The whole toolkit is free; a free account
+// adds saved ports + the morning verdict and alert emails.)
 const GateIcon = ({ children }) => (
   <svg className="gate-ico" viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">{children}</svg>
 );
@@ -783,10 +790,16 @@ export default function App() {
   useAdsense(!adFree);
   useAnalytics(consent === "all");
 
-  const toggleFav = (id) => {
+  const [proPrompt, setProPrompt] = useState(null); // reason the Pro upgrade modal is open
+  const toggleFav = async (id) => {
     if (!auth.user) return;
     const f = auth.user.favorites || [];
-    auth.saveFavorites(f.includes(id) ? f.filter((x) => x !== id) : [...f, id]);
+    if (f.includes(id)) { auth.saveFavorites(f.filter((x) => x !== id)); return; }
+    // Free plan: check the limit up front so the star doesn't flicker on and off.
+    const limit = auth.user.limits && auth.user.limits.favorites;
+    if (limit && f.length >= limit) { setProPrompt("favorites"); return; }
+    const r = await auth.saveFavorites([...f, id]);
+    if (r && r.upgrade) setProPrompt("favorites");
   };
   // Sync prefs: apply the account's saved spot/theme once on sign-in; save on change.
   const appliedRef = useRef(false);
@@ -1052,7 +1065,7 @@ export default function App() {
       ) : (
       <>
       {/* FlightAware-style hero: sponsor takeover when sold, else house hero. */}
-      <Takeover adFree={adFree} spotName={activeName} verdict={rec?.level} signedIn={!gated} onJoin={() => setGateAuth("register")}
+      <Takeover adFree={adFree} spotName={activeName} verdict={rec?.level} signedIn={!gated} onJoin={() => setGateAuth("register")} authPending={auth.user === undefined}
         spot={spot && spot.adHoc && !spot.built ? null : active} region={sponsorRegion} />
 
       <main className="app">
@@ -1252,6 +1265,7 @@ export default function App() {
       {resetToken && <AuthModal auth={auth} initialMode="reset" resetToken={resetToken} onClose={() => setResetToken("")} />}
       {!resetToken && verifyToken && <AuthModal auth={auth} initialMode="verify" verifyToken={verifyToken} onClose={() => setVerifyToken("")} />}
       {!resetToken && !verifyToken && gateAuth && <AuthModal auth={auth} initialMode={gateAuth} spotId={!landing ? active : ""} onClose={() => setGateAuth(null)} />}
+      {proPrompt && auth.user && <UpgradeModal auth={auth} reason={proPrompt} onClose={() => setProPrompt(null)} />}
     </>
   );
 }

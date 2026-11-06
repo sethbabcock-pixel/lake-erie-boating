@@ -8,8 +8,8 @@ deploy rebuilds automatically).
 | Stream | Status | What to do |
 |---|---|---|
 | Display ads (AdSense) | Live; managed at `/admin#ads` with fill telemetry | Check the Ads health panel; confirm site is **Ready** in AdSense |
-| Affiliate (Amazon) | Wired; **tag empty** | Paste your Associates tag (below) |
-| Subscription (Stripe) | Live — $2.99/mo ad-free | Test a real checkout end-to-end |
+| Affiliate (Amazon) | Wired; tag `shouldiboat-20` set | Confirm it's your real Associates tag |
+| Subscription (Stripe) | **Pro** plan: monthly (+ optional yearly) | Create the Pro prices in Stripe, set the price IDs, test a real checkout |
 | Direct sponsorships | Wired (admin UI) | Sell a takeover, enter it at `/admin` |
 | Programmatic (GAM) | Wired; **network code empty** | Optional; paste the network code at `/admin#ads` |
 | Analytics (GA4) | Live (consent-gated) | Nothing — funnel events already fire |
@@ -96,11 +96,30 @@ rail. Empty = hidden.
 > sales. Don't hardcode prices — that violates the Operating Agreement. The gear
 > cards are built to accept live PA-API data once it's available.
 
-## 3. Stripe subscription — already live
+## 3. Stripe subscription — Pro plan
 
-The $2.99/mo ad-free plan is wired (`STRIPE_PRICE` in `functions/auth.js`).
-Before launch: run one real checkout to confirm the webhook flips the account to
-ad-free. Requires `STRIPE_SECRET_KEY` / webhook secret set as Worker secrets.
+One paid plan, **Pro**. Safety information is never paywalled: verdicts, the
+week ahead, the daily digest and NO-GO alerts stay free. Pro adds:
+
+- **No display ads** (local sponsor banners still show unless the campaign is set to hide from subscribers)
+- **Unlimited starred ports** (free: 3; members over the limit keep what they have)
+- **GO alerts**: email when a starred port turns GO mid-day (`prefs.goAlerts`)
+- **Weekend outlook**: Thursday 22:00 UTC email with Sat/Sun per port (`prefs.weekendEmail`)
+
+Prices are read live from Stripe (`GET /api/plans`), so the site always shows
+what Checkout will charge. To set or change pricing:
+
+1. In Stripe, create a **Pro** product with a monthly recurring price (suggested
+   $4.99) and, optionally, a yearly one (suggested $29.99).
+2. Set Worker secrets/vars `STRIPE_PRICE_ID` (monthly) and
+   `STRIPE_PRICE_ID_YEARLY` (yearly; unset = monthly only). With no
+   `STRIPE_PRICE_ID`, the original $2.99/mo price in `functions/auth.js` is used.
+3. Existing $2.99 subscribers keep their price and get every Pro feature.
+4. Check **/admin → System**: both prices should show green.
+5. Run one real checkout to confirm the webhook flips the account to Pro.
+
+The entitlement flag is still `adFree` on the user record (`isPro()` in
+`functions/auth.js`), so no migration is needed.
 
 ## 4. Direct sponsorships — `/admin` (no code)
 

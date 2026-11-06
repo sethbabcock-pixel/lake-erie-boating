@@ -212,7 +212,10 @@ export default function Cams({ lat, lon, spotName, lake }) {
     return (
       <section className="card">
         <div className="card-head"><h2>Live cams</h2></div>
-        <div className="camloading"><span className="spinner" />finding live cams…</div>
+        {/* Inside a sized .camwrap: reserves the player's 16:9 space and keeps the
+            absolutely-positioned spinner in the card (it once anchored to the
+            viewport, and React reused that node, scoring a full-screen layout shift). */}
+        <div className="camwrap" key="cam-pending"><div className="camloading"><span className="spinner" />finding live cams…</div></div>
       </section>
     );
   }
