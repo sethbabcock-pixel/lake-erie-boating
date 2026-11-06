@@ -145,13 +145,15 @@ async function seedUser(env, email, extra = {}) {
   return `sib_session=${token}`;
 }
 
-function stripeWebhookReq(eventObj, secret, { skewSeconds = 0 } = {}) {
+// `secrets` may be an array to mimic webhook-secret rotation, where Stripe
+// sends one `v1=` per active secret. `scheme` swaps the signature key (e.g. v0).
+function stripeWebhookReq(eventObj, secret, { skewSeconds = 0, scheme = "v1" } = {}) {
   const payload = JSON.stringify(eventObj);
   const t = Math.floor(Date.now() / 1000) + skewSeconds;
-  const sig = createHmac("sha256", secret).update(`${t}.${payload}`).digest("hex");
+  const sigs = [].concat(secret).map((s) => `${scheme}=${createHmac("sha256", s).update(`${t}.${payload}`).digest("hex")}`);
   const request = new Request(ORIGIN + "/stripe/webhook", {
     method: "POST",
-    headers: { "Stripe-Signature": `t=${t},v1=${sig}`, "Content-Type": "application/json" },
+    headers: { "Stripe-Signature": `t=${t},${sigs.join(",")}`, "Content-Type": "application/json" },
     body: payload,
   });
   return { request, url: new URL(ORIGIN + "/stripe/webhook") };
@@ -217,7 +219,7 @@ async function run() {
     await seedUser(env, "buyer@example.com");
     const evt = {
       type: "checkout.session.completed",
-      data: { object: { mode: "subscription", client_reference_id: "buyer@example.com", customer: "cus_123", subscription: "sub_123" } },
+      data: { object: { mode: "subscription", payment_status: "paid", metadata: { purpose: "adfree" }, client_reference_id: "buyer@example.com", customer: "cus_123", subscription: "sub_123" } },
     };
     const r = await call(stripeWebhookReq(evt, "whsec_right"), env);
     eq("webhook: completed → 200", r.status, 200);
@@ -262,6 +264,110 @@ async function run() {
     check("webhook: other-purpose subscription does not grant ad-free", !u.adFree);
   }
 
+  // 6d2. An untagged subscription checkout is ignored (purpose=adfree is required)
+  {
+    const env = { USERS: makeKV(), STRIPE_WEBHOOK_SECRET: "whsec_right", BREVO_API_KEY: "brevo_x" };
+    await seedUser(env, "untagged@example.com");
+    emailCalls = [];
+    const evt = { type: "checkout.session.completed", data: { object: { mode: "subscription", payment_status: "paid", subscription: "sub_u", customer: "cus_u", client_reference_id: "untagged@example.com" } } };
+    const r = await call(stripeWebhookReq(evt, "whsec_right"), env);
+    eq("webhook: untagged subscription → 200", r.status, 200);
+    const u = await env.USERS.get("user:untagged@example.com", "json");
+    check("webhook: untagged subscription does not grant ad-free", !u.adFree);
+    check("webhook: untagged subscription stores no stripeSubId", !u.stripeSubId);
+    check("webhook: untagged subscription writes no reverse index", !(await env.USERS.get("stripecust:cus_u")));
+    check("webhook: untagged subscription sends no welcome email", !emailCalls.some((c) => /Welcome to shouldiboat Pro/i.test(c.subject)));
+  }
+
+  // 6d3. Async payment (ACH/SEPA): `completed` arrives unpaid → no grant; the
+  // grant waits for `async_payment_succeeded`. A failed async payment grants nothing.
+  {
+    const env = { USERS: makeKV(), STRIPE_WEBHOOK_SECRET: "whsec_right", BREVO_API_KEY: "brevo_x" };
+    await seedUser(env, "ach@example.com");
+    emailCalls = [];
+    const session = { mode: "subscription", metadata: { purpose: "adfree" }, subscription: "sub_ach", customer: "cus_ach", client_reference_id: "ach@example.com" };
+    const unpaid = { type: "checkout.session.completed", data: { object: { ...session, payment_status: "unpaid" } } };
+    eq("webhook: unpaid completed → 200", (await call(stripeWebhookReq(unpaid, "whsec_right"), env)).status, 200);
+    let u = await env.USERS.get("user:ach@example.com", "json");
+    check("webhook: unpaid completed does not grant ad-free", !u.adFree);
+    check("webhook: unpaid completed stores no stripeSubId", !u.stripeSubId);
+    check("webhook: unpaid completed sends no welcome email", !emailCalls.some((c) => /Welcome to shouldiboat Pro/i.test(c.subject)));
+    const failed = { type: "checkout.session.async_payment_failed", data: { object: { ...session, payment_status: "unpaid" } } };
+    await call(stripeWebhookReq(failed, "whsec_right"), env);
+    check("webhook: async_payment_failed does not grant ad-free", !(await env.USERS.get("user:ach@example.com", "json")).adFree);
+    const succeeded = { type: "checkout.session.async_payment_succeeded", data: { object: { ...session, payment_status: "paid" } } };
+    eq("webhook: async_payment_succeeded → 200", (await call(stripeWebhookReq(succeeded, "whsec_right"), env)).status, 200);
+    u = await env.USERS.get("user:ach@example.com", "json");
+    eq("webhook: async_payment_succeeded grants ad-free", u.adFree, true);
+    eq("webhook: async_payment_succeeded stores stripeSubId", u.stripeSubId, "sub_ach");
+    eq("webhook: async_payment_succeeded writes reverse index", await env.USERS.get("stripecust:cus_ach"), "ach@example.com");
+    check("webhook: async_payment_succeeded sends welcome email", emailCalls.some((c) => /Welcome to shouldiboat Pro/i.test(c.subject)));
+    // A forged/odd async success for an untagged or one-time session still grants nothing.
+    await seedUser(env, "achmerch@example.com");
+    const merch = { type: "checkout.session.async_payment_succeeded", data: { object: { mode: "payment", payment_status: "paid", metadata: { purpose: "merch" }, subscription: null, client_reference_id: "achmerch@example.com" } } };
+    await call(stripeWebhookReq(merch, "whsec_right"), env);
+    check("webhook: async success for merch does not grant ad-free", !(await env.USERS.get("user:achmerch@example.com", "json")).adFree);
+  }
+
+  // 6d4. payment_status=no_payment_required (e.g. a free trial / 100% coupon) grants
+  {
+    const env = { USERS: makeKV(), STRIPE_WEBHOOK_SECRET: "whsec_right" };
+    await seedUser(env, "trial@example.com");
+    const evt = { type: "checkout.session.completed", data: { object: { mode: "subscription", payment_status: "no_payment_required", metadata: { purpose: "adfree" }, subscription: "sub_t", customer: "cus_t", client_reference_id: "trial@example.com" } } };
+    await call(stripeWebhookReq(evt, "whsec_right"), env);
+    eq("webhook: no_payment_required grants ad-free", (await env.USERS.get("user:trial@example.com", "json")).adFree, true);
+    await seedUser(env, "nostatus@example.com");
+    const evt2 = { type: "checkout.session.completed", data: { object: { mode: "subscription", metadata: { purpose: "adfree" }, subscription: "sub_n", client_reference_id: "nostatus@example.com" } } };
+    await call(stripeWebhookReq(evt2, "whsec_right"), env);
+    check("webhook: missing payment_status does not grant ad-free", !(await env.USERS.get("user:nostatus@example.com", "json")).adFree);
+  }
+
+  // 6d5. Secret rotation: several v1 signatures — accept if ANY matches
+  {
+    const env = { USERS: makeKV(), STRIPE_WEBHOOK_SECRET: "whsec_new" };
+    await seedUser(env, "rot@example.com");
+    const evt = { type: "checkout.session.completed", data: { object: { mode: "subscription", payment_status: "paid", metadata: { purpose: "adfree" }, subscription: "sub_r", customer: "cus_r", client_reference_id: "rot@example.com" } } };
+    // Matching signature first, then last — the old code kept only the last v1.
+    eq("webhook: rotation (match first) → 200", (await call(stripeWebhookReq(evt, ["whsec_new", "whsec_old"]), env)).status, 200);
+    eq("webhook: rotation (match last) → 200", (await call(stripeWebhookReq(evt, ["whsec_old", "whsec_new"]), env)).status, 200);
+    eq("webhook: rotation grants ad-free", (await env.USERS.get("user:rot@example.com", "json")).adFree, true);
+    await seedUser(env, "rot2@example.com");
+    const evt2 = { ...evt, data: { object: { ...evt.data.object, client_reference_id: "rot2@example.com" } } };
+    eq("webhook: rotation (none match) → 400", (await call(stripeWebhookReq(evt2, ["whsec_old", "whsec_older"]), env)).status, 400);
+    eq("webhook: v0-only signature → 400", (await call(stripeWebhookReq(evt2, "whsec_new", { scheme: "v0" }), env)).status, 400);
+    check("webhook: rejected rotations grant nothing", !(await env.USERS.get("user:rot2@example.com", "json")).adFree);
+  }
+
+  // 6d6. Malformed signature headers: duplicate t=, or more than 8 v1 values
+  {
+    const env = { USERS: makeKV(), STRIPE_WEBHOOK_SECRET: "whsec_right" };
+    await seedUser(env, "hdr@example.com");
+    const evt = { type: "checkout.session.completed", data: { object: { mode: "subscription", payment_status: "paid", metadata: { purpose: "adfree" }, subscription: "sub_h", client_reference_id: "hdr@example.com" } } };
+    const payload = JSON.stringify(evt);
+    const t = Math.floor(Date.now() / 1000);
+    const good = createHmac("sha256", "whsec_right").update(`${t}.${payload}`).digest("hex");
+    const mk = (hdr) => ({ request: new Request(ORIGIN + "/stripe/webhook", { method: "POST", headers: { "Stripe-Signature": hdr, "Content-Type": "application/json" }, body: payload }), url: new URL(ORIGIN + "/stripe/webhook") });
+    eq("webhook: duplicate t= → 400", (await call(mk(`t=${t},t=${t},v1=${good}`), env)).status, 400);
+    const many = Array.from({ length: 8 }, (_, i) => `v1=${"0".repeat(63)}${i}`).join(",");
+    eq("webhook: >8 v1 values → 400", (await call(mk(`t=${t},${many},v1=${good}`), env)).status, 400);
+    check("webhook: malformed headers grant nothing", !(await env.USERS.get("user:hdr@example.com", "json")).adFree);
+  }
+
+  // 6d7. Legacy user (no stripeSubId): a TAGGED subscription.updated must match a
+  // stored id, so a new unpaid ACH subscription going active can't grant early.
+  // Untagged (legacy) subscription events still use the customer fallback.
+  {
+    const env = { USERS: makeKV(), STRIPE_WEBHOOK_SECRET: "whsec_right" };
+    await seedUser(env, "legacy@example.com", { adFree: false, stripeCustomerId: "cus_l" });
+    await env.USERS.put("stripecust:cus_l", "legacy@example.com");
+    const tagged = { type: "customer.subscription.updated", data: { object: { id: "sub_new", customer: "cus_l", status: "active", metadata: { purpose: "adfree" } } } };
+    await call(stripeWebhookReq(tagged, "whsec_right"), env);
+    check("webhook: legacy user + tagged unmatched sub does not grant", !(await env.USERS.get("user:legacy@example.com", "json")).adFree);
+    const untagged = { type: "customer.subscription.updated", data: { object: { id: "sub_old", customer: "cus_l", status: "active" } } };
+    await call(stripeWebhookReq(untagged, "whsec_right"), env);
+    eq("webhook: legacy user + untagged sub uses fallback", (await env.USERS.get("user:legacy@example.com", "json")).adFree, true);
+  }
+
   // 6e. Deleting a different subscription on the same customer keeps ad-free
   {
     const env = { USERS: makeKV(), STRIPE_WEBHOOK_SECRET: "whsec_right" };
@@ -279,7 +385,7 @@ async function run() {
   {
     const env = { USERS: makeKV() };
     await seedUser(env, "forge@example.com");
-    const evt = { type: "checkout.session.completed", data: { object: { mode: "subscription", subscription: "sub_f", client_reference_id: "forge@example.com" } } };
+    const evt = { type: "checkout.session.completed", data: { object: { mode: "subscription", payment_status: "paid", metadata: { purpose: "adfree" }, subscription: "sub_f", client_reference_id: "forge@example.com" } } };
     const r = await call(stripeWebhookReq(evt, ""), env);
     eq("webhook: missing secret → 503", r.status, 503);
     check("webhook: missing secret grants nothing", !(await env.USERS.get("user:forge@example.com", "json")).adFree);
@@ -706,7 +812,7 @@ async function run() {
     const env = { USERS: makeKV(), STRIPE_WEBHOOK_SECRET: "whsec_right", BREVO_API_KEY: "brevo_x" };
     await seedUser(env, "newpaid@example.com");
     emailCalls = [];
-    const evt = { type: "checkout.session.completed", data: { object: { mode: "subscription", client_reference_id: "newpaid@example.com", customer: "cus_9", subscription: "sub_9" } } };
+    const evt = { type: "checkout.session.completed", data: { object: { mode: "subscription", payment_status: "paid", metadata: { purpose: "adfree" }, client_reference_id: "newpaid@example.com", customer: "cus_9", subscription: "sub_9" } } };
     await call(stripeWebhookReq(evt, "whsec_right"), env);
     check("webhook: sends Pro welcome email", emailCalls.some((c) => /Welcome to shouldiboat Pro/i.test(c.subject)), JSON.stringify(emailCalls.map((c) => c.subject)));
     const notifs = [...env.USERS._map.keys()].filter((k) => k.startsWith("admin:notification:")).map((k) => JSON.parse(env.USERS._map.get(k)));
