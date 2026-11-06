@@ -5,10 +5,12 @@ import { track } from "./monetize.jsx";
 // Pro plan UI, shared by the account page, the account menu and the
 // starred-port limit prompt. Prices come live from Stripe via /api/plans, so
 // the site never shows a price Checkout won't charge. Safety info stays free:
-// Pro is convenience (no ads, more ports, smarter emails), never the verdict.
+// Pro is convenience (no Google ads, more ports, smarter emails), never the verdict.
 
 export const PRO_FEATURES = [
-  { k: "ads", t: "No ads", d: "No display ads anywhere on the site." },
+  // Pro removes Google display ads. Direct local sponsor banners (always
+  // labeled) can still appear: say so, never promise "no ads" outright.
+  { k: "ads", t: "No Google ads", d: "No Google display ads anywhere on the site. Local sponsor banners, always labeled, may still appear." },
   { k: "ports", t: "Unlimited starred ports", d: "Free accounts can star 3." },
   { k: "go", t: "GO alerts", d: "An email the moment a starred port turns GO." },
   { k: "weekend", t: "Weekend outlook", d: "Every Thursday: Saturday and Sunday at your ports." },

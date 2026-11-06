@@ -113,7 +113,7 @@ function getCookie(request, name) {
 // One paid plan. The stored entitlement flag stays `adFree` (every existing
 // subscriber already has it, and the webhook sets it), so "Pro" = adFree. Safety
 // information is never paywalled: verdicts, the week ahead, the daily digest and
-// NO-GO alerts stay free. Pro adds convenience: no ads, unlimited starred ports,
+// NO-GO alerts stay free. Pro adds convenience: no Google ads, unlimited starred ports,
 // GO alerts (a starred port turns GO mid-day) and the Thursday weekend outlook.
 export const FREE_FAVORITES_MAX = 3;
 export const PRO_PREFS = ["goAlerts", "weekendEmail"]; // prefs only Pro members can switch on
@@ -281,6 +281,31 @@ async function stripeSubLive(env, subId, { invoice = false } = {}) {
     return null;
   }
 }
+// Another live, paid ad-free subscription on this customer (not `excludeId`)?
+// Used when the recorded one ends, so a user paying for two isn't cut off.
+// → { id } (another qualifying sub), { id: null } (none), or null when
+// Stripe can't answer (callers retry, then fall back to revoking).
+async function stripeOtherLiveAdfreeSub(env, customer, excludeId) {
+  if (!customer) return { id: null };
+  try {
+    const q = `customer=${encodeURIComponent(customer)}&status=all&limit=20&expand[]=data.latest_invoice`;
+    const r = await fetch(`https://api.stripe.com/v1/subscriptions?${q}`, {
+      headers: { Authorization: `Bearer ${env.STRIPE_SECRET_KEY}` },
+      signal: AbortSignal.timeout(8000),
+    });
+    if (!r.ok) return null;
+    const list = await r.json();
+    const subs = Array.isArray(list?.data) ? list.data : [];
+    const hit = subs.find((s) => s && s.id && s.id !== excludeId
+      && (s.customer === customer || s.customer?.id === customer)
+      && s.metadata?.purpose === "adfree"
+      && (s.status === "active" || s.status === "trialing")
+      && s.latest_invoice && typeof s.latest_invoice === "object" && s.latest_invoice.status === "paid");
+    return { id: hit ? hit.id : null };
+  } catch (e) {
+    return null;
+  }
+}
 async function stripeDELETE(env, path) {
   const r = await fetch(`https://api.stripe.com/v1/${path}`, {
     method: "DELETE",
@@ -385,8 +410,8 @@ async function adminEmails(env) {
 // Footer for non-essential (relationship/marketing) email only — NOT for
 // transactional mail like verification, password reset, or receipts.
 export const emailFooter = (unsubUrl) => unsubUrl ? `<p style="color:#99a;font-size:12px;margin-top:24px;font-family:system-ui,sans-serif">You're receiving this because you have a shouldiboat.com account. <a href="${unsubUrl}" style="color:#99a">Unsubscribe from non-essential emails</a>.</p>` : "";
-const welcomeHtml = (unsubUrl) => `<div style="font-family:system-ui,sans-serif"><h2>Welcome aboard</h2><p>Thanks for joining <b>shouldiboat.com</b>, your quick GO / CAUTION / NO-GO call for boating conditions.</p><ul><li>Save your favorite launch spots</li><li>Set comfort limits tuned to your boat</li><li>Go Pro anytime: no ads, unlimited ports, GO alerts, and a weekend outlook email</li></ul><p><a href="https://shouldiboat.com" style="display:inline-block;background:#008BA8;color:#fff;padding:10px 18px;border-radius:8px;text-decoration:none">Open shouldiboat.com</a></p></div>${emailFooter(unsubUrl)}`;
-const adFreeHtml = () => `<div style="font-family:system-ui,sans-serif"><h2>Welcome to Pro</h2><p>Thanks for supporting shouldiboat.com. Your Pro plan is active:</p><ul><li><b>No display ads</b>, anywhere on the site</li><li><b>Unlimited starred ports</b></li><li><b>GO alerts</b>: an email when a starred port turns GO during the day</li><li><b>Weekend outlook</b>: every Thursday, Saturday and Sunday at your ports</li></ul><p>Switch the alerts on in your <a href="https://shouldiboat.com/account">account</a>, where you can also manage or cancel anytime.</p></div>`;
+const welcomeHtml = (unsubUrl) => `<div style="font-family:system-ui,sans-serif"><h2>Welcome aboard</h2><p>Thanks for joining <b>shouldiboat.com</b>, your quick GO / CAUTION / NO-GO call for boating conditions.</p><ul><li>Save your favorite launch spots</li><li>Set comfort limits tuned to your boat</li><li>Go Pro anytime: no Google ads, unlimited ports, GO alerts, and a weekend outlook email</li></ul><p><a href="https://shouldiboat.com" style="display:inline-block;background:#008BA8;color:#fff;padding:10px 18px;border-radius:8px;text-decoration:none">Open shouldiboat.com</a></p></div>${emailFooter(unsubUrl)}`;
+const adFreeHtml = () => `<div style="font-family:system-ui,sans-serif"><h2>Welcome to Pro</h2><p>Thanks for supporting shouldiboat.com. Your Pro plan is active:</p><ul><li><b>No Google display ads</b> anywhere on the site (local sponsor banners, always labeled, may still appear)</li><li><b>Unlimited starred ports</b></li><li><b>GO alerts</b>: an email when a starred port turns GO during the day</li><li><b>Weekend outlook</b>: every Thursday, Saturday and Sunday at your ports</li></ul><p>Switch the alerts on in your <a href="https://shouldiboat.com/account">account</a>, where you can also manage or cancel anytime.</p></div>`;
 const verifyHtml = (link) => `<div style="font-family:system-ui,-apple-system,sans-serif;max-width:520px;color:#1a2b38">
   <h2 style="margin:0 0 10px">Confirm your email address</h2>
   <p style="line-height:1.55;margin:0 0 14px">Thanks for creating a <b>shouldiboat.com</b> account, the quick GO / CAUTION / NO-GO call for boating conditions. To finish setting up your account, please confirm this is your email address.</p>
@@ -1443,6 +1468,37 @@ export async function handleAuth(request, env, url, ctx) {
           const live = await stripeSubLive(env, obj.id);
           if (live === null) return json({ error: "Could not confirm subscription with Stripe; retry later." }, 503);
           active = ["active", "trialing", "past_due"].includes(live.status);
+        }
+        // The recorded sub ended while the user was ad-free. If they're still
+        // paying for another tagged, live, paid ad-free sub on the same
+        // customer (e.g. two checkouts from two tabs), switch to it instead of
+        // revoking, and tell the admins: a double subscription is a billing
+        // issue (refund/cancel one).
+        // If Stripe can't answer, return 503 so Stripe retries rather than cut
+        // off a user who may still be paying. Stripe stops retrying after ~3
+        // days, so this is bounded: once the lookup has been failing for this
+        // event for 24h, revoke anyway (safe direction; the other sub's next
+        // `updated` re-adopts it).
+        if (!active && user.adFree && user.stripeSubId && user.stripeSubId === obj.id) {
+          const found = await stripeOtherLiveAdfreeSub(env, obj.customer, obj.id);
+          let other = found ? found.id : null;
+          if (found === null && evtKey) {
+            const failKey = `stripeevtfail:${event.id}`;
+            const firstFail = Number(await env.USERS.get(failKey)) || 0;
+            if (!firstFail) await env.USERS.put(failKey, String(Date.now()), { expirationTtl: 7 * 86400 });
+            if (!firstFail || Date.now() - firstFail < 24 * 3600e3) {
+              return json({ error: "Could not check other subscriptions with Stripe; retry later." }, 503);
+            }
+          }
+          if (other) {
+            await setAdFree(email, true, { stripeSubId: other });
+            await runBg(ctx, notify(env, "double_subscription", { email, customer: obj.customer, ended: obj.id, now: other }, {
+              to: await adminEmails(env), subject: "Double Pro subscription · shouldiboat.com",
+              html: `<div style="font-family:system-ui,sans-serif"><p><b>${htmlEscape(email)}</b> had two Pro subscriptions on customer <code>${htmlEscape(String(obj.customer))}</code>. <code>${htmlEscape(String(obj.id))}</code> ended; ad-free now follows <code>${htmlEscape(other)}</code>. Check whether a refund is owed.</p></div>`,
+              ttlDays: 30,
+            }));
+            return done();
+          }
         }
         await setAdFree(email, active);
       } else if (user && event.type === "customer.subscription.updated" && purpose === "adfree" && obj.id

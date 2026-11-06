@@ -398,6 +398,10 @@ const GUIDES = [
   "boating-lake-huron",
   "boating-lake-ontario",
   "boating-hawaii",
+  "boating-puerto-rico",
+  "anchoring-basics",
+  "launching-and-retrieving-at-the-ramp",
+  "man-overboard",
 ];
 
 // Date the page templates / on-page content last changed materially. Google
