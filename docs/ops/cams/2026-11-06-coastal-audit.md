@@ -41,3 +41,23 @@ Other leads:
 - **Santa Barbara:** the city HarborCam.
 
 The WebCOOS cameras are NOAA-funded snapshot cams, the best fit for our `img` type. Ask WebCOOS (SECOORA / Axiom) about a public image URL. The owner sends that request.
+
+## Update — visual frame check (later on 2026-11-06)
+With YouTube thumbnails and Windy previews now reachable, every shipped coastal cam's current frame was checked by eye.
+- **Pulled 15 cams** (sethbabcock-pixel/lake-erie-boating#83). Reasons:
+  - Frames frozen since 2024–2026: Middle River, Seal Beach, Oceanside ×2, Channel Islands wildlife.
+  - No water in view or a street scene: Sanibel, Fort Myers Beach Margaritaville, Galveston seawall surf, South Padre Laguna Madre.
+  - Broadcast down: Murrells Inlet WPDE.
+  - No live frame: Ponce NE, Port Aransas, Okaloosa, Dana Point ×2.
+- **Added 3 cams**, each live today with water in view: Havre de Grace (upper Chesapeake), Baltimore shipping channel (StreamTime), Myrtle Beach oceanfront.
+- **The water-only Windy fallback** now fills 7 spots with real water cams, all checked visually: St. Simons, Tybee, Hilton Head, Charleston, Wrightsville, Morehead City, Honolulu.
+
+**Live coverage:** curated 36 coastal cams. Spots with no cam at all: Fort Pierce, Marco Island, Naples, Fort Myers Beach, Biloxi, Grand Isle, Port Aransas, Newport Beach, Long Beach, Bath NC, Harbor Beach.
+
+**Why they're empty:** each was searched. They have only EarthCam, Skyline or HDOnTap cams (not allowed), Ozolio cams without a public embed id, WebCOOS cams behind authentication, or streams that have ended.
+
+**Next steps (owner sends outreach):**
+- Ask Visit St. Lucie (Fort Pierce jetty), Bath Harbor, and Express Watersports in Murrells Inlet (Ozolio EQPH00001687) for an embed.
+- Ask WebCOOS/SECOORA for public image URLs. That covers UTMSI Port Aransas, Charleston and Beaufort.
+
+**Note for the curator:** an `*_live.jpg` thumbnail can exist for a dead stream. Trust an on-screen timestamp, or the frame itself, over the HTTP status.
