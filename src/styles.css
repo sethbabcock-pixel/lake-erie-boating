@@ -1173,3 +1173,37 @@ body.has-takeover .app { background: var(--bg); border-radius: var(--r-lg) var(-
 .plan-actions .cbtn { width: 100%; max-width: 360px; min-height: 46px; font-weight: var(--fw-bold); }
 .plan-actions .pro-fine { text-align: center; }
 @media (max-width: 560px) { .plan-compare { grid-template-columns: 1fr; } }
+
+/* ── UX batch 2 ─────────────────────────────────────────────────────────── */
+/* Homepage: "Near me" + the returning visitor's port, right under search. */
+.splash-quick { display: flex; flex-wrap: wrap; gap: var(--s2); margin-top: var(--s3); }
+.splash-near, .splash-home { display: inline-flex; align-items: center; gap: var(--s2); min-height: 44px; padding: 0 16px;
+  border-radius: var(--r-pill); border: 1px solid rgba(255,255,255,0.35); background: rgba(7,24,43,0.55); color: #fff;
+  font: inherit; font-size: var(--fs-sm); font-weight: var(--fw-semibold); cursor: pointer; -webkit-backdrop-filter: blur(4px); backdrop-filter: blur(4px); }
+.splash-near:hover, .splash-home:hover { border-color: #7fe3ff; }
+.splash-near:disabled { opacity: .6; cursor: default; }
+.splash-home { min-width: 0; max-width: 100%; padding-left: 8px; }
+.splash-home-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.splash-home-nums { color: rgba(255,255,255,0.75); font-weight: var(--fw-medium); white-space: nowrap; }
+
+/* Compact signup button label (phones show the short one). */
+.sb-short { display: none; }
+
+/* Today at a glance: real tap targets (was 18px tall). */
+.glance-band { height: 32px; }
+.glance-band .gb:hover { transform: none; opacity: 1; }
+
+@media (max-width: 620px) {
+  /* One compact "Sign up" beside the picker instead of a full-width two-button
+     row: ~52px more of the verdict above the fold. */
+  .controls .auth-ctas { flex: 0 0 auto; width: auto; }
+  .auth-ctas .signin-btn.ghost { display: none; }
+  .auth-ctas .signin-btn { flex: 0 0 auto; padding: 0 14px; }
+  .sb-long { display: none; }
+  .sb-short { display: inline; }
+  .splash-home-nums { display: none; }
+}
+@media (max-width: 640px) {
+  /* Spot-page hero: a tighter title band on phones. */
+  .hero-house:not(.hero-splash) .hero-inner, .hero-house.has-photo:not(.hero-splash) .hero-inner { padding-top: var(--s4); padding-bottom: var(--s4); }
+}

@@ -677,18 +677,25 @@ function HourStrip({ hours, headInBy }) {
               {h.gustKt ?? "—"}
             </div>
           ))}
-          {/* waves — Windy-style bands: one centered number per equal-height run.
-              "<1" reads as the calm it is, not as missing data. */}
+          {/* waves — Windy-style bands for equal-height runs, labeled at each
+              band's start and every 4 hours along it, so a long steady stretch
+              never scrolls by as a bare colored bar (waves are the number
+              boaters look for). "<1" reads as the calm it is, not missing data. */}
           <Label unit="ft">Waves</Label>
-          {hours.map((h, idx) => {
-            const b = waveBand[idx];
-            return (
-              <div key={h.time} className={cls(h, `hx-tint-${waveTint(h.waveFt)} hx-wb ${b.start ? "wb-s" : ""} ${b.end ? "wb-e" : ""}`)}
-                title={`${fmtHour(h.time)} · ${h.waveFt == null ? "no data" : `${h.waveFt} ft`}`}>
-                {b.mid ? <b>{h.waveFt == null ? "—" : h.waveFt < 1 ? "<1" : h.waveFt}</b> : null}
-              </div>
-            );
-          })}
+          {(() => {
+            let runStart = 0;
+            return hours.map((h, idx) => {
+              const b = waveBand[idx];
+              if (b.start) runStart = idx;
+              const show = (idx - runStart) % 4 === 0;
+              return (
+                <div key={h.time} className={cls(h, `hx-tint-${waveTint(h.waveFt)} hx-wb ${b.start ? "wb-s" : ""} ${b.end ? "wb-e" : ""}`)}
+                  title={`${fmtHour(h.time)} · ${h.waveFt == null ? "no data" : `${h.waveFt} ft`}`}>
+                  {show ? <b>{h.waveFt == null ? "—" : h.waveFt < 1 ? "<1" : h.waveFt}</b> : null}
+                </div>
+              );
+            });
+          })()}
           {/* period — some waters' NWS grids carry no wavePeriod layer at all
               (e.g. Chesapeake); a permanently blank row reads as broken, so
               only render it when at least one hour has data. Values stay

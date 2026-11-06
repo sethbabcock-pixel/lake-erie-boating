@@ -283,7 +283,7 @@ export function Account({ auth }) {
     return (
       <div className="auth-ctas auth-pending" aria-hidden="true">
         <span className="signin-btn ghost">Sign in</span>
-        <span className="signin-btn">Sign up free</span>
+        <span className="signin-btn"><span className="sb-long">Sign up free</span><span className="sb-short">Sign up</span></span>
       </div>
     );
   }
@@ -294,7 +294,9 @@ export function Account({ auth }) {
       <>
         <div className="auth-ctas">
           <button className="signin-btn ghost" onClick={() => openAuth("login")}>Sign in</button>
-          <button className="signin-btn" onClick={() => openAuth("register")}>Sign up free</button>
+          {/* Phones show only this one, compact, beside the picker; the signup
+              modal links to Sign in for returning boaters. */}
+          <button className="signin-btn" onClick={() => openAuth("register")}><span className="sb-long">Sign up free</span><span className="sb-short">Sign up</span></button>
         </div>
         {modal && <AuthModal key={authMode} auth={auth} initialMode={authMode} onClose={() => setModal(false)} />}
       </>

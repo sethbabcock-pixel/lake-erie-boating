@@ -98,6 +98,10 @@ function SplashSearch({ summary, favorites, onSelect, onPreview, onRequest, onLo
     : [];
   const favCards = (favorites || []).map((id) => (summary || []).find((x) => x.id === id)).filter(Boolean).slice(0, 4);
   const canBuild = ql.length >= 2;
+  // Returning visitor: their home port (first star) or the last spot they
+  // opened, with its live verdict, one tap from the fold.
+  const homeId = (favorites || [])[0] || (() => { try { return localStorage.getItem("boating.spot"); } catch (e) { return null; } })();
+  const home = homeId ? (summary || []).find((s) => s.id === homeId) : null;
 
   useEffect(() => {
     if (!focused) return;
@@ -172,7 +176,17 @@ function SplashSearch({ summary, favorites, onSelect, onPreview, onRequest, onLo
           placeholder="Search a lake, town, marina, or ZIP…" />
         <button className="splash-go" type="submit" disabled={busy}>{busy ? "…" : "Search"}</button>
       </form>
-      <p className="splash-hint">Jump to any covered spot, or build a live NOAA page for any coast, lake, bay, or river.</p>
+      <div className="splash-quick">
+        <button type="button" className="splash-near" onClick={useMyLocation} disabled={busy}>📍 Near me</button>
+        {home && (
+          <button type="button" className="splash-home" onClick={() => onSelect(home.id)} title={`Open ${home.name}`}>
+            <StatusChip level={home.level} />
+            <span className="splash-home-name">{home.name}</span>
+            <span className="splash-home-nums">{[home.windKt != null ? `${home.windKt} kt` : null, home.waveFt != null ? fmtWaves(home.waveFt) : null].filter(Boolean).join(" · ")}</span>
+            <span aria-hidden="true">→</span>
+          </button>
+        )}
+      </div>
 
       {openPanel && (
         <div className="splash-panel">
@@ -243,7 +257,7 @@ function SplashSearch({ summary, favorites, onSelect, onPreview, onRequest, onLo
                   ))}
                 </>
               ) : (
-                <div className="splash-note">Try “Erie”, “Sandusky”, “Chesapeake Bay”, or a 5-digit ZIP.</div>
+                <div className="splash-note">Try “Erie”, “Sandusky”, “Chesapeake Bay”, or a 5-digit ZIP. Anywhere on the water, we can build a live NOAA page.</div>
               )}
             </>
           )}
