@@ -386,6 +386,10 @@ const GUIDES = [
   "boating-lake-michigan",
   "boating-the-gulf-coast",
   "boating-georgia-and-the-carolinas",
+  "boating-lake-superior",
+  "boating-the-chesapeake-bay",
+  "vhf-radio-and-calling-for-help",
+  "thunderstorms-and-lightning",
 ];
 
 // Date the page templates / on-page content last changed materially. Google
