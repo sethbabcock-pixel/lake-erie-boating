@@ -1224,3 +1224,54 @@ body.has-takeover .app { background: var(--bg); border-radius: var(--r-lg) var(-
 
 /* Text for screen readers only (e.g. the ⚡ storm cue in the week strip). */
 .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
+
+/* ===== Ads / consent / sponsor / gear polish (UX review 2026-11: N7, X7, X8) =====
+   Ad labels 12px with AA contrast, 44px sticky-ad close, compact non-modal
+   consent bar, sponsor skin inert on touch, collapsed gear on NO-GO. ===== */
+/* Ad labels: --text-muted is >= 5.9:1 on --bg/--surface in both themes (faint was 3.1:1). */
+.adlabel { font-size: 12px; color: var(--text-muted); }
+.hero-adlabel { font-size: 12px; opacity: 1; color: var(--text-muted); }
+.hero-gam .hero-adlabel { top: 4px; right: 11px; }
+/* Sponsor hero: "Sponsored" sits inline with the eyebrow; no opacity, so the
+   contrast guard in SponsorHero holds for every line of text. */
+.hero-sponsor .hero-eyebrow { opacity: 1; display: flex; flex-wrap: wrap; align-items: center; gap: 4px var(--s2); font-size: 12px; }
+.hero-sponsor .hero-subtitle { opacity: 1; }
+.hero-sponsored { display: inline-block; font-weight: var(--fw-extrabold); border: 1px solid currentColor; border-radius: 4px; padding: 1px 6px; line-height: 1.4; }
+.hero-eyebrow-text { font-weight: var(--fw-bold); }
+/* Sticky footer ad: a 44x44 close tab above the ad's top-right corner (the bar
+   used to clip its own half-height button). Sits above the consent bar when both show. */
+.sticky-ad { overflow: visible; }
+.sticky-ad .adsbygoogle { overflow: hidden; }
+.sticky-ad-close { top: -44px; right: 0; width: 44px; height: 44px; border-radius: var(--r-md) 0 0 0; font-size: 24px;
+  border-bottom: 0; box-shadow: none; color: var(--text); }
+body.has-consent .sticky-ad { bottom: var(--consent-h, 0px); }
+/* Consent: compact full-width bar, non-modal; body padding keeps the last content reachable. */
+body.has-consent { padding-bottom: var(--consent-h, 0px); }
+.consent { left: 0; right: 0; bottom: 0; transform: none; width: auto; max-width: none; border-radius: 0; border-width: 1px 0 0;
+  gap: var(--s2) var(--s4); flex-wrap: wrap; padding: var(--s2) var(--s3) calc(var(--s2) + env(safe-area-inset-bottom, 0px));
+  font-size: 12px; line-height: 1.4; color: var(--text); }
+.consent > span { flex: 1 1 320px; min-width: 0; }
+.consent a { color: var(--text); text-decoration: underline; }
+.consent-actions { flex: 1 1 100%; gap: var(--s3); }
+/* Reject and Accept: identical size, weight and fill (equal prominence). */
+.consent .cbtn { flex: 1 1 0; min-height: 44px; padding: 8px 14px; font-size: var(--fs-sm); font-weight: var(--fw-bold); background: var(--brand); color: #fff; border: 1px solid transparent; }
+[data-theme="dark"] .consent .cbtn { color: #07182B; }
+@media (min-width: 720px) {
+  .consent { flex-wrap: nowrap; align-items: center; justify-content: center; }
+  .consent > span { flex: 0 1 640px; }
+  .consent-actions { flex: 0 0 auto; }
+  .consent .cbtn { flex: 0 0 auto; min-width: 110px; }
+}
+/* Sponsor skin: never a click target on touch devices (desktop keeps the link). */
+@media (hover: none), (pointer: coarse) { .takeover-skin { pointer-events: none; cursor: default; } }
+/* Gear: NO-GO collapses to a neutral safety-prep fold. */
+.gear .legend, .gear .hint { color: var(--text-muted); }
+.gear-fold > summary { display: flex; align-items: center; justify-content: space-between; gap: var(--s3); flex-wrap: wrap; cursor: pointer; min-height: 44px; list-style: none; }
+.gear-fold > summary::-webkit-details-marker { display: none; }
+.gear-fold > summary h2 { margin: 0; }
+.gear-fold > summary::after { content: "+"; font-size: 20px; color: var(--text-muted); margin-left: auto; }
+.gear-fold[open] > summary::after { content: "\2212"; }
+.gear-fold[open] > summary { margin-bottom: var(--s3); }
+.gear-tag { font-size: 12px; white-space: nowrap; letter-spacing: 0; }
+.gear-tag.top { color: var(--text-muted); background: var(--surface-sunk); }
+.gear-tag.pick { color: var(--text); }

@@ -72,9 +72,9 @@ disclosure. Terms already disclose affiliate links.
 
 ### Upgrade a category to a specific "Our pick" (optional)
 
-Each gear item links to that category's **top-rated** results by default (Amazon
-search sorted by customer review). To promote one to a hand-picked product,
-paste its **ASIN** — the 10-character ID in any product URL
+Each gear item links to an **Amazon search** for that category by default (labelled "Amazon search", never "top rated"; sorted by Amazon customer review). On a NO-GO verdict the block collapses to
+neutral "Safety-prep gear" (no rough-day or fun gear). To promote one to a
+hand-picked product, paste its **ASIN** — the 10-character ID in any product URL
 (`amazon.com/dp/B0ABC12345` → `B0ABC12345`) — into `GEAR` in `src/monetize.jsx`:
 
 ```js

@@ -205,12 +205,12 @@ select.adm-input { padding-right: 28px; }
 .adm-preview { position: relative; border-radius: var(--r-md); padding: var(--s5); min-height: 150px; display: flex; align-items: center; justify-content: space-between;
   gap: var(--s4); flex-wrap: wrap; overflow: hidden; background-size: cover; background-position: center; color: #fff; }
 .adm-preview-text { display: flex; flex-direction: column; gap: 6px; max-width: 60%; }
-.adm-preview-text small { font-size: 11px; text-transform: uppercase; letter-spacing: var(--tracking-wide); opacity: .85; font-weight: var(--fw-semibold); }
+.adm-preview-text small { font-size: 12px; text-transform: uppercase; letter-spacing: var(--tracking-wide); opacity: .85; font-weight: var(--fw-semibold); }
 .adm-preview-text img { max-height: 36px; max-width: 160px; object-fit: contain; align-self: flex-start; }
 .adm-preview-text strong { font-size: var(--fs-xl); line-height: var(--lh-tight); letter-spacing: var(--tracking-tight); }
 .adm-preview-text span { font-size: var(--fs-sm); opacity: .9; }
 .adm-preview-cta { padding: 10px 18px; border-radius: var(--r-pill); font-weight: var(--fw-bold); font-size: var(--fs-sm); }
-.adm-preview-ad { position: absolute; top: 8px; right: 10px; font-size: 10px; font-style: normal; opacity: .7; text-transform: uppercase; letter-spacing: .08em; }
+.adm-preview-tag { border: 1px solid currentColor; border-radius: 4px; padding: 0 5px; margin-right: 6px; font-weight: var(--fw-bold); }
 .adm-preview.house { min-height: 190px; margin-bottom: var(--s3); }
 .adm-go { display: inline-block; background: #33CC99; color: #04121f; padding: 2px 10px; border-radius: var(--r-pill); font-size: 12px; margin-right: 6px; }
 .adm-campreview { margin: 0 0 var(--s3); border-radius: var(--r-md); overflow: hidden; border: 1px solid var(--border); aspect-ratio: 16/9; max-width: 560px; background: #000; }
@@ -302,3 +302,5 @@ select.adm-input { padding-right: 28px; }
 .adm-regionhero-img em { position: absolute; right: 8px; top: 8px; font-style: normal; font-size: 11px; padding: 2px 8px; border-radius: var(--r-pill);
   background: rgba(0,0,0,.55); color: #fff; }
 .adm-regionhero .adm-label { display: none; }
+
+.adm-contrast { align-self: center; }
