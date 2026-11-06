@@ -58,6 +58,9 @@ let subGetCancelState = false; // what a GET subscription retrieve reports
 let subStatus = {}; // sub id → status a GET retrieve reports ("missing" → 404); default active
 let subCustomer = {}; // sub id → customer a GET retrieve reports (default: none)
 let stripeDown = false; // every Stripe API call → 500
+let subInvoice = {}; // sub id → latest_invoice.status when expanded (default "paid")
+let subList = {}; // customer → [{ id, status, purpose, invoice }] for GET /v1/subscriptions?customer=
+let subListDown = false; // the list endpoint → 500
 const makeSub = (cancelAtPeriodEnd) => ({
   id: "sub_123", status: "active", cancel_at_period_end: cancelAtPeriodEnd,
   current_period_end: 1790000000, cancel_at: cancelAtPeriodEnd ? 1790000000 : null,
@@ -115,12 +118,21 @@ function installFetchStub() {
     if (u.includes("/v1/billing_portal/sessions"))
       return jsonResp({ id: "bps_123", url: "https://billing.stripe.com/p/session/bps_123" });
     if (stripeDown) return jsonResp({ error: { message: "stripe is down" } }, 500);
+    if (/\/v1\/subscriptions\?/.test(u)) {
+      if (subListDown) return jsonResp({ error: { message: "list down" } }, 500);
+      const cus = new URL(u).searchParams.get("customer");
+      const data = (subList[cus] || []).map((x) => ({ id: x.id, customer: cus, status: x.status,
+        metadata: x.purpose ? { purpose: x.purpose } : {}, latest_invoice: { id: `in_${x.id}`, status: x.invoice || "paid" } }));
+      return jsonResp({ object: "list", data, has_more: false });
+    }
     if (u.includes("/v1/subscriptions/")) {
       // POST = update (cancel/resume) → mirror the request; GET = retrieve.
       if ((opts.method || "GET") === "POST") return jsonResp(makeSub(body?.cancel_at_period_end === "true"));
       const id = decodeURIComponent(u.split("/v1/subscriptions/")[1].split(/[/?]/)[0]);
       if (subStatus[id] === "missing") return jsonResp({ error: { type: "invalid_request_error", code: "resource_missing" } }, 404);
-      return jsonResp({ ...makeSub(subGetCancelState), status: subStatus[id] || "active", ...(subCustomer[id] ? { customer: subCustomer[id] } : {}) });
+      const expandInvoice = u.includes("expand") && decodeURIComponent(u).includes("latest_invoice");
+      return jsonResp({ ...makeSub(subGetCancelState), status: subStatus[id] || "active", ...(subCustomer[id] ? { customer: subCustomer[id] } : {}),
+        ...(expandInvoice ? { latest_invoice: { id: `in_${id}`, status: subInvoice[id] || "paid" } } : {}) });
     }
     if (u.includes("/v1/prices/"))
       return priceResolves
@@ -376,8 +388,12 @@ async function run() {
     await seedUser(env, "legacy@example.com", { adFree: false, stripeCustomerId: "cus_l" });
     await env.USERS.put("stripecust:cus_l", "legacy@example.com");
     const tagged = { type: "customer.subscription.updated", data: { object: { id: "sub_new", customer: "cus_l", status: "active", metadata: { purpose: "adfree" } } } };
+    // Realistic live state: Stripe reports the sub as this customer's and
+    // "active" while the ACH first payment is still processing (invoice open).
+    subCustomer = { sub_new: "cus_l" }; subInvoice = { sub_new: "open" };
     await call(stripeWebhookReq(tagged, "whsec_right"), env);
     check("webhook: legacy user + tagged unmatched sub does not grant", !(await env.USERS.get("user:legacy@example.com", "json")).adFree);
+    subCustomer = {}; subInvoice = {};
     const untagged = { type: "customer.subscription.updated", data: { object: { id: "sub_old", customer: "cus_l", status: "active" } } };
     await call(stripeWebhookReq(untagged, "whsec_right"), env);
     eq("webhook: legacy user + untagged sub uses fallback", (await env.USERS.get("user:legacy@example.com", "json")).adFree, true);
@@ -963,11 +979,128 @@ async function run() {
     await call(stripeWebhookReq({ id: "evt_cur_pd", type: "checkout.session.completed", data: { object: { ...session, client_reference_id: "current@example.com", customer: "cus_cur", subscription: "sub_cur_pd" } } }, "whsec_right"), env);
     eq("past_due other-sub checkout keeps current stripeSubId", (await env.USERS.get("user:current@example.com", "json")).stripeSubId, "sub_cur_live");
 
+    // F1: two checkouts (two tabs) leave subs A (older) and B (newer) both
+    // pending. B is stored, then a stale retry for A repoints stripeSubId to
+    // A. When B is paid, its `updated` must still grant (adopt B).
+    await seedUser(env, "twotabs@example.com");
+    subStatus.sub_tA = "past_due"; subCustomer.sub_tA = "cus_tt";
+    subStatus.sub_tB = "past_due"; subCustomer.sub_tB = "cus_tt";
+    const tabSess = (sub) => ({ ...session, client_reference_id: "twotabs@example.com", customer: "cus_tt", subscription: sub });
+    await call(stripeWebhookReq({ id: "evt_tB", type: "checkout.session.completed", data: { object: tabSess("sub_tB") } }, "whsec_right"), env);
+    await call(stripeWebhookReq({ id: "evt_tA_retry", type: "checkout.session.completed", data: { object: tabSess("sub_tA") } }, "whsec_right"), env);
+    eq("two tabs: stale retry repointed to A (setup)", (await env.USERS.get("user:twotabs@example.com", "json")).stripeSubId, "sub_tA");
+    emailCalls = [];
+    subStatus.sub_tB = "active";
+    const bPaid = { id: "evt_tB_upd", type: "customer.subscription.updated", data: { object: { id: "sub_tB", customer: "cus_tt", status: "active", metadata: { purpose: "adfree" } } } };
+    eq("two tabs: B paid update → 200", (await call(stripeWebhookReq(bPaid, "whsec_right"), env)).status, 200);
+    let tt = await env.USERS.get("user:twotabs@example.com", "json");
+    eq("two tabs: B adopted → ad-free granted", tt.adFree, true);
+    eq("two tabs: B adopted → stripeSubId = B", tt.stripeSubId, "sub_tB");
+    eq("two tabs: adoption sends one welcome email", emailCalls.filter((c) => /Welcome to shouldiboat Pro/i.test(c.subject)).length, 1);
+    // Now granting via B: A's later updates/deletes and stale retries don't touch it.
+    subStatus.sub_tA = "canceled";
+    await call(stripeWebhookReq({ id: "evt_tA_del", type: "customer.subscription.deleted", data: { object: { id: "sub_tA", customer: "cus_tt", status: "canceled", metadata: { purpose: "adfree" } } } }, "whsec_right"), env);
+    await call(stripeWebhookReq({ id: "evt_tA_retry2", type: "checkout.session.completed", data: { object: tabSess("sub_tA") } }, "whsec_right"), env);
+    tt = await env.USERS.get("user:twotabs@example.com", "json");
+    eq("two tabs: A deleted/retried after → still ad-free", tt.adFree, true);
+    eq("two tabs: A deleted/retried after → stripeSubId stays B", tt.stripeSubId, "sub_tB");
+
+    // Adoption guards: event says active but Stripe says canceled → no grant.
+    await seedUser(env, "adoptstale@example.com", { stripeCustomerId: "cus_as", stripeSubId: "sub_as_old" });
+    await env.USERS.put("stripecust:cus_as", "adoptstale@example.com");
+    subStatus.sub_as_new = "canceled"; subCustomer.sub_as_new = "cus_as";
+    await call(stripeWebhookReq({ id: "evt_as", type: "customer.subscription.updated", data: { object: { id: "sub_as_new", customer: "cus_as", status: "active", metadata: { purpose: "adfree" } } } }, "whsec_right"), env);
+    eq("adopt: live canceled → no grant", (await env.USERS.get("user:adoptstale@example.com", "json")).adFree, false);
+    // Untagged sub on the customer → not adopted.
+    subStatus.sub_as_untag = "active"; subCustomer.sub_as_untag = "cus_as";
+    await call(stripeWebhookReq({ id: "evt_as_u", type: "customer.subscription.updated", data: { object: { id: "sub_as_untag", customer: "cus_as", status: "active" } } }, "whsec_right"), env);
+    eq("adopt: untagged sub → no grant", (await env.USERS.get("user:adoptstale@example.com", "json")).adFree, false);
+    // Live sub belongs to another customer → no grant.
+    subStatus.sub_as_x = "active"; subCustomer.sub_as_x = "cus_other";
+    await call(stripeWebhookReq({ id: "evt_as_x", type: "customer.subscription.updated", data: { object: { id: "sub_as_x", customer: "cus_as", status: "active", metadata: { purpose: "adfree" } } } }, "whsec_right"), env);
+    eq("adopt: live customer mismatch → no grant", (await env.USERS.get("user:adoptstale@example.com", "json")).adFree, false);
+    // ACH first payment still processing: sub "active" but invoice open → no grant.
+    subStatus.sub_as_ach = "active"; subCustomer.sub_as_ach = "cus_as"; subInvoice.sub_as_ach = "open";
+    stripeCalls = [];
+    await call(stripeWebhookReq({ id: "evt_as_ach", type: "customer.subscription.updated", data: { object: { id: "sub_as_ach", customer: "cus_as", status: "active", metadata: { purpose: "adfree" } } } }, "whsec_right"), env);
+    eq("adopt: invoice still open (ACH processing) → no grant", (await env.USERS.get("user:adoptstale@example.com", "json")).adFree, false);
+    check("adopt: retrieves sub with latest_invoice expanded", stripeCalls.some((c) => c.url.includes("sub_as_ach") && decodeURIComponent(c.url).includes("expand[]=latest_invoice")), JSON.stringify(stripeCalls.map((c) => c.url)));
+    subInvoice.sub_as_ach = "paid";
+    await call(stripeWebhookReq({ id: "evt_as_ach2", type: "customer.subscription.updated", data: { object: { id: "sub_as_ach", customer: "cus_as", status: "active", metadata: { purpose: "adfree" } } } }, "whsec_right"), env);
+    eq("adopt: invoice paid → grant", (await env.USERS.get("user:adoptstale@example.com", "json")).adFree, true);
+    await env.USERS.put("user:adoptstale@example.com", JSON.stringify({ ...(await env.USERS.get("user:adoptstale@example.com", "json")), adFree: false, stripeSubId: "sub_as_old" }));
+    // Stripe down during adoption → 503.
+    stripeDown = true;
+    const ad = await call(stripeWebhookReq({ id: "evt_as_down", type: "customer.subscription.updated", data: { object: { id: "sub_as_x", customer: "cus_as", status: "active", metadata: { purpose: "adfree" } } } }, "whsec_right"), env);
+    stripeDown = false;
+    eq("adopt: Stripe down → 503", ad.status, 503);
+    // Already ad-free via another sub → a second live sub isn't adopted.
+    await seedUser(env, "hasone@example.com", { adFree: true, stripeCustomerId: "cus_h1", stripeSubId: "sub_h1" });
+    await env.USERS.put("stripecust:cus_h1", "hasone@example.com");
+    subStatus.sub_h2 = "active"; subCustomer.sub_h2 = "cus_h1";
+    await call(stripeWebhookReq({ id: "evt_h2", type: "customer.subscription.updated", data: { object: { id: "sub_h2", customer: "cus_h1", status: "active", metadata: { purpose: "adfree" } } } }, "whsec_right"), env);
+    eq("adopt: already ad-free → stripeSubId unchanged", (await env.USERS.get("user:hasone@example.com", "json")).stripeSubId, "sub_h1");
+
+    // G1: paying for two subs (A recorded, B also live). A ends → switch to B
+    // instead of revoking, and alert the admins.
+    {
+      const genv = { USERS: makeKV(), STRIPE_WEBHOOK_SECRET: "whsec_right", STRIPE_SECRET_KEY: "sk_test_x", BREVO_API_KEY: "brevo_x", ADMIN_EMAIL: "owner@example.com" };
+      const seedTwo = async (em, cus) => {
+        await seedUser(genv, em, { adFree: true, stripeCustomerId: cus, stripeSubId: `${cus}_A` });
+        await genv.USERS.put(`stripecust:${cus}`, em);
+      };
+      const delA = (cus, id) => ({ id, type: "customer.subscription.deleted", data: { object: { id: `${cus}_A`, customer: cus, status: "canceled", metadata: { purpose: "adfree" } } } });
+      await seedTwo("double@example.com", "cus_g1");
+      subList.cus_g1 = [{ id: "cus_g1_A", status: "canceled", purpose: "adfree" }, { id: "cus_g1_B", status: "active", purpose: "adfree" }];
+      emailCalls = [];
+      eq("G1: recorded sub deleted → 200", (await call(stripeWebhookReq(delA("cus_g1", "evt_g1"), "whsec_right"), genv)).status, 200);
+      let g = await genv.USERS.get("user:double@example.com", "json");
+      eq("G1: still ad-free via the other live sub", g.adFree, true);
+      eq("G1: stripeSubId switched to B", g.stripeSubId, "cus_g1_B");
+      check("G1: admins alerted about the double subscription", emailCalls.some((c) => /Double Pro subscription/i.test(c.subject) && (c.to || []).some((r) => r.email === "owner@example.com")), JSON.stringify(emailCalls.map((c) => c.subject)));
+      check("G1: user gets no welcome email on switch", !emailCalls.some((c) => /Welcome to shouldiboat Pro/i.test(c.subject)));
+      // Then B ends too, nothing else live → revoked.
+      subList.cus_g1 = [{ id: "cus_g1_A", status: "canceled", purpose: "adfree" }, { id: "cus_g1_B", status: "canceled", purpose: "adfree" }];
+      await call(stripeWebhookReq({ id: "evt_g1_b", type: "customer.subscription.deleted", data: { object: { id: "cus_g1_B", customer: "cus_g1", status: "canceled", metadata: { purpose: "adfree" } } } }, "whsec_right"), genv);
+      eq("G1: last sub ends → revoked", (await genv.USERS.get("user:double@example.com", "json")).adFree, false);
+
+      // Non-qualifying others don't keep ad-free: unpaid invoice, untagged, past_due.
+      for (const [label, other] of [
+        ["open invoice", { id: "x", status: "active", purpose: "adfree", invoice: "open" }],
+        ["untagged", { id: "x", status: "active" }],
+        ["past_due", { id: "x", status: "past_due", purpose: "adfree" }],
+      ]) {
+        const cus = `cus_g1_${label.replace(/\W/g, "")}`;
+        await seedTwo(`g1${label.replace(/\W/g, "")}@example.com`, cus);
+        subList[cus] = [{ ...other, id: `${cus}_B` }];
+        await call(stripeWebhookReq(delA(cus, `evt_${cus}`), "whsec_right"), genv);
+        eq(`G1: other sub ${label} → revoked`, (await genv.USERS.get(`user:g1${label.replace(/\W/g, "")}@example.com`, "json")).adFree, false);
+      }
+      // List endpoint down → revoke (safe direction), event recorded, no 5xx.
+      await seedTwo("g1down@example.com", "cus_g1d");
+      subList.cus_g1d = [{ id: "cus_g1d_B", status: "active", purpose: "adfree" }];
+      subListDown = true;
+      const gd = await call(stripeWebhookReq(delA("cus_g1d", "evt_g1d"), "whsec_right"), genv);
+      subListDown = false;
+      eq("G1: list down → 200", gd.status, 200);
+      eq("G1: list down → revoked", (await genv.USERS.get("user:g1down@example.com", "json")).adFree, false);
+      // ...and B's next updated re-adopts it (F1 path).
+      subStatus.cus_g1d_B = "active"; subCustomer.cus_g1d_B = "cus_g1d";
+      await call(stripeWebhookReq({ id: "evt_g1d_upd", type: "customer.subscription.updated", data: { object: { id: "cus_g1d_B", customer: "cus_g1d", status: "active", metadata: { purpose: "adfree" } } } }, "whsec_right"), genv);
+      eq("G1: other sub's next update re-adopts", (await genv.USERS.get("user:g1down@example.com", "json")).adFree, true);
+      // A non-recorded sub's deletion never triggers the lookup.
+      stripeCalls = [];
+      await call(stripeWebhookReq({ id: "evt_g1_other", type: "customer.subscription.deleted", data: { object: { id: "sub_unrelated", customer: "cus_g1d", status: "canceled", metadata: { purpose: "adfree" } } } }, "whsec_right"), genv);
+      check("G1: unrelated sub deletion makes no list call", !stripeCalls.some((c) => /\/v1\/subscriptions\?/.test(c.url)));
+      eq("G1: unrelated sub deletion keeps ad-free", (await genv.USERS.get("user:g1down@example.com", "json")).adFree, true);
+      subList = {};
+    }
+
     // Account deleted, then a late checkout retry: no reverse index re-created.
     subStatus.sub_del = "active";
     await call(stripeWebhookReq({ id: "evt_del", type: "checkout.session.completed", data: { object: { ...session, client_reference_id: "deleted@example.com", customer: "cus_del", subscription: "sub_del" } } }, "whsec_right"), env);
     eq("no account: reverse index not written", await env.USERS.get("stripecust:cus_del"), null);
-    subStatus = {}; subCustomer = {};
+    subStatus = {}; subCustomer = {}; subInvoice = {};
   }
 
   // 36. notifyEmails in site config drives admin notification recipients

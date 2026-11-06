@@ -11,8 +11,7 @@ import { fmtWaves, waveFeel, compassToDeg } from "./units.js";
 import { regionBySlug, regionFromPath, regionForLake, nearMetroBySlug, nearMetroFromPath, LAKE_GUIDES } from "./regions.js";
 
 const fmt = (v, unit) => (v == null ? "—" : `${v}${unit || ""}`);
-// Wind for display: whole knots (buoys report tenths, e.g. 22.9). Display only;
-// the verdict is computed server-side from the raw value.
+// Whole knots for display (buoy wind arrives to 0.1 kt; verdicts use the raw value).
 const kt = (v) => (v == null ? null : Math.round(v));
 // No level = no call (missing data): neutral, never painted as GO.
 const verdictClass = (lvl) => (lvl === "NO-GO" ? "nogo" : lvl === "CAUTION" ? "caution" : lvl === "GO" ? "go" : "unknown");
@@ -528,7 +527,7 @@ function WrongCallLink({ spot, rec, wind, wv, updatedAt }) {
   const body = [
     `Spot: ${spot.name} (${spot.id})`,
     `Our call: ${rec.level}`,
-    `Wind ${wind?.speedKt ?? "–"} kt${wind?.gustKt != null ? `, gusts ${wind.gustKt} kt` : ""}; waves ${wv?.ft ?? "–"} ft`,
+    `Wind ${kt(wind?.speedKt) ?? "–"} kt${wind?.gustKt != null ? `, gusts ${kt(wind.gustKt)} kt` : ""}; waves ${wv?.ft ?? "–"} ft`,
     `Data updated: ${updatedAt ? new Date(updatedAt).toLocaleString() : "unknown"}`,
     `Page: ${url}`,
     "",

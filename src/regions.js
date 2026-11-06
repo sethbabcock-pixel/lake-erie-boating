@@ -82,6 +82,7 @@ export const LAKE_GUIDES = {
   "Lake Huron": { href: "/guides/boating-lake-huron", text: "Boating Lake Huron guide" },
   "Lake Ontario": { href: "/guides/boating-lake-ontario", text: "Boating Lake Ontario guide" },
   "Hawaii": { href: "/guides/boating-hawaii", text: "Boating Hawaii guide" },
+  "Puerto Rico": { href: "/guides/boating-puerto-rico", text: "Boating Puerto Rico guide" },
   "Florida Atlantic Coast": { href: "/guides/boating-florida-atlantic-inlets", text: "Florida Atlantic coast & inlets guide" },
   "Florida Gulf Coast": GULF_GUIDE,
   "Alabama & Mississippi Coast": GULF_GUIDE,
