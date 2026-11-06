@@ -1311,7 +1311,7 @@ export function buildRecommendation({ buoy, alerts, wind, waves, read, hours, pr
   }
   // Say so whenever neither wind nor waves came from a live buoy, even if some
   // station reported temperatures: the verdict is then the forecast alone.
-  const liveObs = wind?.source === "buoy" || waves?.source === "buoy";
+  const liveObs = wind?.source === "buoy" || wind?.gustSrc === "buoy" || waves?.source === "buoy";
   if (!liveObs && !noData) reasons.push("No live buoy here; using the NWS forecast, so verify before launch");
 
   const summary = noData

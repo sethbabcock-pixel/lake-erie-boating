@@ -1073,9 +1073,9 @@ export default function App() {
   const wind = data?.wind || {};
   const wv = data?.waves || {};
   const buoy = data?.buoy;
-  // Credit the buoy only when it actually supplied wind or waves; a station
+  // Credit the buoy only when it actually supplied wind, gusts or waves; a station
   // that reported just temperatures leaves the verdict on the forecast.
-  const buoyLive = !!buoy && (wind.source === "buoy" || wv.source === "buoy");
+  const buoyLive = !!buoy && (wind.source === "buoy" || wind.gustSrc === "buoy" || wv.source === "buoy");
   const wr = data?.windRead;
   const comfort = data ? comfortCheck(auth.user?.prefs, wind.speedKt, wv.ft) : null;
 

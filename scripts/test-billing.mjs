@@ -1470,6 +1470,8 @@ async function run() {
     check("headline: buoy wind → no forecast-only reason", !rr.reasons.some((x) => FC_NOTE.test(x)), JSON.stringify(rr.reasons));
     rr = recOf({ station: "WAVE1", waveHeightFt: 1 }, { speedKt: 9, source: "forecast" }, { ft: 1, source: "buoy" });
     check("headline: buoy waves → no forecast-only reason", !rr.reasons.some((x) => FC_NOTE.test(x)), JSON.stringify(rr.reasons));
+    rr = recOf({ station: "GUST1", windGustKt: 16 }, { speedKt: 8, gustKt: 16, source: "forecast", gustSrc: "buoy" }, { ft: 1, source: "forecast" });
+    check("headline: buoy gust only → no forecast-only reason (agrees with the facts card)", !rr.reasons.some((x) => FC_NOTE.test(x)), JSON.stringify(rr.reasons));
     rr = recOf(null, { speedKt: null, source: null }, { ft: null, source: null });
     check("headline: no data → CAUTION, no forecast-only reason (no-data reason covers it)", rr.level === "CAUTION" && !rr.reasons.some((x) => FC_NOTE.test(x)), JSON.stringify(rr));
 
