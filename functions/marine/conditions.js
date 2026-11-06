@@ -69,8 +69,8 @@ export const SPOTS = {
   olcott: { name: "Olcott / Wilson", lat: 43.34, lon: -78.72, zone: "LOZ042", office: "BUF", buoys: [], lake: "Lake Ontario", sea: 20 },
 
   "port-huron": { name: "Port Huron", lat: 42.98, lon: -82.42, zone: "LHZ443", office: "DTX", buoys: [], lake: "Lake Huron", sea: 15, waterBuoys: ["45209", "AGCM4"] },
-  tawas: { name: "Tawas Bay", lat: 44.26, lon: -83.44, zone: "LHZ345", office: "APX", buoys: [], lake: "Lake Huron", sea: 150 },
-  alpena: { name: "Alpena / Thunder Bay", lat: 45.06, lon: -83.42, zone: "LHZ348", office: "APX", buoys: ["45003"], lake: "Lake Huron", sea: 115, waterBuoys: ["LPNM4", "45212"] },
+  tawas: { name: "Tawas Bay", lat: 44.2775, lon: -83.488, zone: "LHZ349", office: "APX", buoys: [], lake: "Lake Huron", sea: 175, gridSteps: [0.1, 0.22] },
+  alpena: { name: "Alpena / Thunder Bay", lat: 45.06, lon: -83.42, zone: "LHZ348", office: "APX", buoys: ["45003"], lake: "Lake Huron", sea: 115, gridSteps: [0.14, 0.18, 0.22], waterBuoys: ["LPNM4", "45212"] },
   "harbor-beach": { name: "Harbor Beach", lat: 43.84, lon: -82.64, zone: "LHZ442", office: "DTX", buoys: [], lake: "Lake Huron", sea: 45, waterBuoys: ["HRBM4", "45149"] },
   mackinaw: { name: "Mackinaw City / Straits", lat: 45.78, lon: -84.72, zone: "LHZ345", office: "APX", buoys: [], lake: "Lake Michigan", waterBuoys: ["MACM4", "45194"] },
 
@@ -421,16 +421,31 @@ const GRID_STEPS = [0.035, 0.1, 0.22];
 // first cell off Port Canaveral reads 0-1 ft while 4-6 ft runs offshore. Start
 // ~4 mi out (still well inside the NWS 0-20 NM coastal zone).
 const OCEAN_GRID_STEPS = [0.06, 0.1, 0.22];
+// Grid sample distances (degrees along the seaward bearing) for a spot. A spot
+// may set `gridSteps` when the default first cells are an enclosed inner bay
+// that reads far calmer than the water a boater from that launch heads into
+// (e.g. inner Thunder Bay at Alpena). Inland waters sample the point only.
+export function gridStepsFor(spot) {
+  if (!isOpenWater(spot)) return [0];
+  if (Array.isArray(spot.gridSteps) && spot.gridSteps.length) return spot.gridSteps;
+  return waterProfile(spot) === "ocean" ? OCEAN_GRID_STEPS : GRID_STEPS;
+}
+// The grid sample points, nearest first (what fetchSpotGrid walks). Exported
+// for tests.
+export const gridSamplePoints = (spot) => gridStepsFor(spot).map((step) => ({ step, ...seawardPoint(spot, step) }));
 async function fetchSpotGrid(spot) {
   // Open water (lakes, bays, sounds, ocean): nudge seaward until we hit a
   // marine cell that carries waves. Inland waters have no wave grid, so just
   // sample the point once (wind/gusts/precip/temp exist on land; waves blank).
-  const steps = !isOpenWater(spot) ? [0] : waterProfile(spot) === "ocean" ? OCEAN_GRID_STEPS : GRID_STEPS;
+  const steps = gridStepsFor(spot);
   // Remember which step reached a wave cell, so steady state costs one grid
   // fetch per spot instead of up to three (the directory summary fetches every
-  // spot in one request, and Workers cap subrequests per request).
+  // spot in one request, and Workers cap subrequests per request). A spot's
+  // own gridSteps are part of the key, so editing them never reuses a step
+  // memoized under the old list (spots without gridSteps keep their old key).
+  const stepTag = Array.isArray(spot.gridSteps) && spot.gridSteps.length ? `,s${spot.gridSteps.join("/")}` : "";
   const memoKey = typeof caches !== "undefined" && caches.default
-    ? new Request(`https://grid-step.local/${round(spot.lat, 3)},${round(spot.lon, 3)},${spot.sea ?? ""},${spot.lake || ""}`) : null;
+    ? new Request(`https://grid-step.local/${round(spot.lat, 3)},${round(spot.lon, 3)},${spot.sea ?? ""},${spot.lake || ""}${stepTag}`) : null;
   let known = null;
   if (memoKey) known = await caches.default.match(memoKey).then((r) => (r ? r.text() : null)).catch(() => null);
   if (known != null && steps.includes(Number(known))) {
