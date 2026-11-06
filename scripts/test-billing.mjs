@@ -2102,6 +2102,12 @@ async function run() {
     pointsCalls = 0;
     await landZonesFor(errSpot);
     eq("land walk: a clean walk is cached (no lookups next time)", pointsCalls, 0);
+
+    // The spot page walks inland steps only (no ring): ≤ 4 lookups per request.
+    pointsOnWater = () => true; pointsCalls = 0;
+    eq("land walk (page): no ring → unresolved", await landZonesFor({ lat: 38.123, lon: -80.456, zone: "LEZ145", lake: "Lake Erie" }, null, { ring: false }), null);
+    check("land walk (page): at most 4 /points lookups", pointsCalls <= 4, `${pointsCalls} lookups`);
+    pointsOnWater = null;
   }
 
   // ── Launch-facts card: a configured buoy is not a live buoy ──

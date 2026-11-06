@@ -643,7 +643,10 @@ async function alertsAt(query) {
 export async function fetchAlerts(spot) {
   const queries = [`point=${spot.lat},${spot.lon}`];
   if (spot.zone) queries.push(`zone=${encodeURIComponent(spot.zone)}`);
-  const landQ = landZonesFor(spot).catch(() => null)
+  // Request path: inland steps only (no ring), so an arbitrary ?lat=&lon=
+  // can cost at most 4 /points lookups. Ring-only spots are resolved and
+  // cached by the summary/cron walk; until then the page reads "unknown".
+  const landQ = landZonesFor(spot, null, { ring: false }).catch(() => null)
     .then((land) => (land && land.length ? alertsAt(`zone=${land.map(encodeURIComponent).join(",")}`) : null));
   const results = await Promise.all([...queries.map(alertsAt), landQ]);
   const answered = results.filter((r) => r != null);
@@ -787,7 +790,7 @@ const landMemo = new Map();
 // `budget` ({ walks }) caps how many uncached walks one invocation may do (a
 // cold walk is 1-20 /points lookups); past it the spot is unknown (no GO)
 // until a later run resolves it. Omit it for a single spot (the spot page).
-export async function landZonesFor(spot, budget = null) {
+export async function landZonesFor(spot, budget = null, { ring = true } = {}) {
   // Every curated spot carries its land zones (SPOTS[*].land, resolved once
   // and checked by hand: county lines, launches across a bay), so the walk
   // below only runs for user-built pages.
@@ -800,7 +803,7 @@ export async function landZonesFor(spot, budget = null) {
     if (Array.isArray(hit) && hit.length) return hit;
   } else if (landMemo.has(key)) return landMemo.get(key);
   if (budget) { if (budget.walks <= 0) return null; budget.walks--; }
-  const { zones: found, clean } = await resolveLandZones(spot);
+  const { zones: found, clean } = await resolveLandZones(spot, ring);
   // Only cache a clean walk: if an earlier (closer) candidate errored, the
   // county found farther out may not be the launch's own. Use it this time,
   // but walk again next time rather than pin a possibly-wrong county a week.
@@ -810,11 +813,11 @@ export async function landZonesFor(spot, budget = null) {
   }
   return found; // null (unknown) is never cached, so a blip retries next time
 }
-async function resolveLandZones(spot) {
+async function resolveLandZones(spot, ring = true) {
   const kLon = 1 / Math.max(0.2, Math.cos((spot.lat * Math.PI) / 180));
   const candidates = [
     ...LAND_STEPS.map((step) => (step ? seawardPoint(spot, -step) : { lat: spot.lat, lon: spot.lon })),
-    ...LAND_RING.map(([r, b]) => ({ lat: round(spot.lat + Math.cos((b * Math.PI) / 180) * r, 4), lon: round(spot.lon + Math.sin((b * Math.PI) / 180) * r * kLon, 4) })),
+    ...(ring ? LAND_RING : []).map(([r, b]) => ({ lat: round(spot.lat + Math.cos((b * Math.PI) / 180) * r, 4), lon: round(spot.lon + Math.sin((b * Math.PI) / 180) * r * kLon, 4) })),
   ];
   let clean = true;
   for (const pt of candidates) {
