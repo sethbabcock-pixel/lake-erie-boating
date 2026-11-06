@@ -1380,6 +1380,11 @@ async function run() {
     check("outlook: good window stops at the first no-data hour", o2.goodHours === 2 && o2.dataEndsAt === hr(null, 2).time && !o2.headInBy, JSON.stringify(o2));
     const o3 = computeOutlook([hr("GO", 0), hr("NO-GO", 1), hr(null, 2)]);
     check("outlook: an earlier NO-GO still sets be-in-by", o3.goodHours === 1 && o3.headInBy === hr("NO-GO", 1).time, JSON.stringify(o3));
+    const storm = { ...hr("NO-GO", 2), short: "Chance Showers And Thunderstorms" };
+    const o4 = computeOutlook([hr(null, 0), hr(null, 1), storm]);
+    check("outlook: missing wind keeps a known storm cutoff", o4.noData === true && o4.goodHours === 0 && o4.headInBy === storm.time && o4.headInReason === "thunderstorms", JSON.stringify(o4));
+    const o5 = computeOutlook([hr("GO", 0), hr(null, 1), storm]);
+    check("outlook: data gap before a storm keeps both", o5.goodHours === 1 && o5.dataEndsAt === hr(null, 1).time && o5.headInBy === storm.time, JSON.stringify(o5));
 
     const r24 = buildRecommendation({ buoy: null, alerts: [], wind: { speedKt: null, gustKt: 24, source: null, gustSrc: "forecast" }, waves: { ft: null }, read: null, hours: [], profile: "lake" });
     check("summary: gust-driven NO-GO with no other data reads as NO-GO, not 'no live data'", r24.level === "NO-GO" && !/No live data/.test(r24.summary), r24.summary);

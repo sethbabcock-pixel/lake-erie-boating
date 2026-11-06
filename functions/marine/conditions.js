@@ -1130,12 +1130,7 @@ export function computeOutlook(hours) {
   if (!hours || !hours.length) return null;
   const win = hours.slice(0, 18); // actionable "today/tonight" window for "be in by"
   const out = { nowLevel: hours[0].level, headInBy: null, headInReason: null, goodHours: win.length };
-  // An hour with no call (missing wind) is not a good hour: the "good for Nh"
-  // count stops there rather than counting unknown hours as fine.
-  const unknownAt = win.findIndex((h) => h.level == null);
-  if (unknownAt === 0) { out.goodHours = 0; out.noData = true; return out; }
   const idx = win.findIndex((h) => h.level === "NO-GO");
-  if (unknownAt > 0 && (idx < 0 || unknownAt < idx)) { out.goodHours = unknownAt; out.dataEndsAt = win[unknownAt].time; return out; }
   if (idx === 0) { out.headInBy = win[0].time; out.goodHours = 0; }
   else if (idx > 0) {
     const h = win[idx];
@@ -1146,6 +1141,12 @@ export function computeOutlook(hours) {
       : (h.waveFt != null && h.waveFt >= 4 ? "building waves"
       : (h.windKt >= 22 ? "building wind" : "deteriorating weather"));
   }
+  // An hour with no call (missing wind) is not a good hour: it only SHORTENS
+  // the "good for Nh" count. The NO-GO cutoff above is always kept, so a known
+  // storm deadline never disappears just because wind data is missing.
+  const unknownAt = win.findIndex((h) => h.level == null);
+  if (unknownAt === 0) { out.goodHours = 0; out.noData = true; }
+  else if (unknownAt > 0 && (idx < 0 || unknownAt < idx)) { out.goodHours = unknownAt; out.dataEndsAt = win[unknownAt].time; }
   return out;
 }
 
