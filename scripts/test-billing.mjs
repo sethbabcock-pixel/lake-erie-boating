@@ -1066,6 +1066,28 @@ async function run() {
     check("email esc: digest carries the escaped name, not a live link", m && !/href="https:\/\/evil/.test(m.htmlContent) && /&lt;a href=/.test(m.htmlContent), m && m.htmlContent.slice(0, 400));
   }
 
+  // 55. Summary/day verdicts: lake gusts count; missing wind is never GO but
+  //     never softens a wave-driven call either.
+  {
+    const { riskLevel } = await import("../functions/marine/conditions.js");
+    eq("riskLevel: lake 13 kt gusting 24 → NO-GO (gust counts)", riskLevel(13, 24, 0, "", 1.5, 4, "lake"), "NO-GO");
+    eq("riskLevel: lake 10 kt gusting 16 → CAUTION", riskLevel(10, 16, 0, "", 1, 4, "lake"), "CAUTION");
+    eq("riskLevel: lake 8 kt, no gust data → GO", riskLevel(8, null, 0, "", 1, 4, "lake"), "GO");
+    eq("riskLevel: no wind, calm waves → no call (null), not GO", riskLevel(null, null, 0, "", 1, 4, "lake"), null);
+    eq("riskLevel: no wind, 5 ft waves → still NO-GO", riskLevel(null, null, 0, "", 5, 5, "lake"), "NO-GO");
+    eq("riskLevel: no wind, 3 ft waves → still CAUTION", riskLevel(null, null, 0, "", 3, 5, "lake"), "CAUTION");
+    eq("riskLevel: no sustained wind but a 24 kt gust → NO-GO", riskLevel(null, 24, 0, "", 1, 4, "lake"), "NO-GO");
+    eq("riskLevel: ocean rates sustained + gust separately (12 g18 → GO)", riskLevel(12, 18, 0, "", 2, 10, "ocean"), "GO");
+    eq("riskLevel: ocean gust 28 → NO-GO", riskLevel(12, 28, 0, "", 2, 10, "ocean"), "NO-GO");
+    eq("riskLevel: thunder with no wind data → still NO-GO", riskLevel(null, null, 40, "thunderstorms", null, null, "lake"), "NO-GO");
+    const { buildRecommendation } = await import("../functions/marine/conditions.js");
+    const rec = (wind, waves = { ft: null }) => buildRecommendation({ buoy: null, alerts: [], wind, waves, read: null, hours: [], profile: "lake" }).level;
+    eq("headline: gust only (8 kt), no sustained wind, no waves → CAUTION, not GO", rec({ speedKt: null, gustKt: 8, source: null, gustSrc: "forecast" }), "CAUTION");
+    eq("headline: gust only (24 kt), no sustained wind → still NO-GO", rec({ speedKt: null, gustKt: 24, source: null, gustSrc: "forecast" }), "NO-GO");
+    const r = buildRecommendation({ buoy: null, alerts: [], wind: { speedKt: 7, gustKt: 16, source: "buoy", gustSrc: "forecast" }, waves: { ft: 1 }, read: null, hours: [], profile: "lake" });
+    check("headline: forecast gust driving the call is tagged (forecast)", r.reasons.some((x) => /16 kt \(forecast\)/.test(x)), JSON.stringify(r.reasons));
+  }
+
   console.log(results.join("\n"));
   console.log(`\n${passed} passed, ${failed} failed`);
   if (failed) process.exit(1);
