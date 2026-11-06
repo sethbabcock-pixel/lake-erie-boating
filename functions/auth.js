@@ -1388,6 +1388,25 @@ export async function handleAuth(request, env, url, ctx) {
       const s = await stripeSubLive(env, user.stripeSubId);
       return s ? s.status : null;
     };
+    // The stored-sub lookup failed: 503 so Stripe retries. Stripe gives up
+    // after ~3 days, so a lookup that keeps failing would silently leave a
+    // paying customer without ad-free. Alert the admin once per event, on
+    // its 3rd failed delivery (ignores one-off blips).
+    const storedLookupFailed = async (user) => {
+      if (evtKey) {
+        const fk = `stripelookupfail:${event.id}`;
+        const n = (parseInt(await env.USERS.get(fk), 10) || 0) + 1;
+        await env.USERS.put(fk, String(n), { expirationTtl: 7 * 86400 });
+        if (n === 3) {
+          await runBg(ctx, notify(env, "stripe_lookup_failing",
+            { email: user?.email || null, storedSub: user?.stripeSubId || null, incomingSub: obj.subscription || null, eventId: event.id },
+            { to: await adminEmails(env), subject: "shouldiboat: Stripe subscription lookup keeps failing",
+              html: `<div style="font-family:system-ui,sans-serif"><h2>Stripe lookup keeps failing</h2><p>Checkout event <code>${htmlEscape(event.id)}</code> for <b>${htmlEscape(user?.email || "?")}</b> has failed 3 times because Stripe could not return the stored subscription <code>${htmlEscape(user?.stripeSubId || "?")}</code>. Until this is fixed, the new subscription <code>${htmlEscape(obj.subscription || "?")}</code> is not recorded and ad-free may not be granted. Stripe stops retrying after about 3 days.</p></div>`,
+              ttlDays: 30 }));
+        }
+      }
+      return json({ error: "Could not confirm subscription with Stripe; retry later." }, 503);
+    };
     const purpose = obj.metadata?.purpose;
     const notAdFree = purpose != null && purpose !== "adfree";
     if (event.type === "checkout.session.completed" || event.type === "checkout.session.async_payment_succeeded") {
@@ -1423,32 +1442,38 @@ export async function handleAuth(request, env, url, ctx) {
           // ad-free. Checked against Stripe, not the adFree flag, so an
           // admin revoke or a sub still waiting to be granted is protected.
           const stored = await storedSubStatus(user);
-          if (stored === null) return json({ error: "Could not confirm subscription with Stripe; retry later." }, 503);
+          if (stored === null) return storedLookupFailed(user);
           if (user && !SUB_HOLDS.includes(stored)) {
             await saveUser(env, { ...user, stripeCustomerId: obj.customer, stripeSubId: obj.subscription });
           }
         }
         return done({ received: true, ignored: true });
       }
-      // The incoming sub is live. If the user already has a different
-      // ad-free sub that is active/trialing, keep tracking that one (its
-      // events stay authoritative) and flag the duplicate to the admin so
-      // it can be refunded/canceled by hand. Never auto-cancel here.
+      // The incoming sub is live. If the user is ad-free on a different sub
+      // that is active/trialing, keep tracking that one (its events stay
+      // authoritative), leave its customer pointer alone, and flag the
+      // duplicate to the admin so it can be refunded/canceled by hand.
+      // If ad-free was off despite an active stored sub (an admin revoke),
+      // the user just paid again: track the new sub instead. Never auto-cancel.
       const user = email ? await env.USERS.get(emailKey(email), "json") : null;
       const stored = await storedSubStatus(user);
-      if (stored === null) return json({ error: "Could not confirm subscription with Stripe; retry later." }, 503);
-      const keepStored = stored === "active" || stored === "trialing";
+      if (stored === null) return storedLookupFailed(user);
+      const storedLive = stored === "active" || stored === "trialing";
+      const keepStored = storedLive && !!user.adFree;
       if (SUB_HOLDS.includes(stored)) {
+        const tracked = keepStored ? user.stripeSubId : obj.subscription;
+        const untracked = keepStored ? obj.subscription : user.stripeSubId;
+        const revoked = storedLive && !user.adFree;
         await runBg(ctx, notify(env, "adfree_duplicate_subscription",
-          { email, customer: obj.customer || null, trackedSub: keepStored ? user.stripeSubId : obj.subscription, untrackedSub: keepStored ? obj.subscription : user.stripeSubId },
+          { email, customer: obj.customer || null, storedCustomer: user.stripeCustomerId || null, trackedSub: tracked, untrackedSub: untracked, revokedBefore: revoked },
           { to: await adminEmails(env), subject: "Duplicate shouldiboat Pro subscription",
-            html: `<div style="font-family:system-ui,sans-serif"><h2>Duplicate Pro subscription</h2><p><b>${htmlEscape(email)}</b> has two live ad-free subscriptions on customer <code>${htmlEscape(obj.customer || "?")}</code>. Tracking <code>${htmlEscape(keepStored ? user.stripeSubId : obj.subscription)}</code>; please refund/cancel <code>${htmlEscape(keepStored ? obj.subscription : user.stripeSubId)}</code> in Stripe.</p></div>`,
+            html: `<div style="font-family:system-ui,sans-serif"><h2>Duplicate Pro subscription</h2><p><b>${htmlEscape(email)}</b> has two live ad-free subscriptions (customer <code>${htmlEscape(obj.customer || "?")}</code>${user.stripeCustomerId && user.stripeCustomerId !== obj.customer ? `, previously <code>${htmlEscape(user.stripeCustomerId)}</code>` : ""}). Tracking <code>${htmlEscape(tracked)}</code>; please refund/cancel <code>${htmlEscape(untracked)}</code> in Stripe.</p>${revoked ? `<p><b>Note:</b> ad-free had been switched off (likely a manual revoke) while <code>${htmlEscape(untracked)}</code> was still active, and the user then paid again. The new subscription is now tracked; review why the old one was revoked before refunding anything.</p>` : ""}</div>`,
             ttlDays: 30 }));
       }
-      const extra = keepStored ? { stripeCustomerId: obj.customer || null } : { stripeCustomerId: obj.customer || null, stripeSubId: obj.subscription };
+      const extra = keepStored ? {} : { stripeCustomerId: obj.customer || null, stripeSubId: obj.subscription };
       const prev = await setAdFree(email, true, extra);
       // Welcome only on a real state change, not on every redelivery.
-      if (prev && (!prev.adFree || (!keepStored && prev.stripeSubId !== obj.subscription))) {
+      if (prev && !keepStored && (!prev.adFree || prev.stripeSubId !== obj.subscription)) {
         await runBg(ctx, notify(env, "adfree_activated", { email }, { to: email, subject: "Welcome to shouldiboat Pro", html: adFreeHtml(), ttlDays: 30 }));
       }
     } else if ((event.type === "customer.subscription.updated" || event.type === "customer.subscription.deleted") && !notAdFree) {

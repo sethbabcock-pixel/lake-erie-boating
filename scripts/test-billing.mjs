@@ -1037,6 +1037,50 @@ async function run() {
     eq("re-subscribe: grants", rs.adFree, true);
     check("re-subscribe: welcome sent", emailCalls.some((c) => /Welcome to shouldiboat Pro/i.test(c.subject)));
     check("re-subscribe: no duplicate notice", !notes().some((n) => n.type === "adfree_duplicate_subscription" && n.email === "resub@example.com"));
+
+    // F1: admin revoked ad-free while sub A was still active; the user pays
+    // again (B). Track B, grant, welcome, and tell the admin about the revoke.
+    await seedUser(env, "f1@example.com", { adFree: false, stripeCustomerId: "cus_f1", stripeSubId: "sub_f1A" });
+    subCustomer.sub_f1B = "cus_f1";
+    emailCalls = [];
+    await call(stripeWebhookReq(ck("evt_f1", "f1@example.com", "cus_f1", "sub_f1B"), "whsec_right"), env);
+    const f1 = await env.USERS.get("user:f1@example.com", "json");
+    eq("F1: paid again after revoke → tracks the new sub", f1.stripeSubId, "sub_f1B");
+    eq("F1: grants", f1.adFree, true);
+    check("F1: welcome sent", emailCalls.some((c) => /Welcome to shouldiboat Pro/i.test(c.subject)));
+    const f1n = notes().find((n) => n.type === "adfree_duplicate_subscription" && n.email === "f1@example.com");
+    check("F1: duplicate notice flags the revoke and names the old sub", f1n && f1n.revokedBefore === true && f1n.untrackedSub === "sub_f1A" && f1n.trackedSub === "sub_f1B", JSON.stringify(f1n));
+    const f1mail = emailCalls.find((c) => /Duplicate shouldiboat Pro subscription/.test(c.subject));
+    check("F1: admin email mentions the manual revoke", f1mail && /manual revoke/.test(f1mail.htmlContent || ""), JSON.stringify(f1mail));
+
+    // F2: keeping the stored sub also keeps the stored customer pointer.
+    await seedUser(env, "f2@example.com", { adFree: true, stripeCustomerId: "cus_f2old", stripeSubId: "sub_f2A" });
+    subCustomer.sub_f2B = "cus_f2new";
+    await call(stripeWebhookReq(ck("evt_f2", "f2@example.com", "cus_f2new", "sub_f2B"), "whsec_right"), env);
+    const f2 = await env.USERS.get("user:f2@example.com", "json");
+    eq("F2: keeps the stored sub", f2.stripeSubId, "sub_f2A");
+    eq("F2: keeps the stored customer", f2.stripeCustomerId, "cus_f2old");
+    const f2n = notes().find((n) => n.type === "adfree_duplicate_subscription" && n.email === "f2@example.com");
+    check("F2: duplicate notice names both customers", f2n && f2n.customer === "cus_f2new" && f2n.storedCustomer === "cus_f2old" && f2n.revokedBefore === false, JSON.stringify(f2n));
+
+    // Stored-sub lookup keeps failing → admin alerted once, on the 3rd failed delivery.
+    await seedUser(env, "lf@example.com", { adFree: false, stripeCustomerId: "cus_lf", stripeSubId: "sub_lfA" });
+    subCustomer.sub_lfB = "cus_lf";
+    stripeFailIds = new Set(["sub_lfA"]);
+    emailCalls = [];
+    const lfEvt = ck("evt_lf", "lf@example.com", "cus_lf", "sub_lfB");
+    const alerts = () => emailCalls.filter((c) => /lookup keeps failing/.test(c.subject)).length;
+    eq("lookup failing: 1st delivery → 503", (await call(stripeWebhookReq(lfEvt, "whsec_right"), env)).status, 503);
+    eq("lookup failing: 2nd delivery → 503", (await call(stripeWebhookReq(lfEvt, "whsec_right"), env)).status, 503);
+    eq("lookup failing: no alert after 2 failures", alerts(), 0);
+    await call(stripeWebhookReq(lfEvt, "whsec_right"), env);
+    eq("lookup failing: alert on the 3rd failure", alerts(), 1);
+    await call(stripeWebhookReq(lfEvt, "whsec_right"), env);
+    eq("lookup failing: no repeat alert on the 4th", alerts(), 1);
+    check("lookup failing: notification recorded", notes().some((n) => n.type === "stripe_lookup_failing" && n.eventId === "evt_lf" && n.storedSub === "sub_lfA"));
+    stripeFailIds = new Set();
+    eq("lookup recovers: retry → 200", (await call(stripeWebhookReq(lfEvt, "whsec_right"), env)).status, 200);
+    eq("lookup recovers: new sub granted", (await env.USERS.get("user:lf@example.com", "json")).adFree, true);
     subStatus = {}; subCustomer = {};
   }
 
