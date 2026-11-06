@@ -283,10 +283,10 @@ async function stripeSubLive(env, subId, { invoice = false } = {}) {
 }
 // Another live, paid ad-free subscription on this customer (not `excludeId`)?
 // Used when the recorded one ends, so a user paying for two isn't cut off.
-// → the subscription id, or null if none / Stripe can't answer (callers then
-// fall back to revoking, the safe direction).
+// → { id } (another qualifying sub), { id: null } (none), or null when
+// Stripe can't answer (callers retry, then fall back to revoking).
 async function stripeOtherLiveAdfreeSub(env, customer, excludeId) {
-  if (!customer) return null;
+  if (!customer) return { id: null };
   try {
     const q = `customer=${encodeURIComponent(customer)}&status=all&limit=20&expand[]=data.latest_invoice`;
     const r = await fetch(`https://api.stripe.com/v1/subscriptions?${q}`, {
@@ -301,7 +301,7 @@ async function stripeOtherLiveAdfreeSub(env, customer, excludeId) {
       && s.metadata?.purpose === "adfree"
       && (s.status === "active" || s.status === "trialing")
       && s.latest_invoice && typeof s.latest_invoice === "object" && s.latest_invoice.status === "paid");
-    return hit ? hit.id : null;
+    return { id: hit ? hit.id : null };
   } catch (e) {
     return null;
   }
@@ -1473,10 +1473,23 @@ export async function handleAuth(request, env, url, ctx) {
         // paying for another tagged, live, paid ad-free sub on the same
         // customer (e.g. two checkouts from two tabs), switch to it instead of
         // revoking, and tell the admins: a double subscription is a billing
-        // issue (refund/cancel one). If Stripe can't answer, revoke (safe);
-        // the other sub's next `updated` adopts it.
+        // issue (refund/cancel one).
+        // If Stripe can't answer, return 503 so Stripe retries rather than cut
+        // off a user who may still be paying. Stripe stops retrying after ~3
+        // days, so this is bounded: once the lookup has been failing for this
+        // event for 24h, revoke anyway (safe direction; the other sub's next
+        // `updated` re-adopts it).
         if (!active && user.adFree && user.stripeSubId && user.stripeSubId === obj.id) {
-          const other = await stripeOtherLiveAdfreeSub(env, obj.customer, obj.id);
+          const found = await stripeOtherLiveAdfreeSub(env, obj.customer, obj.id);
+          let other = found ? found.id : null;
+          if (found === null && evtKey) {
+            const failKey = `stripeevtfail:${event.id}`;
+            const firstFail = Number(await env.USERS.get(failKey)) || 0;
+            if (!firstFail) await env.USERS.put(failKey, String(Date.now()), { expirationTtl: 7 * 86400 });
+            if (!firstFail || Date.now() - firstFail < 24 * 3600e3) {
+              return json({ error: "Could not check other subscriptions with Stripe; retry later." }, 503);
+            }
+          }
           if (other) {
             await setAdFree(email, true, { stripeSubId: other });
             await runBg(ctx, notify(env, "double_subscription", { email, customer: obj.customer, ended: obj.id, now: other }, {
