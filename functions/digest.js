@@ -118,6 +118,14 @@ async function allUsers(env) {
   return users;
 }
 
+// Unconfirmed password sign-ups are deleted after this long. The confirm link
+// lasts 24h, so 48h leaves a day of slack for a resend. Clearing them stops an
+// address being squatted (pre-registered by someone who doesn't own it).
+export const UNVERIFIED_TTL_MS = 48 * 3600e3;
+const isStaleUnverified = (u, now) =>
+  u.emailVerified === false && u.pass && !u.stripeCustomerId && !u.stripeSubId && !u.adFree &&
+  Number.isFinite(Date.parse(u.created)) && now.getTime() - Date.parse(u.created) > UNVERIFIED_TTL_MS;
+
 export async function runScheduled(env, utcHour, now = new Date()) {
   if (!env.USERS) return { skipped: "no KV" };
   const isDigestRun = utcHour === DIGEST_UTC_HOUR;
@@ -125,7 +133,16 @@ export async function runScheduled(env, utcHour, now = new Date()) {
   const isAlertWindow = utcHour >= ALERT_UTC_FROM && utcHour <= ALERT_UTC_TO;
   if (!isDigestRun && !isAlertWindow) return { skipped: "outside windows" };
 
-  const users = await allUsers(env);
+  let users = await allUsers(env);
+  // Once a day (digest run): delete stale unconfirmed password sign-ups.
+  let pruned = 0;
+  if (isDigestRun) {
+    const stale = users.filter((u) => isStaleUnverified(u, now));
+    for (const u of stale) {
+      try { await env.USERS.delete(`user:${u.email}`); pruned++; } catch (e) { /* retry tomorrow */ }
+    }
+    if (stale.length) users = users.filter((u) => !stale.includes(u));
+  }
   const summary = await fetchSummary(env); // curated + featured built pages
   const byId = Object.fromEntries((summary.spots || []).map((s) => [s.id, s]));
   // Favorited user-built pages that aren't already covered (not featured yet):
@@ -258,7 +275,7 @@ export async function runScheduled(env, utcHour, now = new Date()) {
 
   // One log line per run that did something (or every digest run, for visibility).
   if (digests || alerts || goAlerts || weekends || failures || isDigestRun) {
-    await notify(env, "email_run", { utcHour, users: users.length, digests, alerts, goAlerts, weekends, failures });
+    await notify(env, "email_run", { utcHour, users: users.length, digests, alerts, goAlerts, weekends, failures, pruned });
   }
-  return { digests, alerts, goAlerts, weekends, failures, users: users.length };
+  return { digests, alerts, goAlerts, weekends, failures, pruned, users: users.length };
 }

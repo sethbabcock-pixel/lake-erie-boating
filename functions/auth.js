@@ -135,11 +135,16 @@ const DEFAULT_SITE_CONFIG = {
 // Site owner — admin by default so /admin works with no Cloudflare setup.
 // Admins come from the ADMIN_EMAIL Worker variable: one address, or several
 // separated by commas (e.g. "a@x.com, b@y.com"). Unset or empty → DEFAULT_ADMIN.
+// Set but with no valid address (e.g. a typo like "me@gmail") → NO admins
+// (fail closed, logged) rather than silently falling back to the default.
 // Deliberately not editable from /admin, so one admin can't add another.
 const DEFAULT_ADMIN = "seth.babcock@gmail.com";
 const adminList = (env) => {
-  const list = String(env.ADMIN_EMAIL || "").split(/[\s,;]+/).map((e) => e.trim().toLowerCase()).filter(validEmail);
-  return list.length ? [...new Set(list)] : [DEFAULT_ADMIN];
+  const entries = String(env.ADMIN_EMAIL || "").split(/[\s,;]+/).map((e) => e.trim().toLowerCase()).filter(Boolean);
+  if (!entries.length) return [DEFAULT_ADMIN];
+  const list = entries.filter(validEmail);
+  if (!list.length) console.error("ADMIN_EMAIL is set but contains no valid address; no admins until it is fixed.");
+  return [...new Set(list)];
 };
 // An admin must have proved they own the address: an unverified password
 // account (explicit emailVerified === false) never gets admin, even if listed.
@@ -377,6 +382,22 @@ export async function sendEmail(env, to, subject, htmlBody) {
     try { detail = (await resp.text()).slice(0, 300); } catch (e) { /* ignore */ }
     return { ok: false, error: `Brevo ${resp.status}${detail ? `: ${detail}` : ""}` };
   } catch (e) { return { ok: false, error: String(e) }; }
+}
+// Delete every token key under these prefixes that points at `email`.
+// sess:/verify:/reset: tokens map token → email and aren't indexed by email,
+// so this scans; only used on rare paths (account delete, Google takeover of
+// an unverified sign-up).
+async function purgeKeysFor(env, email, prefixes) {
+  for (const prefix of prefixes) {
+    let cursor;
+    do {
+      const page = await env.USERS.list({ prefix, limit: 1000, cursor });
+      for (const k of page.keys) {
+        if ((await env.USERS.get(k.name)) === email) await env.USERS.delete(k.name);
+      }
+      cursor = page.list_complete ? null : page.cursor;
+    } while (cursor);
+  }
 }
 async function adminEmails(env) {
   const cfg = await env.USERS.get("site:config", "json").catch(() => null);
@@ -1192,7 +1213,26 @@ export async function handleAuth(request, env, url, ctx) {
     // as (or claim admin for) an address they don't control.
     if (payload.email_verified !== true && payload.email_verified !== "true") return new Response("Your Google account's email address isn't verified.", { status: 403 });
     let user = await env.USERS.get(emailKey(email), "json");
-    if (!user) {
+    if (user && user.emailVerified === false) {
+      // Pre-hijack defense: someone registered this address with a password but
+      // never confirmed it. Google just proved the signer-in owns the mailbox,
+      // so the account is theirs — drop the unproven password (otherwise
+      // verifying later would make the squatter's password work) and any
+      // tokens issued to the unverified account.
+      user.emailVerified = true;
+      user.via = "google";
+      delete user.pass; delete user.salt; delete user.passIter;
+      await env.USERS.put(emailKey(email), JSON.stringify(user));
+      await purgeKeysFor(env, email, ["sess:", "verify:", "reset:"]);
+      await runBg(ctx, Promise.all([
+        notify(env, "signup", { email, via: "google" }, {
+          to: await adminEmails(env), subject: "New shouldiboat.com signup",
+          html: `<div style="font-family:system-ui,sans-serif"><h2>New signup</h2><p><b>${htmlEscape(email)}</b> just confirmed their account (Google; an unverified password sign-up for this address was discarded).</p></div>`,
+          ttlDays: 30,
+        }),
+        welcomeNotify(env, user, url),
+      ]));
+    } else if (!user) {
       user = { id: randHex(8), email, created: new Date().toISOString(), prefs: {}, favorites: [], adFree: false, via: "google", emailVerified: true };
       await env.USERS.put(emailKey(email), JSON.stringify(user));
       await runBg(ctx, Promise.all([
@@ -1343,13 +1383,7 @@ export async function handleAuth(request, env, url, ctx) {
     await env.USERS.delete(emailKey(u.email));
     if (u.unsubToken) await env.USERS.delete(`unsub:${u.unsubToken}`);
     if (u.stripeCustomerId) await env.USERS.delete(`stripecust:${u.stripeCustomerId}`);
-    for (const prefix of ["sess:", "verify:", "reset:"]) {
-      const list = await env.USERS.list({ prefix, limit: 1000 });
-      for (const k of list.keys) {
-        const v = await env.USERS.get(k.name);
-        if (v === u.email) await env.USERS.delete(k.name);
-      }
-    }
+    await purgeKeysFor(env, u.email, ["sess:", "verify:", "reset:"]);
     await runBg(ctx, notify(env, "account_deleted", { email: u.email }, {
       to: await adminEmails(env), subject: "Account deleted · shouldiboat.com",
       html: `<div style="font-family:system-ui,sans-serif"><p><b>${htmlEscape(u.email)}</b> deleted their account.</p></div>`, ttlDays: 30,
