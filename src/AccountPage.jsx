@@ -2,7 +2,7 @@ import React, { useEffect, useState } from "react";
 import { useAuth, AuthModal } from "./auth.jsx";
 import { BOAT_TYPES, boatById, effectiveLimits } from "./boats.js";
 import { track } from "./monetize.jsx";
-import { ProUpsell } from "./Pro.jsx";
+import { ProUpsell, PlanCompare } from "./Pro.jsx";
 
 const fmtDate = (unixSec) =>
   unixSec ? new Date(unixSec * 1000).toLocaleDateString(undefined, { year: "numeric", month: "long", day: "numeric" }) : null;
@@ -315,7 +315,7 @@ function DangerZone({ auth }) {
 // ── Page shell ────────────────────────────────────────────────────────────────
 export default function AccountPage() {
   const auth = useAuth();
-  const [modal, setModal] = useState(false);
+  const [modal, setModal] = useState(false); // false | "login" | "register"
   const dark = (typeof document !== "undefined" ? document.documentElement.getAttribute("data-theme") : "dark") !== "light";
 
   const created = auth.user?.created ? new Date(auth.user.created).toLocaleDateString(undefined, { year: "numeric", month: "long", day: "numeric" }) : null;
@@ -336,11 +336,11 @@ export default function AccountPage() {
         {auth.user === undefined && <p className="acct-note">Loading…</p>}
 
         {auth.user === null && (
-          <section className="card acct-sec">
-            <h2>Sign in</h2>
-            <p className="acct-lead">Sign in to manage your boat profile, comfort limits, and subscription.</p>
-            <button className="cbtn" onClick={() => setModal(true)}>Sign in</button>
-            {modal && <AuthModal auth={auth} onClose={() => setModal(false)} />}
+          <section className="card acct-sec" id="pro">
+            <h2>Plans</h2>
+            <p className="acct-lead">Sign in to manage your starred ports, boat profile, emails and subscription. New here? Start free.</p>
+            <PlanCompare onStart={() => setModal("register")} onSignIn={() => setModal("login")} />
+            {modal && <AuthModal key={modal} auth={auth} initialMode={modal} onClose={() => setModal(false)} />}
           </section>
         )}
 

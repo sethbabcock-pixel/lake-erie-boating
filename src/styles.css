@@ -1148,3 +1148,28 @@ body.has-takeover .app { background: var(--bg); border-radius: var(--r-lg) var(-
 .pro-fine { margin: var(--s2) 0 0; font-size: var(--fs-xs); color: var(--text-faint); }
 .pro-later { display: block; margin: var(--s3) auto 0; }
 .acct-toggle.locked { cursor: default; opacity: .75; }
+
+/* Layout-shift guards: placeholders that hold space while /auth/me loads. */
+.auth-pending { visibility: hidden; pointer-events: none; }
+.auth-pending .signin-btn { display: inline-flex; align-items: center; justify-content: center; }
+.hero-cta-pending { display: inline-block; visibility: hidden; }
+
+/* "Remove ads" next to the ad label (links to the Pro plan) */
+.adlabel { display: flex; justify-content: space-between; align-items: baseline; gap: var(--s2); }
+.adlabel-remove { text-transform: none; letter-spacing: 0; font-size: 11px; color: var(--accent); text-decoration: none; padding: 4px 0; }
+.adlabel-remove:hover { text-decoration: underline; }
+
+/* Free vs Pro (signed-out /account) */
+.plan-compare { display: grid; grid-template-columns: 1fr 1fr; gap: var(--s3); }
+.plan-col { border: 1px solid var(--border-strong); border-radius: var(--r-md); padding: var(--s4); background: var(--surface); }
+.plan-col.pro { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 6%, var(--surface)); }
+.plan-head { display: flex; flex-direction: column; gap: 2px; margin-bottom: var(--s3); }
+.plan-head b { font-size: var(--fs-lg); color: var(--text); }
+.plan-price { font-size: var(--fs-2xl); font-weight: var(--fw-extrabold); color: var(--text); }
+.plan-price small { font-size: var(--fs-sm); font-weight: var(--fw-semibold); color: var(--text-muted); }
+.plan-alt { font-size: var(--fs-xs); color: var(--text-muted); }
+.plan-col .pro-feats { margin: 0; }
+.plan-actions { grid-column: 1 / -1; display: flex; flex-direction: column; align-items: center; gap: var(--s2); }
+.plan-actions .cbtn { width: 100%; max-width: 360px; min-height: 46px; font-weight: var(--fw-bold); }
+.plan-actions .pro-fine { text-align: center; }
+@media (max-width: 560px) { .plan-compare { grid-template-columns: 1fr; } }

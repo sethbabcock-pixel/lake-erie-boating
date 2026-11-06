@@ -277,7 +277,17 @@ export function Account({ auth }) {
     return () => document.removeEventListener("mousedown", h);
   }, [menu]);
 
-  if (!auth.available || auth.user === undefined) return null; // accounts off or still loading
+  // While /auth/me loads, hold the signed-out buttons' space (most first visits
+  // are signed out), so the header doesn't grow and push the page down.
+  if (auth.user === undefined) {
+    return (
+      <div className="auth-ctas auth-pending" aria-hidden="true">
+        <span className="signin-btn ghost">Sign in</span>
+        <span className="signin-btn">Sign up free</span>
+      </div>
+    );
+  }
+  if (!auth.available) return null; // accounts not configured
   if (!auth.user) {
     // Lead with signup, but always offer Sign in for returning boaters.
     return (

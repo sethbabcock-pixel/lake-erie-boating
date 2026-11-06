@@ -86,6 +86,37 @@ export function ProUpsell({ auth, where, compact = false }) {
   );
 }
 
+// Free vs Pro side by side, for signed-out visitors (/account). Pro is bought
+// from an account, so the action here is "start free"; the Pro column shows the
+// live monthly price so the upgrade path is visible before anyone signs up.
+export function PlanCompare({ onStart, onSignIn }) {
+  const plans = usePlans();
+  const month = (plans || []).find((p) => p.id === "month");
+  const year = (plans || []).find((p) => p.id === "year");
+  const FREE = ["Every GO / CAUTION / NO-GO verdict", "Hour-by-hour, week ahead, maps & cams", "Daily verdict email + NO-GO alerts", "Up to 3 starred ports"];
+  return (
+    <div className="plan-compare">
+      <div className="plan-col">
+        <div className="plan-head"><b>Free</b><span className="plan-price">$0</span></div>
+        <ul className="pro-feats">{FREE.map((t) => <li key={t}><span className="pro-check" aria-hidden="true">✓</span><span>{t}</span></li>)}</ul>
+      </div>
+      <div className="plan-col pro">
+        <div className="plan-head"><b>Pro</b>
+          {month && <span className="plan-price">{money(month.amount, month.currency)}<small>/mo</small></span>}
+          {year && <span className="plan-alt">or {money(year.amount, year.currency)}/yr</span>}
+        </div>
+        <ul className="pro-feats"><li><span className="pro-check" aria-hidden="true">✓</span><span>Everything in Free, plus:</span></li>
+          {PRO_FEATURES.map((f) => <li key={f.k}><span className="pro-check" aria-hidden="true">✓</span><span><b>{f.t}</b></span></li>)}</ul>
+      </div>
+      <div className="plan-actions">
+        <button className="cbtn" onClick={() => { track("event", "signup_gate_click", { spot: "account_compare", action: "register" }); onStart(); }}>Start free</button>
+        <button className="linklike" onClick={onSignIn}>Already have an account? Sign in</button>
+        <p className="pro-fine">Create a free account first; you can go Pro from your account anytime.</p>
+      </div>
+    </div>
+  );
+}
+
 // Shown when a free member tries to star a port past the free limit.
 export function UpgradeModal({ auth, reason, onClose }) {
   useEffect(() => { track("event", "pro_prompt_view", { reason }); }, [reason]);

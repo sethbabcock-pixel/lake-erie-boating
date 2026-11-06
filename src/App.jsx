@@ -92,7 +92,8 @@ const WaveGlyph = () => (
 // One NWS nearshore period as icon + wind/wave chips + weather sentence.
 // Shared by the full forecast card and the week-ahead day panel.
 function MarinePeriodRow({ p }) {
-  const m = parseMarine(p.forecast);
+  // Belt and braces: strip an NWS "$$" product terminator from any source.
+  const m = parseMarine(String(p.forecast || "").split("$$")[0].trim());
   return (
     <div className="mrow">
       <div className="mrow-head"><WxIcon short={p.forecast} size={24} /><span className="mrow-name">{p.name}</span></div>
@@ -733,10 +734,8 @@ function MapCard({ spot }) {
   );
 }
 
-// Conversion gate: signed-out visitors get the verdict + current conditions
-// free; the full toolkit (hour-by-hour, cams, maps, forecasts) needs a free
-// account. The skeleton behind the card is decorative — gated data is simply
-// not rendered, so nothing leaks into the DOM.
+// Line icons for the signup nudge. (The whole toolkit is free; a free account
+// adds saved ports + the morning verdict and alert emails.)
 const GateIcon = ({ children }) => (
   <svg className="gate-ico" viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">{children}</svg>
 );
@@ -1059,7 +1058,7 @@ export default function App() {
       ) : (
       <>
       {/* FlightAware-style hero: sponsor takeover when sold, else house hero. */}
-      <Takeover adFree={adFree} spotName={activeName} verdict={rec?.level} signedIn={!gated} onJoin={() => setGateAuth("register")}
+      <Takeover adFree={adFree} spotName={activeName} verdict={rec?.level} signedIn={!gated} onJoin={() => setGateAuth("register")} authPending={auth.user === undefined}
         spot={spot && spot.adHoc && !spot.built ? null : active} region={sponsorRegion} />
 
       <main className="app">

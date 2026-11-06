@@ -149,7 +149,7 @@ export function AdSlot({ name = "detailTop" }) {
   const test = adTestOn();
   return (
     <div className={`adwrap is-${status}${test ? " is-test" : ""}`}>
-      <span className="adlabel">Advertisement{test ? ` · ${status}` : ""}</span>
+      <span className="adlabel">Advertisement{test ? ` · ${status}` : ""}<a className="adlabel-remove" href="/account#pro" onClick={() => track("event", "remove_ads_click", { placement: name })}>Remove ads</a></span>
       <ins ref={ref} className="adsbygoogle" style={{ display: "block" }}
         data-ad-client={client} data-ad-slot={slot}
         data-ad-format="auto" data-full-width-responsive="true"

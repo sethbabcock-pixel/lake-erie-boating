@@ -98,7 +98,7 @@ function SponsorHero({ s, splash, children }) {
 // ── House hero (brand band over the hero photo or video) ─────────────────────
 // title / subtitle replace the admin headline on pages with their own subject
 // (a /near/<city> page reads "Boating near Cleveland, OH").
-function HouseHero({ hero, spotName, verdict, adFree, splash, children, signedIn, onJoin, title, subtitle, region }) {
+function HouseHero({ hero, spotName, verdict, adFree, splash, children, signedIn, onJoin, title, subtitle, region, authPending }) {
   const h = { ...DEFAULT_HERO, ...(hero || {}) };
   const photo = heroImageFor(h, region);
   // A hero video belongs to the main hero; a regional photo replaces it.
@@ -134,11 +134,15 @@ function HouseHero({ hero, spotName, verdict, adFree, splash, children, signedIn
           <p className="hero-subtitle">{h.sub || "A clear GO / CAUTION / NO-GO call from live NOAA wind, waves & weather."}</p>
         )}
         {children}
-        {/* One goal per audience: signed-out → sign up; signed-in free → Pro upsell. */}
-        {!splash && !signedIn && onJoin && (
-          <button className="hero-housecta linkbtn" onClick={onJoin}>Create a free account for hour-by-hour, cams &amp; alerts →</button>
+        {/* One goal per audience: signed-out → sign up; signed-in free → Pro upsell.
+            Everything on the page is already free, so the signup pitch is what an
+            account adds: the morning email + alerts. While auth loads, hold the
+            line's space so the CTA doesn't pop in and shift the page. */}
+        {!splash && authPending && <span className="hero-housecta hero-cta-pending" aria-hidden="true">&nbsp;</span>}
+        {!splash && !authPending && !signedIn && onJoin && (
+          <button className="hero-housecta linkbtn" onClick={onJoin}>Get this port's verdict by email at 6am, free →</button>
         )}
-        {!splash && signedIn && !adFree && <a className="hero-housecta" href="/account#pro">Go Pro: no ads, GO alerts &amp; weekend outlook →</a>}
+        {!splash && !authPending && signedIn && !adFree && <a className="hero-housecta" href="/account#pro">Go Pro: no ads + GO alerts →</a>}
       </div>
     </section>
   );
@@ -147,7 +151,7 @@ function HouseHero({ hero, spotName, verdict, adFree, splash, children, signedIn
 // ── Public entry ──────────────────────────────────────────────────────────────
 // spot / region: where this hero sits (a launch id, a REGIONS slug), so a
 // targeted campaign shows on its own pages (see src/sponsor-target.js).
-export default function Takeover({ adFree, spotName, verdict, splash = false, children = null, signedIn = true, onJoin = null, spot = null, region = null, title = null, subtitle = null }) {
+export default function Takeover({ adFree, spotName, verdict, splash = false, children = null, signedIn = true, onJoin = null, spot = null, region = null, title = null, subtitle = null, authPending = false }) {
   const [cfg, setCfg] = useState({ hero: DEFAULT_HERO, takeovers: [], gam: { networkCode: "" }, loaded: false });
   useEffect(() => {
     let alive = true;
@@ -186,5 +190,5 @@ export default function Takeover({ adFree, spotName, verdict, splash = false, ch
     );
   }
   return <HouseHero hero={cfg.hero} spotName={spotName} verdict={verdict} adFree={adFree} splash={splash} signedIn={signedIn} onJoin={onJoin}
-    title={title} subtitle={subtitle} region={region}>{splash ? children : null}</HouseHero>;
+    title={title} subtitle={subtitle} region={region} authPending={authPending}>{splash ? children : null}</HouseHero>;
 }

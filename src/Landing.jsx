@@ -575,6 +575,10 @@ function GuidesTeaser() {
 const NEARPT_KEY = "boating.nearpt";
 const loadNearPt = () => { try { return JSON.parse(localStorage.getItem(NEARPT_KEY) || "null"); } catch (e) { return null; } };
 
+// "on the Great Lakes", "in Florida": reads naturally after "Should I boat".
+const ON_REGIONS = { greatlakes: "on the Great Lakes", chesapeake: "on the Chesapeake", carolina: "on the Carolina sounds", "gulf-coast": "on the Gulf Coast" };
+const regionPhrase = (r) => ON_REGIONS[r.slug] || `in ${r.title}`;
+
 export default function Landing({ adFree, showAds, onSelect, favorites, onCookieSettings, onJoin, onSignIn, signedIn, nudge, region, onRegion, userEmail, onPreview, prefs, metro, onCity }) {
   const [summary, setSummary] = useState(null);
   const [reqToken, setReqToken] = useState(0);
@@ -604,11 +608,22 @@ export default function Landing({ adFree, showAds, onSelect, favorites, onCookie
       .catch(() => { if (alive) setSummary([]); });
     return () => { alive = false; };
   }, []);
+  // A region page (/greatlakes, /florida…) leads with its own subject and live
+  // tally, then its ports directly under the hero: that's what a search for
+  // "Great Lakes boating conditions" came for, and what a regional sponsor buys.
+  const regionPage = region && !metro ? region : null;
+  const regionTally = regionPage && summary ? (() => {
+    const mine = summary.filter((s) => (regionPage.lakes || []).includes(s.lake || "Lake Erie"));
+    const go = mine.filter((s) => s.level === "GO").length;
+    return mine.length ? `${go} of ${mine.length} launches are GO right now. Live GO / CAUTION / NO-GO calls from NOAA wind, waves and weather.` : null;
+  })() : null;
+  const directory = <RegionDirectory summary={summary} q="" onSelect={onSelect} deepLake={dirRegion ? null : deepLake} region={dirRegion} onRegion={onRegion} />;
   return (
     <>
       <Takeover splash adFree={adFree} signedIn={signedIn} onJoin={onJoin} region={dirRegion ? dirRegion.slug : null}
-        title={metro ? `Boating near ${metro.name}` : null}
-        subtitle={metro ? "The closest launches, best conditions first, with a live GO / CAUTION / NO-GO call from NOAA for each." : null}>
+        title={metro ? `Boating near ${metro.name}` : regionPage ? `Should I boat ${regionPhrase(regionPage)} today?` : null}
+        subtitle={metro ? "The closest launches, best conditions first, with a live GO / CAUTION / NO-GO call from NOAA for each."
+          : regionPage ? (regionTally || regionPage.blurb) : null}>
         <SplashSearch summary={summary} favorites={favorites}
           onSelect={onSelect} onPreview={onPreview} onRequest={openRequest} onLocate={rememberPt} />
       </Takeover>
@@ -618,9 +633,10 @@ export default function Landing({ adFree, showAds, onSelect, favorites, onCookie
           <NearYou summary={summary} pt={nearPt} prefs={prefs} onSelect={onSelect} limit={8} radius={METRO_MI}
             heading={<>Closest launches to {metro.name}</>} />
         )}
+        {regionPage && directory}
         {onJoin && (
           <div className="joinstrip">
-            <span><b>Every port's verdict is below, free.</b> Create an account for the hour-by-hour picture, live cams &amp; “be back in by” times.</span>
+            <span><b>Every verdict, forecast and cam here is free.</b> A free account adds ⭐ saved ports, your ports' verdict by email at 6am, and NO-GO alerts.</span>
             <div className="joinstrip-actions">
               <button className="cbtn" onClick={onJoin}>Create free account</button>
               {onSignIn && <button className="linklike joinstrip-signin" onClick={onSignIn}>Already have an account? Sign in</button>}
@@ -635,7 +651,7 @@ export default function Landing({ adFree, showAds, onSelect, favorites, onCookie
         {nudge}
         {!metro && <NearYou summary={summary} pt={nearPt} prefs={prefs} onSelect={onSelect} />}
         {signedIn && <MyPorts summary={summary} favorites={favorites} onSelect={onSelect} />}
-        <RegionDirectory summary={summary} q="" onSelect={onSelect} deepLake={dirRegion ? null : deepLake} region={dirRegion} onRegion={onRegion} />
+        {!regionPage && directory}
         {/* Ads sit after real content (the directory, then the guides), never
             above it — AdSense's "ads on screens without publisher content". */}
         {showAds && <AdSlot name="landingTop" />}

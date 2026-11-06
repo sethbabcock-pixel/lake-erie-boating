@@ -421,6 +421,9 @@ const GRID_STEPS = [0.035, 0.1, 0.22];
 // ~4 mi out (still well inside the NWS 0-20 NM coastal zone).
 const OCEAN_GRID_STEPS = [0.06, 0.1, 0.22];
 async function fetchSpotGrid(spot) {
+  return prunePeriods(await fetchSpotGridRaw(spot));
+}
+async function fetchSpotGridRaw(spot) {
   // Open water (lakes, bays, sounds, ocean): nudge seaward until we hit a
   // marine cell that carries waves. Inland waters have no wave grid, so just
   // sample the point once (wind/gusts/precip/temp exist on land; waves blank).
@@ -823,6 +826,23 @@ function zoneNumbers(spec) {
 // magnitude — and makes the headline, the hour-by-hour strip, and the week all
 // agree with the nearshore report. Marine periods run in ~12h day/night blocks
 // starting from "now", so we bucket each hour into a period by local half-day.
+// Physical sanity check for a wave period: a wave can't be steeper than about
+// 1:7 (height / deep-water wavelength, wavelength ≈ 1.56·T² m) before it breaks.
+// The grid's period layer and the nearshore wave floor come from different
+// sources, so a raised height can sit on a tiny period ("7 ft @ 1s"). Those
+// pairs are dropped (shown as "—") rather than shown or used in the verdict.
+export function plausiblePeriod(waveFt, sec) {
+  if (sec == null || !(sec > 0)) return null;
+  if (sec < 1.5) return null;
+  if (waveFt != null && waveFt * 0.3048 > (1.56 * sec * sec) / 7) return null;
+  return sec;
+}
+function prunePeriods(grid) {
+  if (!grid || !grid.periodSec) return grid;
+  for (const [h, sec] of grid.periodSec) if (plausiblePeriod(grid.waveFt.get(h), sec) == null) grid.periodSec.delete(h);
+  return grid;
+}
+
 function applyMarineWaveFloor(grid, marine) {
   if (!grid || !marine || !marine.length) return;
   // Drop leading advisory / synopsis entries (e.g. a "Dense Smoke Advisory"
@@ -850,6 +870,7 @@ function applyMarineWaveFloor(grid, marine) {
     const g = grid.waveFt.get(h);
     if (g == null || floor > g) grid.waveFt.set(h, floor);
   }
+  prunePeriods(grid);
 }
 
 // Water temperature (°F) parsed from the NSH text, which lists a few ports:
@@ -890,7 +911,9 @@ function nshPeriodsForZone(text, zone) {
     const re = /\.([A-Z][A-Z ]+?)\.\.\.\s*([\s\S]*?)(?=\.[A-Z][A-Z ]+?\.\.\.|$)/g;
     let m;
     while ((m = re.exec(body))) {
-      const forecast = m[2].replace(/\s+/g, " ").trim();
+      // The last period runs into the product's "$$" terminator (and any trailing
+      // boilerplate after it): cut there so it never shows in the forecast card.
+      const forecast = m[2].split("$$")[0].replace(/\s+/g, " ").trim();
       if (forecast) periods.push({ name: titleCase(m[1].trim()), forecast });
     }
     return periods.slice(0, 5);
@@ -1148,15 +1171,15 @@ function buildRecommendation({ buoy, alerts, wind, waves, read, hours, profile =
       // Ocean trade/sea-breeze gusts run well above the sustained wind, and NWS
       // coastal advisories key on sustained speed, so rate them separately.
       const w = wind?.speedKt ?? 0, gu = wind?.gustKt ?? 0;
-      const desc = `${round(w)} kt${gu > w ? `, gusts ${round(gu)}` : ""}${tag}`;
+      const desc = `${round(w, 0)} kt${gu > w ? `, gusts ${round(gu, 0)}` : ""}${tag}`;
       if (w >= 22 || gu >= 28) bump("NO-GO", `Wind ~${desc}`);
       else if (w >= 17 || gu >= 24) bump("CAUTION", `Wind ~${desc}`);
       else if (w >= 15 || gu >= 20) bump("CAUTION", `Breezy ~${desc}`);
     }
-    else if (topWind >= 22) bump("NO-GO", `Wind/gusts ~${round(topWind)} kt${tag}`);
-    else if (topWind >= 17) bump("CAUTION", `Wind ~${round(topWind)} kt${tag}`);
-    else if (topWind >= 12) bump("CAUTION", `Breezy ~${round(topWind)} kt${tag}`);
-    else if (wv == null) reasons.push(`Wind ~${round(topWind)} kt${tag}, light`);
+    else if (topWind >= 22) bump("NO-GO", `Wind/gusts ~${round(topWind, 0)} kt${tag}`);
+    else if (topWind >= 17) bump("CAUTION", `Wind ~${round(topWind, 0)} kt${tag}`);
+    else if (topWind >= 12) bump("CAUTION", `Breezy ~${round(topWind, 0)} kt${tag}`);
+    else if (wv == null) reasons.push(`Wind ~${round(topWind, 0)} kt${tag}, light`);
   }
 
   // Wind DIRECTION on the lake's fetch — only matters once there's some wind.
@@ -1631,9 +1654,10 @@ export async function onRequest(context) {
   const gridNowPeriod = hourly[0]?.periodSec ?? null;
   const textWaveFt = parseForecastWaves(marinePeriods) ?? null;
   const currentWaveFt = gridNowFt ?? textWaveFt;
+  const nowFt = buoy?.waveHeightFt ?? currentWaveFt ?? null;
   const waves = {
-    ft: buoy?.waveHeightFt ?? currentWaveFt ?? null,
-    periodSec: buoy?.dominantPeriodSec ?? gridNowPeriod ?? null,
+    ft: nowFt,
+    periodSec: plausiblePeriod(nowFt, buoy?.dominantPeriodSec ?? gridNowPeriod ?? null),
     source: buoy?.waveHeightFt != null ? "buoy" : currentWaveFt != null ? "forecast" : null,
   };
 
@@ -1643,9 +1667,9 @@ export async function onRequest(context) {
   const waterTempF = buoy?.waterTempF ?? waterStation?.f ?? nshWaterTempF(noaaReport?.text, spot);
   const airTempF = buoy?.airTempF ?? hourly[0]?.tempF ?? null;
   const temps = {
-    waterF: waterTempF ?? null,
+    waterF: round(waterTempF, 0),
     waterSource: buoy?.waterTempF != null ? "buoy" : waterStation?.f != null ? `NDBC ${waterStation.station}` : waterTempF != null ? "NWS" : null,
-    airF: airTempF ?? null,
+    airF: round(airTempF, 0),
     airSource: buoy?.airTempF != null ? "buoy" : airTempF != null ? "NWS" : null,
   };
 
