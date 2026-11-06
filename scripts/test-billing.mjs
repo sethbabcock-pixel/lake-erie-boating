@@ -1717,6 +1717,29 @@ async function run() {
     }
   }
 
+  // ── Wind-only buoy: forecast waves are called out, never a level change ──
+  {
+    const { buildRecommendation } = await import("../functions/marine/conditions.js");
+    const WAVES_FC = /Waves are from the NWS forecast/;
+    const NO_BUOY = /No live buoy here/;
+    const rec = (wind, waves, profile = "lake") => buildRecommendation({ buoy: { station: "X" }, alerts: [], wind, waves, read: null, hours: [], profile });
+    const buoyWind = { speedKt: 6, gustKt: 8, source: "buoy", gustSrc: "buoy" };
+    const a = rec(buoyWind, { ft: 0.8, source: "forecast" });
+    check("wind-only buoy: forecast-waves caveat shown", a.reasons.some((x) => WAVES_FC.test(x)), JSON.stringify(a.reasons));
+    check("wind-only buoy: no 'No live buoy' line", !a.reasons.some((x) => NO_BUOY.test(x)), JSON.stringify(a.reasons));
+    const a0 = rec(buoyWind, { ft: 0.8, source: "buoy" });
+    eq("wind-only buoy: caveat doesn't change the level", a.level, a0.level);
+    check("wind+wave buoy: no forecast-waves caveat", !a0.reasons.some((x) => WAVES_FC.test(x)), JSON.stringify(a0.reasons));
+    const g = rec({ speedKt: 6, gustKt: 8, source: "forecast", gustSrc: "buoy" }, { ft: 0.8, source: "forecast" });
+    check("gust-only buoy: forecast-waves caveat shown", g.reasons.some((x) => WAVES_FC.test(x)), JSON.stringify(g.reasons));
+    const n = rec(buoyWind, { ft: null, source: null });
+    check("wind-only buoy, no wave data: no forecast-waves caveat (waves aren't from anywhere)", !n.reasons.some((x) => WAVES_FC.test(x)) && n.level !== "GO", JSON.stringify(n));
+    const f = buildRecommendation({ buoy: null, alerts: [], wind: { speedKt: 6, source: "forecast" }, waves: { ft: 0.8, source: "forecast" }, read: null, hours: [], profile: "lake" });
+    check("no buoy: only the 'No live buoy' line, not both", f.reasons.some((x) => NO_BUOY.test(x)) && !f.reasons.some((x) => WAVES_FC.test(x)), JSON.stringify(f.reasons));
+    const o = rec(buoyWind, { ft: 1, source: "forecast" }, "ocean");
+    check("wind-only shore station on the coast: caveat shown too", o.reasons.some((x) => WAVES_FC.test(x)), JSON.stringify(o.reasons));
+  }
+
   console.log(results.join("\n"));
   console.log(`\n${passed} passed, ${failed} failed`);
   if (failed) process.exit(1);

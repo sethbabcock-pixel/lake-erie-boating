@@ -1337,6 +1337,10 @@ export function buildRecommendation({ buoy, alerts, wind, waves, read, hours, pr
   // station reported temperatures: the verdict is then the forecast alone.
   const liveObs = wind?.source === "buoy" || wind?.gustSrc === "buoy" || waves?.source === "buoy";
   if (!liveObs && !noData) reasons.push("No live buoy here; using the NWS forecast, so verify before launch");
+  // A buoy that supplies wind (or gusts) but no wave height leaves the wave
+  // half of the call on the forecast. Say so: a live wind reading must not
+  // make forecast waves look measured. Reason line only, never a level change.
+  else if (liveObs && waves?.source === "forecast" && wv != null) reasons.push("Waves are from the NWS forecast (no live wave reading); verify before launch");
 
   // The "no data" line only when that's the whole story: a gust or storm that
   // drove the call higher gets the normal summary for its level.
