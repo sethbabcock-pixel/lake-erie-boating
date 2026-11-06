@@ -14,7 +14,7 @@
 // Both respect the global emailOptOut, carry the unsubscribe footer, and reuse
 // the same summary data the homepage directory shows (pooled NWS grid calls
 // for all ports, with cached /points lookups — cheap enough to run hourly).
-import { sendEmail, ensureUnsubToken, notify, emailFooter, isPro } from "./auth.js";
+import { sendEmail, ensureUnsubToken, notify, emailFooter, isPro, purgeKeysFor } from "./auth.js";
 import { fetchSummary, fetchTodayWindows, fetchBuiltSummaries, fetchWeeks, fetchSpotVerdict } from "./marine/conditions.js";
 
 const SITE = "https://shouldiboat.com";
@@ -111,12 +111,20 @@ async function allUsers(env) {
     const page = await env.USERS.list({ prefix: "user:", limit: 1000, cursor });
     for (const k of page.keys) {
       const u = await env.USERS.get(k.name, "json").catch(() => null);
-      if (u && u.email) users.push(u);
+      if (u && u.email) { Object.defineProperty(u, "_key", { value: k.name }); users.push(u); }
     }
     cursor = page.list_complete ? null : page.cursor;
   } while (cursor);
   return users;
 }
+
+// Unconfirmed password sign-ups are deleted after this long. The confirm link
+// lasts 24h, so 48h leaves a day of slack for a resend. Clearing them stops an
+// address being squatted (pre-registered by someone who doesn't own it).
+export const UNVERIFIED_TTL_MS = 48 * 3600e3;
+const isStaleUnverified = (u, now) =>
+  u.emailVerified === false && u.pass && !u.stripeCustomerId && !u.stripeSubId && !u.adFree &&
+  Number.isFinite(Date.parse(u.created)) && now.getTime() - Date.parse(u.created) > UNVERIFIED_TTL_MS;
 
 export async function runScheduled(env, utcHour, now = new Date()) {
   if (!env.USERS) return { skipped: "no KV" };
@@ -125,7 +133,22 @@ export async function runScheduled(env, utcHour, now = new Date()) {
   const isAlertWindow = utcHour >= ALERT_UTC_FROM && utcHour <= ALERT_UTC_TO;
   if (!isDigestRun && !isAlertWindow) return { skipped: "outside windows" };
 
-  const users = await allUsers(env);
+  let users = await allUsers(env);
+  // Once a day (digest run): delete stale unconfirmed password sign-ups.
+  let pruned = 0;
+  if (isDigestRun) {
+    const stale = users.filter((u) => isStaleUnverified(u, now));
+    for (const u of stale) {
+      try {
+        await env.USERS.delete(u._key || `user:${u.email}`);
+        // Drop its sessions too, so a token can't resolve to a later
+        // re-registration of the same address.
+        await purgeKeysFor(env, u.email, ["sess:", "verify:", "reset:"]);
+        pruned++;
+      } catch (e) { /* retry tomorrow */ }
+    }
+    if (stale.length) users = users.filter((u) => !stale.includes(u));
+  }
   const summary = await fetchSummary(env); // curated + featured built pages
   const byId = Object.fromEntries((summary.spots || []).map((s) => [s.id, s]));
   // Favorited user-built pages that aren't already covered (not featured yet):
@@ -258,7 +281,7 @@ export async function runScheduled(env, utcHour, now = new Date()) {
 
   // One log line per run that did something (or every digest run, for visibility).
   if (digests || alerts || goAlerts || weekends || failures || isDigestRun) {
-    await notify(env, "email_run", { utcHour, users: users.length, digests, alerts, goAlerts, weekends, failures });
+    await notify(env, "email_run", { utcHour, users: users.length, digests, alerts, goAlerts, weekends, failures, pruned });
   }
-  return { digests, alerts, goAlerts, weekends, failures, users: users.length };
+  return { digests, alerts, goAlerts, weekends, failures, pruned, users: users.length };
 }

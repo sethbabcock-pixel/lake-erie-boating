@@ -73,7 +73,7 @@ locally in `.dev.vars` (copy `.dev.vars.example`).
 | `WINDY_WEBCAMS_KEY` | Optional — nearest Windy webcam for spots without a curated cam |
 | `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` | Optional — Google sign-in |
 | `STRIPE_PRICE_ID`, `STRIPE_PRICE_ID_YEARLY` | Pro monthly / yearly price IDs (yearly optional) |
-| `EMAIL_FROM`, `ADMIN_EMAIL`, `OAUTH_REDIRECT_BASE` | Optional overrides |
+| `EMAIL_FROM`, `ADMIN_EMAIL`, `OAUTH_REDIRECT_BASE` | Optional overrides. `ADMIN_EMAIL` takes one address or a comma-separated list; each admin signs in with that email (verified). Unset/empty → the default owner; set but with no valid address → no admins (fails closed) |
 
 Everything degrades gracefully when an optional key is absent.
 
