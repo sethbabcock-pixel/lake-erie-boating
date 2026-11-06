@@ -26,6 +26,11 @@
     ul { padding-left:20px; }
     .note { background:#FBF3E0; border:1px solid #EBD7A8; color:#7a560f; border-radius:10px; padding:12px 14px; font-size:.9rem; }
     footer { color:var(--faint); font-size:.82rem; margin-top:24px; }
+    @media (prefers-color-scheme: dark) {
+      :root { color-scheme:dark; --navy:#8FD3EA; --teal:#4AC6E0; --ink:#EAF2F8; --muted:#9FB6C9; --faint:#8AA2B7; --bg:#07182B; --surface:#0F2942; --border:#1F405F; }
+      p, li { color:#C9D8E4; }
+      .note { background:#2A2410; border-color:#5A4A1A; color:#E3C04A; }
+    }
   </style>
   <!-- Google AdSense — site review + ad serving. Consent Mode v2 default (denied
        unless the visitor accepted on the main app) runs before the ad library. -->

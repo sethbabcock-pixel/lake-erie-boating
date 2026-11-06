@@ -13,7 +13,7 @@
   <script>
     (function () {
       try {
-        var c = localStorage.getItem("theme") || "dark";
+        var c = localStorage.getItem("theme") || "system";
         var eff = c === "system" ? (matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark") : c;
         document.documentElement.setAttribute("data-theme", eff);
       } catch (e) { document.documentElement.setAttribute("data-theme", "dark"); }
