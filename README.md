@@ -1,4 +1,4 @@
-# Lake Erie — shouldiboat.com
+# shouldiboat.com
 
 A go/no-go boating conditions app for the Great Lakes and US coastal waters —
 it started on Lake Erie and now covers the other Great Lakes plus Florida, the
