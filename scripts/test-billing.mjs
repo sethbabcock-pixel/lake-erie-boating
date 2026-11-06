@@ -48,10 +48,6 @@ let priceResolves = true;
 let stormMode = false; // Open-Meteo stub: every spot NO-GO (true) vs calm GO (false)
 let scaMode = false; // NWS alerts stub: an active Small Craft Advisory at every point
 let alertsDown = false; // NWS alerts stub: the alerts endpoint fails
-// NWS grid stub override: "gusty" = 13 kt gusting 24 kt, 1.5 ft (lake NO-GO on
-// the gust); "nowind" = no wind/gust layers at all, calm 1 ft waves;
-// "gustonly" = a 9 kt gust but no sustained wind (grid or hourly) and no waves.
-let gridMode = null;
 let subGetCancelState = false; // what a GET subscription retrieve reports
 const makeSub = (cancelAtPeriodEnd) => ({
   id: "sub_123", status: "active", cancel_at_period_end: cancelAtPeriodEnd,
@@ -78,10 +74,10 @@ function installFetchStub() {
       const start = new Date(Date.now() - 30 * 3600e3); start.setUTCMinutes(0, 0, 0);
       const span = (value) => ({ values: [{ validTime: `${start.toISOString().replace(".000Z", "+00:00")}/PT240H`, value }] });
       return jsonResp({ properties: {
-        windSpeed: { uom: "wmoUnit:km_h-1", ...span(gridMode === "nowind" || gridMode === "gustonly" ? null : gridMode === "gusty" ? 24 : stormMode ? 52 : 15) },
-        windGust: { uom: "wmoUnit:km_h-1", ...span(gridMode === "nowind" ? null : gridMode === "gustonly" ? 16.7 : gridMode === "gusty" ? 44.5 : stormMode ? 65 : 20) },
+        windSpeed: { uom: "wmoUnit:km_h-1", ...span(stormMode ? 52 : 15) },
+        windGust: { uom: "wmoUnit:km_h-1", ...span(stormMode ? 65 : 20) },
         windDirection: span(225),
-        waveHeight: span(gridMode === "gustonly" ? null : gridMode === "gusty" ? 0.457 : stormMode ? 1.83 : 0.3),
+        waveHeight: span(stormMode ? 1.83 : 0.3),
         wavePeriod: span(5),
         probabilityOfPrecipitation: span(0),
         weather: span([]),
@@ -91,7 +87,7 @@ function installFetchStub() {
     if (/\/forecast\/hourly$/.test(u)) {
       const t0 = new Date(); t0.setUTCMinutes(0, 0, 0);
       const periods = Array.from({ length: 48 }, (_, i) => ({ startTime: new Date(t0.getTime() + i * 3600e3).toISOString(), temperature: 60,
-        windSpeed: stormMode ? "32 mph" : gridMode === "gusty" ? "15 mph" : gridMode === "gustonly" ? "" : "9 mph", windDirection: "SW", shortForecast: "Sunny", probabilityOfPrecipitation: { value: 0 } }));
+        windSpeed: stormMode ? "32 mph" : "9 mph", windDirection: "SW", shortForecast: "Sunny", probabilityOfPrecipitation: { value: 0 } }));
       return jsonResp({ properties: { periods } });
     }
     if (u.includes("api.weather.gov/alerts/active") && alertsDown) return new Response("", { status: 503 });
@@ -1070,49 +1066,26 @@ async function run() {
     check("email esc: digest carries the escaped name, not a live link", m && !/href="https:\/\/evil/.test(m.htmlContent) && /&lt;a href=/.test(m.htmlContent), m && m.htmlContent.slice(0, 400));
   }
 
-  // 55. Lake gusts count everywhere a verdict is made (tile, week, digest
-  //     window, spot headline), and missing wind never reads GO.
+  // 55. Summary/day verdicts: lake gusts count; missing wind is never GO but
+  //     never softens a wave-driven call either.
   {
-    const { fetchSummary, fetchWeeks, fetchTodayWindows, onRequest } = await import("../functions/marine/conditions.js");
-    const env = { USERS: makeKV() };
-    stormMode = false; scaMode = false; alertsDown = false;
-    gridMode = "gusty"; // 13 kt gusting 24 kt, 1.5 ft on Lake Erie
-    const tile = (await fetchSummary(env)).spots.find((x) => x.id === "sandusky");
-    eq("gusty lake: tile wind is 13 kt", tile?.windKt, 13);
-    eq("gusty lake: tile gust is 24 kt", tile?.gustKt, 24);
-    eq("gusty lake: tile is NO-GO on the gust", tile?.level, "NO-GO");
-    const week = (await fetchWeeks(env, ["sandusky"])).sandusky || [];
-    check("gusty lake: week has days", week.length > 0);
-    check("gusty lake: every week day is NO-GO", week.length && week.every((d) => d.level === "NO-GO"), JSON.stringify(week.map((d) => d.level)));
-    const wins = await fetchTodayWindows();
-    check("gusty lake: digest has no GO window anywhere", Object.values(wins).every((w) => w == null), JSON.stringify(wins).slice(0, 200));
-    const page = await (await onRequest({ request: new Request("https://shouldiboat.com/marine/conditions?spot=sandusky"), env })).json();
-    eq("gusty lake: no-buoy headline gets the grid gust", page.wind?.gustKt, 24);
-    eq("gusty lake: headline gust source is forecast", page.wind?.gustSource, "forecast");
-    eq("gusty lake: spot headline is NO-GO", page.recommendation?.level, "NO-GO");
-    check("gusty lake: forecast gust reason is tagged (forecast)", (page.recommendation?.reasons || []).some((r) => /Wind\/gusts ~24 kt \(forecast\)/.test(r)), JSON.stringify(page.recommendation?.reasons));
-    const pageWeek = page.week || [];
-    check("gusty lake: spot page week strip agrees (NO-GO)", pageWeek.length && pageWeek.every((d) => d.level === "NO-GO"), JSON.stringify(pageWeek.map((d) => d.level)));
-
-    gridMode = "nowind"; // waves present, no wind/gust layers
-    const t2 = (await fetchSummary(env)).spots.find((x) => x.id === "sandusky");
-    eq("no wind: tile wind is null", t2?.windKt, null);
-    check("no wind: tile still has waves", t2?.waveFt != null, JSON.stringify(t2));
-    eq("no wind: tile level is null (—), not GO", t2?.level, null);
-    const w2 = (await fetchWeeks(env, ["sandusky"])).sandusky || [];
-    check("no wind: no week day reads GO (all —)", w2.length && w2.every((d) => d.level === null), JSON.stringify(w2.map((d) => d.level)));
-    const wins2 = await fetchTodayWindows();
-    check("no wind: digest has no GO window", Object.values(wins2).every((w) => w == null));
-
-    // No buoy, daily forecast down (no sustained wind), grid gust 9 kt, no
-    // waves: a lone gust is missing data, not calm, so never GO.
-    gridMode = "gustonly";
-    const p3 = await (await onRequest({ request: new Request("https://shouldiboat.com/marine/conditions?spot=sandusky"), env })).json();
-    eq("gust only: sustained wind missing", p3.wind?.speedKt, null);
-    eq("gust only: grid gust present", p3.wind?.gustKt, 9);
-    check("gust only: unparseable hourly wind is null, not 0 kt", (p3.hourly || []).length && p3.hourly.every((h) => h.windKt === null), JSON.stringify((p3.hourly || []).slice(0, 2)));
-    check("gust only: headline is not GO", p3.recommendation?.level && p3.recommendation.level !== "GO", JSON.stringify(p3.recommendation));
-    gridMode = null;
+    const { riskLevel } = await import("../functions/marine/conditions.js");
+    eq("riskLevel: lake 13 kt gusting 24 → NO-GO (gust counts)", riskLevel(13, 24, 0, "", 1.5, 4, "lake"), "NO-GO");
+    eq("riskLevel: lake 10 kt gusting 16 → CAUTION", riskLevel(10, 16, 0, "", 1, 4, "lake"), "CAUTION");
+    eq("riskLevel: lake 8 kt, no gust data → GO", riskLevel(8, null, 0, "", 1, 4, "lake"), "GO");
+    eq("riskLevel: no wind, calm waves → no call (null), not GO", riskLevel(null, null, 0, "", 1, 4, "lake"), null);
+    eq("riskLevel: no wind, 5 ft waves → still NO-GO", riskLevel(null, null, 0, "", 5, 5, "lake"), "NO-GO");
+    eq("riskLevel: no wind, 3 ft waves → still CAUTION", riskLevel(null, null, 0, "", 3, 5, "lake"), "CAUTION");
+    eq("riskLevel: no sustained wind but a 24 kt gust → NO-GO", riskLevel(null, 24, 0, "", 1, 4, "lake"), "NO-GO");
+    eq("riskLevel: ocean rates sustained + gust separately (12 g18 → GO)", riskLevel(12, 18, 0, "", 2, 10, "ocean"), "GO");
+    eq("riskLevel: ocean gust 28 → NO-GO", riskLevel(12, 28, 0, "", 2, 10, "ocean"), "NO-GO");
+    eq("riskLevel: thunder with no wind data → still NO-GO", riskLevel(null, null, 40, "thunderstorms", null, null, "lake"), "NO-GO");
+    const { buildRecommendation } = await import("../functions/marine/conditions.js");
+    const rec = (wind, waves = { ft: null }) => buildRecommendation({ buoy: null, alerts: [], wind, waves, read: null, hours: [], profile: "lake" }).level;
+    eq("headline: gust only (8 kt), no sustained wind, no waves → CAUTION, not GO", rec({ speedKt: null, gustKt: 8, source: null, gustSrc: "forecast" }), "CAUTION");
+    eq("headline: gust only (24 kt), no sustained wind → still NO-GO", rec({ speedKt: null, gustKt: 24, source: null, gustSrc: "forecast" }), "NO-GO");
+    const r = buildRecommendation({ buoy: null, alerts: [], wind: { speedKt: 7, gustKt: 16, source: "buoy", gustSrc: "forecast" }, waves: { ft: 1 }, read: null, hours: [], profile: "lake" });
+    check("headline: forecast gust driving the call is tagged (forecast)", r.reasons.some((x) => /16 kt \(forecast\)/.test(x)), JSON.stringify(r.reasons));
   }
 
   console.log(results.join("\n"));

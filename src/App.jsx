@@ -11,7 +11,7 @@ import { fmtWaves, waveFeel, compassToDeg } from "./units.js";
 import { regionBySlug, regionFromPath, regionForLake, nearMetroBySlug, nearMetroFromPath, LAKE_GUIDES } from "./regions.js";
 
 const fmt = (v, unit) => (v == null ? "—" : `${v}${unit || ""}`);
-// null/unknown level (missing data) renders neutral, never green.
+// No level = no call (missing data): neutral, never painted as GO.
 const verdictClass = (lvl) => (lvl === "NO-GO" ? "nogo" : lvl === "CAUTION" ? "caution" : lvl === "GO" ? "go" : "unknown");
 const fmtHour = (t, withMin) =>
   new Date(t).toLocaleTimeString([], withMin ? { hour: "numeric", minute: "2-digit" } : { hour: "numeric" });
@@ -1135,7 +1135,7 @@ export default function App() {
               <div className="stat hero">
                 <div className="k">Wind</div>
                 <div className="v">{fmt(wind.speedKt, "")}<small>kt</small> <Trend t={trendOf(data.hourly?.[0]?.windKt, data.hourly?.[3]?.windKt)} /></div>
-                <div className="sub">{[wind.dir, wind.gustKt ? `gust ${wind.gustKt}${wind.gustSource === "forecast" && wind.source !== "forecast" ? " (forecast)" : ""}` : null, wind.source].filter(Boolean).join(" · ") || "—"}</div>
+                <div className="sub">{[wind.dir, wind.gustKt ? `gust ${wind.gustKt}` : null, wind.source].filter(Boolean).join(" · ") || "—"}</div>
               </div>
               <div className="stat">
                 <div className="k">Waves</div>

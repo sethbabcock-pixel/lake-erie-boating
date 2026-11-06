@@ -77,6 +77,8 @@ const SOUTHEAST_GUIDE = { href: "/guides/boating-georgia-and-the-carolinas", tex
 export const LAKE_GUIDES = {
   "Lake Erie": { href: "/guides/boating-lake-erie", text: "Boating Lake Erie guide" },
   "Lake Michigan": { href: "/guides/boating-lake-michigan", text: "Boating Lake Michigan guide" },
+  "Lake Superior": { href: "/guides/boating-lake-superior", text: "Boating Lake Superior guide" },
+  "Chesapeake Bay": { href: "/guides/boating-the-chesapeake-bay", text: "Boating the Chesapeake Bay guide" },
   "Florida Gulf Coast": GULF_GUIDE,
   "Alabama & Mississippi Coast": GULF_GUIDE,
   "Louisiana & Texas Coast": GULF_GUIDE,
