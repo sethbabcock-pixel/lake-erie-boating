@@ -133,9 +133,27 @@ const DEFAULT_SITE_CONFIG = {
   ads: ADSENSE_DEFAULTS, // AdSense on/off, publisher ID, slot IDs (src/ads-config.js)
 };
 // Site owner — admin by default so /admin works with no Cloudflare setup.
-// Override (or add more admins) with the ADMIN_EMAIL env var.
+// Admins come from the ADMIN_EMAIL Worker variable: one address, or several
+// separated by commas (e.g. "a@x.com, b@y.com"). Unset or empty → DEFAULT_ADMIN;
+// set but with no valid address → nobody (fails closed).
+// Deliberately not editable from /admin, so one admin can't add another.
 const DEFAULT_ADMIN = "seth.babcock@gmail.com";
-const isAdmin = (env, u) => !!(u && u.email === (env.ADMIN_EMAIL || DEFAULT_ADMIN).trim().toLowerCase());
+function adminList(env) {
+  const raw = String(env.ADMIN_EMAIL || "").trim();
+  if (!raw) return [DEFAULT_ADMIN];
+  // Set but with no valid address (e.g. a typo) → no admins, rather than
+  // silently handing admin back to the default owner.
+  const list = raw.split(/[\s,;]+/).map((e) => e.trim().toLowerCase()).filter(validEmail);
+  if (!list.length && !adminList.warned) { adminList.warned = true; console.warn("ADMIN_EMAIL is set but contains no valid email; /admin is locked."); }
+  return [...new Set(list)];
+}
+// Who may get a password-reset link: anyone with a password, or a verified
+// password-type account without one. The link goes to the inbox, which is the
+// proof of ownership.
+const canSetPassword = (u) => !!(u && (u.pass || (u.via !== "google" && u.emailVerified !== false)));
+// An admin must have proved they own the address: an unverified password
+// account (explicit emailVerified === false) never gets admin, even if listed.
+const isAdmin = (env, u) => !!(u && u.emailVerified !== false && adminList(env).includes(String(u.email || "").toLowerCase()));
 // Admin views of a user — never expose the password hash/salt or tokens.
 const adminUserSummary = (u) => ({
   email: u.email, created: u.created || null, via: u.via || "password",
@@ -404,7 +422,7 @@ async function adminEmails(env) {
   const cfg = await env.USERS.get("site:config", "json").catch(() => null);
   const fromCfg = cfg && Array.isArray(cfg.notifyEmails) ? cfg.notifyEmails : [];
   const legacy = await env.USERS.get("admin:emails", "json").catch(() => null);
-  const list = fromCfg.length ? fromCfg : (Array.isArray(legacy) && legacy.length ? legacy : [env.ADMIN_EMAIL || DEFAULT_ADMIN]);
+  const list = fromCfg.length ? fromCfg : (Array.isArray(legacy) && legacy.length ? legacy : adminList(env));
   return [...new Set(list.map((e) => String(e).trim().toLowerCase()).filter(Boolean))];
 }
 // Footer for non-essential (relationship/marketing) email only — NOT for
@@ -441,7 +459,7 @@ async function welcomeNotify(env, user, url) {
 // Always log a KV notification (success or failure); send the email if given.
 export async function notify(env, type, context, mail) {
   let emailSent = false, emailError = null;
-  if (mail && mail.to && mail.subject && mail.html) {
+  if (mail && mail.to && (!Array.isArray(mail.to) || mail.to.length) && mail.subject && mail.html) {
     const r = await sendEmail(env, mail.to, mail.subject, mail.html);
     emailSent = r.ok; emailError = r.error;
   }
@@ -495,7 +513,10 @@ export async function handleAuth(request, env, url, ctx) {
     const e = (email || "").trim().toLowerCase();
     if (validEmail(e)) {
       const user = await env.USERS.get(emailKey(e), "json");
-      if (user && user.pass) { // password accounts only; Google users sign in with Google
+      // Password accounts, plus verified non-Google accounts left without one
+      // (an admin address whose registration password was dropped on verify).
+      // Google users sign in with Google.
+      if (user && canSetPassword(user)) {
         const token = randHex(20);
         await env.USERS.put(`reset:${token}`, e, { expirationTtl: 3600 });
         const link = `${siteBase(env, url)}/?reset=${token}`;
@@ -539,6 +560,11 @@ export async function handleAuth(request, env, url, ctx) {
     if (!user) return json({ error: "Account not found." }, 404);
     const firstTime = user.emailVerified === false;
     user.emailVerified = true;
+    // For an admin address, a verification click must never activate a
+    // password the clicker didn't set (a squatter may have registered it).
+    // Drop it: the admin signs in with Google or sets one via "Forgot password"
+    // (allowed for this record by canSetPassword).
+    if (firstTime && user.pass && adminList(env).includes(email)) { delete user.pass; delete user.salt; delete user.passIter; }
     await env.USERS.put(emailKey(email), JSON.stringify(user));
     await env.USERS.delete(`verify:${token}`);
     // The account is real now → fire the welcome + admin signup notice once.
@@ -1094,7 +1120,7 @@ export async function handleAuth(request, env, url, ctx) {
     // POST: either email a password-reset link, or toggle account flags.
     const body = await request.json().catch(() => ({}));
     if (body.action === "sendReset") {
-      if (!target.pass) return json({ error: "This user signs in with Google, so there's no password to reset." }, 400);
+      if (!canSetPassword(target)) return json({ error: "This user signs in with Google, so there's no password to reset." }, 400);
       const token = randHex(20);
       await env.USERS.put(`reset:${token}`, target.email, { expirationTtl: 3600 });
       const link = `${siteBase(env, url)}/?reset=${token}`;
@@ -1210,7 +1236,22 @@ export async function handleAuth(request, env, url, ctx) {
     const payload = JSON.parse(atob(tok.id_token.split(".")[1].replace(/-/g, "+").replace(/_/g, "/")));
     const email = (payload.email || "").toLowerCase();
     if (!email) return new Response("No email from Google", { status: 502 });
+    // Only trust an address Google has verified; otherwise anyone could sign in
+    // as (or claim admin for) an address they don't control.
+    if (payload.email_verified !== true && payload.email_verified !== "true") return new Response("Your Google account's email address isn't verified.", { status: 403 });
     let user = await env.USERS.get(emailKey(email), "json");
+    // An unverified password account was never proven to be its owner's:
+    // anyone can register any address. Google has now verified the owner, so
+    // promote the account and drop its password. Otherwise a squatter's
+    // password would start working once the owner verified, which could hand
+    // them the account (or admin). The rest of the record is kept: a squatter
+    // can't write to it (no session until verified), and real members who
+    // skipped verification and used Google sign-in may have favorites or Pro.
+    if (user && user.emailVerified === false) {
+      user = { ...user, emailVerified: true, via: "google" };
+      delete user.pass; delete user.salt; delete user.passIter;
+      await env.USERS.put(emailKey(email), JSON.stringify(user));
+    }
     if (!user) {
       user = { id: randHex(8), email, created: new Date().toISOString(), prefs: {}, favorites: [], adFree: false, via: "google", emailVerified: true };
       await env.USERS.put(emailKey(email), JSON.stringify(user));
