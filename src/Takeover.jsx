@@ -23,7 +23,7 @@ function sponsorHit(id, k) {
   } catch (e) { /* reporting never breaks the page */ }
 }
 
-const vclass = (v) => (v === "NO-GO" ? "nogo" : v === "CAUTION" ? "caution" : "go");
+const vclass = (v) => (v === "NO-GO" ? "nogo" : v === "CAUTION" ? "caution" : v === "GO" ? "go" : "unknown");
 const DEFAULT_HERO = { image: "/hero-sunset.svg", video: "", headline: "Should I boat{spot} today?", sub: "", showVerdict: true };
 
 // ── Google Ad Manager (GPT) ───────────────────────────────────────────────────
