@@ -591,7 +591,10 @@ function EmailNudge({ auth }) {
 // The gold "yellow time" — when to head back in.
 function OutlookPill({ outlook }) {
   if (!outlook) return null;
+  if (outlook.noData) return <span className="opill"><IconClock /> no wind data this hour</span>;
   if (outlook.goodHours === 0) return <span className="opill bad"><IconNoGo /> not right now</span>;
+  if (outlook.dataEndsAt)
+    return <span className="opill warn"><IconClock /> wind data runs out at <b>{fmtHour(outlook.dataEndsAt, true)}</b> · check back</span>;
   if (outlook.headInBy)
     return <span className="opill warn"><IconClock /> be in by <b>{fmtHour(outlook.headInBy, true)}</b> · {outlook.headInReason || "weather turns"}</span>;
   return <span className="opill good"><IconClock /> good for {outlook.goodHours}h+</span>;
