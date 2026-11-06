@@ -11,6 +11,8 @@ import { fmtWaves, waveFeel, compassToDeg } from "./units.js";
 import { regionBySlug, regionFromPath, regionForLake, nearMetroBySlug, nearMetroFromPath, LAKE_GUIDES } from "./regions.js";
 
 const fmt = (v, unit) => (v == null ? "—" : `${v}${unit || ""}`);
+// Whole knots for display (buoy wind arrives to 0.1 kt; verdicts use the raw value).
+const kt = (v) => (v == null ? null : Math.round(v));
 // No level = no call (missing data): neutral, never painted as GO.
 const verdictClass = (lvl) => (lvl === "NO-GO" ? "nogo" : lvl === "CAUTION" ? "caution" : lvl === "GO" ? "go" : "unknown");
 const fmtHour = (t, withMin) =>
@@ -490,7 +492,7 @@ function ShareButton({ spot, rec, wind, wv }) {
   const [copied, setCopied] = useState(false);
   const share = async () => {
     track("event", "share_verdict", { spot: spot.id, level: rec.level });
-    const text = `${spot.name}: ${rec.level} right now. Wind ${wind.speedKt ?? "–"} kt, waves ${wv.ft ?? "–"} ft.`;
+    const text = `${spot.name}: ${rec.level} right now. Wind ${kt(wind.speedKt) ?? "–"} kt, waves ${wv.ft ?? "–"} ft.`;
     const url = spot.adHoc
       ? `https://shouldiboat.com/preview?lat=${spot.lat}&lon=${spot.lon}&name=${encodeURIComponent(spot.name)}`
       : `https://shouldiboat.com/spot/${encodeURIComponent(spot.id)}`;
@@ -525,7 +527,7 @@ function WrongCallLink({ spot, rec, wind, wv, updatedAt }) {
   const body = [
     `Spot: ${spot.name} (${spot.id})`,
     `Our call: ${rec.level}`,
-    `Wind ${wind?.speedKt ?? "–"} kt${wind?.gustKt != null ? `, gusts ${wind.gustKt} kt` : ""}; waves ${wv?.ft ?? "–"} ft`,
+    `Wind ${kt(wind?.speedKt) ?? "–"} kt${wind?.gustKt != null ? `, gusts ${kt(wind.gustKt)} kt` : ""}; waves ${wv?.ft ?? "–"} ft`,
     `Data updated: ${updatedAt ? new Date(updatedAt).toLocaleString() : "unknown"}`,
     `Page: ${url}`,
     "",
@@ -1215,8 +1217,8 @@ export default function App() {
             <div className="grid stats">
               <div className="stat hero">
                 <div className="k">Wind</div>
-                <div className="v">{fmt(wind.speedKt, "")}<small>kt</small> <Trend t={trendOf(data.hourly?.[0]?.windKt, data.hourly?.[3]?.windKt)} /></div>
-                <div className="sub">{[wind.dir, wind.gustKt ? `gust ${wind.gustKt}${wind.gustSrc === "forecast" && wind.source !== "forecast" ? " (forecast)" : ""}` : null, wind.source].filter(Boolean).join(" · ") || "—"}</div>
+                <div className="v">{fmt(kt(wind.speedKt), "")}<small>kt</small> <Trend t={trendOf(data.hourly?.[0]?.windKt, data.hourly?.[3]?.windKt)} /></div>
+                <div className="sub">{[wind.dir, wind.gustKt ? `gust ${kt(wind.gustKt)}${wind.gustSrc === "forecast" && wind.source !== "forecast" ? " (forecast)" : ""}` : null, wind.source].filter(Boolean).join(" · ") || "—"}</div>
               </div>
               <div className="stat">
                 <div className="k">Waves</div>
