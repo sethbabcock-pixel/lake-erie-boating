@@ -537,7 +537,7 @@ function WeekStrip({ week, marineForecast }) {
             <button key={d.date} onClick={() => setSel(sel === i ? null : i)} aria-expanded={sel === i}
               className={`wday ${verdictClass(d.level)} ${f.weekend ? "weekend" : ""} ${sel === i ? "sel" : ""}`} title={`${f.wd} ${f.md}, tap for the day's forecast`}>
               <div className="wd-name">{i === 0 ? "Today" : f.wd}{f.weekend && <span className="wd-star">•</span>}</div>
-              <div className={`wd-level ${verdictClass(d.level)}`} title={d.thunder ? "Thunderstorms forecast" : undefined}>{d.thunder ? "⚡" : ""}{d.level === "NO-GO" ? "NO" : d.level || "—"}</div>
+              <div className={`wd-level ${verdictClass(d.level)}`} title={d.thunder ? "Thunderstorms forecast" : undefined}>{d.thunder ? <><span aria-hidden="true">⚡</span><span className="sr-only">storms </span></> : ""}{d.level === "NO-GO" ? "NO" : d.level || "—"}</div>
               <div className="wd-m"><b>{d.windKt ?? "—"}</b><small>kt</small></div>
               <div className="wd-m wave"><b>{d.waveFt ?? "—"}</b><small>ft{d.periodSec ? ` @${d.periodSec}s` : ""}</small></div>
               <div className="wd-p">
