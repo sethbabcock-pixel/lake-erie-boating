@@ -11,7 +11,8 @@ import { fmtWaves, waveFeel, compassToDeg } from "./units.js";
 import { regionBySlug, regionFromPath, regionForLake, nearMetroBySlug, nearMetroFromPath, LAKE_GUIDES } from "./regions.js";
 
 const fmt = (v, unit) => (v == null ? "—" : `${v}${unit || ""}`);
-const verdictClass = (lvl) => (lvl === "NO-GO" ? "nogo" : lvl === "CAUTION" ? "caution" : "go");
+// null/unknown level (missing data) renders neutral, never green.
+const verdictClass = (lvl) => (lvl === "NO-GO" ? "nogo" : lvl === "CAUTION" ? "caution" : lvl === "GO" ? "go" : "unknown");
 const fmtHour = (t, withMin) =>
   new Date(t).toLocaleTimeString([], withMin ? { hour: "numeric", minute: "2-digit" } : { hour: "numeric" });
 
@@ -506,7 +507,7 @@ function WeekStrip({ week, marineForecast }) {
             <button key={d.date} onClick={() => setSel(sel === i ? null : i)} aria-expanded={sel === i}
               className={`wday ${verdictClass(d.level)} ${f.weekend ? "weekend" : ""} ${sel === i ? "sel" : ""}`} title={`${f.wd} ${f.md}, tap for the day's forecast`}>
               <div className="wd-name">{i === 0 ? "Today" : f.wd}{f.weekend && <span className="wd-star">•</span>}</div>
-              <div className={`wd-level ${verdictClass(d.level)}`}>{d.level === "NO-GO" ? "NO" : d.level}</div>
+              <div className={`wd-level ${verdictClass(d.level)}`}>{d.level === "NO-GO" ? "NO" : d.level || "—"}</div>
               <div className="wd-m"><b>{d.windKt ?? "—"}</b><small>kt</small></div>
               <div className="wd-m wave"><b>{d.waveFt ?? "—"}</b><small>ft{d.periodSec ? ` @${d.periodSec}s` : ""}</small></div>
               <div className="wd-p">

@@ -48,6 +48,9 @@ let priceResolves = true;
 let stormMode = false; // Open-Meteo stub: every spot NO-GO (true) vs calm GO (false)
 let scaMode = false; // NWS alerts stub: an active Small Craft Advisory at every point
 let alertsDown = false; // NWS alerts stub: the alerts endpoint fails
+// NWS grid stub override: "gusty" = 13 kt gusting 24 kt, 1.5 ft (lake NO-GO on
+// the gust); "nowind" = no wind/gust layers at all, calm 1 ft waves.
+let gridMode = null;
 let subGetCancelState = false; // what a GET subscription retrieve reports
 const makeSub = (cancelAtPeriodEnd) => ({
   id: "sub_123", status: "active", cancel_at_period_end: cancelAtPeriodEnd,
@@ -74,10 +77,10 @@ function installFetchStub() {
       const start = new Date(Date.now() - 30 * 3600e3); start.setUTCMinutes(0, 0, 0);
       const span = (value) => ({ values: [{ validTime: `${start.toISOString().replace(".000Z", "+00:00")}/PT240H`, value }] });
       return jsonResp({ properties: {
-        windSpeed: { uom: "wmoUnit:km_h-1", ...span(stormMode ? 52 : 15) },
-        windGust: { uom: "wmoUnit:km_h-1", ...span(stormMode ? 65 : 20) },
+        windSpeed: { uom: "wmoUnit:km_h-1", ...span(gridMode === "nowind" ? null : gridMode === "gusty" ? 24 : stormMode ? 52 : 15) },
+        windGust: { uom: "wmoUnit:km_h-1", ...span(gridMode === "nowind" ? null : gridMode === "gusty" ? 44.5 : stormMode ? 65 : 20) },
         windDirection: span(225),
-        waveHeight: span(stormMode ? 1.83 : 0.3),
+        waveHeight: span(gridMode === "gusty" ? 0.457 : stormMode ? 1.83 : 0.3),
         wavePeriod: span(5),
         probabilityOfPrecipitation: span(0),
         weather: span([]),
@@ -87,7 +90,7 @@ function installFetchStub() {
     if (/\/forecast\/hourly$/.test(u)) {
       const t0 = new Date(); t0.setUTCMinutes(0, 0, 0);
       const periods = Array.from({ length: 48 }, (_, i) => ({ startTime: new Date(t0.getTime() + i * 3600e3).toISOString(), temperature: 60,
-        windSpeed: stormMode ? "32 mph" : "9 mph", windDirection: "SW", shortForecast: "Sunny", probabilityOfPrecipitation: { value: 0 } }));
+        windSpeed: stormMode ? "32 mph" : gridMode === "gusty" ? "15 mph" : "9 mph", windDirection: "SW", shortForecast: "Sunny", probabilityOfPrecipitation: { value: 0 } }));
       return jsonResp({ properties: { periods } });
     }
     if (u.includes("api.weather.gov/alerts/active") && alertsDown) return new Response("", { status: 503 });
@@ -1064,6 +1067,41 @@ async function run() {
     await runScheduled(env, 10);
     const m = emailCalls.find((c) => c.to[0].email === "esc@example.com");
     check("email esc: digest carries the escaped name, not a live link", m && !/href="https:\/\/evil/.test(m.htmlContent) && /&lt;a href=/.test(m.htmlContent), m && m.htmlContent.slice(0, 400));
+  }
+
+  // 55. Lake gusts count everywhere a verdict is made (tile, week, digest
+  //     window, spot headline), and missing wind never reads GO.
+  {
+    const { fetchSummary, fetchWeeks, fetchTodayWindows, onRequest } = await import("../functions/marine/conditions.js");
+    const env = { USERS: makeKV() };
+    stormMode = false; scaMode = false; alertsDown = false;
+    gridMode = "gusty"; // 13 kt gusting 24 kt, 1.5 ft on Lake Erie
+    const tile = (await fetchSummary(env)).spots.find((x) => x.id === "sandusky");
+    eq("gusty lake: tile wind is 13 kt", tile?.windKt, 13);
+    eq("gusty lake: tile gust is 24 kt", tile?.gustKt, 24);
+    eq("gusty lake: tile is NO-GO on the gust", tile?.level, "NO-GO");
+    const week = (await fetchWeeks(env, ["sandusky"])).sandusky || [];
+    check("gusty lake: week has days", week.length > 0);
+    check("gusty lake: every week day is NO-GO", week.length && week.every((d) => d.level === "NO-GO"), JSON.stringify(week.map((d) => d.level)));
+    const wins = await fetchTodayWindows();
+    check("gusty lake: digest has no GO window anywhere", Object.values(wins).every((w) => w == null), JSON.stringify(wins).slice(0, 200));
+    const page = await (await onRequest({ request: new Request("https://shouldiboat.com/marine/conditions?spot=sandusky"), env })).json();
+    eq("gusty lake: no-buoy headline gets the grid gust", page.wind?.gustKt, 24);
+    eq("gusty lake: headline gust source is forecast", page.wind?.gustSource, "forecast");
+    eq("gusty lake: spot headline is NO-GO", page.recommendation?.level, "NO-GO");
+    const pageWeek = page.week || [];
+    check("gusty lake: spot page week strip agrees (NO-GO)", pageWeek.length && pageWeek.every((d) => d.level === "NO-GO"), JSON.stringify(pageWeek.map((d) => d.level)));
+
+    gridMode = "nowind"; // waves present, no wind/gust layers
+    const t2 = (await fetchSummary(env)).spots.find((x) => x.id === "sandusky");
+    eq("no wind: tile wind is null", t2?.windKt, null);
+    check("no wind: tile still has waves", t2?.waveFt != null, JSON.stringify(t2));
+    eq("no wind: tile level is null (—), not GO", t2?.level, null);
+    const w2 = (await fetchWeeks(env, ["sandusky"])).sandusky || [];
+    check("no wind: no week day reads GO (all —)", w2.length && w2.every((d) => d.level === null), JSON.stringify(w2.map((d) => d.level)));
+    const wins2 = await fetchTodayWindows();
+    check("no wind: digest has no GO window", Object.values(wins2).every((w) => w == null));
+    gridMode = null;
   }
 
   console.log(results.join("\n"));
