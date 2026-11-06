@@ -32,9 +32,10 @@ You (the main session) act as COO: break work down, delegate to the right agent 
 | Marketing | `growth-marketer` | Campaigns, social, email, community, conversion |
 | Sales | `sales-sponsorships` | Sponsor prospects, outreach, rate cards, pipeline |
 | Revenue | `revenue-analyst` | Ads/affiliate/Stripe performance, KPIs |
+| Revenue | `merch-manager` | Merch line, print-on-demand vendors, margins, shop, co-branded merch |
 | Support | `customer-support` | Replies, triage, FAQ |
 | Legal | `legal-compliance` | Disclaimers, privacy, platform policy, claims |
 
 Cross-team workflows: `/ship-feature`, `/weekly-review`, `/launch-campaign`, `/security-audit`, `/triage`.
 
-Non-code outputs go under `docs/` (product, design, forecast, marketing, sales, business, support, legal, security, ops).
+Non-code outputs go under `docs/` (product, design, forecast, marketing, sales, merch, business, support, legal, security, ops).

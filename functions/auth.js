@@ -1134,6 +1134,10 @@ export async function handleAuth(request, env, url, ctx) {
       cancel_url: `${url.origin}/`,
       client_reference_id: u.email,
       allow_promotion_codes: "true",
+      // Tag the session and its subscription so the webhook can tell ad-free
+      // purchases apart from any other checkout on this Stripe account (merch).
+      "metadata[purpose]": "adfree",
+      "subscription_data[metadata][purpose]": "adfree",
     };
     if (u.stripeCustomerId) params.customer = u.stripeCustomerId;
     else params.customer_email = u.email;
@@ -1249,8 +1253,10 @@ export async function handleAuth(request, env, url, ctx) {
 
   // ---- Stripe: webhook (subscription lifecycle → adFree) ----
   if (path === "/stripe/webhook" && request.method === "POST") {
+    // No secret configured → refuse outright; never verify against an empty key.
+    if (!env.STRIPE_WEBHOOK_SECRET) return json({ error: "Billing is not configured yet." }, 503);
     const raw = await request.text();
-    const ok = await stripeVerify(raw, request.headers.get("Stripe-Signature"), env.STRIPE_WEBHOOK_SECRET || "");
+    const ok = await stripeVerify(raw, request.headers.get("Stripe-Signature"), env.STRIPE_WEBHOOK_SECRET);
     if (!ok) return json({ error: "Bad signature" }, 400);
     let event;
     try { event = JSON.parse(raw); } catch { return json({ error: "Bad payload" }, 400); }
@@ -1261,15 +1267,29 @@ export async function handleAuth(request, env, url, ctx) {
       if (!user) return;
       await saveUser(env, { ...user, adFree: value, ...extra });
     };
+    // Only the ad-free subscription may flip ad-free. Other checkouts on the
+    // same Stripe account (e.g. one-time merch payments) must not grant it or
+    // overwrite a subscriber's stored subscription id. Sessions created before
+    // purpose metadata existed are still recognized by mode + subscription id.
+    const purpose = obj.metadata?.purpose;
+    const notAdFree = purpose != null && purpose !== "adfree";
     if (event.type === "checkout.session.completed") {
+      if (obj.mode !== "subscription" || !obj.subscription || notAdFree) return json({ received: true, ignored: true });
       const email = (obj.client_reference_id || obj.customer_email || obj.customer_details?.email || "").toLowerCase();
       if (obj.customer && email) await env.USERS.put(`stripecust:${obj.customer}`, email); // reverse index for later events
-      await setAdFree(email, true, { stripeCustomerId: obj.customer || null, stripeSubId: obj.subscription || null });
+      await setAdFree(email, true, { stripeCustomerId: obj.customer || null, stripeSubId: obj.subscription });
       if (email) await runBg(ctx, notify(env, "adfree_activated", { email }, { to: email, subject: "You're ad-free on shouldiboat.com", html: adFreeHtml(), ttlDays: 30 }));
-    } else if (event.type === "customer.subscription.updated" || event.type === "customer.subscription.deleted") {
+    } else if ((event.type === "customer.subscription.updated" || event.type === "customer.subscription.deleted") && !notAdFree) {
       const email = await env.USERS.get(`stripecust:${obj.customer}`);
-      const active = event.type !== "customer.subscription.deleted" && ["active", "trialing", "past_due"].includes(obj.status);
-      await setAdFree(email, active);
+      const user = email ? await env.USERS.get(emailKey(email), "json") : null;
+      // Only the subscription we recorded as the user's ad-free plan may flip it.
+      // A second subscription on the same customer, or a late event for an old
+      // subscription after re-subscribing, is ignored. Users from before
+      // stripeSubId was stored (unset) fall back to the customer mapping.
+      if (user && (!user.stripeSubId || user.stripeSubId === obj.id)) {
+        const active = event.type !== "customer.subscription.deleted" && ["active", "trialing", "past_due"].includes(obj.status);
+        await setAdFree(email, active);
+      }
     }
     return json({ received: true });
   }
