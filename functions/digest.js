@@ -22,6 +22,10 @@ export const DIGEST_UTC_HOUR = 10; // 6am ET / 5am CT
 const ALERT_UTC_FROM = 9, ALERT_UTC_TO = 23; // only alert 5am–7pm ET
 export const WEEKEND_UTC_DAY = 4, WEEKEND_UTC_HOUR = 22; // Thursday evening ET
 
+// Spot names can come from user-built pages (free text), so escape them before
+// they go into email HTML; otherwise a crafted name is a phishing link in our mail.
+export const esc = (s) => String(s ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+
 const V_COLOR = { GO: "#1B936A", CAUTION: "#A9831C", "NO-GO": "#C0392B" };
 const chip = (level) =>
   `<span style="display:inline-block;min-width:64px;text-align:center;background:${V_COLOR[level] || "#667"};color:#fff;font-weight:700;font-size:12px;padding:4px 8px;border-radius:6px">${level || "—"}</span>`;
@@ -30,7 +34,7 @@ const portRow = (s) => `
   <tr>
     <td style="padding:8px 10px 8px 0">${chip(s.level)}</td>
     <td style="padding:8px 0;font-family:system-ui,sans-serif">
-      <a href="${SITE}/?spot=${encodeURIComponent(s.id)}" style="color:#008BA8;font-weight:600;text-decoration:none">${s.name}</a>
+      <a href="${SITE}/?spot=${encodeURIComponent(s.id)}" style="color:#008BA8;font-weight:600;text-decoration:none">${esc(s.name)}</a>
       <span style="color:#5b6b78;font-size:13px"> · ${s.windKt != null ? `${s.windKt} kt${s.dir ? ` ${s.dir}` : ""}` : "—"} · ${s.waveFt != null ? `${s.waveFt} ft${s.periodSec ? ` @ ${s.periodSec}s` : ""}` : "—"}${s.win ? ` · <b style="color:#1B936A">best ${s.win.from}–${s.win.to}</b>` : ""}</span>
     </td>
   </tr>`;
@@ -59,7 +63,7 @@ function alertHtml(nogoSpots, unsubUrl) {
 
 function goAlertHtml(goSpots, unsubUrl) {
   return `<div style="font-family:system-ui,-apple-system,sans-serif;max-width:520px;color:#1a2b38">
-    <h2 style="margin:0 0 10px">It's GO at ${goSpots.length > 1 ? "your ports" : goSpots[0].name}</h2>
+    <h2 style="margin:0 0 10px">It's GO at ${goSpots.length > 1 ? "your ports" : esc(goSpots[0].name)}</h2>
     <p style="margin:0 0 14px;color:#5b6b78">Conditions just improved. If you can get out, now's the window:</p>
     <table cellspacing="0" cellpadding="0" style="border-collapse:collapse">${goSpots.map(portRow).join("")}</table>
     <p style="margin:18px 0 0"><a href="${SITE}/spot/${encodeURIComponent(goSpots[0].id)}" style="display:inline-block;background:#1B936A;color:#fff;padding:10px 18px;border-radius:8px;text-decoration:none;font-weight:600">See how long it lasts</a></p>
@@ -84,7 +88,7 @@ function weekendHtml(rows, unsubUrl) {
   const any = rows.find((r) => r.sat || r.sun) || {};
   const satLabel = any.sat ? dayName(any.sat.date) : "Saturday", sunLabel = any.sun ? dayName(any.sun.date) : "Sunday";
   const tr = (r) => `<tr>
-      <td style="padding:10px 12px 10px 0;font-family:system-ui,sans-serif"><a href="${SITE}/spot/${encodeURIComponent(r.id)}" style="color:#008BA8;font-weight:600;text-decoration:none">${r.name}</a></td>
+      <td style="padding:10px 12px 10px 0;font-family:system-ui,sans-serif"><a href="${SITE}/spot/${encodeURIComponent(r.id)}" style="color:#008BA8;font-weight:600;text-decoration:none">${esc(r.name)}</a></td>
       <td style="padding:10px 12px 10px 0">${dayCell(r.sat)}</td>
       <td style="padding:10px 0">${dayCell(r.sun)}</td>
     </tr>`;

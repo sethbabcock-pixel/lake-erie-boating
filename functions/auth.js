@@ -238,7 +238,9 @@ async function loadPlans(env) {
     const r = await stripeGET(env, `prices/${encodeURIComponent(id)}`).catch(() => null);
     if (r && r.id && r.active !== false) plans.push({ id: plan, amount: r.unit_amount ?? null, currency: r.currency || "usd", interval: r.recurring?.interval || plan });
   }
-  if (cache && plans.length) await cache.put(key, new Response(JSON.stringify(plans), { headers: { "Cache-Control": "public, max-age=3600" } })).catch(() => {});
+  // Cache misses too (briefly): a misconfigured price or a Stripe outage must
+  // not turn every public GET into Stripe API calls.
+  if (cache) await cache.put(key, new Response(JSON.stringify(plans), { headers: { "Cache-Control": `public, max-age=${plans.length ? 3600 : 60}` } })).catch(() => {});
   return plans;
 }
 async function stripeAPI(env, path, params) {

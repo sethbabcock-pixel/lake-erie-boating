@@ -963,6 +963,18 @@ async function run() {
     check("weekend: has Saturday + Sunday columns", m && /Saturday/.test(m.htmlContent) && /Sunday/.test(m.htmlContent));
   }
 
+  // 54. Email HTML escapes user-built spot names (no injected links/markup)
+  {
+    const { esc } = await import("../functions/digest.js");
+    eq("email esc: tags neutralized", esc('<a href="x">Pay</a> & co'), "&lt;a href=&quot;x&quot;&gt;Pay&lt;/a&gt; &amp; co");
+    const env = { USERS: makeKV({ "builtspot:evil": JSON.stringify({ slug: "evil", name: '<a href="https://evil.example">Update card</a>', lat: 41.5, lon: -82.7, zone: "LEZ144", office: "CLE", product: "NSH", lake: "Lake Erie" }) }), BREVO_API_KEY: "brevo_x" };
+    await seedUser(env, "esc@example.com", { favorites: ["evil"], prefs: { dailyEmail: true } });
+    emailCalls = [];
+    await runScheduled(env, 10);
+    const m = emailCalls.find((c) => c.to[0].email === "esc@example.com");
+    check("email esc: digest carries the escaped name, not a live link", m && !/href="https:\/\/evil/.test(m.htmlContent) && /&lt;a href=/.test(m.htmlContent), m && m.htmlContent.slice(0, 400));
+  }
+
   console.log(results.join("\n"));
   console.log(`\n${passed} passed, ${failed} failed`);
   if (failed) process.exit(1);

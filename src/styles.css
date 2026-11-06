@@ -1154,11 +1154,6 @@ body.has-takeover .app { background: var(--bg); border-radius: var(--r-lg) var(-
 .auth-pending .signin-btn { display: inline-flex; align-items: center; justify-content: center; }
 .hero-cta-pending { display: inline-block; visibility: hidden; }
 
-/* "Remove ads" next to the ad label (links to the Pro plan) */
-.adlabel { display: flex; justify-content: space-between; align-items: baseline; gap: var(--s2); }
-.adlabel-remove { text-transform: none; letter-spacing: 0; font-size: 11px; color: var(--accent); text-decoration: none; padding: 4px 0; }
-.adlabel-remove:hover { text-decoration: underline; }
-
 /* Free vs Pro (signed-out /account) */
 .plan-compare { display: grid; grid-template-columns: 1fr 1fr; gap: var(--s3); }
 .plan-col { border: 1px solid var(--border-strong); border-radius: var(--r-md); padding: var(--s4); background: var(--surface); }
