@@ -1823,6 +1823,14 @@ export function gridStale(g, now = Date.now()) {
   const a = g?.updateTime ? ageMinOf(g.updateTime, now) : null;
   return a != null && a >= STALE_LIMITS.forecastMin;
 }
+// Strip rows ({level}) built from an overdue forecast can't be GO: they drop
+// to CAUTION (as the headline does), flagged `stale`. CAUTION/NO-GO and no
+// call are left as they are. Applied AFTER the alert raise, so an advisory
+// still lifts an hour or day to its own level.
+export function capStaleGo(rows, stale) {
+  if (!stale || !rows) return rows;
+  return rows.map((r) => (r.level === "GO" ? { ...r, level: "CAUTION", stale: true } : r));
+}
 
 // Wind as one phrase that names the sustained speed AND the gust, each with
 // its source, so the reason matches the stat tile and the header strip (the
@@ -2333,7 +2341,9 @@ export async function fetchWeeks(env, ids, { landBudget } = {}) {
   await floorWithMarineText(entries, grids).catch(() => {});
   // Same per-day verdicts as the week strip (buildWeek → riskLevel: no wind
   // data is "—", lake gusts count), raised by the zone's active alerts.
-  return Object.fromEntries(entries.map(([id, s], i) => [id, applyAlertsToWeek(buildWeek(grids[i], waterProfile(s)), zoneAlertsFor(za, s), zoneAlertsOkFor(za, s), grids[i]?.tz, Date.now(), s)]));
+  // An overdue grid can't put a GO day in the email (gridStale → CAUTION, as
+  // on the spot page's week strip).
+  return Object.fromEntries(entries.map(([id, s], i) => [id, capStaleGo(applyAlertsToWeek(buildWeek(grids[i], waterProfile(s)), zoneAlertsFor(za, s), zoneAlertsOkFor(za, s), grids[i]?.tz, Date.now(), s), gridStale(grids[i]))]));
 }
 
 // The full spot-page verdict (alerts, gusts, buoy, nearshore text) for one
@@ -2466,9 +2476,17 @@ export async function onRequest(context) {
   // comes from one (nearshore-corrected) series and they can't disagree.
   applyMarineWaveFloor(grid, marinePeriods);
   const profile = waterProfile(spot);
+  // The OLDEST known forecaster update across the NWS products feeding the
+  // call (hourly, daily, grid): conservative when they disagree. Used by the
+  // freshness block, the headline cap and the strips below.
+  const issued = [fc.issuedAt?.hourly, fc.issuedAt?.daily, grid?.updateTime].filter(Boolean).sort();
+  const forecastIssuedAt = issued[0] || null;
+  const forecastAgeMin = forecastIssuedAt ? ageMinOf(forecastIssuedAt) : null;
+  // An overdue forecast caps every hour and day at CAUTION, like the headline.
+  const forecastStale = forecastAgeMin != null && forecastAgeMin >= STALE_LIMITS.forecastMin;
   // Alerts in effect raise the strips too, not just the headline, so the week
   // and hourly views never show GO under an active advisory.
-  const week = applyAlertsToWeek(buildWeek(grid, profile), allAlerts, alertsOk, grid?.tz, Date.now(), spot);
+  const week = capStaleGo(applyAlertsToWeek(buildWeek(grid, profile), allAlerts, alertsOk, grid?.tz, Date.now(), spot), forecastStale);
   const sun = sunTimes(spot.lat, spot.lon);
   // Merge hourly wave height (NWS grid) into the NWS hourly rows, then rate
   // risk. Keyed by epoch hour, so spots outside Eastern time line up too.
@@ -2476,7 +2494,7 @@ export async function onRequest(context) {
   // them), so the strip's first row, the outlook, and the headline's
   // imminent-hazard check all start at the current hour.
   const nowEH = Math.floor(Date.now() / 3600000);
-  const hourly = applyAlertsToHours(withRisk(
+  const hourlyRaw = applyAlertsToHours(withRisk(
     fc.hourly.filter((h) => Math.floor(Date.parse(h.time) / 3600000) >= nowEH).map((h) => {
       const eh = Math.floor(Date.parse(h.time) / 3600000);
       return {
@@ -2488,6 +2506,7 @@ export async function onRequest(context) {
     }),
     profile
   ), allAlerts, alertsOk, Date.now(), spot);
+  const hourly = capStaleGo(hourlyRaw, forecastStale);
   const outlook = computeOutlook(hourly);
 
   // Effective wind: prefer the live buoy, fall back to the NWS forecast so wind
@@ -2567,9 +2586,7 @@ export async function onRequest(context) {
 
   // Freshness: the observation time of every station that actually supplied
   // wind/gust/waves (the wind can come from windBuoy, a different station than
-  // the primary), and the OLDEST known forecaster update across the NWS
-  // products feeding the call (hourly, daily, grid): conservative when they
-  // disagree. freshness.buoy is the oldest feeding station, so the stale cap
+  // the primary), and the oldest forecaster update (forecastAgeMin, above). freshness.buoy is the oldest feeding station, so the stale cap
   // and the page's freshness line name the reading that is actually that old.
   const obsAge = (o) => (Number.isFinite(Date.parse(o.observedAt)) ? ageMinOf(o.observedAt, nowMs) : o.ageMinutes ?? null);
   const fedBy = new Map();
@@ -2578,9 +2595,6 @@ export async function onRequest(context) {
   const buoyStations = [...fedBy].map(([o, feeds]) => ({ station: o.station, feeds, observedAt: o.observedAt || null, ageMinutes: obsAge(o) }));
   // Oldest first; an unknown age doesn't outrank a known one.
   const oldestBuoy = [...buoyStations].sort((x, y) => (y.ageMinutes ?? -1) - (x.ageMinutes ?? -1))[0] || null;
-  const issued = [fc.issuedAt?.hourly, fc.issuedAt?.daily, grid?.updateTime].filter(Boolean).sort();
-  const forecastIssuedAt = issued[0] || null;
-  const forecastAgeMin = forecastIssuedAt ? ageMinOf(forecastIssuedAt, nowMs) : null;
   const buoyAgeMin = oldestBuoy ? oldestBuoy.ageMinutes : null;
   const freshness = {
     buoy: oldestBuoy ? { station: oldestBuoy.station, observedAt: oldestBuoy.observedAt, ageMinutes: oldestBuoy.ageMinutes } : null,
