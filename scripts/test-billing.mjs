@@ -2021,6 +2021,7 @@ async function run() {
     eq("land alerts: calm day, no land warning → tile GO", calm?.level, "GO");
     const sa = await fetchSpotsAlerts([SPOTS.sandusky]);
     check("land alerts: a curated spot uses its stored land zones", JSON.stringify(sa.land.get(`${SPOTS.sandusky.lat},${SPOTS.sandusky.lon}`)) === JSON.stringify(SPOTS.sandusky.land), JSON.stringify([...sa.land]));
+    eq("land alerts: Mackinaw City watches both Cheboygan and Emmet counties", JSON.stringify(SPOTS.mackinaw.land), JSON.stringify(["MIZ017", "MIC031", "MIZ016", "MIC047"]));
     check("land alerts: every curated spot carries valid land zones", Object.values(SPOTS).every((x) => Array.isArray(x.land) && x.land.length && x.land.every((z) => /^[A-Z]{3}\d{3}$/.test(z))), Object.entries(SPOTS).filter(([, x]) => !Array.isArray(x.land)).map(([k]) => k).join());
     pointsCalls = 0;
     await fetchSpotsAlerts(Object.values(SPOTS));
