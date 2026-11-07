@@ -1,0 +1,841 @@
+[
+ {
+  "spot": "sausalito",
+  "name": "Angel Island \u00b7 Ayala Cove",
+  "lake": "San Francisco Bay",
+  "lat": 37.8615,
+  "lon": -122.4325,
+  "kind": "yt",
+  "id": "OIyy1ZmRryM",
+  "view": "Cove and Raccoon Strait water from the beach; also serves berkeley, alameda"
+ },
+ {
+  "spot": "berkeley",
+  "name": "Treasure Island \u00b7 Alcatraz & bay (ABC7)",
+  "lake": "San Francisco Bay",
+  "lat": 37.823,
+  "lon": -122.37,
+  "kind": "yt",
+  "id": "_VqvVJfmyfs",
+  "view": "Open bay water toward Alcatraz; also serves sausalito, alameda, redwood-city"
+ },
+ {
+  "spot": "alameda",
+  "name": "Treasure Island \u00b7 Mersea bay view",
+  "lake": "San Francisco Bay",
+  "lat": 37.8225,
+  "lon": -122.3705,
+  "kind": "yt",
+  "id": "BSWhGNXxT9A",
+  "view": "Bay shoreline, Bay Bridge/Golden Gate beyond; thumbnail was a title card; also serves berkeley, redwood-city"
+ },
+ {
+  "spot": "redwood-city",
+  "name": "San Francisco \u00b7 Pier 23 Cafe waterfront (StreamTime)",
+  "lake": "San Francisco Bay",
+  "lat": 37.8095,
+  "lon": -122.4005,
+  "kind": "yt",
+  "id": "PDKGik7Np88",
+  "view": "Embarcadero piers and Central Bay water; Central Bay, not South Bay; also serves sausalito, berkeley, alameda"
+ },
+ {
+  "spot": "half-moon-bay",
+  "name": "Pacifica \u00b7 Pier close-up (Chamberlin Nature)",
+  "lake": "Northern California Coast",
+  "lat": 37.6322,
+  "lon": -122.4965,
+  "kind": "yt",
+  "id": "BrUaOjjXgZM",
+  "view": "Pier and surf zone; live timestamp seen 2026-11-07"
+ },
+ {
+  "spot": "half-moon-bay",
+  "name": "Pacifica \u00b7 Pier & beach (Chamberlin Nature)",
+  "lake": "Northern California Coast",
+  "lat": 37.6315,
+  "lon": -122.4965,
+  "kind": "yt",
+  "id": "_-_hg_aJrKU",
+  "view": "Wide surf and pier view; thumbnail was dated 2020, recheck live"
+ },
+ {
+  "spot": "half-moon-bay",
+  "name": "Pacifica \u00b7 Mori Point (Chamberlin Nature)",
+  "lake": "Northern California Coast",
+  "lat": 37.6,
+  "lon": -122.5,
+  "kind": "yt",
+  "id": "iQ7XJDXYSMo",
+  "view": "Surf and coastline; thumbnail was dated 2026-02, recheck live"
+ },
+ {
+  "spot": "half-moon-bay",
+  "name": "Pacifica \u00b7 Linda Mar Beach cam",
+  "lake": "Northern California Coast",
+  "lat": 37.592,
+  "lon": -122.5,
+  "kind": "yt",
+  "id": "TDcKozRHlKs",
+  "view": "Linda Mar surf beach; thumbnail was a title card, recheck"
+ },
+ {
+  "spot": "bodega-bay",
+  "name": "Point Reyes \u00b7 Marine Mammal Center shoreline cam",
+  "lake": "Northern California Coast",
+  "lat": 38.03,
+  "lon": -122.8,
+  "kind": "yt",
+  "id": "k-rsgU8-Inw",
+  "view": "Cove water and rocky shore, Point Reyes National Seashore; lat/lon approximate; also serves half-moon-bay, sausalito"
+ },
+ {
+  "spot": "humboldt-bay",
+  "name": "Trinidad Harbor \u00b7 Trinidad Bay",
+  "lake": "Northern California Coast",
+  "lat": 41.0587,
+  "lon": -124.1436,
+  "kind": "yt",
+  "id": "31ViUog5FV4",
+  "view": "Trinidad Bay and harbor mouth, 20 mi north of Humboldt Bay"
+ },
+ {
+  "spot": "newport-or",
+  "name": "Newport \u00b7 Yaquina Bay from Oregon Coast Aquarium (KOIN 6)",
+  "lake": "Oregon Coast",
+  "lat": 44.6,
+  "lon": -124.05,
+  "kind": "yt",
+  "id": "lc8LAAh2jMI",
+  "view": "Yaquina Bay estuary in lower third of frame, town beyond; also serves depoe-bay"
+ },
+ {
+  "spot": "seattle",
+  "name": "Seattle \u00b7 Union Bay & Lake Washington (UW)",
+  "lake": "Puget Sound",
+  "lat": 47.655,
+  "lon": -122.305,
+  "kind": "yt",
+  "id": "NCzKkn0wD30",
+  "view": "Union Bay/Lake Washington water, 520 bridge; fresh water, not the Sound; also serves everett, tacoma"
+ },
+ {
+  "spot": "olympia",
+  "name": "Union \u00b7 Hood Canal boat ramp (Hood Canal Communications)",
+  "lake": "Puget Sound",
+  "lat": 47.357,
+  "lon": -123.097,
+  "kind": "yt",
+  "id": "sFX2tlGIl_Y",
+  "view": "Hood Canal shoreline and boat ramp; also serves tacoma, seattle"
+ },
+ {
+  "spot": "olympia",
+  "name": "Union \u00b7 Hood Canal water & mountain cam (Hood Canal Communications)",
+  "lake": "Puget Sound",
+  "lat": 47.357,
+  "lon": -123.097,
+  "kind": "yt",
+  "id": "DNz4t_CRxuI",
+  "view": "Hood Canal water; fog-bound at capture; also serves tacoma, seattle"
+ },
+ {
+  "spot": "honolulu",
+  "name": "Waikiki \u00b7 South Shore 180\u00b0 (Waikiki Aquarium / UH SOEST)",
+  "lake": "Hawaii",
+  "lat": 21.2655,
+  "lon": -157.8225,
+  "kind": "yt",
+  "id": "WIUg8wzhq1g",
+  "view": "Panoramic Waikiki surf break and reef; university cam"
+ },
+ {
+  "spot": "honolulu",
+  "name": "Waikiki Beach \u00b7 Marriott (Ozolio)",
+  "lake": "Hawaii",
+  "lat": 21.275,
+  "lon": -157.825,
+  "kind": "yt",
+  "id": "4CK0CsimBHs",
+  "view": "Waikiki beach, reef break, Diamond Head"
+ },
+ {
+  "spot": "honolulu",
+  "name": "Waikiki \u00b7 Park Shore Hotel (Ozolio Plus)",
+  "lake": "Hawaii",
+  "lat": 21.2735,
+  "lon": -157.8235,
+  "kind": "yt",
+  "id": "kCPppYpcY_s",
+  "view": "Beach, pier and water; night frame only seen"
+ },
+ {
+  "spot": "honolulu",
+  "name": "Ala Moana \u00b7 Magic Island lagoon (WOZ ERE)",
+  "lake": "Hawaii",
+  "lat": 21.2885,
+  "lon": -157.8445,
+  "kind": "yt",
+  "id": "y5XS3fMISRk",
+  "view": "Magic Island lagoon and open water off Ala Moana, next to Kewalo Basin"
+ },
+ {
+  "spot": "honolulu",
+  "name": "Ala Moana \u00b7 Concessions surf break",
+  "lake": "Hawaii",
+  "lat": 21.2865,
+  "lon": -157.851,
+  "kind": "yt",
+  "id": "EuR8OkQxOgk",
+  "view": "Surf break off Ala Moana Beach Park; thumbnail was a title card"
+ },
+ {
+  "spot": "honolulu",
+  "name": "Honolulu Harbor webcam (The Bridge Guy)",
+  "lake": "Hawaii",
+  "lat": 21.31,
+  "lon": -157.87,
+  "kind": "yt",
+  "id": "eCHeZDEVSeU",
+  "view": "Harbor and channel with timestamp overlay; night frame seen, stamp 2026-11-07"
+ },
+ {
+  "spot": "honolulu",
+  "name": "Kahala \u00b7 Resort beach & reef (Ozolio)",
+  "lake": "Hawaii",
+  "lat": 21.2745,
+  "lon": -157.7835,
+  "kind": "yt",
+  "id": "TZAvviB_o-4",
+  "view": "Oahu south shore reef and ocean; 7 mi east of Honolulu"
+ },
+ {
+  "spot": "maalaea",
+  "name": "Kihei \u00b7 Hale Pau Hana surf cam",
+  "lake": "Hawaii",
+  "lat": 20.7545,
+  "lon": -156.4579,
+  "kind": "yt",
+  "id": "hPvl6IACa2k",
+  "view": "Kihei shoreline on Ma'alaea Bay; night frame only seen"
+ },
+ {
+  "spot": "maalaea",
+  "name": "Wailea \u00b7 Fairmont Kea Lani (Ozolio)",
+  "lake": "Hawaii",
+  "lat": 20.6558,
+  "lon": -156.4415,
+  "kind": "yt",
+  "id": "G1zgkkguCyc",
+  "view": "Polo Beach and channel toward Kahoolawe"
+ },
+ {
+  "spot": "maalaea",
+  "name": "Kaanapali \u00b7 Sheraton Maui (Ozolio)",
+  "lake": "Hawaii",
+  "lat": 20.9167,
+  "lon": -156.6944,
+  "kind": "yt",
+  "id": "YXji6UQ0bwY",
+  "view": "West Maui beach and Au'au Channel; 14 mi NW"
+ },
+ {
+  "spot": "maalaea",
+  "name": "Napili \u00b7 Napili Kai Beach Resort (Ozolio)",
+  "lake": "Hawaii",
+  "lat": 20.9925,
+  "lon": -156.6675,
+  "kind": "yt",
+  "id": "fwX04Gsb8W4",
+  "view": "Napili Bay beach and water; 17 mi NW"
+ },
+ {
+  "spot": "kona",
+  "name": "Kohanaiki \u00b7 Web Camera",
+  "lake": "Hawaii",
+  "lat": 19.7235,
+  "lon": -156.0535,
+  "kind": "yt",
+  "id": "Sb6v9lXIDjc",
+  "view": "Coast south of Kona airport; blurry/dark at capture, recheck"
+ },
+ {
+  "spot": "portland-me",
+  "name": "Portland Head Light \u00b7 Casco Bay",
+  "lake": "New England Coast",
+  "lat": 43.623,
+  "lon": -70.208,
+  "kind": "yt",
+  "id": "rArvNLNmhOo",
+  "view": "Fort Williams Park cam, rocks and Casco Bay in frame; daylight seen"
+ },
+ {
+  "spot": "portland-me",
+  "name": "Scarborough Beach \u00b7 Surf",
+  "lake": "New England Coast",
+  "lat": 43.55,
+  "lon": -70.32,
+  "kind": "yt",
+  "id": "-JZf3deL-Rs",
+  "view": "Surf cam on the open Atlantic; thumbnail was a surf photo, confirm live frame"
+ },
+ {
+  "spot": "portland-me",
+  "name": "Cape Porpoise \u00b7 Outer Harbor",
+  "lake": "New England Coast",
+  "lat": 43.362,
+  "lon": -70.428,
+  "kind": "yt",
+  "id": "xROnFN6dIZQ",
+  "view": "Working harbor, moored boats; thumbnail is title card over harbor"
+ },
+ {
+  "spot": "boston",
+  "name": "Weymouth \u00b7 Fore River",
+  "lake": "New England Coast",
+  "lat": 42.25,
+  "lon": -70.95,
+  "kind": "yt",
+  "id": "dtIcEq1itmU",
+  "view": "Fore River / Boston Harbor south shore; title card over water"
+ },
+ {
+  "spot": "boston",
+  "name": "Nahant \u00b7 Ocean House Surf & Skate",
+  "lake": "New England Coast",
+  "lat": 42.425,
+  "lon": -70.93,
+  "kind": "yt",
+  "id": "KziwCV7db9s",
+  "view": "Open water view from Nahant, daylight frame seen"
+ },
+ {
+  "spot": "boston",
+  "name": "Plum Island \u00b7 Beach South (Newburyport)",
+  "lake": "New England Coast",
+  "lat": 42.79,
+  "lon": -70.81,
+  "kind": "yt",
+  "id": "ZPbgf9jLD4E",
+  "view": "Beach and surf, daylight frame seen"
+ },
+ {
+  "spot": "boston",
+  "name": "Beverly \u00b7 Jubilee Yacht Club (southwest)",
+  "lake": "New England Coast",
+  "lat": 42.55,
+  "lon": -70.85,
+  "kind": "yt",
+  "id": "ZlmEdBfHqsM",
+  "view": "Second Jubilee YC camera, harbor water and docks"
+ },
+ {
+  "spot": "hyannis",
+  "name": "Cape Cod Canal \u00b7 Mass Maritime Academy",
+  "lake": "New England Coast",
+  "lat": 41.74,
+  "lon": -70.5,
+  "kind": "yt",
+  "id": "_OeFhA2XqqA",
+  "view": "Canal channel and bridge, daylight frame seen"
+ },
+ {
+  "spot": "hyannis",
+  "name": "Edgartown \u00b7 Harbor & Lighthouse (GOMV)",
+  "lake": "New England Coast",
+  "lat": 41.39,
+  "lon": -70.51,
+  "kind": "yt",
+  "id": "FoAvYeGRjU4",
+  "view": "Aerial of Edgartown harbor, daylight seen"
+ },
+ {
+  "spot": "hyannis",
+  "name": "Vineyard Haven \u00b7 Harbor & Ferry (GOMV)",
+  "lake": "New England Coast",
+  "lat": 41.455,
+  "lon": -70.6,
+  "kind": "yt",
+  "id": "bdjXsDufCQY",
+  "view": "Aerial of Vineyard Haven harbor, daylight seen"
+ },
+ {
+  "spot": "ny-harbor",
+  "name": "East River \u00b7 NYC Ferry (E 34th St)",
+  "lake": "New York & New Jersey Coast",
+  "lat": 40.745,
+  "lon": -73.97,
+  "kind": "yt",
+  "id": "roEn_E6sMfc",
+  "view": "East River water, ferry landing; borderline (river not harbor)"
+ },
+ {
+  "spot": "cape-may",
+  "name": "Sea Isle City \u00b7 Beach Patrol",
+  "lake": "New York & New Jersey Coast",
+  "lat": 39.153,
+  "lon": -74.693,
+  "kind": "yt",
+  "id": "FYOGiFH60uM",
+  "view": "Beach and surf, daylight seen"
+ },
+ {
+  "spot": "cape-may",
+  "name": "Sea Isle City \u00b7 Spinnaker beach",
+  "lake": "New York & New Jersey Coast",
+  "lat": 39.153,
+  "lon": -74.693,
+  "kind": "yt",
+  "id": "BY_Lar5zLr8",
+  "view": "Beach and surf, daylight seen"
+ },
+ {
+  "spot": "cape-may",
+  "name": "Margate \u00b7 Beach (Atlantic City skyline cam)",
+  "lake": "New York & New Jersey Coast",
+  "lat": 39.33,
+  "lon": -74.51,
+  "kind": "yt",
+  "id": "2MNsMmfdpx8",
+  "view": "Beach and surf daylight seen; beyond-ish range for Barnegat"
+ },
+ {
+  "spot": "tybee",
+  "name": "Savannah River \u00b7 Upper East River",
+  "lake": "Georgia & South Carolina Coast",
+  "lat": 32.08,
+  "lon": -81.09,
+  "kind": "yt",
+  "id": "Nto6QNZZnQ0",
+  "view": "River view with bridge; title says Savannah River, location unconfirmed"
+ },
+ {
+  "spot": "tybee",
+  "name": "Hilton Head \u00b7 Sea Pines Beach Club",
+  "lake": "Georgia & South Carolina Coast",
+  "lat": 32.13,
+  "lon": -80.78,
+  "kind": "yt",
+  "id": "QIJku1LZGRE",
+  "view": "Beach and Atlantic; also serves Hilton Head"
+ },
+ {
+  "spot": "hilton-head",
+  "name": "Hilton Head \u00b7 Westin (Ozolio)",
+  "lake": "Georgia & South Carolina Coast",
+  "lat": 32.2,
+  "lon": -80.74,
+  "kind": "ozolio",
+  "id": "EMB_YQCM0000134E",
+  "view": "Ozolio page id YQCM0000134E seen; EMB_ prefix assumed, needs Action check"
+ },
+ {
+  "spot": "murrells-inlet",
+  "name": "Surfside Beach \u00b7 Pier",
+  "lake": "Georgia & South Carolina Coast",
+  "lat": 33.605,
+  "lon": -78.975,
+  "kind": "yt",
+  "id": "hXqjUfQJf9U",
+  "view": "Town pier looking over the surf, daylight seen"
+ },
+ {
+  "spot": "murrells-inlet",
+  "name": "Murrells Inlet \u00b7 Express Watersports dock",
+  "lake": "Georgia & South Carolina Coast",
+  "lat": 33.54,
+  "lon": -79.03,
+  "kind": "yt",
+  "id": "En6HTsRLAAU",
+  "view": "Ozolio page confirms Murrells Inlet; YouTube thumbnail is an ad card"
+ },
+ {
+  "spot": "murrells-inlet",
+  "name": "North Myrtle Beach \u00b7 Elliott Beach Rentals",
+  "lake": "Georgia & South Carolina Coast",
+  "lat": 33.69,
+  "lon": -78.88,
+  "kind": "yt",
+  "id": "6NofiKBWXIk",
+  "view": "Beach and surf, dim frame; ~0.3 deg away"
+ },
+ {
+  "spot": "wrightsville",
+  "name": "Wrightsville Beach \u00b7 Johnnie Mercer's Pier (south)",
+  "lake": "North Carolina Coast",
+  "lat": 34.21,
+  "lon": -77.79,
+  "kind": "yt",
+  "id": "itXoEFJZtD0",
+  "view": "Beach and surf, daylight seen"
+ },
+ {
+  "spot": "wrightsville",
+  "name": "Wrightsville Beach \u00b7 Johnnie Mercer's Pier (north)",
+  "lake": "North Carolina Coast",
+  "lat": 34.21,
+  "lon": -77.79,
+  "kind": "yt",
+  "id": "yQG1M1GU_pI",
+  "view": "Pier deck looking out over water"
+ },
+ {
+  "spot": "wrightsville",
+  "name": "Bald Head Island \u00b7 Beach Access 15",
+  "lake": "North Carolina Coast",
+  "lat": 33.86,
+  "lon": -77.97,
+  "kind": "yt",
+  "id": "lcANlrXCR0Q",
+  "view": "Cape Fear mouth beach and ocean, daylight seen"
+ },
+ {
+  "spot": "morehead-city",
+  "name": "Beaufort \u00b7 Rhumbar waterfront deck",
+  "lake": "North Carolina Coast",
+  "lat": 34.717,
+  "lon": -76.66,
+  "kind": "yt",
+  "id": "ATYJsuZqEUU",
+  "view": "Deck over Taylor Creek with docks; bar exterior, not interior"
+ },
+ {
+  "spot": "jupiter",
+  "name": "Jupiter \u00b7 Reef Club oceanfront (cam 2)",
+  "lake": "Florida Atlantic Coast",
+  "lat": 26.921,
+  "lon": -80.067,
+  "kind": "yt",
+  "id": "4y7kDbwBuh0",
+  "view": "Beach and surf; also serves Palm Beach and Fort Pierce"
+ },
+ {
+  "spot": "palm-beach",
+  "name": "Deerfield Beach \u00b7 Fishing pier",
+  "lake": "Florida Atlantic Coast",
+  "lat": 26.318,
+  "lon": -80.075,
+  "kind": "yt",
+  "id": "H33wtprQqSM",
+  "view": "Pier over surf; title card thumbnail; ~0.45 deg"
+ },
+ {
+  "spot": "palm-beach",
+  "name": "Deerfield Beach \u00b7 Beach camera",
+  "lake": "Florida Atlantic Coast",
+  "lat": 26.318,
+  "lon": -80.075,
+  "kind": "yt",
+  "id": "rdeoEeJ00xA",
+  "view": "Beach and ocean; title card thumbnail; ~0.45 deg"
+ },
+ {
+  "spot": "palm-beach",
+  "name": "Dania Beach \u00b7 Pier",
+  "lake": "Florida Atlantic Coast",
+  "lat": 26.06,
+  "lon": -80.11,
+  "kind": "yt",
+  "id": "o1eTLR7Degs",
+  "view": "Pier and surf daylight seen; ~0.7 deg"
+ },
+ {
+  "spot": "naples",
+  "name": "Fort Myers Beach \u00b7 Visit Fort Myers webcam",
+  "lake": "Florida Gulf Coast",
+  "lat": 26.45,
+  "lon": -81.95,
+  "kind": "yt",
+  "id": "nj9jdOXXhEo",
+  "view": "Beach and Gulf, daylight seen; ~0.38 deg"
+ },
+ {
+  "spot": "naples",
+  "name": "Fort Myers Beach \u00b7 Margaritaville License to Chill",
+  "lake": "Florida Gulf Coast",
+  "lat": 26.45,
+  "lon": -81.95,
+  "kind": "yt",
+  "id": "2qd9j2CbIpg",
+  "view": "Beach and Gulf, daylight seen"
+ },
+ {
+  "spot": "fort-myers-beach",
+  "name": "Pine Island \u00b7 Four Winds Marina",
+  "lake": "Florida Gulf Coast",
+  "lat": 26.65,
+  "lon": -82.1,
+  "kind": "yt",
+  "id": "xp1b7w3qPd8",
+  "view": "Marina basin and docks, daylight seen"
+ },
+ {
+  "spot": "orange-beach",
+  "name": "Orange Beach \u00b7 Gulf (FOX10)",
+  "lake": "Alabama & Mississippi Coast",
+  "lat": 30.27,
+  "lon": -87.58,
+  "kind": "yt",
+  "id": "5Ijk8QsR-nw",
+  "view": "Aerial beach and Gulf, daylight seen"
+ },
+ {
+  "spot": "orange-beach",
+  "name": "Orange Beach \u00b7 The Moorings marina",
+  "lake": "Alabama & Mississippi Coast",
+  "lat": 30.29,
+  "lon": -87.57,
+  "kind": "yt",
+  "id": "nkA40olKP5s",
+  "view": "Marina slips and water, daylight seen"
+ },
+ {
+  "spot": "orange-beach",
+  "name": "Orange Beach \u00b7 Turquoise Place beach",
+  "lake": "Alabama & Mississippi Coast",
+  "lat": 30.27,
+  "lon": -87.6,
+  "kind": "yt",
+  "id": "pJqrjIuvGFE",
+  "view": "Beach and Gulf, daylight seen"
+ },
+ {
+  "spot": "orange-beach",
+  "name": "Perdido Key \u00b7 Gulf beach (ENCO)",
+  "lake": "Alabama & Mississippi Coast",
+  "lat": 30.28,
+  "lon": -87.44,
+  "kind": "yt",
+  "id": "Qoouv_9QG5Q",
+  "view": "Dune and Gulf, daylight seen"
+ },
+ {
+  "spot": "mobile-bay",
+  "name": "Fairhope \u00b7 Municipal Pier",
+  "lake": "Alabama & Mississippi Coast",
+  "lat": 30.52,
+  "lon": -87.91,
+  "kind": "yt",
+  "id": "N5wWOVOTHmQ",
+  "view": "Pier and Mobile Bay, daylight seen"
+ },
+ {
+  "spot": "biloxi",
+  "name": "D'Iberville \u00b7 Back Bay of Biloxi (FOX10)",
+  "lake": "Alabama & Mississippi Coast",
+  "lat": 30.43,
+  "lon": -88.89,
+  "kind": "yt",
+  "id": "fYsEy6RFskY",
+  "view": "Back Bay water with bridge; Biloxi is 0.05 deg away"
+ },
+ {
+  "spot": "galveston",
+  "name": "Galveston \u00b7 Seawall surf cam",
+  "lake": "Louisiana & Texas Coast",
+  "lat": 29.29,
+  "lon": -94.79,
+  "kind": "yt",
+  "id": "r9PwbZwEFas",
+  "view": "Gulf surf frame (gray daylight), seen"
+ },
+ {
+  "spot": "galveston",
+  "name": "Galveston \u00b7 Yacht Basin marina",
+  "lake": "Louisiana & Texas Coast",
+  "lat": 29.31,
+  "lon": -94.79,
+  "kind": "yt",
+  "id": "YIkt_L2YFPY",
+  "view": "Yacht basin water, daylight seen"
+ },
+ {
+  "spot": "galveston",
+  "name": "Galveston \u00b7 Ship Channel (Emerald cam)",
+  "lake": "Louisiana & Texas Coast",
+  "lat": 29.31,
+  "lon": -94.79,
+  "kind": "yt",
+  "id": "LwKESRa1f-c",
+  "view": "Ship channel traffic, daylight seen"
+ },
+ {
+  "spot": "galveston",
+  "name": "Galveston \u00b7 Cruise terminals",
+  "lake": "Louisiana & Texas Coast",
+  "lat": 29.31,
+  "lon": -94.79,
+  "kind": "yt",
+  "id": "Mnj84qrUbXc",
+  "view": "Ship at terminal with channel water"
+ },
+ {
+  "spot": "port-aransas",
+  "name": "Aransas Pass \u00b7 Harbor Park",
+  "lake": "Louisiana & Texas Coast",
+  "lat": 27.91,
+  "lon": -97.15,
+  "kind": "yt",
+  "id": "Mn3vY8bordE",
+  "view": "Dock and harbor water, daylight seen; ~0.12 deg"
+ },
+ {
+  "spot": "port-aransas",
+  "name": "Corpus Christi \u00b7 Packery Channel surf cam",
+  "lake": "Louisiana & Texas Coast",
+  "lat": 27.6,
+  "lon": -97.2,
+  "kind": "yt",
+  "id": "5s6X2045OTs",
+  "view": "Packery Channel beach; thumbnail is a logo card; ~0.27 deg"
+ },
+ {
+  "spot": "south-padre",
+  "name": "South Padre \u00b7 Courtyard beach cam",
+  "lake": "Louisiana & Texas Coast",
+  "lat": 26.1,
+  "lon": -97.17,
+  "kind": "yt",
+  "id": "dzylsC0KcOE",
+  "view": "Beach and Gulf, daylight seen"
+ },
+ {
+  "spot": "south-padre",
+  "name": "South Padre \u00b7 Queen Isabella Causeway",
+  "lake": "Louisiana & Texas Coast",
+  "lat": 26.08,
+  "lon": -97.17,
+  "kind": "yt",
+  "id": "bvL_3W7F4Fk",
+  "view": "Laguna Madre and causeway, daylight seen"
+ },
+ {
+  "spot": "south-padre",
+  "name": "South Padre \u00b7 Isla Blanca (South Padre Surf Co)",
+  "lake": "Louisiana & Texas Coast",
+  "lat": 26.07,
+  "lon": -97.16,
+  "kind": "yt",
+  "id": "0FaRaPPTS8M",
+  "view": "Surf cam; thumbnail is a logo card"
+ },
+ {
+  "spot": "alpena",
+  "name": "Alpena \u00b7 Thunder Bay Camera (WATZ)",
+  "lake": "Lake Huron",
+  "lat": 45.063,
+  "lon": -83.43,
+  "kind": "yt",
+  "id": "BluUW4pk2ek",
+  "view": "Elevated view over Alpena waterfront and Thunder Bay horizon"
+ },
+ {
+  "spot": "alpena",
+  "name": "Alpena \u00b7 Thunder Bay Harbor Camera (105.7 The Bird)",
+  "lake": "Lake Huron",
+  "lat": 45.063,
+  "lon": -83.43,
+  "kind": "yt",
+  "id": "cTL6RHF3WDs",
+  "view": "Marina basin, boat yard and open bay beyond breakwall"
+ },
+ {
+  "spot": "alpena",
+  "name": "Alpena \u00b7 Thunder Bay Marina Camera (Radio Centre)",
+  "lake": "Lake Huron",
+  "lat": 45.063,
+  "lon": -83.43,
+  "kind": "yt",
+  "id": "FS9Iz-EJW5Y",
+  "view": "Marina docks and breakwall looking out to Thunder Bay"
+ },
+ {
+  "spot": "port-huron",
+  "name": "Algonac \u00b7 St. Clair River (StreamTime)",
+  "lake": "Lake Huron",
+  "lat": 42.62,
+  "lon": -82.53,
+  "kind": "yt",
+  "id": "g4mpc2I5lhc",
+  "view": "St. Clair River with Algonac ferry; river view"
+ },
+ {
+  "spot": "port-huron",
+  "name": "Port Huron \u00b7 St. Clair River shipping (BoatNerd PTZ)",
+  "lake": "Lake Huron",
+  "lat": 42.98,
+  "lon": -82.42,
+  "kind": "yt",
+  "id": "SrL74LPoXF8",
+  "view": "Freighter channel at the head of the St. Clair River, Blue Water Bridge beyond"
+ },
+ {
+  "spot": "erie",
+  "name": "North East, PA \u00b7 Sunset Cam (Lake Erie)",
+  "lat": 42.215,
+  "lon": -79.83,
+  "kind": "yt",
+  "id": "Hg56IYpaF2A",
+  "view": "Lake Erie shoreline from North East Borough; ~15 mi east of Presque Isle"
+ },
+ {
+  "spot": "olcott",
+  "name": "Lyndonville \u00b7 Lake Ontario Livestream",
+  "lake": "Lake Ontario",
+  "lat": 43.33,
+  "lon": -78.39,
+  "kind": "yt",
+  "id": "w2COKOM5USU",
+  "view": "Rocky shoreline and open Lake Ontario"
+ },
+ {
+  "spot": "grand-marais",
+  "name": "Silver Bay \u00b7 Marina (Duluth Harbor Cam)",
+  "lake": "Lake Superior",
+  "lat": 47.295,
+  "lon": -91.257,
+  "kind": "yt",
+  "id": "zTVWJ3Mc0Ag",
+  "view": "Small-craft marina and breakwall on the North Shore, ~45 mi SW of Grand Marais"
+ },
+ {
+  "spot": "chicago",
+  "name": "Chicago \u00b7 Lakefront Skyline 4K (Lakefront Live)",
+  "lake": "Lake Michigan",
+  "lat": 41.895,
+  "lon": -87.61,
+  "kind": "yt",
+  "id": "dBGt-W7onQ8",
+  "view": "Gold Coast shoreline and open lake; Navy Pier/Playpen views per title"
+ },
+ {
+  "spot": "michigan-city",
+  "name": "Michigan City \u00b7 Lighthouse & Beach (Access LaPorte County)",
+  "lake": "Lake Michigan",
+  "lat": 41.73,
+  "lon": -86.91,
+  "kind": "yt",
+  "id": "Y2VkN45kj_0",
+  "view": "East Pierhead lighthouse, pier and beach"
+ },
+ {
+  "spot": "muskegon",
+  "name": "North Muskegon \u00b7 Muskegon Lake (Muskegon Waterfront)",
+  "lake": "Lake Michigan",
+  "lat": 43.26,
+  "lon": -86.27,
+  "kind": "yt",
+  "id": "itIkc0INogQ",
+  "view": "Muskegon Lake open water, boats, city across the lake"
+ },
+ {
+  "spot": "holland",
+  "name": "South Haven \u00b7 South Beach & Piers (City of South Haven)",
+  "lake": "Lake Michigan",
+  "lat": 42.4,
+  "lon": -86.28,
+  "kind": "yt",
+  "id": "G-tlKF32_p4",
+  "view": "Pierheads, red lighthouse, beach and open lake; ~35 mi S of Holland"
+ }
+]
