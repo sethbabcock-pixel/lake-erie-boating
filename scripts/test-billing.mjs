@@ -48,12 +48,31 @@ let priceResolves = true;
 let stormMode = false; // Open-Meteo stub: every spot NO-GO (true) vs calm GO (false)
 let scaMode = false; // NWS alerts stub: an active Small Craft Advisory at every point
 let alertsDown = false; // NWS alerts stub: the alerts endpoint fails
+let zoneAlert = null; // NWS alerts stub: "gale" = a Gale Warning on the zone query only; "down" = zone query fails
+let alertFeatures = null; // NWS alerts stub: every alerts query returns these raw features
+let alertTestStatus = null; // NWS alerts stub: every alerts query returns one Gale Warning with this status (e.g. "Test")
+let landAlertGeom = null; // with landAlert: a GeoJSON geometry for the warned polygon (null = zone-based, no polygon)
+let landAlertMotion = null; // with landAlert: an NWS eventMotionDescription string (null = none)
+let landAlert = null; // NWS alerts stub: an event name issued for the land county OHC043 (every mock launch point is in it)
+let pointsNoZones = false;
+let pointsCalls = 0; // NWS /points stub: lookups served
+let pointsFail = null; // NWS /points stub: a function (lat, lon) → true to answer 503
+let pointsOnWater = null; // NWS /points stub: a function (lat, lon) → true when that point is on the water (marine zone, no county) // NWS /points stub: omit the launch point's forecastZone/county
+let zoneAlertOnly = null; // with zoneAlert "gale": only these zones carry it (null = every queried zone)
+let zoneAlertSpan = null; // with zoneAlert "gale": { onsetH, endsH } hours from now (null = in effect now, open-ended)
 let alertsZoneDown = false; // NWS alerts stub: only the by-zone lookup fails (the point lookup still answers)
 let barMode = null; // NWS alerts stub: a Small Craft Advisory for this zone only (e.g. "PZZ210"), answered by zone lookups
 // NWS grid stub override: "gusty" = 13 kt gusting 24 kt, 1.5 ft (lake NO-GO on
 // the gust); "nowind" = no wind/gust layers at all, calm 1 ft waves;
 // "gustonly" = a 9 kt gust but no sustained wind (grid or hourly) and no waves.
 let gridMode = null;
+// NWS grid stub, per sample point: (lat, lon) → a wave layer override for the
+// grid cell at that point, or undefined for the default. Overrides: "filler"
+// (one 0 m value held for 7 days, like DTX/84,67 off Port Huron), "zeros"
+// (several valid times, all 0 m), "calm" (a real 0–1 ft day: 0 m and 0.3 m
+// in turn), or a number = a real forecast of that many metres.
+let gridWavesAt = null;
+let gridCalls = []; // NWS grid stub: the "lat,lon" sample point of each grid fetch
 let hourlyLagH = 0; // hourly stub: lead with this many already-past hours
 let ndbcFiles = {}; // NDBC realtime2 stub: station → file text (unlisted → 404)
 let subGetCancelState = false; // what a GET subscription retrieve reports
@@ -84,20 +103,38 @@ function installFetchStub() {
     // /points → a grid, /gridpoints → 4 days of flat weather. Calm by default
     // (8 kt, 1 ft @ 5 s → GO all day); stormMode = 28 kt, 6 ft → NO-GO.
     if (u.includes("api.weather.gov/points/")) {
+      pointsCalls++;
+      if (pointsFail && pointsFail(...u.split("/points/")[1].split(",").map(Number))) return new Response("", { status: 503 });
       return jsonResp({ properties: { gridId: "CLE", gridX: 1, gridY: 1, timeZone: "America/New_York",
-        forecastGridData: "https://api.weather.gov/gridpoints/CLE/1,1",
+        // The query names the sample point, so the grid stub can vary by cell.
+        forecastGridData: `https://api.weather.gov/gridpoints/CLE/1,1?at=${u.split("/points/")[1]}`,
         forecast: "https://api.weather.gov/gridpoints/CLE/1,1/forecast",
-        forecastHourly: "https://api.weather.gov/gridpoints/CLE/1,1/forecast/hourly" } });
+        forecastHourly: "https://api.weather.gov/gridpoints/CLE/1,1/forecast/hourly",
+        // Land zones for the launch point (land warnings are issued for these).
+        ...(pointsNoZones ? {} : pointsOnWater && pointsOnWater(...u.split("/points/")[1].split(",").map(Number)) ? { forecastZone: "https://api.weather.gov/zones/forecast/LEZ144" } : { forecastZone: "https://api.weather.gov/zones/forecast/OHZ007", county: "https://api.weather.gov/zones/county/OHC043" }) } });
     }
     if (/api\.weather\.gov\/gridpoints\/[^/]+\/[^/]+$/.test(u)) {
       const start = new Date(Date.now() - 30 * 3600e3); start.setUTCMinutes(0, 0, 0);
       const span = (value) => ({ values: [{ validTime: `${start.toISOString().replace(".000Z", "+00:00")}/PT240H`, value }] });
+      // A real forecast breaks the period into many valid times (a single
+      // 10-day value is a placeholder and is ignored as wave data): 6-hour
+      // steps, value(i) for step i.
+      const steps = (value) => (value == null ? { values: [] } : { values: Array.from({ length: 40 }, (_, i) => ({
+        validTime: `${new Date(start.getTime() + i * 6 * 3600e3).toISOString().replace(".000Z", "+00:00")}/PT6H`, value: typeof value === "function" ? value(i) : value })) });
+      gridCalls.push(new URL(u).searchParams.get("at"));
+      const at = new URL(u).searchParams.get("at")?.split(",").map(Number) || [];
+      const ov = gridWavesAt ? gridWavesAt(...at) : undefined;
+      const waveLayer = ov === "filler" ? { values: [{ validTime: `${start.toISOString().replace(".000Z", "+00:00")}/P7DT4H`, value: 0 }] }
+        : ov === "zeros" ? steps(0)
+        : ov === "calm" ? steps((i) => (i % 2 ? 0.3048 : 0))
+        : typeof ov === "number" ? steps(ov)
+        : steps(gridMode === "gustonly" ? null : gridMode === "gusty" ? 0.457 : stormMode ? 1.83 : 0.3);
       return jsonResp({ properties: {
         windSpeed: { uom: "wmoUnit:km_h-1", ...span(gridMode === "nowind" || gridMode === "gustonly" ? null : gridMode === "gusty" ? 24 : stormMode ? 52 : 15) },
         windGust: { uom: "wmoUnit:km_h-1", ...span(gridMode === "nowind" ? null : gridMode === "gustonly" ? 16.7 : gridMode === "gusty" ? 44.5 : stormMode ? 65 : 20) },
         windDirection: span(225),
-        waveHeight: span(gridMode === "gustonly" ? null : gridMode === "gusty" ? 0.457 : stormMode ? 1.83 : 0.3),
-        wavePeriod: span(5),
+        waveHeight: waveLayer,
+        wavePeriod: ov === "filler" ? { values: [{ validTime: waveLayer.values[0].validTime, value: 0 }] } : steps(5),
         probabilityOfPrecipitation: span(0),
         weather: span([]),
       } });
@@ -110,6 +147,22 @@ function installFetchStub() {
       return jsonResp({ properties: { periods } });
     }
     if (u.includes("api.weather.gov/alerts/active") && alertsDown) return new Response("", { status: 503 });
+    if (u.includes("api.weather.gov/alerts/active") && alertFeatures) return jsonResp({ features: alertFeatures });
+    if (u.includes("api.weather.gov/alerts/active") && alertTestStatus) {
+      return jsonResp({ features: [{ properties: { status: alertTestStatus, event: "Gale Warning", severity: "Moderate", headline: "TEST Gale Warning", sent: new Date().toISOString(), geocode: { UGC: ["LEZ143"] } } }] });
+    }
+    if (u.includes("api.weather.gov/alerts/active?zone=") && landAlert && decodeURIComponent(u).includes("OHC043")) {
+      return jsonResp({ features: [{ geometry: landAlertGeom, properties: { status: "Actual", event: landAlert, severity: "Severe", headline: `${landAlert} in effect`, sent: new Date().toISOString(), geocode: { UGC: ["OHC043"] }, parameters: landAlertMotion ? { eventMotionDescription: [landAlertMotion] } : {} } }] });
+    }
+    if (u.includes("api.weather.gov/alerts/active?zone=") && zoneAlert === "down") return new Response("", { status: 503 });
+    if (u.includes("api.weather.gov/alerts/active?zone=") && zoneAlert === "gale") {
+      const asked = decodeURIComponent(u.split("zone=")[1] || "").split(",");
+      const UGC = zoneAlertOnly ? asked.filter((z) => zoneAlertOnly.includes(z)) : asked;
+      if (!UGC.length) return jsonResp({ features: [] });
+      const at = (h) => new Date(Date.now() + h * 3600e3).toISOString();
+      const span = zoneAlertSpan ? { onset: at(zoneAlertSpan.onsetH), ends: at(zoneAlertSpan.endsH) } : {};
+      return jsonResp({ features: [{ properties: { event: "Gale Warning", severity: "Moderate", headline: "Gale Warning in effect", sent: new Date().toISOString(), ...span, geocode: { UGC } } }] });
+    }
     if (u.includes("api.weather.gov/alerts/active?zone=") && alertsZoneDown) return new Response("", { status: 503 });
     if (u.includes("api.weather.gov/alerts/active") && barMode) {
       // Zone-coded advisory: only a lookup that names the zone gets it (a shore
@@ -1795,6 +1848,400 @@ async function run() {
     check("hourly strip: past hours dropped, starts at the current hour", firstH === nowH || firstH === nowH + 1, `got ${firstH}, now ${nowH}`);
   }
 
+  // 58. Alerts are looked up by the spot's marine zone as well as its point:
+  //     zone-issued warnings reach launches outside the zone polygon, and a
+  //     failed zone lookup is never read as "no advisories".
+  {
+    const { onRequest, fetchAlerts, SPOTS } = await import("../functions/marine/conditions.js");
+    stormMode = false; scaMode = false; alertsDown = false; gridMode = null;
+    const page = async () => (await onRequest({ request: new Request("https://shouldiboat.com/marine/conditions?spot=sandusky"), env: { USERS: makeKV() } })).json();
+    zoneAlert = "gale";
+    const g = await page();
+    check("zone alerts: a Gale Warning on the zone only → NO-GO", g.recommendation?.level === "NO-GO", JSON.stringify(g.recommendation));
+    check("zone alerts: the zone's Gale Warning is listed", (g.alerts || []).some((a) => a.event === "Gale Warning") && g.alertsOk === true, JSON.stringify(g.alerts));
+    scaMode = true;
+    const both = await fetchAlerts(SPOTS.sandusky);
+    check("zone alerts: point and zone alerts merge", both.ok && both.alerts.map((a) => a.event).sort().join() === "Gale Warning,Small Craft Advisory", JSON.stringify(both));
+    zoneAlert = null;
+    const dup = await fetchAlerts(SPOTS.sandusky);
+    eq("zone alerts: the same advisory from point and zone shows once", dup.alerts.length, 1);
+    scaMode = false;
+    zoneAlert = "down";
+    const d = await page();
+    check("zone alerts: zone lookup failed → alertsOk false, page not GO", d.alertsOk === false && d.recommendation?.level !== "GO", JSON.stringify({ ok: d.alertsOk, level: d.recommendation?.level }));
+    scaMode = true;
+    const part = await fetchAlerts(SPOTS.sandusky);
+    check("zone alerts: point alerts still shown when only the zone lookup fails", !part.ok && part.alerts?.[0]?.event === "Small Craft Advisory", JSON.stringify(part));
+    scaMode = false; zoneAlert = null;
+    const noZone = await fetchAlerts({ lat: 41.5, lon: -82.7 });
+    check("zone alerts: a spot with no zone uses the point lookup alone", noZone.ok && Array.isArray(noZone.alerts), JSON.stringify(noZone));
+    alertsDown = true;
+    const none = await fetchAlerts(SPOTS.sandusky);
+    check("zone alerts: every lookup failed → alerts null, ok false", none.alerts === null && none.ok === false, JSON.stringify(none));
+    alertsDown = false;
+  }
+
+  // 59. Active alerts raise every verdict view, not just the spot headline:
+  //     the hourly strip + outlook, the week strip, directory tiles, the
+  //     digest's best window and the weekend outlook.
+  {
+    const { alertLevel, applyAlertsToHours, applyAlertsToWeek, computeOutlook, fetchZoneAlerts, fetchSummary, fetchWeeks, fetchTodayWindows, onRequest } = await import("../functions/marine/conditions.js");
+    const env = { USERS: makeKV() };
+    stormMode = false; scaMode = false; alertsDown = false; gridMode = null; zoneAlert = null; zoneAlertOnly = null; zoneAlertSpan = null;
+
+    eq("alertLevel: gale → NO-GO", alertLevel({ event: "Gale Warning" }), "NO-GO");
+    eq("alertLevel: SCA → CAUTION", alertLevel({ event: "Small Craft Advisory" }), "CAUTION");
+    eq("alertLevel: watch → CAUTION", alertLevel({ event: "Gale Watch" }), "CAUTION");
+    eq("alertLevel: shore-side alert → no effect", alertLevel({ event: "Rip Current Statement" }), null);
+
+    const now = Date.now(), H = 3600e3;
+    const t0 = Math.floor(now / H) * H;
+    const hrs = Array.from({ length: 60 }, (_, i) => ({ time: new Date(t0 + i * H).toISOString(), level: "GO", short: "" }));
+    const sca = { event: "Small Craft Advisory", onset: new Date(t0 + 2 * H).toISOString(), ends: new Date(t0 + 5 * H).toISOString() };
+    const h1 = applyAlertsToHours(hrs, [sca], true, now);
+    eq("hours: before the advisory stays GO", h1[1].level, "GO");
+    check("hours: advisory hours (2-4) are CAUTION", [2, 3, 4].every((i) => h1[i].level === "CAUTION"), JSON.stringify(h1.slice(0, 6).map((h) => h.level)));
+    eq("hours: after the advisory ends, GO again", h1[5].level, "GO");
+    const gale = { event: "Gale Warning", onset: new Date(t0 + 3 * H).toISOString(), ends: new Date(t0 + 9 * H).toISOString() };
+    const o = computeOutlook(applyAlertsToHours(hrs, [gale], true, now));
+    check("outlook: be in by the gale's onset, reason 'a marine warning'", o.headInBy === hrs[3].time && o.goodHours === 3 && o.headInReason === "a marine warning", JSON.stringify(o));
+    const h2 = applyAlertsToHours(hrs, [], false, now);
+    check("hours: alerts unknown → next 48 h not GO", h2.slice(0, 48).every((h) => h.level === "CAUTION"), JSON.stringify(h2.slice(0, 48).map((h) => h.level)));
+    eq("hours: alerts unknown → beyond 48 h unchanged", h2[49].level, "GO");
+    // NWS "until further notice": no event end. toAlert keeps ends = expires for
+    // the card, but timing must not end the warning at the product's expiry.
+    const ufn = { event: "Hurricane Warning", onset: null, ends: new Date(t0 + 3 * H).toISOString(), eventEnds: null };
+    const hU = applyAlertsToHours(hrs, [ufn], true, now);
+    check("hours: until-further-notice warning stays in force past its product expiry", hU[10].level === "NO-GO" && hU[59].level === "NO-GO", JSON.stringify([hU[10].level, hU[59].level]));
+    const stmt = { event: "Marine Weather Statement", onset: null, ends: new Date(t0 + 2 * H).toISOString(), eventEnds: null };
+    const hS = applyAlertsToHours(hrs, [stmt], true, now);
+    check("hours: a statement (no event end by design) ends at its expiry", hS[1].level === "CAUTION" && hS[3].level === "GO", JSON.stringify([hS[1].level, hS[3].level]));
+    // DST: an SCA spanning the fall-back night (2026-11-01 01:00 EDT repeats).
+    const dstHrs = Array.from({ length: 8 }, (_, i) => ({ time: new Date(Date.parse("2026-11-01T04:00:00Z") + i * H).toISOString(), level: "GO" }));
+    const dstSca = { event: "Small Craft Advisory", onset: "2026-11-01T01:00:00-04:00", ends: "2026-11-01T03:00:00-05:00" }; // 05Z → 08Z
+    const hD = applyAlertsToHours(dstHrs, [dstSca], true, Date.parse("2026-11-01T04:00:00Z"));
+    eq("hours: across the DST change, exactly the 3 UTC hours of the advisory", hD.map((h) => h.level).join(","), "GO,CAUTION,CAUTION,CAUTION,GO,GO,GO,GO");
+    const dstWk = applyAlertsToWeek([{ date: "2026-10-31", level: "GO" }, { date: "2026-11-01", level: "GO" }, { date: "2026-11-02", level: "GO" }], [{ event: "Gale Warning", onset: "2026-10-31T23:30:00-04:00", ends: "2026-11-01T23:00:00-05:00" }], true, "America/New_York", Date.parse("2026-10-31T12:00:00Z"));
+    eq("week: across the DST change, the gale's local days (onset in EDT, end in EST)", dstWk.map((d) => d.level).join(","), "NO-GO,NO-GO,GO");
+    const sca2 = { event: "Small Craft Advisory", onset: new Date(t0 + 20 * H).toISOString(), ends: new Date(t0 + 22 * H).toISOString() };
+    const h3 = applyAlertsToHours(hrs, [sca, sca2], true, now);
+    check("hours: two issuances of one event each cover their own hours", h3[3].level === "CAUTION" && h3[21].level === "CAUTION" && h3[10].level === "GO", JSON.stringify([h3[3].level, h3[10].level, h3[21].level]));
+    const nowFirst = applyAlertsToHours([{ ...hrs[0], level: "NO-GO" }], [sca], true, now)[0];
+    eq("hours: an alert never lowers a level", nowFirst.level, "NO-GO");
+
+    const iso = (k) => new Date(t0 + k * 24 * H).toLocaleDateString("en-CA", { timeZone: "America/New_York" });
+    const wk = [0, 1, 2, 3, 4].map((k) => ({ date: iso(k), level: "GO" }));
+    const tomorrowGale = { event: "Gale Warning", onset: new Date(Date.parse(`${iso(1)}T12:00:00-05:00`)).toISOString(), ends: new Date(Date.parse(`${iso(1)}T20:00:00-05:00`)).toISOString() };
+    const w1 = applyAlertsToWeek(wk, [tomorrowGale], true, "America/New_York", now);
+    check("week: gale tomorrow → tomorrow NO-GO, other days GO", w1[0].level === "GO" && w1[1].level === "NO-GO" && w1[2].level === "GO", JSON.stringify(w1.map((d) => d.level)));
+    const w2 = applyAlertsToWeek(wk, [], false, "America/New_York", now);
+    check("week: alerts unknown → the days the 48 h hourly cap reaches are not GO, later days unchanged", w2[0].level === "CAUTION" && w2[1].level === "CAUTION" && w2[4].level === "GO", JSON.stringify(w2.map((d) => d.level)));
+
+    zoneAlert = "gale"; zoneAlertOnly = ["LEZ143"];
+    const many = Array.from({ length: 30 }, (_, i) => `LEZ${String(100 + i).padStart(3, "0")}`).concat(["LEZ143", "bogus", null]);
+    const za = await fetchZoneAlerts(many);
+    check("zone batch: gale lands on its zone only", za.ok && za.byZone.get("LEZ143")?.[0]?.event === "Gale Warning" && za.byZone.get("LEZ100").length === 0, JSON.stringify([...za.byZone].filter(([, a]) => a.length)));
+    check("zone batch: invalid zone IDs are dropped", !za.byZone.has("bogus"));
+
+    const tiles = (await fetchSummary(env)).spots;
+    eq("tiles: Sandusky (LEZ143, gale) is NO-GO", tiles.find((x) => x.id === "sandusky")?.level, "NO-GO");
+    eq("tiles: a calm spot in another zone stays GO", tiles.find((x) => x.id === "erie")?.level, "GO");
+    const wins = await fetchTodayWindows();
+    eq("digest: no GO window under the gale (Sandusky)", wins.sandusky, null);
+    check("digest: other spots keep their windows", wins.erie != null, JSON.stringify(wins.erie));
+    const weeks = await fetchWeeks(env, ["sandusky", "erie"]);
+    eq("weekend: Sandusky today is NO-GO under an open-ended gale", weeks.sandusky?.[0]?.level, "NO-GO");
+    eq("weekend: Erie today stays GO", weeks.erie?.[0]?.level, "GO");
+
+    const page = await (await onRequest({ request: new Request("https://shouldiboat.com/marine/conditions?spot=sandusky"), env })).json();
+    check("spot page: hourly strip has no GO hour under the gale", (page.hourly || []).length && page.hourly.every((h) => h.level !== "GO"), JSON.stringify((page.hourly || []).slice(0, 3).map((h) => h.level)));
+    check("spot page: outlook is not GO now", page.outlook?.nowLevel !== "GO", JSON.stringify(page.outlook));
+    eq("spot page: week strip today is NO-GO", page.week?.[0]?.level, "NO-GO");
+
+    // Tiles count every active alert that hasn't ended, like the spot page
+    // headline (stricter than the old 2 h / 6 h lookahead: a tile must never
+    // read softer than the page it links to). An alert already over doesn't.
+    zoneAlertSpan = { onsetH: 1, endsH: 12 };
+    eq("tiles: gale starting next hour → NO-GO", (await fetchSummary(env)).spots.find((x) => x.id === "sandusky")?.level, "NO-GO");
+    zoneAlertSpan = { onsetH: 4, endsH: 12 };
+    eq("tiles: gale starting in 4 h → NO-GO (matches the headline)", (await fetchSummary(env)).spots.find((x) => x.id === "sandusky")?.level, "NO-GO");
+    zoneAlertSpan = { onsetH: 9, endsH: 12 };
+    eq("tiles: gale starting in 9 h → NO-GO (matches the headline)", (await fetchSummary(env)).spots.find((x) => x.id === "sandusky")?.level, "NO-GO");
+    eq("digest: no GO window while a gale is still to come today", (await fetchTodayWindows()).sandusky, null);
+    zoneAlertSpan = { onsetH: -6, endsH: -1 };
+    eq("tiles: a gale that has already ended → tile follows the weather (GO)", (await fetchSummary(env)).spots.find((x) => x.id === "sandusky")?.level, "GO");
+
+    zoneAlertSpan = { onsetH: 6, endsH: 12 };
+    const later = await (await onRequest({ request: new Request("https://shouldiboat.com/marine/conditions?spot=sandusky"), env })).json();
+    eq("spot page: gale starting in 6 h → headline still lists it", later.recommendation?.level, "NO-GO");
+    const ix = (later.hourly || []).findIndex((h) => h.level === "NO-GO");
+    check("spot page: strip turns NO-GO when the gale starts, GO before", ix >= 5 && ix <= 7 && later.hourly[0].level === "GO", JSON.stringify((later.hourly || []).slice(0, 9).map((h) => h.level)));
+
+    // A built spot saved without a zone had no alerts checked: never GO.
+    zoneAlert = null; zoneAlertOnly = null; zoneAlertSpan = null;
+    const kvNz = makeKV();
+    await kvNz.put("builtspot:nozone-cove", JSON.stringify({ slug: "nozone-cove", name: "No-Zone Cove", lat: 41.5, lon: -82.0, lake: "Lake Erie", office: "CLE", product: "NSH", featured: true }));
+    const { fetchBuiltSummaries } = await import("../functions/marine/conditions.js");
+    const nz = (await fetchBuiltSummaries({ USERS: kvNz }, ["nozone-cove"]))[0];
+    check("zone-less built spot: tile is not GO (alerts unchecked)", nz && nz.level !== "GO", JSON.stringify(nz));
+    const nzWeek = (await fetchWeeks({ USERS: kvNz }, ["nozone-cove"]))["nozone-cove"] || [];
+    check("zone-less built spot: today is not GO in the weekend outlook", nzWeek.length && nzWeek[0].level !== "GO", JSON.stringify(nzWeek.slice(0, 2)));
+
+    zoneAlert = "down"; zoneAlertOnly = null; zoneAlertSpan = null;
+    const tilesDown = (await fetchSummary(env)).spots;
+    check("tiles: zone alerts unknown → no GO tile", tilesDown.every((t) => t.level !== "GO"), JSON.stringify(tilesDown.slice(0, 3).map((t) => t.level)));
+    const winsDown = await fetchTodayWindows();
+    check("digest: zone alerts unknown → no GO windows", Object.values(winsDown).every((w) => w == null));
+    zoneAlert = null;
+  }
+
+  // 60. Alert classifier: wind/ice warnings that end a trip are NO-GO; no
+  //     existing level is loosened; NWS test messages never count.
+  {
+    const { alertLevel, fetchAlerts, SPOTS } = await import("../functions/marine/conditions.js");
+    for (const ev of ["Tornado Warning", "High Wind Warning", "Extreme Wind Warning", "Heavy Freezing Spray Warning"]) eq(`classifier: ${ev} → NO-GO`, alertLevel({ event: ev }), "NO-GO");
+    for (const ev of ["Blizzard Warning", "Snow Squall Warning", "Lake Effect Snow Warning", "High Surf Warning", "Typhoon Warning", "Winter Storm Warning", "Ice Storm Warning", "Storm Surge Warning", "Tsunami Advisory"]) eq(`classifier: ${ev} → NO-GO`, alertLevel({ event: ev }), "NO-GO");
+    for (const ev of ["High Surf Advisory", "Winter Weather Advisory", "Typhoon Watch", "Winter Storm Watch", "Dense Fog Advisory", "Low Water Advisory", "Brisk Wind Advisory", "Lake Wind Advisory", "Extreme Cold Warning", "Ashfall Warning", "Tropical Cyclone Local Statement"]) eq(`classifier: ${ev} → CAUTION`, alertLevel({ event: ev }), "CAUTION");
+    // Stricter than the original classifier (was CAUTION): any freezing spray
+    // ices a small boat's topsides; the advisory grade is still NO-GO.
+    eq("classifier: Freezing Spray Advisory → NO-GO", alertLevel({ event: "Freezing Spray Advisory" }), "NO-GO");
+    eq("classifier: Freezing Spray Watch → CAUTION", alertLevel({ event: "Freezing Spray Watch" }), "CAUTION");
+    eq("classifier: High Wind Watch → CAUTION", alertLevel({ event: "High Wind Watch" }), "CAUTION");
+    eq("classifier: Tornado Watch → CAUTION", alertLevel({ event: "Tornado Watch" }), "CAUTION");
+    eq("classifier: Wind Advisory → CAUTION", alertLevel({ event: "Wind Advisory" }), "CAUTION");
+    for (const [ev, lvl] of [["Gale Warning", "NO-GO"], ["Storm Warning", "NO-GO"], ["Severe Thunderstorm Warning", "NO-GO"], ["Special Marine Warning", "NO-GO"], ["Hurricane Force Wind Warning", "NO-GO"], ["Small Craft Advisory", "CAUTION"], ["Gale Watch", "CAUTION"], ["Freeze Warning", null], ["Rip Current Statement", null]]) {
+      eq(`classifier unchanged: ${ev}`, alertLevel({ event: ev }), lvl);
+    }
+    alertTestStatus = "Test";
+    const t = await fetchAlerts(SPOTS.sandusky);
+    check("NWS test message is ignored (no alert, lookup ok)", t.ok && t.alerts.length === 0, JSON.stringify(t));
+    alertTestStatus = "Exercise";
+    const x = await fetchAlerts(SPOTS.sandusky);
+    check("NWS exercise message is ignored", x.ok && x.alerts.length === 0, JSON.stringify(x));
+    alertTestStatus = null;
+  }
+
+  // 61. Flash Flood Warning is CAUTION (debris/current at river ramps); a Flash
+  //     Flood Emergency (catastrophic threat) is NO-GO; the watch, statement
+  //     and other flood products stay shore-side notes.
+  {
+    const { alertLevel, buildRecommendation } = await import("../functions/marine/conditions.js");
+    eq("flash flood: warning → CAUTION", alertLevel({ event: "Flash Flood Warning" }), "CAUTION");
+    // NWS sends an emergency as event "Flash Flood Warning" + flashFloodDamageThreat CATASTROPHIC.
+    eq("flash flood: emergency (catastrophic threat) → NO-GO", alertLevel({ event: "Flash Flood Warning", ffThreat: "CATASTROPHIC" }), "NO-GO");
+    eq("flash flood: considerable threat stays CAUTION", alertLevel({ event: "Flash Flood Warning", ffThreat: "CONSIDERABLE" }), "CAUTION");
+    eq("flash flood: literal emergency event → NO-GO", alertLevel({ event: "Flash Flood Emergency" }), "NO-GO");
+    for (const ev of ["Flash Flood Watch", "Flash Flood Statement", "Flood Warning", "Flood Watch", "Flood Advisory", "Coastal Flood Warning", "Lakeshore Flood Warning"]) eq(`flash flood: ${ev} stays a note`, alertLevel({ event: ev }), null);
+    // End to end: the threat parameter survives parsing, and when an emergency
+    // and a later ordinary warning are both active, the emergency is the card kept.
+    const { fetchAlerts, SPOTS } = await import("../functions/marine/conditions.js");
+    const ffw = (sent, threat) => ({ properties: { status: "Actual", event: "Flash Flood Warning", severity: "Severe", sent, parameters: threat ? { flashFloodDamageThreat: [threat] } : {}, geocode: { UGC: ["OHC095"] } } });
+    alertFeatures = [ffw("2026-07-01T10:00:00Z", "CATASTROPHIC"), ffw("2026-07-01T11:00:00Z", "CONSIDERABLE")];
+    const fe = await fetchAlerts(SPOTS.toledo);
+    check("flash flood: emergency card kept over a later ordinary warning", fe.ok && fe.alerts.length === 1 && alertLevel(fe.alerts[0]) === "NO-GO", JSON.stringify(fe.alerts));
+    alertFeatures = [ffw("2026-07-01T10:00:00Z", null)];
+    const fo = await fetchAlerts(SPOTS.toledo);
+    check("flash flood: parsed warning without a threat tag → CAUTION", fo.ok && alertLevel(fo.alerts[0]) === "CAUTION", JSON.stringify(fo.alerts));
+    alertFeatures = null;
+    const em = buildRecommendation({ buoy: null, alerts: [{ event: "Flash Flood Warning", ffThreat: "CATASTROPHIC" }], wind: { speedKt: 6, gustKt: 8, source: "forecast", gustSrc: "forecast" }, waves: { ft: 1, source: "forecast" }, read: null, hours: [], profile: "lake" });
+    eq("flash flood: calm day under a Flash Flood Emergency is NO-GO", em.level, "NO-GO");
+    const r = buildRecommendation({ buoy: null, alerts: [{ event: "Flash Flood Warning" }], wind: { speedKt: 6, gustKt: 8, source: "forecast", gustSrc: "forecast" }, waves: { ft: 1, source: "forecast" }, read: null, hours: [], profile: "lake" });
+    check("flash flood: calm day under a Flash Flood Warning is CAUTION, with the reason", r.level === "CAUTION" && r.reasons.some((x) => /Active Flash Flood Warning/.test(x)), JSON.stringify(r));
+  }
+
+  // 62. Land warnings (issued for counties / land forecast zones, never for
+  //     marine zones) reach tiles, the digest window and the weekend outlook
+  //     via the launch point's land zones; unresolved land zones block GO.
+  {
+    const { fetchSummary, fetchTodayWindows, fetchWeeks, fetchBuiltSummaries, fetchSpotsAlerts, SPOTS, landZonesFor: landZonesFor0 } = await import("../functions/marine/conditions.js");
+    const env = { USERS: makeKV() };
+    stormMode = false; scaMode = false; alertsDown = false; gridMode = null; zoneAlert = null; zoneAlertOnly = null; zoneAlertSpan = null;
+
+    const calm = (await fetchSummary(env)).spots.find((x) => x.id === "sandusky");
+    eq("land alerts: calm day, no land warning → tile GO", calm?.level, "GO");
+    const sa = await fetchSpotsAlerts([SPOTS.sandusky]);
+    check("land alerts: a curated spot uses its stored land zones", JSON.stringify(sa.land.get(`${SPOTS.sandusky.lat},${SPOTS.sandusky.lon}`)) === JSON.stringify(SPOTS.sandusky.land), JSON.stringify([...sa.land]));
+    eq("land alerts: Mackinaw City watches both Cheboygan and Emmet counties", JSON.stringify(SPOTS.mackinaw.land), JSON.stringify(["MIZ017", "MIC031", "MIZ016", "MIC047"]));
+    check("land alerts: every curated spot carries valid land zones", Object.values(SPOTS).every((x) => Array.isArray(x.land) && x.land.length && x.land.every((z) => /^[A-Z]{3}\d{3}$/.test(z))), Object.entries(SPOTS).filter(([, x]) => !Array.isArray(x.land)).map(([k]) => k).join());
+    pointsCalls = 0;
+    await fetchSpotsAlerts(Object.values(SPOTS));
+    eq("land alerts: curated spots make no /points lookups for land zones", pointsCalls, 0);
+
+    landAlert = "Tornado Warning";
+    eq("land alerts: Tornado Warning on the county → tile NO-GO", (await fetchSummary(env)).spots.find((x) => x.id === "sandusky")?.level, "NO-GO");
+    eq("land alerts: no digest window under a Tornado Warning", (await fetchTodayWindows()).sandusky, null);
+    eq("land alerts: weekend outlook today NO-GO", (await fetchWeeks(env, ["sandusky"])).sandusky?.[0]?.level, "NO-GO");
+
+    landAlert = "Flash Flood Warning";
+    eq("land alerts: Flash Flood Warning → tile CAUTION", (await fetchSummary(env)).spots.find((x) => x.id === "sandusky")?.level, "CAUTION");
+
+    landAlert = "Frost Advisory";
+    eq("land alerts: shore-side land note doesn't move the tile", (await fetchSummary(env)).spots.find((x) => x.id === "sandusky")?.level, "GO");
+    landAlert = null;
+
+    // A launch point whose /points has no land zones: land warnings unchecked → no GO.
+    pointsNoZones = true;
+    const kv = makeKV();
+    await kv.put("builtspot:noland-cove", JSON.stringify({ slug: "noland-cove", name: "No-Land Cove", lat: 41.4321, lon: -82.1234, zone: "LEZ145", lake: "Lake Erie", office: "CLE", product: "NSH", featured: true }));
+    const nl = (await fetchBuiltSummaries({ USERS: kv }, ["noland-cove"]))[0];
+    check("land alerts: launch point's land zones unresolved → tile not GO", nl && nl.level !== "GO", JSON.stringify(nl));
+    const nlw = (await fetchWeeks({ USERS: kv }, ["noland-cove"]))["noland-cove"] || [];
+    check("land alerts: … and weekend today not GO", nlw.length && nlw[0].level !== "GO", JSON.stringify(nlw.slice(0, 1)));
+    const { onRequest } = await import("../functions/marine/conditions.js");
+    const nlp = await (await onRequest({ request: new Request("https://shouldiboat.com/marine/conditions?spot=noland-cove"), env: { USERS: kv } })).json();
+    check("land alerts: … and its spot page reads alerts unknown, not GO", nlp.alertsOk === false && nlp.recommendation?.level !== "GO", JSON.stringify({ ok: nlp.alertsOk, level: nlp.recommendation?.level }));
+    pointsNoZones = false;
+
+    // The spot page checks the same land zones as its tile, so a zone-issued
+    // land warning (no polygon; a water launch point is in no land zone) can't
+    // leave the page softer than the tile.
+    const spotPage = async () => (await onRequest({ request: new Request("https://shouldiboat.com/marine/conditions?spot=sandusky"), env: { USERS: makeKV() } })).json();
+    landAlert = "High Wind Warning";
+    const hw = await spotPage();
+    check("land alerts: spot page lists the county/zone High Wind Warning and is NO-GO", hw.recommendation?.level === "NO-GO" && (hw.alerts || []).some((a) => a.event === "High Wind Warning") && hw.alertsOk === true, JSON.stringify({ level: hw.recommendation?.level, alerts: hw.alerts }));
+    eq("land alerts: … and its tile agrees", (await fetchSummary(env)).spots.find((x) => x.id === "sandusky")?.level, "NO-GO");
+    landAlert = null;
+    eq("land alerts: spot page calm with no land warning → GO", (await spotPage()).recommendation?.level, "GO");
+
+    // Curated overrides where the nearest-land walk picks the wrong county.
+    eq("land zones: San Juan → San Juan municipio, not Guaynabo", JSON.stringify(await landZonesFor0(SPOTS["san-juan"])), JSON.stringify(["PRZ001", "PRC127"]));
+    check("land zones: Vermilion / Lorain watches both counties", ["OHC043", "OHC093"].every((z) => SPOTS.vermilion.land.includes(z)), JSON.stringify(SPOTS.vermilion.land));
+    eq("land zones: Miami / Government Cut → coastal Miami-Dade zone", JSON.stringify(await landZonesFor0(SPOTS.miami)), JSON.stringify(["FLZ173", "FLC086"]));
+    check("land zones: Sebastian Inlet watches Brevard and Indian River", ["FLC009", "FLC061"].every((z) => SPOTS["sebastian-inlet"].land.includes(z)), JSON.stringify(SPOTS["sebastian-inlet"].land));
+
+    // A launch on the water (marine forecast zone, no county) resolves to the
+    // county a step inland — never to the marine zone.
+    const { landZonesFor } = await import("../functions/marine/conditions.js");
+    pointsOnWater = (lat) => lat > 41.2; // everything north of 41.2 N is "lake"
+    const wet = await landZonesFor({ lat: 41.25, lon: -82.5, zone: "LEZ145", lake: "Lake Erie" });
+    check("land zones: on-water launch steps inland to its county", JSON.stringify(wet) === JSON.stringify(["OHZ007", "OHC043"]), JSON.stringify(wet));
+    pointsOnWater = () => true;
+    eq("land zones: no county anywhere nearby → null (unknown, not none)", await landZonesFor({ lat: 45.6789, lon: -84.321, zone: "LHZ345", lake: "Lake Huron" }), null);
+    pointsOnWater = null;
+
+    // Budget: one call walks at most 10 uncached built spots; the rest are
+    // unknown (null → no GO) until a later call.
+    const many = Array.from({ length: 14 }, (_, i) => ({ lat: 40.1 + i * 0.01, lon: -81.9, zone: "LEZ145", lake: "Lake Erie" }));
+    pointsNoZones = true;
+    pointsCalls = 0;
+    const bud = await fetchSpotsAlerts(many);
+    check("land walk budget: at most 10 uncached walks per call", [...bud.land.values()].every((v) => v === null) && pointsCalls <= 10 * 20, `${pointsCalls} lookups`);
+    pointsNoZones = false;
+    const many2 = many.map((x) => ({ ...x, lon: -81.7 })); // fresh points (the no-zone answers above are cached)
+    const bud2 = await fetchSpotsAlerts(many2);
+    eq("land walk budget: 10 resolve, the rest wait (unknown)", [...bud2.land.values()].filter(Boolean).length, 10);
+    const bud3 = await fetchSpotsAlerts(many2);
+    eq("land walk budget: the next call finishes them (first 10 cached)", [...bud3.land.values()].filter(Boolean).length, 14);
+
+    // Shared budget: two calls in one invocation draw on one budget of 10.
+    const { landWalkBudget } = await import("../functions/marine/conditions.js");
+    const shared = landWalkBudget();
+    const sixA = Array.from({ length: 6 }, (_, i) => ({ lat: 39.1 + i * 0.01, lon: -81.3, zone: "LEZ145", lake: "Lake Erie" }));
+    const sixB = sixA.map((x) => ({ ...x, lon: -81.1 }));
+    const ra = await fetchSpotsAlerts(sixA, shared);
+    const rb = await fetchSpotsAlerts(sixB, shared);
+    eq("land walk budget: shared across calls (6 + 4 resolve, 2 wait)", [...ra.land.values(), ...rb.land.values()].filter(Boolean).length, 10);
+    eq("land walk budget: shared budget spent", shared.walks, 0);
+    const own = await fetchSpotsAlerts(sixB.map((x) => ({ ...x, lon: -80.9 })));
+    eq("land walk budget: a lone call still gets its own 10", [...own.land.values()].filter(Boolean).length, 6);
+
+    // An errored closer candidate: use the farther county now, but don't cache it.
+    pointsFail = (lat, lon) => lat === 39.5 && lon === -81.5;
+    const errSpot = { lat: 39.5, lon: -81.5, zone: "LEZ145", lake: "Lake Erie" };
+    check("land walk: still resolves past an errored lookup", Array.isArray(await landZonesFor(errSpot)));
+    pointsFail = null; pointsCalls = 0;
+    await landZonesFor(errSpot);
+    check("land walk: a walk that hit an error isn't cached (walks again)", pointsCalls > 0, `${pointsCalls} lookups`);
+    pointsCalls = 0;
+    await landZonesFor(errSpot);
+    eq("land walk: a clean walk is cached (no lookups next time)", pointsCalls, 0);
+
+    // The spot page walks inland steps only (no ring): ≤ 4 lookups per request.
+    pointsOnWater = () => true; pointsCalls = 0;
+    eq("land walk (page): no ring → unresolved", await landZonesFor({ lat: 38.123, lon: -80.456, zone: "LEZ145", lake: "Lake Erie" }, null, { ring: false }), null);
+    check("land walk (page): at most 4 /points lookups", pointsCalls <= 4, `${pointsCalls} lookups`);
+    pointsOnWater = null;
+  }
+
+  // 63. Warned polygons: a storm-based warning listed for a whole county
+  //     only reaches launches inside its polygon or within 10 nm of it;
+  //     storm-track products also sweep 30 min along the storm's motion;
+  //     marine products, Flash Flood Emergencies, track products without a
+  //     motion, and malformed geometry all stay zone-wide.
+  {
+    const { alertReachesSpot, fetchSummary, fetchTodayWindows, onRequest, SPOTS } = await import("../functions/marine/conditions.js");
+    const env = { USERS: makeKV() };
+    stormMode = false; scaMode = false; alertsDown = false; gridMode = null; zoneAlert = null;
+    const S = SPOTS.sandusky; // 41.46, -82.71
+    const box = (lat, lon, d) => ({ type: "Polygon", coordinates: [[[lon - d, lat - d], [lon + d, lat - d], [lon + d, lat + d], [lon - d, lat + d], [lon - d, lat - d]]] });
+    const rings = (g) => (g.type === "Polygon" ? [g.coordinates[0]] : g.coordinates.map((p) => p[0]));
+    const still = { towardDeg: 0, kt: 0 }; // parsed motion, stationary storm
+    const poly = (g, event = "Tornado Warning", extra = { motion: still }) => ({ event, polygons: rings(g), ...extra });
+    check("polygon: launch inside → applies", alertReachesSpot(poly(box(S.lat, S.lon, 0.05)), S));
+    check("polygon: edge ~6 nm away → applies (within 10 nm)", alertReachesSpot(poly(box(S.lat - 0.15, S.lon, 0.05)), S));
+    check("polygon: ~25 nm away, stationary → doesn't apply", !alertReachesSpot(poly(box(S.lat - 0.5, S.lon, 0.05)), S));
+    check("polygon: MultiPolygon, one part near → applies", alertReachesSpot(poly({ type: "MultiPolygon", coordinates: [box(S.lat - 2, S.lon, 0.05).coordinates, box(S.lat, S.lon + 0.1, 0.05).coordinates] }), S));
+    check("polygon: no polygon (zone-based) → applies zone-wide", alertReachesSpot({ event: "High Wind Warning", polygons: null }, S));
+    // Box edge ~17 nm south of the launch. A storm moving north (from 180°) at
+    // 30 kt covers 15 nm in the 30-min sweep: 17 - 15 = 2 nm ≤ 10 → applies.
+    const south = box(S.lat - 0.33, S.lon, 0.05);
+    check("polygon: storm 17 nm away moving at the launch (30 kt) → applies", alertReachesSpot(poly(south, "Severe Thunderstorm Warning", { motion: { towardDeg: 0, kt: 30 } }), S));
+    check("polygon: same storm moving away → doesn't apply", !alertReachesSpot(poly(south, "Severe Thunderstorm Warning", { motion: { towardDeg: 180, kt: 30 } }), S));
+    check("polygon: track product with no motion → applies county-wide", alertReachesSpot(poly(south, "Severe Thunderstorm Warning", {}), S));
+    check("polygon: Snow Squall Warning with no motion → applies county-wide", alertReachesSpot(poly(south, "Snow Squall Warning", {}), S));
+    check("polygon: plain Flash Flood Warning 25 nm away → doesn't apply", !alertReachesSpot(poly(box(S.lat - 0.5, S.lon, 0.05), "Flash Flood Warning", {}), S));
+    check("polygon: Flash Flood Emergency (CATASTROPHIC) 25 nm away → applies county-wide", alertReachesSpot(poly(box(S.lat - 0.5, S.lon, 0.05), "Flash Flood Warning", { ffThreat: "CATASTROPHIC" }), S));
+    check("polygon: Special Marine Warning 25 nm away → applies zone-wide", alertReachesSpot(poly(box(S.lat + 0.5, S.lon, 0.05), "Special Marine Warning"), S));
+    check("polygon: Marine Weather Statement 25 nm away → applies zone-wide", alertReachesSpot(poly(box(S.lat + 0.5, S.lon, 0.05), "Marine Weather Statement"), S));
+    // Antimeridian: a launch inside a polygon straddling 180°, every edge
+    // ~18 nm away (unwrapped longitudes would put it outside and far off).
+    const am = { lat: 52, lon: 179.99 };
+    const amRing = [[179.5, 51.7], [-179.5, 51.7], [-179.5, 52.3], [179.5, 52.3], [179.5, 51.7]];
+    check("polygon: launch inside a polygon across the antimeridian → applies", alertReachesSpot({ event: "Flash Flood Warning", polygons: [amRing] }, am));
+    // Box east of the launch whose west side (~9 nm away) is the closing edge;
+    // without it the nearest point would be a corner ~15 nm away.
+    const unclosed = box(S.lat, S.lon + 0.4, 0.2).coordinates[0].slice(0, 4).reverse(); // NW, NE, SE, SW: the west side is the implied closing edge
+    check("polygon: unclosed ring still measures its closing edge (~9 nm → applies)", alertReachesSpot({ event: "Flash Flood Warning", polygons: [unclosed] }, S));
+
+    const tile = async () => (await fetchSummary(env)).spots.find((x) => x.id === "sandusky")?.level;
+    const MOT_STILL = "2026-11-07T00:00:00-00:00...storm...270DEG...0KT...41.0,-83.0";
+    landAlert = "Tornado Warning"; landAlertMotion = MOT_STILL;
+    landAlertGeom = box(S.lat - 0.5, S.lon - 0.3, 0.05); // far end of the county (~30 nm)
+    eq("polygon: far-county Tornado Warning → tile follows the weather (GO)", await tile(), "GO");
+    check("polygon: … and a digest window is still offered", (await fetchTodayWindows()).sandusky != null);
+    const pFar = await (await onRequest({ request: new Request("https://shouldiboat.com/marine/conditions?spot=sandusky"), env })).json();
+    check("polygon: … and the spot page agrees (no NO-GO, not listed)", pFar.recommendation?.level !== "NO-GO" && !(pFar.alerts || []).some((a) => a.event === "Tornado Warning"), JSON.stringify({ l: pFar.recommendation?.level, a: (pFar.alerts || []).map((a) => a.event) }));
+    landAlertMotion = null;
+    eq("polygon: same far Tornado Warning without a motion → tile NO-GO (fails toward applying)", await tile(), "NO-GO");
+    landAlertMotion = MOT_STILL;
+    landAlertGeom = { type: "Polygon", coordinates: [[[-82.7, 41.0], ["x", 41.1], [-82.6, 41.1], [-82.7, 41.0]]] };
+    eq("polygon: malformed geometry → tile NO-GO (zone-wide)", await tile(), "NO-GO");
+    landAlertGeom = { type: "GeometryCollection", geometries: [box(S.lat - 0.5, S.lon - 0.3, 0.05)] };
+    eq("polygon: GeometryCollection → tile NO-GO (zone-wide)", await tile(), "NO-GO");
+    landAlertGeom = box(S.lat - 0.1, S.lon, 0.05); // ~3 nm from the launch
+    eq("polygon: nearby Tornado Warning → tile NO-GO", await tile(), "NO-GO");
+    const pNear = await (await onRequest({ request: new Request("https://shouldiboat.com/marine/conditions?spot=sandusky"), env })).json();
+    eq("polygon: … spot page NO-GO", pNear.recommendation?.level, "NO-GO");
+    landAlert = "High Wind Warning"; landAlertGeom = null; landAlertMotion = null; // zone-based, no polygon
+    eq("polygon: zone-based High Wind Warning still applies county-wide", await tile(), "NO-GO");
+    landAlert = null; landAlertGeom = null; landAlertMotion = null;
+  }
+
+  // 58b. Grid sampling: a spot's gridSteps override skips an enclosed inner-bay
+  //     cell; spots without one (all of Lake Erie) sample exactly as before.
+  {
+    const { SPOTS, gridStepsFor, gridSamplePoints } = await import("../functions/marine/conditions.js");
+    const erie = Object.entries(SPOTS).filter(([, s]) => (s.lake || "Lake Erie") === "Lake Erie");
+    check("grid steps: every Lake Erie spot keeps the default lake steps", erie.length > 0 && erie.every(([, s]) => gridStepsFor(s).join() === "0.035,0.1,0.22"), erie.filter(([, s]) => gridStepsFor(s).join() !== "0.035,0.1,0.22").map(([k]) => k).join());
+    const sand = gridSamplePoints(SPOTS.sandusky)[0];
+    check("grid steps: Sandusky's first sample is still 0.035 deg toward the lake center", sand.step === 0.035 && Math.abs(Math.hypot(sand.lat - SPOTS.sandusky.lat, sand.lon - SPOTS.sandusky.lon) - 0.035) < 1e-3, JSON.stringify(sand));
+    eq("grid steps: Alpena starts at the Thunder Bay mouth, not the inner bay", JSON.stringify(gridSamplePoints(SPOTS.alpena)[0]), JSON.stringify({ step: 0.14, lat: 45.0008, lon: -83.2404 }));
+    check("grid steps: Alpena never samples the inner-bay cell (0.035)", !gridSamplePoints(SPOTS.alpena).some((p) => p.step < 0.14));
+    eq("grid steps: ocean spots keep the ocean steps", gridStepsFor(SPOTS.jacksonville).join(), "0.06,0.1,0.22");
+    eq("grid steps: inland water samples the point only", gridStepsFor({ lat: 40, lon: -80, lake: "Some Reservoir" }).join(), "0");
+    eq("grid steps: an empty override falls back to the defaults", gridStepsFor({ ...SPOTS.alpena, gridSteps: [] }).join(), "0.035,0.1,0.22");
+  }
+
   // ── Launch-facts card: a configured buoy is not a live buoy ──
   {
     const { SPOTS, spotFacts } = await import("../functions/marine/conditions.js");
@@ -1986,6 +2433,23 @@ async function run() {
     eq("bars: another bar's tile isn't touched by the Columbia advisory (stays GO)", other?.level, "GO");
     const wins = await fetchTodayWindows();
     eq("bars: no digest GO window at astoria under the bar advisory", wins.astoria, null);
+    // The bar rule runs through main's timed views too, not just the headline.
+    check("bars: astoria hourly strip has no hour below NO-GO under the bar SCA", (page.hourly || []).length && page.hourly.every((h) => h.level === "NO-GO"), JSON.stringify((page.hourly || []).slice(0, 3).map((h) => h.level)));
+    eq("bars: astoria week strip today NO-GO under the bar SCA", page.week?.[0]?.level, "NO-GO");
+    const { fetchWeeks: fetchWeeksB, applyAlertsToHours: aah, alertLevel: alB } = await import("../functions/marine/conditions.js");
+    eq("bars: weekend outlook today NO-GO at astoria under the bar SCA", (await fetchWeeksB(env, ["astoria"])).astoria?.[0]?.level, "NO-GO");
+    eq("bars: alertLevel with the spot applies the bar rule", alB({ event: "Small Craft Advisory" }, SPOTS.astoria), "NO-GO");
+    eq("bars: alertLevel without a spot is the any-spot level", alB({ event: "Small Craft Advisory" }), "CAUTION");
+    eq("bars: applyAlertsToHours with the spot → NO-GO hour", aah([{ time: new Date().toISOString(), level: "GO" }], sca, true, Date.now(), SPOTS["coos-bay"])[0].level, "NO-GO");
+    // A bar zone that is not the spot's own zone still reaches page, tile and digest.
+    barMode = "PZZ410";
+    const hb = await (await onRequest({ request: new Request("https://shouldiboat.com/marine/conditions?spot=humboldt-bay"), env })).json();
+    eq("bars: SCA on Humboldt's bar zone only → page NO-GO", hb.recommendation?.level, "NO-GO");
+    eq("bars: … tile NO-GO (bar zone in the batched lookup)", (await fetchSummary(env)).spots.find((x) => x.id === "humboldt-bay")?.level, "NO-GO");
+    eq("bars: … no digest window", (await fetchTodayWindows())["humboldt-bay"], null);
+    barMode = "PZZ251";
+    eq("bars: SCA on astoria's outside zone (alertZones) → tile NO-GO", (await fetchSummary(env)).spots.find((x) => x.id === "astoria")?.level, "NO-GO");
+    barMode = "PZZ210";
     barMode = "LEZ143";
     const sand = await (await onRequest({ request: new Request("https://shouldiboat.com/marine/conditions?spot=sandusky"), env })).json();
     check("alerts: a zone-coded marine advisory reaches a shore-point spot (sandusky, LEZ143) → not GO", sand.recommendation?.level !== "GO" && sand.alerts.some((a) => a.event === "Small Craft Advisory"), JSON.stringify(sand.recommendation));
@@ -2041,6 +2505,11 @@ async function run() {
     eq("riskLevel: ocean, no waves, 24 kt → still NO-GO", riskLevel(24, 28, 0, "", null, null, "ocean"), "NO-GO");
     eq("riskLevel: ocean with waves still GO when calm", riskLevel(5, 7, 0, "", 2, 12, "ocean"), "GO");
 
+    // San Francisco Bay: Berkeley's grid walk must stay inside the Golden Gate
+    // (Point Bonita ~122.53 W), or a bay launch is rated on open-Pacific swell.
+    const { gridSamplePoints: gsp } = await import("../functions/marine/conditions.js");
+    check("grid walk: Berkeley never samples west of the Golden Gate", gsp(SPOTS.berkeley).every((p) => p.lon > -122.47), JSON.stringify(gsp(SPOTS.berkeley)));
+
     // fetchBuoy merges a wind-only first station with a later wave buoy.
     const nd = ({ wspd = "MM", gst = "MM", wvht = "MM", dpd = "MM", wtmp = "MM" } = {}) => {
       const t = new Date(Date.now() - 20 * 60000), p2 = (n) => String(n).padStart(2, "0");
@@ -2058,6 +2527,113 @@ async function run() {
     check("page: merged stations listed in sources", /WPTW1 \+ 46211/.test(wp.sources?.buoy || ""), wp.sources?.buoy);
     check("page: no 'forecast waves' caveat when a live wave buoy filled in", !wp.recommendation.reasons.some((x) => /Waves are from the NWS forecast/.test(x)), JSON.stringify(wp.recommendation.reasons));
     ndbcFiles = {};
+  }
+
+  // ── Placeholder ("filler") grid wave layers are not wave data ──────────────
+  // Some NWS cells carry one 0 m value held for ~7 days (DTX/84,67 off Port
+  // Huron, APX/104,65 near Alpena). That must not read as "0 ft, calm", must
+  // not stop the seaward step search, and must never enable a lake GO.
+  {
+    const { isFillerWaveLayer, gridSamplePoints, SPOTS, fetchSummary, fetchWeeks, fetchTodayWindows, onRequest } = await import("../functions/marine/conditions.js");
+    const L = (...e) => ({ values: e.map(([validTime, value]) => ({ validTime, value })) });
+    // Shapes copied from live cells (Nov 2026).
+    check("filler: DTX/84,67 one 0 m value for P7DT4H", isFillerWaveLayer(L(["2026-11-06T16:00:00+00:00/P7DT4H", 0])));
+    check("filler: one non-zero value for the whole week (MHX/61,90)", isFillerWaveLayer(L(["2026-11-06T18:00:00+00:00/P6DT19H", 0.3048])));
+    check("filler: P6D of 0 plus 1-h stubs (TBW/73,83)", isFillerWaveLayer(L(["2026-11-06T13:00:00+00:00/P6D", 0], ["2026-11-12T18:00:00+00:00/PT1H", 0], ["2026-11-13T00:00:00+00:00/PT1H", 0], ["2026-11-13T06:00:00+00:00/PT1H", 0])));
+    check("filler: many valid times, all 0", isFillerWaveLayer(L(["2026-11-06T00:00:00+00:00/PT12H", 0], ["2026-11-06T12:00:00+00:00/PT12H", 0], ["2026-11-07T00:00:00+00:00/P5D", 0])));
+    check("filler: one small value (1 ft) over 90% of the period", isFillerWaveLayer(L(["2026-11-06T00:00:00+00:00/P6D", 0.3048], ["2026-11-12T00:00:00+00:00/PT6H", 0], ["2026-11-12T06:00:00+00:00/PT6H", 0])));
+    check("real: a 2 ft value held over 90% of the period is kept (real height)", !isFillerWaveLayer(L(["2026-11-06T00:00:00+00:00/P6D", 0.6], ["2026-11-12T00:00:00+00:00/PT6H", 0.3], ["2026-11-12T06:00:00+00:00/PT6H", 0.3])));
+    check("real: a 5 ft trade-wind sea held all week is kept (ocean)", !isFillerWaveLayer(L(["2026-11-06T00:00:00+00:00/P6DT20H", 1.524])));
+    check("real: a single 4 ft entry is kept, never dropped as filler", !isFillerWaveLayer(L(["2026-11-06T00:00:00+00:00/P7D", 1.2192])));
+    check("filler: missing / empty layer", isFillerWaveLayer(null) && isFillerWaveLayer({ values: [] }));
+    check("real: calm 0–1 ft lake week (DLH/93,69: 0, 0.3 m for 7 h, 0)", !isFillerWaveLayer(L(["2026-11-06T17:00:00+00:00/P1DT6H", 0], ["2026-11-07T23:00:00+00:00/PT7H", 0.3048], ["2026-11-08T06:00:00+00:00/P5DT1H", 0])));
+    check("real: a long-held swell (SJU/210,120: 3 ft for 144 of 198 h)", !isFillerWaveLayer(L(["2026-11-06T00:00:00+00:00/P6D", 0.9144], ["2026-11-12T00:00:00+00:00/PT24H", 0.6096], ["2026-11-13T00:00:00+00:00/PT30H", 0.9144])));
+    check("real: two valid times (MOB/56,59)", !isFillerWaveLayer(L(["2026-11-06T15:00:00+00:00/P3DT1H", 0.3048], ["2026-11-09T16:00:00+00:00/P4DT9H", 0])));
+
+    const env = { USERS: makeKV() };
+    stormMode = false; scaMode = false; alertsDown = false; gridMode = null; zoneAlert = null;
+    const pts = gridSamplePoints(SPOTS.sandusky);
+    const stepAt = (lat, lon) => pts.findIndex((p) => Math.abs(p.lat - lat) < 1e-6 && Math.abs(p.lon - lon) < 1e-6);
+    const sanduskyCalls = () => gridCalls.map((a) => stepAt(...a.split(",").map(Number))).filter((i) => i >= 0);
+    const tileOf = async () => (await fetchSummary(env)).spots.find((x) => x.id === "sandusky");
+
+    // 1. First cell filler, second a real 2 ft forecast → the 2 ft cell's waves.
+    gridWavesAt = (lat, lon) => ({ 0: "filler", 1: 0.6096 })[stepAt(lat, lon)];
+    gridCalls = [];
+    const t1 = await tileOf();
+    eq("filler skipped: tile reads the next cell's 2 ft, not 0 ft", t1?.waveFt, 2);
+    eq("filler skipped: wind still from the nearest cell (8 kt)", t1?.windKt, 8);
+    check("filler skipped: the walk went past the filler cell", sanduskyCalls().join() === "0,1", JSON.stringify(sanduskyCalls()));
+    const p1 = await (await onRequest({ request: new Request("https://shouldiboat.com/marine/conditions?spot=sandusky"), env })).json();
+    check("filler skipped: spot page hours carry 2 ft, never 0 ft", (p1.hourly || []).length && p1.hourly.every((h) => h.waveFt === 2), JSON.stringify((p1.hourly || []).slice(0, 2)));
+
+    // 2. Every cell filler (and the all-zero variant) → no waves → no lake GO.
+    for (const mode of ["filler", "zeros"]) {
+      gridWavesAt = (lat, lon) => (stepAt(lat, lon) >= 0 ? mode : undefined);
+      gridCalls = [];
+      const t2 = await tileOf();
+      eq(`all ${mode}: tile has no waves (not 0 ft)`, t2?.waveFt, null);
+      check(`all ${mode}: every step was tried`, sanduskyCalls().join() === "0,1,2", JSON.stringify(sanduskyCalls()));
+      check(`all ${mode}: calm wind but the tile is not GO`, t2 && t2.windKt === 8 && t2.level !== "GO", JSON.stringify(t2));
+      const w2 = (await fetchWeeks(env, ["sandusky"])).sandusky || [];
+      check(`all ${mode}: no week day is GO`, w2.length && w2.every((d) => d.level !== "GO" && d.waveFt == null), JSON.stringify(w2.map((d) => [d.level, d.waveFt])));
+      const wins = await fetchTodayWindows();
+      eq(`all ${mode}: no digest GO window for sandusky`, wins.sandusky ?? null, null);
+      const p2 = await (await onRequest({ request: new Request("https://shouldiboat.com/marine/conditions?spot=sandusky"), env })).json();
+      check(`all ${mode}: spot page hours have no waves and no GO`, (p2.hourly || []).length && p2.hourly.every((h) => h.waveFt == null && h.level !== "GO"), JSON.stringify((p2.hourly || []).slice(0, 2)));
+      check(`all ${mode}: spot headline is not GO`, p2.recommendation?.level && p2.recommendation.level !== "GO", JSON.stringify(p2.recommendation?.level));
+    }
+
+    // 2b. Ocean spot: all-filler is no wave data, and on the open ocean no
+    //     wave data is never GO (a light wind says nothing about the swell):
+    //     the tile is "—" while a real 1 ft sea still reads GO. Stricter than
+    //     the original assertion (filler and 1 ft rated alike).
+    {
+      const jp = gridSamplePoints(SPOTS.jacksonville);
+      const jAt = (lat, lon) => jp.findIndex((p) => Math.abs(p.lat - lat) < 1e-6 && Math.abs(p.lon - lon) < 1e-6);
+      const jTile = async () => (await fetchSummary(env)).spots.find((x) => x.id === "jacksonville");
+      gridWavesAt = (lat, lon) => (jAt(lat, lon) >= 0 ? "filler" : undefined);
+      const jf = await jTile();
+      gridWavesAt = (lat, lon) => (jAt(lat, lon) >= 0 ? 0.3048 : undefined);
+      const j1 = await jTile();
+      check("ocean all-filler: no waves (not 0 ft)", jf?.waveFt == null, JSON.stringify(jf));
+      check("ocean all-filler: no wave data → no call (\u2014), never GO; a real 1 ft sea → GO", jf && jf.level == null && j1?.level === "GO" && j1?.waveFt === 1, JSON.stringify({ filler: jf?.level, oneFt: j1?.level, ft: j1?.waveFt }));
+    }
+
+    // 3. A genuine calm 0–1 ft forecast is kept (and stops the walk).
+    gridWavesAt = (lat, lon) => (stepAt(lat, lon) === 0 ? "calm" : stepAt(lat, lon) > 0 ? 1.2 : undefined);
+    gridCalls = [];
+    const t3 = await tileOf();
+    check("calm kept: tile reads 0–1 ft from the first cell", t3?.waveFt === 0 || t3?.waveFt === 1, JSON.stringify(t3));
+    eq("calm kept: the walk stopped at the first cell", sanduskyCalls().join(), "0");
+    eq("calm kept: calm day is still GO", t3?.level, "GO");
+    const w3 = (await fetchWeeks(env, ["sandusky"])).sandusky || [];
+    check("calm kept: week days read 1 ft and GO", w3.length && w3.every((d) => d.waveFt === 1 && d.level === "GO"), JSON.stringify(w3.map((d) => [d.level, d.waveFt])));
+
+    // 4. Grid-step memo: a remembered cell that turns filler is not reused.
+    const store = new Map();
+    globalThis.caches = { default: {
+      async match(req) { const v = store.get(req.url); return v == null ? undefined : new Response(v); },
+      async put(req, resp) { store.set(req.url, await resp.text()); },
+      async delete(req) { return store.delete(req.url); },
+    } };
+    try {
+      const memoKeys = () => [...store.keys()].filter((k) => k.startsWith("https://grid-step.local/") && k.includes(`${Math.round(SPOTS.sandusky.lat * 1000) / 1000},`));
+      gridWavesAt = (lat, lon) => (stepAt(lat, lon) >= 0 ? 0.3048 : undefined);
+      await tileOf();
+      check("memo: the first real cell is remembered", memoKeys().length === 1 && store.get(memoKeys()[0]) === String(pts[0].step), JSON.stringify(memoKeys()));
+      gridWavesAt = (lat, lon) => ({ 0: "filler", 1: 0.6096 })[stepAt(lat, lon)];
+      gridCalls = [];
+      const t4 = await tileOf();
+      eq("memo: remembered cell gone filler → walks on to the 2 ft cell", t4?.waveFt, 2);
+      check("memo: the stale step is forgotten", memoKeys().length === 0, JSON.stringify(memoKeys().map((k) => store.get(k))));
+      gridWavesAt = (lat, lon) => (stepAt(lat, lon) >= 0 ? "filler" : undefined);
+      await tileOf(); // seed nothing: an all-filler walk memoizes no step
+      check("memo: an all-filler walk remembers no step", memoKeys().length === 0);
+    } finally {
+      delete globalThis.caches;
+    }
+    gridWavesAt = null; gridCalls = [];
   }
 
   console.log(results.join("\n"));
