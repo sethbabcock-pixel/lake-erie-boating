@@ -1514,11 +1514,23 @@ async function fetchWindyCams(env, lat, lon, lake) {
   try {
     // Over-fetch so we can rank: water views (harbor, bay, beach…) beat city
     // and traffic cams for a boating audience, and live streams beat replays.
-    const u = `https://api.windy.com/webcams/api/v3/webcams?nearby=${round(lat, 3)},${round(lon, 3)},60&limit=20&include=categories,location,player,urls`;
-    const r = await fetch(u, { headers: { "X-WINDY-API-KEY": key, Accept: "application/json" }, signal: AbortSignal.timeout(8000) });
-    if (!r.ok) return null;
-    const d = await r.json();
-    const list = d?.webcams || d?.result?.webcams || [];
+    // The ranking below throws away road/city cams, so ask Windy for water
+    // categories FIRST: in dense coastal metros (LA / Orange County / San Diego)
+    // the 20 nearest cams are all city/traffic cams and the post-filter left 0
+    // ("ok:0/20"). If the category filter is rejected or empty, fall back to the
+    // plain nearby list (wider limit, still filtered below).
+    const base = `https://api.windy.com/webcams/api/v3/webcams?nearby=${round(lat, 3)},${round(lon, 3)},60&include=categories,location,player,urls`;
+    const hdrs = { "X-WINDY-API-KEY": key, Accept: "application/json" };
+    const grab = async (u) => {
+      const r = await fetch(u, { headers: hdrs, signal: AbortSignal.timeout(8000) });
+      if (!r.ok) return null;
+      const d = await r.json();
+      return d?.webcams || d?.result?.webcams || [];
+    };
+    let list = null;
+    try { list = await grab(`${base}&categories=beach,coast,harbor,lake,port&limit=50`); } catch { list = null; }
+    if (!list || !list.length) list = await grab(`${base}&limit=50`);
+    if (list == null) return null;
     // Boaters need to see the water. Windy's "nearest" list is mostly traffic
     // and city cams (St. Augustine's top hit was an I-95 cam), so a cam is only
     // used when its categories or title say water AND nothing says road.

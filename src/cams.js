@@ -94,9 +94,17 @@ export const CAMS = [
   // Georgia & South Carolina / North Carolina / Chesapeake
   { name: "Nags Head · Jennette's Pier", lat: 35.91, lon: -75.6, yt: "sgnlB7lhknM", lake: "North Carolina Coast" },
   { name: "Kitty Hawk · Oceanfront (Twiddy)", lat: 36.07, lon: -75.7, yt: "WEhuDqlxHmM", lake: "North Carolina Coast" },
-  // Southern California Coast
+  // Southern California Coast (2026-11 audit: every entry is a YouTube live stream with
+  // embedding allowed (oEmbed 200) that showed up in YouTube's "Live" filter and whose frame
+  // shows water. South to north.)
   { name: "San Diego Bay · Shelter Island", lat: 32.714, lon: -117.227, yt: "ct7IRmzDggk", lake: "Southern California Coast" },
-  { name: "Channel Islands Harbor · Coastal Café", lat: 34.165, lon: -119.225, yt: "oJ9CLuRwuuk", lake: "Southern California Coast" },
+  { name: "Mission Bay · San Diego Rowing Club", lat: 32.7835, lon: -117.254, yt: "7esMbPeSjpk", lake: "Southern California Coast" },
+  { name: "Oceanside · Pier & surf (Rooftop Bar)", lat: 33.1945, lon: -117.3815, yt: "cvP_F-c2Upw", lake: "Southern California Coast" },
+  { name: "Huntington Beach · Pier & surf (City of HB)", lat: 33.6555, lon: -118.0033, yt: "mhQjsLBfOoY", lake: "Southern California Coast" },
+  { name: "Redondo Beach · King Harbor (City)", lat: 33.846, lon: -118.393, yt: "Ni7v-aIa3bw", lake: "Southern California Coast" },
+  { name: "Redondo Beach · King Harbor Yacht Club channel", lat: 33.845, lon: -118.395, yt: "g1IHHYlgzy8", lake: "Southern California Coast" },
+  { name: "Santa Monica · Beach & Pier (explore.org)", lat: 34.0095, lon: -118.4975, yt: "v97JpT3ZA0w", lake: "Southern California Coast" },
+  { name: "Channel Islands Harbor · Boat launch (Oxnard)", lat: 34.157, lon: -119.2265, yt: "5LEWwFzJ6rg", lake: "Southern California Coast" },
   // Hawaii & Puerto Rico
   { name: "Kona · Keauhou Bay", lat: 19.56, lon: -155.96, yt: "RxDQLIwxyhA", lake: "Hawaii" },
   { name: "Maui · Wailea Beach", lat: 20.68, lon: -156.44, yt: "mrUciA_XZxA", lake: "Hawaii" },
