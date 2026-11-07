@@ -51,6 +51,7 @@ let alertsDown = false; // NWS alerts stub: the alerts endpoint fails
 let zoneAlert = null; // NWS alerts stub: "gale" = a Gale Warning on the zone query only; "down" = zone query fails
 let alertFeatures = null; // NWS alerts stub: every alerts query returns these raw features
 let alertTestStatus = null; // NWS alerts stub: every alerts query returns one Gale Warning with this status (e.g. "Test")
+let landAlertGeom = null; // with landAlert: a GeoJSON geometry for the warned polygon (null = zone-based, no polygon)
 let landAlert = null; // NWS alerts stub: an event name issued for the land county OHC043 (every mock launch point is in it)
 let pointsNoZones = false;
 let pointsCalls = 0; // NWS /points stub: lookups served
@@ -127,7 +128,7 @@ function installFetchStub() {
       return jsonResp({ features: [{ properties: { status: alertTestStatus, event: "Gale Warning", severity: "Moderate", headline: "TEST Gale Warning", sent: new Date().toISOString(), geocode: { UGC: ["LEZ143"] } } }] });
     }
     if (u.includes("api.weather.gov/alerts/active?zone=") && landAlert && decodeURIComponent(u).includes("OHC043")) {
-      return jsonResp({ features: [{ properties: { status: "Actual", event: landAlert, severity: "Severe", headline: `${landAlert} in effect`, sent: new Date().toISOString(), geocode: { UGC: ["OHC043"] } } }] });
+      return jsonResp({ features: [{ geometry: landAlertGeom, properties: { status: "Actual", event: landAlert, severity: "Severe", headline: `${landAlert} in effect`, sent: new Date().toISOString(), geocode: { UGC: ["OHC043"] } } }] });
     }
     if (u.includes("api.weather.gov/alerts/active?zone=") && zoneAlert === "down") return new Response("", { status: 503 });
     if (u.includes("api.weather.gov/alerts/active?zone=") && zoneAlert === "gale") {
@@ -2108,6 +2109,37 @@ async function run() {
     eq("land walk (page): no ring → unresolved", await landZonesFor({ lat: 38.123, lon: -80.456, zone: "LEZ145", lake: "Lake Erie" }, null, { ring: false }), null);
     check("land walk (page): at most 4 /points lookups", pointsCalls <= 4, `${pointsCalls} lookups`);
     pointsOnWater = null;
+  }
+
+  // 63. Warned polygons: a storm-based warning listed for a whole county
+  //     only reaches launches inside its polygon or within 10 nm of it.
+  {
+    const { alertReachesSpot, fetchSummary, fetchTodayWindows, onRequest, SPOTS } = await import("../functions/marine/conditions.js");
+    const env = { USERS: makeKV() };
+    stormMode = false; scaMode = false; alertsDown = false; gridMode = null; zoneAlert = null;
+    const S = SPOTS.sandusky; // 41.46, -82.71
+    const box = (lat, lon, d) => ({ type: "Polygon", coordinates: [[[lon - d, lat - d], [lon + d, lat - d], [lon + d, lat + d], [lon - d, lat + d], [lon - d, lat - d]]] });
+    const poly = (g) => ({ event: "Tornado Warning", polygons: g.type === "Polygon" ? [g.coordinates[0]] : g.coordinates.map((p) => p[0]) });
+    check("polygon: launch inside → applies", alertReachesSpot(poly(box(S.lat, S.lon, 0.05)), S));
+    check("polygon: edge ~6 nm away → applies (within 10 nm)", alertReachesSpot(poly(box(S.lat - 0.15, S.lon, 0.05)), S));
+    check("polygon: ~25 nm away → doesn't apply", !alertReachesSpot(poly(box(S.lat - 0.5, S.lon, 0.05)), S));
+    check("polygon: MultiPolygon, one part near → applies", alertReachesSpot(poly({ type: "MultiPolygon", coordinates: [box(S.lat - 2, S.lon, 0.05).coordinates, box(S.lat, S.lon + 0.1, 0.05).coordinates] }), S));
+    check("polygon: no polygon (zone-based) → applies zone-wide", alertReachesSpot({ event: "High Wind Warning", polygons: null }, S));
+
+    const tile = async () => (await fetchSummary(env)).spots.find((x) => x.id === "sandusky")?.level;
+    landAlert = "Tornado Warning";
+    landAlertGeom = box(S.lat - 0.5, S.lon - 0.3, 0.05); // far end of the county (~30 nm)
+    eq("polygon: far-county Tornado Warning → tile follows the weather (GO)", await tile(), "GO");
+    check("polygon: … and a digest window is still offered", (await fetchTodayWindows()).sandusky != null);
+    const pFar = await (await onRequest({ request: new Request("https://shouldiboat.com/marine/conditions?spot=sandusky"), env })).json();
+    check("polygon: … and the spot page agrees (no NO-GO, not listed)", pFar.recommendation?.level !== "NO-GO" && !(pFar.alerts || []).some((a) => a.event === "Tornado Warning"), JSON.stringify({ l: pFar.recommendation?.level, a: (pFar.alerts || []).map((a) => a.event) }));
+    landAlertGeom = box(S.lat - 0.1, S.lon, 0.05); // ~3 nm from the launch
+    eq("polygon: nearby Tornado Warning → tile NO-GO", await tile(), "NO-GO");
+    const pNear = await (await onRequest({ request: new Request("https://shouldiboat.com/marine/conditions?spot=sandusky"), env })).json();
+    eq("polygon: … spot page NO-GO", pNear.recommendation?.level, "NO-GO");
+    landAlert = "High Wind Warning"; landAlertGeom = null; // zone-based, no polygon
+    eq("polygon: zone-based High Wind Warning still applies county-wide", await tile(), "NO-GO");
+    landAlert = null; landAlertGeom = null;
   }
 
   // ── Launch-facts card: a configured buoy is not a live buoy ──

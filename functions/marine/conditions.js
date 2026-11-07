@@ -599,6 +599,46 @@ async function fetchMarineForecast(zone) {
   }
 }
 
+// Outer rings ([[lon, lat], ...]) of a GeoJSON Polygon/MultiPolygon, or null.
+function alertPolygons(g) {
+  if (!g) return null;
+  if (g.type === "Polygon" && Array.isArray(g.coordinates?.[0])) return [g.coordinates[0]];
+  if (g.type === "MultiPolygon" && Array.isArray(g.coordinates)) return g.coordinates.map((p) => p?.[0]).filter(Array.isArray);
+  return null;
+}
+// Does an alert reach this launch? An alert with a warned polygon applies
+// when the launch is inside it or within ALERT_POLYGON_BUFFER_NM of its edge
+// (a boat from that launch can be that far out; storms move). One without a
+// polygon applies to its whole zone, as listed. A county-wide UGC on a
+// storm-based warning otherwise flags launches at the far end of a big
+// county (Kona under a Hilo-side flash flood, Duluth under all of St. Louis).
+export const ALERT_POLYGON_BUFFER_NM = 10;
+export function alertReachesSpot(a, spot) {
+  if (!a?.polygons || !a.polygons.length || spot?.lat == null || spot?.lon == null) return true;
+  return a.polygons.some((ring) => pointInRing(spot.lon, spot.lat, ring) || ringDistanceNm(spot.lat, spot.lon, ring) <= ALERT_POLYGON_BUFFER_NM);
+}
+function pointInRing(x, y, ring) {
+  let inside = false;
+  for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+    const [xi, yi] = ring[i], [xj, yj] = ring[j];
+    if ((yi > y) !== (yj > y) && x < ((xj - xi) * (y - yi)) / (yj - yi) + xi) inside = !inside;
+  }
+  return inside;
+}
+// Shortest distance (nm) from a point to a ring's edges, on a local
+// equirectangular projection (fine at warning-polygon scale).
+function ringDistanceNm(lat, lon, ring) {
+  const kx = 60 * Math.cos((lat * Math.PI) / 180), ky = 60; // nm per degree
+  let best = Infinity;
+  for (let i = 0; i < ring.length - 1; i++) {
+    const ax = (ring[i][0] - lon) * kx, ay = (ring[i][1] - lat) * ky;
+    const bx = (ring[i + 1][0] - lon) * kx, by = (ring[i + 1][1] - lat) * ky;
+    const dx = bx - ax, dy = by - ay, len2 = dx * dx + dy * dy;
+    const t = len2 ? Math.max(0, Math.min(1, -(ax * dx + ay * dy) / len2)) : 0;
+    best = Math.min(best, Math.hypot(ax + t * dx, ay + t * dy));
+  }
+  return best;
+}
 const toAlert = (f) => ({
   event: f.properties?.event,
   severity: f.properties?.severity,
@@ -616,6 +656,9 @@ const toAlert = (f) => ({
   // NWS issues a Flash Flood Emergency as an ordinary "Flash Flood Warning"
   // event; only this parameter (CATASTROPHIC) tells them apart.
   ffThreat: f.properties?.parameters?.flashFloodDamageThreat?.[0] || null,
+  // Storm-based warnings (Severe Thunderstorm, Tornado, Flash Flood, Special
+  // Marine) carry the warned polygon; zone-based products have none.
+  polygons: alertPolygons(f.geometry),
 });
 async function alertsAt(query) {
   try {
@@ -649,7 +692,10 @@ export async function fetchAlerts(spot) {
   const landQ = landZonesFor(spot, null, { ring: false }).catch(() => null)
     .then((land) => (land && land.length ? alertsAt(`zone=${land.map(encodeURIComponent).join(",")}`) : null));
   const results = await Promise.all([...queries.map(alertsAt), landQ]);
-  const answered = results.filter((r) => r != null);
+  // The point query already matches warned polygons; zone/county queries
+  // return every alert listing the zone, so keep only those that reach the
+  // launch (see alertReachesSpot).
+  const answered = results.map((r, i) => (r == null || i === 0 ? r : r.filter((a) => alertReachesSpot(a, spot)))).filter((r) => r != null);
   return {
     alerts: answered.length ? dedupeAlerts(answered.flat()) : null, // one card per event type
     all: answered.flat(), // every issuance, for timing (two SCAs can cover different hours)
@@ -850,7 +896,7 @@ export async function fetchSpotsAlerts(spots) {
 const zoneAlertsFor = (za, spot) => {
   if (!za || !spot) return [];
   const zones = [spot.zone, ...((za.land && za.land.get(pointKey(spot))) || [])];
-  return zones.flatMap((z) => (z && za.byZone.get(z)) || []);
+  return zones.flatMap((z) => (z && za.byZone.get(z)) || []).filter((a) => alertReachesSpot(a, spot));
 };
 // Were this spot's zone alerts actually checked? Every directory spot is
 // marine (built pages require a marine zone), so a spot with no valid zone —
