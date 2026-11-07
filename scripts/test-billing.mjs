@@ -1958,16 +1958,13 @@ async function run() {
     check("spot page: outlook is not GO now", page.outlook?.nowLevel !== "GO", JSON.stringify(page.outlook));
     eq("spot page: week strip today is NO-GO", page.week?.[0]?.level, "NO-GO");
 
-    // Tiles count every active alert that hasn't ended, like the spot page
-    // headline (stricter than the old 2 h / 6 h lookahead: a tile must never
-    // read softer than the page it links to). An alert already over doesn't.
+    // Tile lookahead: a gale starting within 6 h makes the tile at least CAUTION.
     zoneAlertSpan = { onsetH: 1, endsH: 12 };
     eq("tiles: gale starting next hour → NO-GO", (await fetchSummary(env)).spots.find((x) => x.id === "sandusky")?.level, "NO-GO");
     zoneAlertSpan = { onsetH: 4, endsH: 12 };
-    eq("tiles: gale starting in 4 h → NO-GO (matches the headline)", (await fetchSummary(env)).spots.find((x) => x.id === "sandusky")?.level, "NO-GO");
+    eq("tiles: gale starting in 4 h → CAUTION, not GO", (await fetchSummary(env)).spots.find((x) => x.id === "sandusky")?.level, "CAUTION");
     zoneAlertSpan = { onsetH: 9, endsH: 12 };
-    eq("tiles: gale starting in 9 h → NO-GO (matches the headline)", (await fetchSummary(env)).spots.find((x) => x.id === "sandusky")?.level, "NO-GO");
-    eq("digest: no GO window while a gale is still to come today", (await fetchTodayWindows()).sandusky, null);
+    eq("tiles: gale starting in 9 h → tile follows the weather (GO)", (await fetchSummary(env)).spots.find((x) => x.id === "sandusky")?.level, "GO");
     zoneAlertSpan = { onsetH: -6, endsH: -1 };
     eq("tiles: a gale that has already ended → tile follows the weather (GO)", (await fetchSummary(env)).spots.find((x) => x.id === "sandusky")?.level, "GO");
 

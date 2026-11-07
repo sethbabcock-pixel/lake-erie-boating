@@ -2158,6 +2158,7 @@ async function handleCamStatus(url, env) {
 // directory. Per-spot NWS grid fetches through a small pool; /points lookups
 // are edge-cached a day and the whole result ~10 min, so the API isn't hammered.
 // One directory/email tile (verdict + wind/wave) from a spot and its grid.
+const TILE_ALERT_LOOKAHEAD_H = 6; // ~a half-day trip
 function summaryTile(id, s, g, nowH, za = null) {
   const windKt = round(sampleNear(g?.windKt, nowH), 0);
   const gustKt = round(sampleNear(g?.gustKt, nowH), 0);
@@ -2172,14 +2173,14 @@ function summaryTile(id, s, g, nowH, za = null) {
   const precipPct = Math.max(g?.precipPct.get(nowH) ?? 0, g?.precipPct.get(nowH + 1) ?? 0);
   const thunder = g?.thunder.get(nowH) === true || g?.thunder.get(nowH + 1) === true;
   let level = riskLevel(windKt, gustKt, precipPct, thunder ? "thunderstorms" : "", waveFt, periodSec, waterProfile(s));
-  // Any advisory or warning for the spot's zones that hasn't ended yet (in
-  // effect now, or issued for later) raises the tile to its level, bar rule
-  // included, exactly as the spot page headline counts every active alert: a
-  // tile must never read softer than the page it links to. If the zone
-  // alerts couldn't be checked, no GO (a "—" no-data tile stays "—").
+  // An advisory in effect for the spot's zones now or next hour raises the
+  // tile to its level (bar/inlet rule included); one starting within the
+  // next few hours (a trip launched now is still out when it begins) leaves
+  // it at least CAUTION. If the zone alerts couldn't be checked, no GO.
   if (za) {
     const zoneAlerts = zoneAlertsFor(za, s);
-    level = worseLevel(level, alertLevelBetween(zoneAlerts, nowH * 3600e3, Infinity, s));
+    level = worseLevel(level, alertLevelBetween(zoneAlerts, nowH * 3600e3, (nowH + 2) * 3600e3, s));
+    if (level === "GO" && alertLevelBetween(zoneAlerts, nowH * 3600e3, (nowH + TILE_ALERT_LOOKAHEAD_H) * 3600e3, s)) level = "CAUTION";
     if (!zoneAlertsOkFor(za, s) && level === "GO") level = "CAUTION";
   }
   // lat/lon travel with each spot so the homepage can find the nearest launch
@@ -2285,13 +2286,9 @@ export async function fetchTodayWindows({ landBudget } = {}) {
   const out = {};
   entries.forEach(([id, s], i) => {
     const g = grids[i];
-    // No grid, or the alerts couldn't be checked: offer no GO window. Nor while
-    // any advisory or warning for the spot's zones is still to run out (now or
-    // later today): the spot page headline reads it all day, so the digest
-    // must not point at a "best window" under it.
+    // No grid, or the zone alerts couldn't be checked: offer no GO window.
     if (!g || !zoneAlertsOkFor(za, s)) { out[id] = null; return; }
     const spotAlerts = zoneAlertsFor(za, s);
-    if (alertLevelBetween(spotAlerts, nowH * 3600e3, Infinity, s)) { out[id] = null; return; }
     const toLocal = localParts(g.tz);
     const today = toLocal(nowH).date;
     let best = null, run = null;
