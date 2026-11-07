@@ -1337,6 +1337,7 @@ export default function App() {
                     {comfort.ok ? "today's conditions are within your limits." : `above your limit: ${comfort.over.join("; ")}.`}
                   </div>
                 )}
+                <p className="call-disclaimer">An automated summary of NOAA data, not a guarantee of safety. Check the latest NWS marine forecast and warnings; the decision to go is yours.</p>
                 <WrongCallLink spot={spot} rec={rec} wind={wind} wv={wv} updatedAt={data.updatedAt} />
               </div>
             </section>
@@ -1475,6 +1476,7 @@ export default function App() {
             {showAds && <AdSlot name="detailMid" />}
 
             <footer className="meta">
+              <p className="meta-disclaimer">shouldiboat.com is a planning aid, not an official forecast or a navigation tool. Conditions can change quickly and local conditions can differ from the data. GO / CAUTION / NO-GO is an automated summary, not a guarantee of safety. You are responsible for the decision to boat. Check the latest NWS marine forecast and warnings before you launch.</p>
               Source: {buoyLive ? `Buoy ${buoy.station} · ${buoy.ageMinutes != null ? `${buoy.ageMinutes} min ago` : "latest"}` : "forecast only"}
               {" · NWS & NDBC (NOAA), Windy. Updated "}{new Date(data.updatedAt).toLocaleTimeString()}
               <span className="buildtag" title="Deployed version">{typeof __BUILD__ !== "undefined" ? ` · v ${__BUILD__}` : ""}</span>

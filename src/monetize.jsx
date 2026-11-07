@@ -45,8 +45,13 @@ function adTestOn() {
   try { return new URLSearchParams(window.location.search).get("adtest") === "1"; } catch (e) { return false; }
 }
 
+// A stored choice wins; with none, a Global Privacy Control signal counts as
+// Reject (essential only) so those visitors are never asked or tracked.
 export function getConsent() {
-  try { return localStorage.getItem("sib.consent"); } catch (e) { return null; }
+  let c = null;
+  try { c = localStorage.getItem("sib.consent"); } catch (e) { /* ignore */ }
+  if (!c && typeof navigator !== "undefined" && navigator.globalPrivacyControl === true) return "essential";
+  return c;
 }
 
 // Google Consent Mode v2 update — flips cookie permissions when the user makes

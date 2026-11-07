@@ -8,11 +8,15 @@
 // The admin can override any spot with an upload (Admin → Homepage hero →
 // Photo by launch), stored in site config as hero.spots[id].
 //
-// Shape: id: { src, credit, license, source }
-//   src     site path to the resized image, e.g. "/spots/put-in-bay.jpg"
-//   credit  author as Commons attributes them
-//   license short name, e.g. "CC BY-SA 4.0", "Public domain"
-//   source  the Commons file page URL
+// Shape: id: { src, title, credit, license, licenseUrl, source }
+//   src        site path to the resized image, e.g. "/spots/put-in-bay.jpg"
+//   title      short file title
+//   credit     author as Commons attributes them
+//   license    short name, e.g. "CC BY-SA 4.0", "Public domain"
+//   licenseUrl the license deed ("" for public domain)
+//   source     the Commons file page URL
+// Share-alike: the resized files stay reusable under their own license; never
+// bake text or logos into them.
 export const SPOT_PHOTOS = {
 };
 

@@ -134,11 +134,6 @@ function HouseHero({ hero, spotName, verdict, adFree, splash, children, signedIn
     return (
       <section className={`hero hero-band${pic ? " has-photo" : ""}`}>
         {pic && <img className="hero-band-img" src={pic.src} alt="" fetchpriority="high" decoding="async" referrerPolicy="no-referrer" />}
-        {pic && pic.credit && (
-          <a className="hero-band-credit" href={pic.source} target="_blank" rel="noopener">
-            Photo: {pic.credit}{pic.license ? ` · ${pic.license}` : ""}
-          </a>
-        )}
         <div className="hero-inner">
           <div className="hero-band-text">
             <div className="hero-eyebrow">Live conditions · NOAA / NWS data</div>
@@ -155,6 +150,15 @@ function HouseHero({ hero, spotName, verdict, adFree, splash, children, signedIn
           )}
           {!authPending && signedIn && !adFree && <a className="hero-housecta" href="/account#pro">Go Pro: no Google ads + GO alerts →</a>}
         </div>
+        {pic && pic.credit && (
+          // Attribution (TASL): title + author linked to the file page, the
+          // license linked to its deed, and a note of our changes.
+          <p className="hero-band-credit">
+            Photo: <a href={pic.source} target="_blank" rel="noopener">{pic.title ? <>“{pic.title}” by </> : null}{pic.credit}</a>
+            {pic.license ? <> · {pic.licenseUrl ? <a href={pic.licenseUrl} target="_blank" rel="noopener license">{pic.license}</a> : pic.license}</> : null}
+            {" · cropped, darkened"}
+          </p>
+        )}
       </section>
     );
   }
