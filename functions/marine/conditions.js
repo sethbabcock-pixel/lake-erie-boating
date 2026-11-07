@@ -25,142 +25,145 @@ const NWS = "https://api.weather.gov";
 export const SPOTS = {
   toledo: {
     name: "Toledo / Maumee Bay",
-    lat: 41.694, lon: -83.32, zone: "LEZ142", buoys: ["45005", "THLO1"],
+    lat: 41.694, lon: -83.32, zone: "LEZ142", land: ["OHZ003", "OHC095"], buoys: ["45005", "THLO1"],
   },
   "port-clinton": {
     name: "Port Clinton / Catawba",
-    lat: 41.512, lon: -82.94, zone: "LEZ143", buoys: ["45005"],
+    lat: 41.512, lon: -82.94, zone: "LEZ143", land: ["OHZ007", "OHC123"], buoys: ["45005"],
   },
   "put-in-bay": {
     name: "Put-in-Bay / South Bass Island",
-    lat: 41.652, lon: -82.82, zone: "LEZ143", buoys: ["SBIO1", "45005"],
+    lat: 41.652, lon: -82.82, zone: "LEZ143", land: ["OHZ007", "OHC123"], buoys: ["SBIO1", "45005"],
   },
   sandusky: {
     name: "Sandusky / Cedar Point",
-    lat: 41.46, lon: -82.71, zone: "LEZ143", buoys: ["45005"],
+    lat: 41.46, lon: -82.71, zone: "LEZ143", land: ["OHZ009", "OHC043"], buoys: ["45005"],
   },
   vermilion: {
     name: "Vermilion / Lorain",
     lat: 41.47, lon: -82.31, zone: "LEZ144", buoys: ["45176", "45164", "45005"],
+    // Spans the Erie/Lorain county line (launch point is on the Lorain side;
+    // the inland walk lands in Erie County): watch both.
+    land: ["OHZ009", "OHC043", "OHZ010", "OHC093"],
   },
   cleveland: {
     name: "Cleveland",
-    lat: 41.507, lon: -81.706, zone: "LEZ146", buoys: ["45164", "45176"],
+    lat: 41.507, lon: -81.706, zone: "LEZ146", land: ["OHZ011", "OHC035"], buoys: ["45164", "45176"],
   },
   fairport: {
     name: "Fairport Harbor / Mentor",
-    lat: 41.76, lon: -81.28, zone: "LEZ147", buoys: ["45207", "45164", "45167"],
+    lat: 41.76, lon: -81.28, zone: "LEZ147", land: ["OHZ012", "OHC085"], buoys: ["45207", "45164", "45167"],
   },
   conneaut: {
     name: "Conneaut / Ashtabula",
-    lat: 41.96, lon: -80.55, zone: "LEZ148", buoys: ["45207", "45167"],
+    lat: 41.96, lon: -80.55, zone: "LEZ148", land: ["OHZ089", "OHC007"], buoys: ["45207", "45167"],
   },
   erie: {
     name: "Erie, PA / Presque Isle",
-    lat: 42.16, lon: -80.11, zone: "LEZ149", buoys: ["45167"],
+    lat: 42.16, lon: -80.11, zone: "LEZ149", land: ["PAZ001", "PAC049"], buoys: ["45167"],
   },
 
   // ── Other Great Lakes (US shores). zone/office resolved from NWS; buoys
   // optional (wind from forecast, waves from the NWS grid cover spots w/o buoys).
-  rochester: { name: "Rochester", lat: 43.22, lon: -77.62, zone: "LOZ043", office: "BUF", buoys: ["45012"], lake: "Lake Ontario" },
-  "sodus-bay": { name: "Sodus Bay", lat: 43.27, lon: -76.97, zone: "LOZ043", office: "BUF", buoys: ["45012"], lake: "Lake Ontario" },
-  oswego: { name: "Oswego", lat: 43.47, lon: -76.51, zone: "LOZ044", office: "BUF", buoys: ["45012"], lake: "Lake Ontario" },
-  "sackets-harbor": { name: "Sackets Harbor", lat: 43.94, lon: -76.12, zone: "LOZ045", office: "BUF", buoys: [], lake: "Lake Ontario" },
-  olcott: { name: "Olcott / Wilson", lat: 43.34, lon: -78.72, zone: "LOZ042", office: "BUF", buoys: [], lake: "Lake Ontario" },
+  rochester: { name: "Rochester", lat: 43.22, lon: -77.62, zone: "LOZ043", land: ["NYZ003", "NYC055"], office: "BUF", buoys: ["45012"], lake: "Lake Ontario", sea: 0 },
+  "sodus-bay": { name: "Sodus Bay", lat: 43.27, lon: -76.97, zone: "LOZ043", land: ["NYZ004", "NYC117"], office: "BUF", buoys: ["45012"], lake: "Lake Ontario", sea: 0 },
+  oswego: { name: "Oswego", lat: 43.47, lon: -76.51, zone: "LOZ044", land: ["NYZ006", "NYC075"], office: "BUF", buoys: ["45012"], lake: "Lake Ontario", sea: 315 },
+  "sackets-harbor": { name: "Sackets Harbor", lat: 43.94, lon: -76.12, zone: "LOZ045", land: ["NYZ007", "NYC045"], office: "BUF", buoys: [], lake: "Lake Ontario" },
+  olcott: { name: "Olcott / Wilson", lat: 43.34, lon: -78.72, zone: "LOZ042", land: ["NYZ001", "NYC063"], office: "BUF", buoys: [], lake: "Lake Ontario", sea: 20 },
 
-  "port-huron": { name: "Port Huron", lat: 42.98, lon: -82.42, zone: "LHZ443", office: "DTX", buoys: [], lake: "Lake Huron", waterBuoys: ["45209", "AGCM4"] },
-  tawas: { name: "Tawas Bay", lat: 44.26, lon: -83.44, zone: "LHZ345", office: "APX", buoys: [], lake: "Lake Huron" },
-  alpena: { name: "Alpena / Thunder Bay", lat: 45.06, lon: -83.42, zone: "LHZ348", office: "APX", buoys: ["45003"], lake: "Lake Huron", waterBuoys: ["LPNM4", "45212"] },
-  "harbor-beach": { name: "Harbor Beach", lat: 43.84, lon: -82.64, zone: "LHZ442", office: "DTX", buoys: [], lake: "Lake Huron", waterBuoys: ["HRBM4", "45149"] },
-  mackinaw: { name: "Mackinaw City / Straits", lat: 45.78, lon: -84.72, zone: "LHZ345", office: "APX", buoys: [], lake: "Lake Michigan", waterBuoys: ["MACM4", "45194"] },
+  "port-huron": { name: "Port Huron", lat: 42.98, lon: -82.42, zone: "LHZ443", land: ["MIZ063", "MIC147"], office: "DTX", buoys: [], lake: "Lake Huron", sea: 15, waterBuoys: ["45209", "AGCM4"] },
+  tawas: { name: "Tawas Bay", lat: 44.2775, lon: -83.488, zone: "LHZ349", land: ["MIZ036", "MIC069"], office: "APX", buoys: [], lake: "Lake Huron", sea: 175, gridSteps: [0.1, 0.22] },
+  alpena: { name: "Alpena / Thunder Bay", lat: 45.06, lon: -83.42, zone: "LHZ348", land: ["MIZ024", "MIC007"], office: "APX", buoys: ["45003"], lake: "Lake Huron", sea: 115, gridSteps: [0.14, 0.18, 0.22], waterBuoys: ["LPNM4", "45212"] },
+  "harbor-beach": { name: "Harbor Beach", lat: 43.84, lon: -82.64, zone: "LHZ442", land: ["MIZ049", "MIC063"], office: "DTX", buoys: [], lake: "Lake Huron", sea: 45, waterBuoys: ["HRBM4", "45149"] },
+  mackinaw: { name: "Mackinaw City / Straits", lat: 45.78, lon: -84.72, zone: "LHZ345", land: ["MIZ017", "MIC031", "MIZ016", "MIC047"] /* ~1 km east of the Cheboygan/Emmet line: watch both counties */, office: "APX", buoys: [], lake: "Lake Michigan", waterBuoys: ["MACM4", "45194"] },
 
-  chicago: { name: "Chicago", lat: 41.89, lon: -87.60, zone: "LMZ741", office: "LOT", buoys: ["45198"], lake: "Lake Michigan", waterBuoys: ["45170"] },
-  milwaukee: { name: "Milwaukee", lat: 43.03, lon: -87.88, zone: "LMZ645", office: "MKX", buoys: ["45013"], lake: "Lake Michigan" },
-  muskegon: { name: "Muskegon", lat: 43.23, lon: -86.34, zone: "LMZ844", office: "GRR", buoys: ["45161"], lake: "Lake Michigan", waterBuoys: ["45029", "HLNM4"] },
-  holland: { name: "Holland", lat: 42.77, lon: -86.21, zone: "LMZ846", office: "GRR", buoys: [], lake: "Lake Michigan", waterBuoys: ["HLNM4", "45029"] },
-  "traverse-city": { name: "Traverse City", lat: 44.76, lon: -85.62, zone: "LMZ323", office: "APX", buoys: [], lake: "Lake Michigan" },
-  sheboygan: { name: "Sheboygan", lat: 43.75, lon: -87.715, zone: "LMZ643", office: "MKX", buoys: [], lake: "Lake Michigan", waterBuoys: ["45210"] },
-  "michigan-city": { name: "Michigan City", lat: 41.72, lon: -86.91, zone: "LMZ046", office: "IWX", buoys: ["45198"], lake: "Lake Michigan", waterBuoys: ["45170", "45026"] },
-  petoskey: { name: "Petoskey", lat: 45.373, lon: -84.955, zone: "LMZ342", office: "APX", buoys: [], lake: "Lake Michigan", waterBuoys: ["MACM4", "45194"] },
-  "harbor-springs": { name: "Harbor Springs", lat: 45.431, lon: -84.992, zone: "LMZ342", office: "APX", buoys: [], lake: "Lake Michigan", waterBuoys: ["MACM4", "45194"] },
-  "cross-village": { name: "Cross Village", lat: 45.641, lon: -85.032, zone: "LMZ342", office: "APX", buoys: [], lake: "Lake Michigan", waterBuoys: ["45194", "MACM4"] },
+  chicago: { name: "Chicago", lat: 41.89, lon: -87.60, zone: "LMZ741", land: ["ILZ104", "ILC031"], office: "LOT", buoys: ["45198"], lake: "Lake Michigan", waterBuoys: ["45170"] },
+  milwaukee: { name: "Milwaukee", lat: 43.03, lon: -87.88, zone: "LMZ645", land: ["WIZ066", "WIC079"], office: "MKX", buoys: ["45013"], lake: "Lake Michigan" },
+  muskegon: { name: "Muskegon", lat: 43.23, lon: -86.34, zone: "LMZ844", land: ["MIZ050", "MIC121"], office: "GRR", buoys: ["45161"], lake: "Lake Michigan", waterBuoys: ["45029", "HLNM4"] },
+  holland: { name: "Holland", lat: 42.77, lon: -86.21, zone: "LMZ846", land: ["MIZ064", "MIC005"], office: "GRR", buoys: [], lake: "Lake Michigan", waterBuoys: ["HLNM4", "45029"] },
+  "traverse-city": { name: "Traverse City", lat: 44.76, lon: -85.62, zone: "LMZ323", land: ["MIZ026", "MIC055"], office: "APX", buoys: [], lake: "Lake Michigan" },
+  sheboygan: { name: "Sheboygan", lat: 43.75, lon: -87.715, zone: "LMZ643", land: ["WIZ052", "WIC117"], office: "MKX", buoys: [], lake: "Lake Michigan", waterBuoys: ["45210"] },
+  "michigan-city": { name: "Michigan City", lat: 41.72, lon: -86.91, zone: "LMZ046", land: ["INZ103", "INC091"], office: "IWX", buoys: ["45198"], lake: "Lake Michigan", waterBuoys: ["45170", "45026"] },
+  petoskey: { name: "Petoskey", lat: 45.373, lon: -84.955, zone: "LMZ342", land: ["MIZ016", "MIC047"], office: "APX", buoys: [], lake: "Lake Michigan", waterBuoys: ["MACM4", "45194"] },
+  "harbor-springs": { name: "Harbor Springs", lat: 45.431, lon: -84.992, zone: "LMZ342", land: ["MIZ016", "MIC047"], office: "APX", buoys: [], lake: "Lake Michigan", waterBuoys: ["MACM4", "45194"] },
+  "cross-village": { name: "Cross Village", lat: 45.641, lon: -85.032, zone: "LMZ342", land: ["MIZ016", "MIC047"], office: "APX", buoys: [], lake: "Lake Michigan", waterBuoys: ["45194", "MACM4"] },
 
-  duluth: { name: "Duluth", lat: 46.78, lon: -92.08, zone: "LSZ145", office: "DLH", buoys: ["45027"], lake: "Lake Superior", waterBuoys: ["DULM5"] },
-  bayfield: { name: "Bayfield / Apostle Is.", lat: 46.81, lon: -90.82, zone: "LSZ143", office: "DLH", buoys: [], lake: "Lake Superior" },
-  marquette: { name: "Marquette", lat: 46.54, lon: -87.38, zone: "LSZ249", office: "MQT", buoys: ["45004"], lake: "Lake Superior" },
-  houghton: { name: "Houghton / Keweenaw", lat: 47.12, lon: -88.57, zone: "LSZ267", office: "MQT", buoys: [], lake: "Lake Superior" },
-  "grand-marais": { name: "Grand Marais, MN", lat: 47.75, lon: -90.33, zone: "LSZ140", office: "DLH", buoys: [], lake: "Lake Superior", waterBuoys: ["GDMM5", "45006"] },
+  duluth: { name: "Duluth", lat: 46.78, lon: -92.08, zone: "LSZ145", land: ["MNZ037", "MNC137"], office: "DLH", buoys: ["45027"], lake: "Lake Superior", waterBuoys: ["DULM5"] },
+  bayfield: { name: "Bayfield / Apostle Is.", lat: 46.81, lon: -90.82, zone: "LSZ143", land: ["WIZ002", "WIC007"], office: "DLH", buoys: [], lake: "Lake Superior" },
+  marquette: { name: "Marquette", lat: 46.54, lon: -87.38, zone: "LSZ249", land: ["MIZ005", "MIC103"], office: "MQT", buoys: ["45004"], lake: "Lake Superior" },
+  houghton: { name: "Houghton / Keweenaw", lat: 47.12, lon: -88.57, zone: "LSZ267", land: ["MIZ003", "MIC061"], office: "MQT", buoys: [], lake: "Lake Superior" },
+  "grand-marais": { name: "Grand Marais, MN", lat: 47.75, lon: -90.33, zone: "LSZ140", land: ["MNZ021", "MNC031"], office: "DLH", buoys: [], lake: "Lake Superior", waterBuoys: ["GDMM5", "45006"] },
 
   // ── Beyond the Great Lakes: coastal / tidal waters. Same NWS grid + marine
   // zone + NDBC pipeline — the water body (`lake`) just needs a WATER_CENTERS
   // entry so a seaward wave cell gets sampled. Zone/office/buoy IDs are the
   // NWS/NDBC identifiers for each area; verify against live data when adding more.
-  "middle-river": { name: "Middle River / Essex, MD", lat: 39.31, lon: -76.40, zone: "ANZ531", office: "LWX", product: "CWF", buoys: ["FSKM2", "44062"], lake: "Chesapeake Bay", waterBuoys: ["44080", "BLTM2"] },
-  "bath-nc": { name: "Bath / Pamlico River, NC", lat: 35.44, lon: -76.75, zone: "AMZ136", office: "MHX", product: "CWF", buoys: [], lake: "Pamlico Sound" },
+  "middle-river": { name: "Middle River / Essex, MD", lat: 39.31, lon: -76.40, zone: "ANZ531", land: ["MDZ011", "MDC005"], office: "LWX", product: "CWF", buoys: ["FSKM2", "44062"], lake: "Chesapeake Bay", waterBuoys: ["44080", "BLTM2"] },
+  "bath-nc": { name: "Bath / Pamlico River, NC", lat: 35.44, lon: -76.75, zone: "AMZ136", land: ["NCZ080", "NCC013"], office: "MHX", product: "CWF", buoys: [], lake: "Pamlico Sound" },
   // ── Warm-weather coasts. Zone/office/buoys resolved from api.weather.gov and
   // NDBC's active-station list (Oct 2026); `sea` is the bearing toward open
   // water (wave sampling + onshore/offshore reads); `water` picks the verdict
   // thresholds (see waterProfile); `openWater` is the prose name.
   // Florida Atlantic Coast, Biscayne Bay and the Keys
-  jacksonville: { name: "Jacksonville / Mayport, FL", lat: 30.395, lon: -81.41, zone: "AMZ452", office: "JAX", product: "CWF", buoys: ["MYPF1", "BLIF1"], lake: "Florida Atlantic Coast", water: "ocean", sea: 68, openWater: "the Atlantic" },
-  "st-augustine": { name: "St. Augustine, FL", lat: 29.89, lon: -81.29, zone: "AMZ454", office: "JAX", product: "CWF", buoys: ["SAUF1"], lake: "Florida Atlantic Coast", water: "ocean", sea: 68, openWater: "the Atlantic", waterBuoys: ["41117", "MYPF1"] },
-  "ponce-inlet": { name: "Ponce Inlet / New Smyrna, FL", lat: 29.08, lon: -80.93, zone: "AMZ550", office: "MLB", product: "CWF", buoys: ["41069"], lake: "Florida Atlantic Coast", water: "ocean", sea: 68, openWater: "the Atlantic" },
-  "port-canaveral": { name: "Port Canaveral / Cocoa Beach, FL", lat: 28.41, lon: -80.61, zone: "AMZ552", office: "MLB", product: "CWF", buoys: ["TRDF1", "41009"], lake: "Florida Atlantic Coast", water: "ocean", sea: 68, openWater: "the Atlantic", waterBuoys: ["41113"] },
-  "sebastian-inlet": { name: "Sebastian Inlet, FL", lat: 27.86, lon: -80.45, zone: "AMZ552", office: "MLB", product: "CWF", buoys: ["SIPF1", "41068"], lake: "Florida Atlantic Coast", water: "ocean", sea: 68, openWater: "the Atlantic", waterBuoys: ["41114", "41113"] },
-  "fort-pierce": { name: "Fort Pierce, FL", lat: 27.47, lon: -80.3, zone: "AMZ555", office: "MLB", product: "CWF", buoys: ["41068", "SIPF1"], lake: "Florida Atlantic Coast", water: "ocean", sea: 68, openWater: "the Atlantic" },
-  jupiter: { name: "Jupiter Inlet, FL", lat: 26.945, lon: -80.075, zone: "AMZ650", office: "MFL", product: "CWF", buoys: ["LKWF1"], lake: "Florida Atlantic Coast", water: "ocean", sea: 68, openWater: "the Atlantic" },
-  "palm-beach": { name: "Palm Beach Inlet, FL", lat: 26.77, lon: -80.04, zone: "AMZ650", office: "MFL", product: "CWF", buoys: ["LKWF1"], lake: "Florida Atlantic Coast", water: "ocean", sea: 90, openWater: "the Atlantic" },
-  "fort-lauderdale": { name: "Fort Lauderdale, FL", lat: 26.1, lon: -80.11, zone: "AMZ651", office: "MFL", product: "CWF", buoys: ["PEGF1", "VAKF1"], lake: "Florida Atlantic Coast", water: "ocean", sea: 113, openWater: "the Atlantic", waterBuoys: ["41122", "LKWF1"] },
-  miami: { name: "Miami / Government Cut, FL", lat: 25.765, lon: -80.135, zone: "AMZ651", office: "MFL", product: "CWF", buoys: ["VAKF1", "PEGF1"], lake: "Florida Atlantic Coast", water: "ocean", sea: 135, openWater: "the Atlantic" },
-  "biscayne-bay": { name: "Biscayne Bay / Coconut Grove, FL", lat: 25.72, lon: -80.23, zone: "AMZ630", office: "MFL", product: "CWF", buoys: ["VAKF1", "PEGF1"], lake: "Florida Atlantic Coast", water: "sheltered", sea: 135, openWater: "Biscayne Bay" },
-  "key-largo": { name: "Key Largo, FL", lat: 25.09, lon: -80.44, zone: "GMZ042", office: "KEY", product: "CWF", buoys: [], lake: "Florida Keys", water: "ocean", sea: 120, openWater: "the Atlantic" },
-  islamorada: { name: "Islamorada, FL", lat: 24.92, lon: -80.63, zone: "GMZ042", office: "KEY", product: "CWF", buoys: ["WRBF1"], lake: "Florida Keys", water: "ocean", sea: 135, openWater: "the Atlantic" },
-  marathon: { name: "Marathon, FL", lat: 24.71, lon: -81.09, zone: "GMZ032", office: "KEY", product: "CWF", buoys: ["VCAF1", "SMKF1"], lake: "Florida Keys", water: "ocean", sea: 160, openWater: "the Atlantic" },
-  "key-west": { name: "Key West, FL", lat: 24.555, lon: -81.8, zone: "GMZ044", office: "KEY", product: "CWF", buoys: ["KYWF1", "SANF1"], lake: "Florida Keys", water: "ocean", sea: 180, openWater: "the Atlantic" },
+  jacksonville: { name: "Jacksonville / Mayport, FL", lat: 30.395, lon: -81.41, zone: "AMZ452", land: ["FLZ125", "FLC031"], office: "JAX", product: "CWF", buoys: ["MYPF1", "BLIF1"], lake: "Florida Atlantic Coast", water: "ocean", sea: 68, openWater: "the Atlantic" },
+  "st-augustine": { name: "St. Augustine, FL", lat: 29.89, lon: -81.29, zone: "AMZ454", land: ["FLZ333", "FLC109"], office: "JAX", product: "CWF", buoys: ["SAUF1"], lake: "Florida Atlantic Coast", water: "ocean", sea: 68, openWater: "the Atlantic", waterBuoys: ["41117", "MYPF1"] },
+  "ponce-inlet": { name: "Ponce Inlet / New Smyrna, FL", lat: 29.08, lon: -80.93, zone: "AMZ550", land: ["FLZ141", "FLC127"], office: "MLB", product: "CWF", buoys: ["41069"], lake: "Florida Atlantic Coast", water: "ocean", sea: 68, openWater: "the Atlantic" },
+  "port-canaveral": { name: "Port Canaveral / Cocoa Beach, FL", lat: 28.41, lon: -80.61, zone: "AMZ552", land: ["FLZ447", "FLC009"], office: "MLB", product: "CWF", buoys: ["TRDF1", "41009"], lake: "Florida Atlantic Coast", water: "ocean", sea: 68, openWater: "the Atlantic", waterBuoys: ["41113"] },
+  "sebastian-inlet": { name: "Sebastian Inlet, FL", lat: 27.86, lon: -80.45, zone: "AMZ552", land: ["FLZ747", "FLC009", "FLZ154", "FLC061"] /* inlet is the Brevard/Indian River line; walk picked the mainland zone */, office: "MLB", product: "CWF", buoys: ["SIPF1", "41068"], lake: "Florida Atlantic Coast", water: "ocean", sea: 68, openWater: "the Atlantic", waterBuoys: ["41114", "41113"] },
+  "fort-pierce": { name: "Fort Pierce, FL", lat: 27.47, lon: -80.3, zone: "AMZ555", land: ["FLZ159", "FLC111"], office: "MLB", product: "CWF", buoys: ["41068", "SIPF1"], lake: "Florida Atlantic Coast", water: "ocean", sea: 68, openWater: "the Atlantic" },
+  jupiter: { name: "Jupiter Inlet, FL", lat: 26.945, lon: -80.075, zone: "AMZ650", land: ["FLZ168", "FLC099"], office: "MFL", product: "CWF", buoys: ["LKWF1"], lake: "Florida Atlantic Coast", water: "ocean", sea: 68, openWater: "the Atlantic" },
+  "palm-beach": { name: "Palm Beach Inlet, FL", lat: 26.77, lon: -80.04, zone: "AMZ650", land: ["FLZ168", "FLC099"], office: "MFL", product: "CWF", buoys: ["LKWF1"], lake: "Florida Atlantic Coast", water: "ocean", sea: 90, openWater: "the Atlantic" },
+  "fort-lauderdale": { name: "Fort Lauderdale, FL", lat: 26.1, lon: -80.11, zone: "AMZ651", land: ["FLZ172", "FLC011"], office: "MFL", product: "CWF", buoys: ["PEGF1", "VAKF1"], lake: "Florida Atlantic Coast", water: "ocean", sea: 113, openWater: "the Atlantic", waterBuoys: ["41122", "LKWF1"] },
+  miami: { name: "Miami / Government Cut, FL", lat: 25.765, lon: -80.135, zone: "AMZ651", land: ["FLZ173", "FLC086"] /* coastal Miami-Dade; walk reached the inland metro zone */, office: "MFL", product: "CWF", buoys: ["VAKF1", "PEGF1"], lake: "Florida Atlantic Coast", water: "ocean", sea: 135, openWater: "the Atlantic" },
+  "biscayne-bay": { name: "Biscayne Bay / Coconut Grove, FL", lat: 25.72, lon: -80.23, zone: "AMZ630", land: ["FLZ173", "FLC086"], office: "MFL", product: "CWF", buoys: ["VAKF1", "PEGF1"], lake: "Florida Atlantic Coast", water: "sheltered", sea: 135, openWater: "Biscayne Bay" },
+  "key-largo": { name: "Key Largo, FL", lat: 25.09, lon: -80.44, zone: "GMZ042", land: ["FLZ076", "FLC087"], office: "KEY", product: "CWF", buoys: [], lake: "Florida Keys", water: "ocean", sea: 120, openWater: "the Atlantic" },
+  islamorada: { name: "Islamorada, FL", lat: 24.92, lon: -80.63, zone: "GMZ042", land: ["FLZ076", "FLC087"], office: "KEY", product: "CWF", buoys: ["WRBF1"], lake: "Florida Keys", water: "ocean", sea: 135, openWater: "the Atlantic" },
+  marathon: { name: "Marathon, FL", lat: 24.71, lon: -81.09, zone: "GMZ032", land: ["FLZ077", "FLC087"], office: "KEY", product: "CWF", buoys: ["VCAF1", "SMKF1"], lake: "Florida Keys", water: "ocean", sea: 160, openWater: "the Atlantic" },
+  "key-west": { name: "Key West, FL", lat: 24.555, lon: -81.8, zone: "GMZ044", land: ["FLZ078", "FLC087"], office: "KEY", product: "CWF", buoys: ["KYWF1", "SANF1"], lake: "Florida Keys", water: "ocean", sea: 180, openWater: "the Atlantic" },
   // Florida Gulf Coast
-  "marco-island": { name: "Marco Island, FL", lat: 25.94, lon: -81.72, zone: "GMZ656", office: "MFL", product: "CWF", buoys: ["RKXF1"], lake: "Florida Gulf Coast", water: "ocean", sea: 225, openWater: "the Gulf" },
-  naples: { name: "Naples, FL", lat: 26.14, lon: -81.8, zone: "GMZ656", office: "MFL", product: "CWF", buoys: ["RKXF1"], lake: "Florida Gulf Coast", water: "ocean", sea: 248, openWater: "the Gulf", waterBuoys: ["FMRF1"] },
-  "fort-myers-beach": { name: "Fort Myers Beach, FL", lat: 26.45, lon: -81.95, zone: "GMZ856", office: "TBW", product: "CWF", buoys: ["FMRF1"], lake: "Florida Gulf Coast", water: "ocean", sea: 248, openWater: "the Gulf" },
-  sarasota: { name: "Sarasota, FL", lat: 27.33, lon: -82.55, zone: "GMZ853", office: "TBW", product: "CWF", buoys: ["VENF1", "MTBF1"], lake: "Florida Gulf Coast", water: "ocean", sea: 248, openWater: "the Gulf", waterBuoys: ["PMAF1", "42013"] },
-  "tampa-bay": { name: "Tampa Bay / St. Petersburg, FL", lat: 27.77, lon: -82.63, zone: "GMZ830", office: "TBW", product: "CWF", buoys: ["SAPF1", "OPTF1"], lake: "Florida Gulf Coast", water: "sheltered", sea: 135, openWater: "Tampa Bay" },
-  clearwater: { name: "Clearwater, FL", lat: 27.98, lon: -82.83, zone: "GMZ853", office: "TBW", product: "CWF", buoys: ["CWBF1", "OPTF1"], lake: "Florida Gulf Coast", water: "ocean", sea: 293, openWater: "the Gulf" },
-  "panama-city": { name: "Panama City Beach, FL", lat: 30.16, lon: -85.8, zone: "GMZ751", office: "TAE", product: "CWF", buoys: ["PCBF1", "PACF1"], lake: "Florida Gulf Coast", water: "ocean", sea: 202, openWater: "the Gulf" },
-  destin: { name: "Destin, FL", lat: 30.39, lon: -86.51, zone: "GMZ655", office: "MOB", product: "CWF", buoys: [], lake: "Florida Gulf Coast", water: "ocean", sea: 180, openWater: "the Gulf", waterBuoys: ["PCBF1"] },
-  pensacola: { name: "Pensacola Beach, FL", lat: 30.33, lon: -87.14, zone: "GMZ655", office: "MOB", product: "CWF", buoys: ["PCLF1", "PPTA1"], lake: "Florida Gulf Coast", water: "ocean", sea: 135, openWater: "the Gulf" },
+  "marco-island": { name: "Marco Island, FL", lat: 25.94, lon: -81.72, zone: "GMZ656", land: ["FLZ069", "FLC021"], office: "MFL", product: "CWF", buoys: ["RKXF1"], lake: "Florida Gulf Coast", water: "ocean", sea: 225, openWater: "the Gulf" },
+  naples: { name: "Naples, FL", lat: 26.14, lon: -81.8, zone: "GMZ656", land: ["FLZ069", "FLC021"], office: "MFL", product: "CWF", buoys: ["RKXF1"], lake: "Florida Gulf Coast", water: "ocean", sea: 248, openWater: "the Gulf", waterBuoys: ["FMRF1"] },
+  "fort-myers-beach": { name: "Fort Myers Beach, FL", lat: 26.45, lon: -81.95, zone: "GMZ856", land: ["FLZ165", "FLC071"], office: "TBW", product: "CWF", buoys: ["FMRF1"], lake: "Florida Gulf Coast", water: "ocean", sea: 248, openWater: "the Gulf" },
+  sarasota: { name: "Sarasota, FL", lat: 27.33, lon: -82.55, zone: "GMZ853", land: ["FLZ160", "FLC115"], office: "TBW", product: "CWF", buoys: ["VENF1", "MTBF1"], lake: "Florida Gulf Coast", water: "ocean", sea: 248, openWater: "the Gulf", waterBuoys: ["PMAF1", "42013"] },
+  "tampa-bay": { name: "Tampa Bay / St. Petersburg, FL", lat: 27.77, lon: -82.63, zone: "GMZ830", land: ["FLZ050", "FLC103"], office: "TBW", product: "CWF", buoys: ["SAPF1", "OPTF1"], lake: "Florida Gulf Coast", water: "sheltered", sea: 135, openWater: "Tampa Bay" },
+  clearwater: { name: "Clearwater, FL", lat: 27.98, lon: -82.83, zone: "GMZ853", land: ["FLZ050", "FLC103"], office: "TBW", product: "CWF", buoys: ["CWBF1", "OPTF1"], lake: "Florida Gulf Coast", water: "ocean", sea: 293, openWater: "the Gulf" },
+  "panama-city": { name: "Panama City Beach, FL", lat: 30.16, lon: -85.8, zone: "GMZ751", land: ["FLZ112", "FLC005"], office: "TAE", product: "CWF", buoys: ["PCBF1", "PACF1"], lake: "Florida Gulf Coast", water: "ocean", sea: 202, openWater: "the Gulf" },
+  destin: { name: "Destin, FL", lat: 30.39, lon: -86.51, zone: "GMZ655", land: ["FLZ206", "FLC091"], office: "MOB", product: "CWF", buoys: [], lake: "Florida Gulf Coast", water: "ocean", sea: 180, openWater: "the Gulf", waterBuoys: ["PCBF1"] },
+  pensacola: { name: "Pensacola Beach, FL", lat: 30.33, lon: -87.14, zone: "GMZ655", land: ["FLZ202", "FLC033"], office: "MOB", product: "CWF", buoys: ["PCLF1", "PPTA1"], lake: "Florida Gulf Coast", water: "ocean", sea: 135, openWater: "the Gulf" },
   // Northern Gulf: Alabama, Mississippi, Louisiana and Texas
-  "orange-beach": { name: "Orange Beach / Gulf Shores, AL", lat: 30.27, lon: -87.58, zone: "GMZ650", office: "MOB", product: "CWF", buoys: ["PPTA1", "42012"], lake: "Alabama & Mississippi Coast", water: "ocean", sea: 158, openWater: "the Gulf" },
-  "mobile-bay": { name: "Fairhope / Mobile Bay, AL", lat: 30.52, lon: -87.91, zone: "GMZ630", office: "MOB", product: "CWF", buoys: ["WKXA1", "MCGA1"], lake: "Alabama & Mississippi Coast", water: "sheltered", sea: 248, openWater: "Mobile Bay", waterBuoys: ["OBLA1", "DILA1"] },
-  biloxi: { name: "Biloxi, MS", lat: 30.39, lon: -88.88, zone: "GMZ532", office: "LIX", product: "CWF", buoys: ["PTBM6", "WYCM6"], lake: "Alabama & Mississippi Coast", water: "sheltered", sea: 180, openWater: "the Mississippi Sound", waterBuoys: ["PNLM6"] },
-  "grand-isle": { name: "Grand Isle, LA", lat: 29.24, lon: -90, zone: "GMZ553", office: "LIX", product: "CWF", buoys: ["GISL1"], lake: "Louisiana & Texas Coast", water: "ocean", sea: 160, openWater: "the Gulf" },
-  galveston: { name: "Galveston, TX", lat: 29.3, lon: -94.78, zone: "GMZ355", office: "HGX", product: "CWF", buoys: ["GTOT2", "GNJT2"], lake: "Louisiana & Texas Coast", water: "ocean", sea: 135, openWater: "the Gulf" },
-  kemah: { name: "Kemah / Galveston Bay, TX", lat: 29.545, lon: -95.02, zone: "GMZ335", office: "HGX", product: "CWF", buoys: ["EPTT2", "MGPT2"], lake: "Louisiana & Texas Coast", water: "sheltered", sea: 90, openWater: "Galveston Bay" },
-  "port-aransas": { name: "Port Aransas, TX", lat: 27.83, lon: -97.06, zone: "GMZ255", office: "CRP", product: "CWF", buoys: ["MIST2", "RTAT2"], lake: "Louisiana & Texas Coast", water: "ocean", sea: 135, openWater: "the Gulf", waterBuoys: ["MHBT2", "RCPT2"] },
-  "south-padre": { name: "South Padre Island, TX", lat: 26.07, lon: -97.16, zone: "GMZ150", office: "BRO", product: "CWF", buoys: ["BZST2", "PCGT2"], lake: "Louisiana & Texas Coast", water: "ocean", sea: 90, openWater: "the Gulf" },
+  "orange-beach": { name: "Orange Beach / Gulf Shores, AL", lat: 30.27, lon: -87.58, zone: "GMZ650", land: ["ALZ266", "ALC003"], office: "MOB", product: "CWF", buoys: ["PPTA1", "42012"], lake: "Alabama & Mississippi Coast", water: "ocean", sea: 158, openWater: "the Gulf" },
+  "mobile-bay": { name: "Fairhope / Mobile Bay, AL", lat: 30.52, lon: -87.91, zone: "GMZ630", land: ["ALZ264", "ALC003"], office: "MOB", product: "CWF", buoys: ["WKXA1", "MCGA1"], lake: "Alabama & Mississippi Coast", water: "sheltered", sea: 248, openWater: "Mobile Bay", waterBuoys: ["OBLA1", "DILA1"] },
+  biloxi: { name: "Biloxi, MS", lat: 30.39, lon: -88.88, zone: "GMZ532", land: ["MSZ087", "MSC047"], office: "LIX", product: "CWF", buoys: ["PTBM6", "WYCM6"], lake: "Alabama & Mississippi Coast", water: "sheltered", sea: 180, openWater: "the Mississippi Sound", waterBuoys: ["PNLM6"] },
+  "grand-isle": { name: "Grand Isle, LA", lat: 29.24, lon: -90, zone: "GMZ553", land: ["LAZ093", "LAC051"], office: "LIX", product: "CWF", buoys: ["GISL1"], lake: "Louisiana & Texas Coast", water: "ocean", sea: 160, openWater: "the Gulf" },
+  galveston: { name: "Galveston, TX", lat: 29.3, lon: -94.78, zone: "GMZ355", land: ["TXZ438", "TXC167"], office: "HGX", product: "CWF", buoys: ["GTOT2", "GNJT2"], lake: "Louisiana & Texas Coast", water: "ocean", sea: 135, openWater: "the Gulf" },
+  kemah: { name: "Kemah / Galveston Bay, TX", lat: 29.545, lon: -95.02, zone: "GMZ335", land: ["TXZ338", "TXC167"], office: "HGX", product: "CWF", buoys: ["EPTT2", "MGPT2"], lake: "Louisiana & Texas Coast", water: "sheltered", sea: 90, openWater: "Galveston Bay" },
+  "port-aransas": { name: "Port Aransas, TX", lat: 27.83, lon: -97.06, zone: "GMZ255", land: ["TXZ443", "TXC355"], office: "CRP", product: "CWF", buoys: ["MIST2", "RTAT2"], lake: "Louisiana & Texas Coast", water: "ocean", sea: 135, openWater: "the Gulf", waterBuoys: ["MHBT2", "RCPT2"] },
+  "south-padre": { name: "South Padre Island, TX", lat: 26.07, lon: -97.16, zone: "GMZ150", land: ["TXZ455", "TXC061"], office: "BRO", product: "CWF", buoys: ["BZST2", "PCGT2"], lake: "Louisiana & Texas Coast", water: "ocean", sea: 90, openWater: "the Gulf" },
   // Southeast Atlantic: Georgia and the Carolinas
-  "st-simons": { name: "St. Simons Island / Brunswick, GA", lat: 31.14, lon: -81.39, zone: "AMZ450", office: "JAX", product: "CWF", buoys: ["SAXG1"], lake: "Georgia & South Carolina Coast", water: "ocean", sea: 135, openWater: "the Atlantic", waterBuoys: ["41112"] },
-  tybee: { name: "Savannah / Tybee Island, GA", lat: 32.01, lon: -80.85, zone: "AMZ362", office: "CHS", product: "CWF", buoys: ["FPKG1"], lake: "Georgia & South Carolina Coast", water: "ocean", sea: 135, openWater: "the Atlantic" },
-  "hilton-head": { name: "Hilton Head, SC", lat: 32.17, lon: -80.73, zone: "AMZ362", office: "CHS", product: "CWF", buoys: ["FPKG1", "41033"], lake: "Georgia & South Carolina Coast", water: "ocean", sea: 113, openWater: "the Atlantic" },
-  charleston: { name: "Charleston Harbor, SC", lat: 32.76, lon: -79.87, zone: "AMZ340", office: "CHS", product: "CWF", buoys: ["CHTS1", "FBIS1"], lake: "Georgia & South Carolina Coast", water: "sheltered", sea: 135, openWater: "Charleston Harbor" },
-  "murrells-inlet": { name: "Murrells Inlet / Myrtle Beach, SC", lat: 33.55, lon: -79.04, zone: "AMZ254", office: "ILM", product: "CWF", buoys: ["MROS1", "NIWS1"], lake: "Georgia & South Carolina Coast", water: "ocean", sea: 113, openWater: "the Atlantic" },
-  wrightsville: { name: "Wilmington / Wrightsville Beach, NC", lat: 34.21, lon: -77.79, zone: "AMZ250", office: "ILM", product: "CWF", buoys: ["JMPN7", "MBNN7"], lake: "North Carolina Coast", water: "ocean", sea: 113, openWater: "the Atlantic" },
-  "morehead-city": { name: "Morehead City / Beaufort, NC", lat: 34.7, lon: -76.69, zone: "AMZ158", office: "MHX", product: "CWF", buoys: ["BFTN7", "CLKN7"], lake: "North Carolina Coast", water: "ocean", sea: 180, openWater: "the Atlantic" },
-  "oregon-inlet": { name: "Oregon Inlet / Outer Banks, NC", lat: 35.79, lon: -75.54, zone: "AMZ150", office: "MHX", product: "CWF", buoys: ["ORIN7", "41082"], lake: "North Carolina Coast", water: "ocean", sea: 90, openWater: "the Atlantic" },
+  "st-simons": { name: "St. Simons Island / Brunswick, GA", lat: 31.14, lon: -81.39, zone: "AMZ450", land: ["GAZ154", "GAC127"], office: "JAX", product: "CWF", buoys: ["SAXG1"], lake: "Georgia & South Carolina Coast", water: "ocean", sea: 135, openWater: "the Atlantic", waterBuoys: ["41112"] },
+  tybee: { name: "Savannah / Tybee Island, GA", lat: 32.01, lon: -80.85, zone: "AMZ362", land: ["GAZ219", "GAC051"], office: "CHS", product: "CWF", buoys: ["FPKG1"], lake: "Georgia & South Carolina Coast", water: "ocean", sea: 135, openWater: "the Atlantic" },
+  "hilton-head": { name: "Hilton Head, SC", lat: 32.17, lon: -80.73, zone: "AMZ362", land: ["SCZ148", "SCC013"], office: "CHS", product: "CWF", buoys: ["FPKG1", "41033"], lake: "Georgia & South Carolina Coast", water: "ocean", sea: 113, openWater: "the Atlantic" },
+  charleston: { name: "Charleston Harbor, SC", lat: 32.76, lon: -79.87, zone: "AMZ340", land: ["SCZ150", "SCC019"], office: "CHS", product: "CWF", buoys: ["CHTS1", "FBIS1"], lake: "Georgia & South Carolina Coast", water: "sheltered", sea: 135, openWater: "Charleston Harbor" },
+  "murrells-inlet": { name: "Murrells Inlet / Myrtle Beach, SC", lat: 33.55, lon: -79.04, zone: "AMZ254", land: ["SCZ056", "SCC043"], office: "ILM", product: "CWF", buoys: ["MROS1", "NIWS1"], lake: "Georgia & South Carolina Coast", water: "ocean", sea: 113, openWater: "the Atlantic" },
+  wrightsville: { name: "Wilmington / Wrightsville Beach, NC", lat: 34.21, lon: -77.79, zone: "AMZ250", land: ["NCZ108", "NCC129"], office: "ILM", product: "CWF", buoys: ["JMPN7", "MBNN7"], lake: "North Carolina Coast", water: "ocean", sea: 113, openWater: "the Atlantic" },
+  "morehead-city": { name: "Morehead City / Beaufort, NC", lat: 34.7, lon: -76.69, zone: "AMZ158", land: ["NCZ195", "NCC031"], office: "MHX", product: "CWF", buoys: ["BFTN7", "CLKN7"], lake: "North Carolina Coast", water: "ocean", sea: 180, openWater: "the Atlantic" },
+  "oregon-inlet": { name: "Oregon Inlet / Outer Banks, NC", lat: 35.79, lon: -75.54, zone: "AMZ150", land: ["NCZ203", "NCC055"], office: "MHX", product: "CWF", buoys: ["ORIN7", "41082"], lake: "North Carolina Coast", water: "ocean", sea: 90, openWater: "the Atlantic" },
   // Southern California
-  "san-diego": { name: "San Diego / Point Loma, CA", lat: 32.71, lon: -117.18, zone: "PZZ740", office: "SGX", product: "CWF", buoys: ["TIXC1", "LJAC1"], lake: "Southern California Coast", water: "ocean", sea: 248, openWater: "the Pacific", waterBuoys: ["SDBC1", "46254"] },
-  "mission-bay": { name: "Mission Bay, CA", lat: 32.765, lon: -117.24, zone: "PZZ740", office: "SGX", product: "CWF", buoys: ["LJAC1", "LJPC1"], lake: "Southern California Coast", water: "ocean", sea: 225, openWater: "the Pacific" },
-  oceanside: { name: "Oceanside Harbor, CA", lat: 33.21, lon: -117.4, zone: "PZZ740", office: "SGX", product: "CWF", buoys: [], lake: "Southern California Coast", water: "ocean", sea: 248, openWater: "the Pacific", waterBuoys: ["46224", "46275"] },
-  "dana-point": { name: "Dana Point, CA", lat: 33.46, lon: -117.7, zone: "PZZ655", office: "LOX", product: "CWF", buoys: [], lake: "Southern California Coast", water: "ocean", sea: 225, openWater: "the Pacific", waterBuoys: ["46285", "46277"] },
-  "newport-beach": { name: "Newport Beach, CA", lat: 33.6, lon: -117.88, zone: "PZZ655", office: "LOX", product: "CWF", buoys: ["PRJC1", "PFXC1"], lake: "Southern California Coast", water: "ocean", sea: 203, openWater: "the Pacific", waterBuoys: ["46285", "46253"] },
-  "long-beach": { name: "Long Beach, CA", lat: 33.75, lon: -118.19, zone: "PZZ655", office: "LOX", product: "CWF", buoys: ["PRJC1", "PFXC1"], lake: "Southern California Coast", water: "ocean", sea: 180, openWater: "the Pacific", waterBuoys: ["46256", "46222"] },
-  "marina-del-rey": { name: "Marina del Rey, CA", lat: 33.97, lon: -118.45, zone: "PZZ655", office: "LOX", product: "CWF", buoys: ["ICAC1", "PXAC1"], lake: "Southern California Coast", water: "ocean", sea: 225, openWater: "the Pacific" },
-  "channel-islands": { name: "Channel Islands Harbor / Oxnard, CA", lat: 34.16, lon: -119.23, zone: "PZZ650", office: "LOX", product: "CWF", buoys: ["46025"], lake: "Southern California Coast", water: "ocean", sea: 225, openWater: "the Pacific" },
-  "santa-barbara": { name: "Santa Barbara, CA", lat: 34.4, lon: -119.69, zone: "PZZ650", office: "LOX", product: "CWF", buoys: ["46053"], lake: "Southern California Coast", water: "ocean", sea: 180, openWater: "the Pacific" },
+  "san-diego": { name: "San Diego / Point Loma, CA", lat: 32.71, lon: -117.18, zone: "PZZ740", land: ["CAZ043", "CAC073"], office: "SGX", product: "CWF", buoys: ["TIXC1", "LJAC1"], lake: "Southern California Coast", water: "ocean", sea: 248, openWater: "the Pacific", waterBuoys: ["SDBC1", "46254"] },
+  "mission-bay": { name: "Mission Bay, CA", lat: 32.765, lon: -117.24, zone: "PZZ740", land: ["CAZ043", "CAC073"], office: "SGX", product: "CWF", buoys: ["LJAC1", "LJPC1"], lake: "Southern California Coast", water: "ocean", sea: 225, openWater: "the Pacific" },
+  oceanside: { name: "Oceanside Harbor, CA", lat: 33.21, lon: -117.4, zone: "PZZ740", land: ["CAZ043", "CAC073"], office: "SGX", product: "CWF", buoys: [], lake: "Southern California Coast", water: "ocean", sea: 248, openWater: "the Pacific", waterBuoys: ["46224", "46275"] },
+  "dana-point": { name: "Dana Point, CA", lat: 33.46, lon: -117.7, zone: "PZZ655", land: ["CAZ552", "CAC059"], office: "LOX", product: "CWF", buoys: [], lake: "Southern California Coast", water: "ocean", sea: 225, openWater: "the Pacific", waterBuoys: ["46285", "46277"] },
+  "newport-beach": { name: "Newport Beach, CA", lat: 33.6, lon: -117.88, zone: "PZZ655", land: ["CAZ552", "CAC059"], office: "LOX", product: "CWF", buoys: ["PRJC1", "PFXC1"], lake: "Southern California Coast", water: "ocean", sea: 203, openWater: "the Pacific", waterBuoys: ["46285", "46253"] },
+  "long-beach": { name: "Long Beach, CA", lat: 33.75, lon: -118.19, zone: "PZZ655", land: ["CAZ366", "CAC037"], office: "LOX", product: "CWF", buoys: ["PRJC1", "PFXC1"], lake: "Southern California Coast", water: "ocean", sea: 180, openWater: "the Pacific", waterBuoys: ["46256", "46222"] },
+  "marina-del-rey": { name: "Marina del Rey, CA", lat: 33.97, lon: -118.45, zone: "PZZ655", land: ["CAZ366", "CAC037"], office: "LOX", product: "CWF", buoys: ["ICAC1", "PXAC1"], lake: "Southern California Coast", water: "ocean", sea: 225, openWater: "the Pacific" },
+  "channel-islands": { name: "Channel Islands Harbor / Oxnard, CA", lat: 34.16, lon: -119.23, zone: "PZZ650", land: ["CAZ354", "CAC111"], office: "LOX", product: "CWF", buoys: ["46025"], lake: "Southern California Coast", water: "ocean", sea: 225, openWater: "the Pacific" },
+  "santa-barbara": { name: "Santa Barbara, CA", lat: 34.4, lon: -119.69, zone: "PZZ650", land: ["CAZ350", "CAC083"], office: "LOX", product: "CWF", buoys: ["46053"], lake: "Southern California Coast", water: "ocean", sea: 180, openWater: "the Pacific" },
   // Hawaii and Puerto Rico
-  honolulu: { name: "Honolulu / Kewalo Basin, HI", lat: 21.29, lon: -157.86, zone: "PHZ115", office: "HFO", product: "CWF", buoys: ["OOUH1", "PRHH1"], lake: "Hawaii", water: "ocean", sea: 200, openWater: "the Pacific" },
-  kona: { name: "Kona / Honokohau Harbor, HI", lat: 19.67, lon: -156.03, zone: "PHZ123", office: "HFO", product: "CWF", buoys: ["KWHH1"], lake: "Hawaii", water: "ocean", sea: 270, openWater: "the Pacific" },
-  maalaea: { name: "Ma'alaea, Maui, HI", lat: 20.79, lon: -156.51, zone: "PHZ119", office: "HFO", product: "CWF", buoys: ["KLIH1"], lake: "Hawaii", water: "ocean", sea: 200, openWater: "Ma'alaea Bay" },
-  "san-juan": { name: "San Juan, PR", lat: 18.47, lon: -66.11, zone: "AMZ712", office: "SJU", product: "CWF", buoys: ["41053", "SJNP4"], lake: "Puerto Rico", water: "ocean", sea: 0, openWater: "the Atlantic", waterBuoys: ["41121"] },
-  fajardo: { name: "Fajardo, PR", lat: 18.33, lon: -65.63, zone: "AMZ726", office: "SJU", product: "CWF", buoys: ["41056", "ESPP4"], lake: "Puerto Rico", water: "ocean", sea: 90, openWater: "Vieques Sound", waterBuoys: ["CLBP4", "SJNP4"] },
+  honolulu: { name: "Honolulu / Kewalo Basin, HI", lat: 21.29, lon: -157.86, zone: "PHZ115", land: ["HIZ033", "HIC003"], office: "HFO", product: "CWF", buoys: ["OOUH1", "PRHH1"], lake: "Hawaii", water: "ocean", sea: 200, openWater: "the Pacific" },
+  kona: { name: "Kona / Honokohau Harbor, HI", lat: 19.67, lon: -156.03, zone: "PHZ123", land: ["HIZ023", "HIC001"], office: "HFO", product: "CWF", buoys: ["KWHH1"], lake: "Hawaii", water: "ocean", sea: 270, openWater: "the Pacific" },
+  maalaea: { name: "Ma'alaea, Maui, HI", lat: 20.79, lon: -156.51, zone: "PHZ119", land: ["HIZ046", "HIC009"], office: "HFO", product: "CWF", buoys: ["KLIH1"], lake: "Hawaii", water: "ocean", sea: 200, openWater: "Ma'alaea Bay" },
+  "san-juan": { name: "San Juan, PR", lat: 18.47, lon: -66.11, zone: "AMZ712", land: ["PRZ001", "PRC127"] /* San Juan municipio; the walk south crossed the bay into Guaynabo */, office: "SJU", product: "CWF", buoys: ["41053", "SJNP4"], lake: "Puerto Rico", water: "ocean", sea: 0, openWater: "the Atlantic", waterBuoys: ["41121"] },
+  fajardo: { name: "Fajardo, PR", lat: 18.33, lon: -65.63, zone: "AMZ726", land: ["PRZ002", "PRC053"], office: "SJU", product: "CWF", buoys: ["41056", "ESPP4"], lake: "Puerto Rico", water: "ocean", sea: 90, openWater: "Vieques Sound", waterBuoys: ["CLBP4", "SJNP4"] },
 };
 
 const json = (obj, status = 200) =>
@@ -385,20 +388,75 @@ function gridSeries(prop, xf = (v) => v) {
 // A speed layer declares its unit in `uom` (km/h by default, sometimes m/s).
 const speedToKt = (prop) => (String(prop?.uom || "").includes("m_s") ? msToKt : kmhToKt);
 
+// Some grid cells carry a placeholder wave layer, not a forecast: one value
+// held for the whole ~7-day period (DTX/84,67 off Port Huron and APX/104,65
+// near Alpena were a single 0 m valid for P7DT4H). They are mostly LAND
+// cells the seaward walk crosses on its way to open water: in Nov 2026 the
+// walks from Mackinaw, Petoskey and Traverse City (toward mid-Lake Michigan)
+// and Houghton (toward mid-Superior) hit only such cells, while real marine
+// cells sat a few km away in other directions; Bath, NC (MHX) was likewise
+// all-placeholder (0.3 m held all week).
+// Read as data, that is a false "0 ft, calm" that can enable a GO. Real
+// cells, even on flat-calm days, break the period into several valid times
+// and almost always carry some non-zero value (GFE encodes "1 ft or less" as
+// 0 for hours to days, then 0.3 m). Thresholds were checked live against all
+// 3 sample cells of the 90 curated spots (Nov 2026): the real cells had >= 2
+// entries and their longest single value covered at most 77% of the period
+// (SJU/210,120 held 3 ft for 144 of 198 h); every placeholder had 1 entry,
+// or 98% in one zero value. A layer is filler when ANY of:
+//   - fewer than WAVE_MIN_TIMES valid times carry a value;
+//   - every value is 0 (a whole week of exactly 0 is not a forecast; real
+//     calm reads 0 with some 0.3 m hours, and a truly flat week costs only
+//     a GO on lakes, which is the safe direction);
+//   - one value spans more than WAVE_FILLER_SPAN_H and covers at least
+//     WAVE_FILLER_SHARE of all the layer's hours.
+// …and only if no value exceeds WAVE_FILLER_MAX_M (~1 ft): dropping a layer
+// can only loosen a verdict when it held real height (ocean seas would go
+// unrated; a held 4 ft lake value would stop reading NO-GO), so a layer with
+// any value above ~1 ft is always kept. Every placeholder seen live was 0 or
+// 0.3048 m.
+const WAVE_FILLER_MAX_M = 0.31;
+const WAVE_MIN_TIMES = 2;
+const WAVE_FILLER_SPAN_H = 48;
+const WAVE_FILLER_SHARE = 0.9;
+export function isFillerWaveLayer(prop) {
+  const spans = [];
+  let anyNonZero = false, maxM = 0;
+  for (const { validTime, value } of prop?.values || []) {
+    if (value == null || !Number.isFinite(+value)) continue;
+    const span = expandValidTime(validTime);
+    if (!span) continue;
+    spans.push(span[1]);
+    if (+value > 0) anyNonZero = true;
+    maxM = Math.max(maxM, +value);
+  }
+  if (maxM > WAVE_FILLER_MAX_M) return false; // real height: never drop it
+  if (spans.length < WAVE_MIN_TIMES) return true;
+  if (!anyNonZero) return true;
+  const total = spans.reduce((a, b) => a + b, 0);
+  const longest = Math.max(...spans);
+  return longest > WAVE_FILLER_SPAN_H && longest >= WAVE_FILLER_SHARE * total;
+}
+
 async function fetchGridAt(lat, lon) {
   try {
     const pt = await cachedJSON(`${NWS}/points/${lat},${lon}`, 86400); // grid mapping is static
     const gUrl = pt?.properties?.forecastGridData;
     if (!gUrl) return null;
     const p = (await getJSON(gUrl))?.properties || {};
+    // A placeholder wave layer is no wave data: drop it (and its period) so
+    // the step search keeps looking for a real marine cell, and a cell with
+    // nothing better reads "no waves", never a GO-enabling "0 ft".
+    const waveFiller = !!p.waveHeight && isFillerWaveLayer(p.waveHeight);
     return {
+      waveFiller,
       tz: pt?.properties?.timeZone || "America/New_York",
       updateTime: validIso(p.updateTime), // forecaster's last grid update (staleness)
       windKt: gridSeries(p.windSpeed, speedToKt(p.windSpeed)),
       gustKt: gridSeries(p.windGust, speedToKt(p.windGust)),
       windDirDeg: gridSeries(p.windDirection),
-      waveFt: gridSeries(p.waveHeight, mToFt),
-      periodSec: gridSeries(p.wavePeriod),
+      waveFt: waveFiller ? new Map() : gridSeries(p.waveHeight, mToFt),
+      periodSec: waveFiller ? new Map() : gridSeries(p.wavePeriod),
       precipPct: gridSeries(p.probabilityOfPrecipitation),
       // weather layer → per-hour thunderstorm flag, so summary verdicts and GO
       // windows see storms the same way the detail page does.
@@ -438,22 +496,40 @@ const GRID_STEPS = [0.035, 0.1, 0.22];
 // first cell off Port Canaveral reads 0-1 ft while 4-6 ft runs offshore. Start
 // ~4 mi out (still well inside the NWS 0-20 NM coastal zone).
 const OCEAN_GRID_STEPS = [0.06, 0.1, 0.22];
+// Grid sample distances (degrees along the seaward bearing) for a spot. A spot
+// may set `gridSteps` when the default first cells are an enclosed inner bay
+// that reads far calmer than the water a boater from that launch heads into
+// (e.g. inner Thunder Bay at Alpena). Inland waters sample the point only.
+export function gridStepsFor(spot) {
+  if (!isOpenWater(spot)) return [0];
+  if (Array.isArray(spot.gridSteps) && spot.gridSteps.length) return spot.gridSteps;
+  return waterProfile(spot) === "ocean" ? OCEAN_GRID_STEPS : GRID_STEPS;
+}
+// The grid sample points, nearest first (what fetchSpotGrid walks). Exported
+// for tests.
+export const gridSamplePoints = (spot) => gridStepsFor(spot).map((step) => ({ step, ...seawardPoint(spot, step) }));
 async function fetchSpotGrid(spot) {
   // Open water (lakes, bays, sounds, ocean): nudge seaward until we hit a
   // marine cell that carries waves. Inland waters have no wave grid, so just
   // sample the point once (wind/gusts/precip/temp exist on land; waves blank).
-  const steps = !isOpenWater(spot) ? [0] : waterProfile(spot) === "ocean" ? OCEAN_GRID_STEPS : GRID_STEPS;
+  const steps = gridStepsFor(spot);
   // Remember which step reached a wave cell, so steady state costs one grid
   // fetch per spot instead of up to three (the directory summary fetches every
-  // spot in one request, and Workers cap subrequests per request).
+  // spot in one request, and Workers cap subrequests per request). A spot's
+  // own gridSteps are part of the key, so editing them never reuses a step
+  // memoized under the old list (spots without gridSteps keep their old key).
+  const stepTag = Array.isArray(spot.gridSteps) && spot.gridSteps.length ? `,s${spot.gridSteps.join("/")}` : "";
   const memoKey = typeof caches !== "undefined" && caches.default
-    ? new Request(`https://grid-step.local/${round(spot.lat, 3)},${round(spot.lon, 3)},${spot.sea ?? ""},${spot.lake || ""}`) : null;
+    ? new Request(`https://grid-step.local/${round(spot.lat, 3)},${round(spot.lon, 3)},${spot.sea ?? ""},${spot.lake || ""}${stepTag}`) : null;
   let known = null;
   if (memoKey) known = await caches.default.match(memoKey).then((r) => (r ? r.text() : null)).catch(() => null);
   if (known != null && steps.includes(Number(known))) {
     const p = seawardPoint(spot, Number(known));
     const g = await fetchGridAt(p.lat, p.lon);
     if (g && (g.waveFt.size || !isOpenWater(spot))) return g;
+    // The remembered cell has no real waves now (e.g. it only carries a
+    // placeholder layer — fetchGridAt drops those): forget it and walk again.
+    if (g) await caches.default.delete(memoKey).catch(() => {});
   }
   let base = null;
   for (const step of steps) {
@@ -603,21 +679,367 @@ async function fetchMarineForecast(zone) {
   }
 }
 
-async function fetchAlerts(lat, lon) {
+// Outer rings ([[lon, lat], ...]) of a GeoJSON Polygon/MultiPolygon, or null
+// (= no usable polygon, so the alert applies zone-wide). Fails toward
+// applying: any malformed ring (too few points, non-finite or out-of-range
+// coordinates) voids the whole geometry rather than being skipped, and other
+// geometry types (GeometryCollection, Point) count as no polygon.
+const okRing = (r) => Array.isArray(r) && r.length >= 4 &&
+  r.every((pt) => Array.isArray(pt) && Number.isFinite(pt[0]) && Number.isFinite(pt[1]) && Math.abs(pt[0]) <= 180 && Math.abs(pt[1]) <= 90);
+function alertPolygons(g) {
+  if (!g) return null;
+  let rings = null;
+  if (g.type === "Polygon" && Array.isArray(g.coordinates)) rings = [g.coordinates[0]];
+  else if (g.type === "MultiPolygon" && Array.isArray(g.coordinates)) rings = g.coordinates.map((p) => (Array.isArray(p) ? p[0] : null));
+  return rings && rings.length && rings.every(okRing) ? rings : null;
+}
+// Storm motion from NWS eventMotionDescription ("<time>...storm...259DEG...21KT...41.68,-71.1").
+// DEG is the direction the storm moves FROM (TIME...MOT...LOC convention), so
+// it travels toward DEG + 180. null when absent or unparseable.
+function alertMotion(desc) {
+  const m = /\.\.\.(\d{1,3})DEG\.\.\.(\d{1,3})KT/.exec(String(desc || ""));
+  if (!m || +m[1] > 360) return null;
+  return { towardDeg: (+m[1] + 180) % 360, kt: +m[2] };
+}
+// Does an alert reach this launch? An alert with a warned polygon applies
+// when the launch is inside it or within ALERT_POLYGON_BUFFER_NM of its edge
+// (a boat from that launch can be that far out). One without a polygon
+// applies to its whole zone, as listed. A county-wide UGC on a storm-based
+// warning otherwise flags launches at the far end of a big county (Kona under
+// a Hilo-side flash flood, Grand Isle under a New Orleans one).
+// Exceptions, all failing toward applying the alert:
+// - Marine products (Special Marine Warning, Marine Weather Statement) stay
+//   zone-wide: the marine zone is the water the boater will be on, and the
+//   launch point sits on its shore, not at its centre.
+// - A Flash Flood Emergency (catastrophic damage threat) stays county-wide.
+// - Storm-track products (tornado, severe thunderstorm, snow squall, extreme
+//   wind, special weather statement) are drawn along a moving storm: the
+//   polygon is also carried ALERT_TRACK_SWEEP_H further along the storm's
+//   motion, so a launch just ahead of the leading edge (where the storm will
+//   be within the hour, and beyond our 5-10 min response cache) is still
+//   flagged. Without a parseable motion they apply county-wide.
+export const ALERT_POLYGON_BUFFER_NM = 10;
+export const ALERT_TRACK_SWEEP_H = 0.5;
+const ZONE_WIDE_ALERTS = /marine/;
+const TRACK_ALERTS = /tornado|thunderstorm|snow squall|extreme wind|special weather statement|dust storm/;
+export function alertReachesSpot(a, spot) {
+  if (!a?.polygons || !a.polygons.length || !Number.isFinite(spot?.lat) || !Number.isFinite(spot?.lon)) return true;
+  const ev = String(a.event || "").toLowerCase();
+  if (ZONE_WIDE_ALERTS.test(ev) || /catastrophic/i.test(a.ffThreat || "") || ev === "flash flood emergency") return true;
+  const motion = a.motion || null;
+  if (TRACK_ALERTS.test(ev) && !motion) return true;
+  // Local plane centred on the launch, in nm (equirectangular; fine at
+  // warning-polygon scale). Longitudes are wrapped relative to the launch so
+  // a polygon across the antimeridian stays contiguous.
+  const kx = 60 * Math.cos((spot.lat * Math.PI) / 180);
+  const rings = a.polygons.map((r) => r.map(([lon, lat]) => [((((lon - spot.lon) % 360) + 540) % 360 - 180) * kx, (lat - spot.lat) * 60]));
+  // Shifts along the motion vector, every <= 1 nm out to the sweep distance.
+  const sweep = motion ? motion.kt * ALERT_TRACK_SWEEP_H : 0;
+  const n = Math.ceil(sweep);
+  const ux = motion ? Math.sin((motion.towardDeg * Math.PI) / 180) : 0, uy = motion ? Math.cos((motion.towardDeg * Math.PI) / 180) : 0;
+  for (let k = 0; k <= n; k++) {
+    const d = n ? (sweep * k) / n : 0;
+    // The launch is at the origin; shifting the ring by +d equals moving the launch by -d.
+    const px = -ux * d, py = -uy * d;
+    if (rings.some((ring) => pointInRing(px, py, ring) || ringDistance(px, py, ring) <= ALERT_POLYGON_BUFFER_NM)) return true;
+  }
+  return false;
+}
+function pointInRing(x, y, ring) {
+  let inside = false;
+  for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+    const [xi, yi] = ring[i], [xj, yj] = ring[j];
+    if ((yi > y) !== (yj > y) && x < ((xj - xi) * (y - yi)) / (yj - yi) + xi) inside = !inside;
+  }
+  return inside;
+}
+// Shortest distance from (x, y) to a ring's edges, same planar units. Walks
+// the closing edge too, so an unclosed ring isn't read as farther away.
+function ringDistance(x, y, ring) {
+  let best = Infinity;
+  for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+    const ax = ring[j][0] - x, ay = ring[j][1] - y;
+    const dx = ring[i][0] - ring[j][0], dy = ring[i][1] - ring[j][1], len2 = dx * dx + dy * dy;
+    const t = len2 ? Math.max(0, Math.min(1, -(ax * dx + ay * dy) / len2)) : 0;
+    best = Math.min(best, Math.hypot(ax + t * dx, ay + t * dy));
+  }
+  return best;
+}
+const toAlert = (f) => ({
+  event: f.properties?.event,
+  severity: f.properties?.severity,
+  headline: f.properties?.headline,
+  description: f.properties?.description,
+  sent: f.properties?.sent || f.properties?.effective || null,
+  onset: f.properties?.onset || f.properties?.effective || null,
+  ends: f.properties?.ends || f.properties?.expires,
+  // The event's own end, null when NWS gives none ("until further notice",
+  // e.g. hurricane/tropical warnings). `ends` above falls back to `expires`,
+  // which is only when the PRODUCT lapses (often hours before the event ends),
+  // so timing uses this instead (see alertSpan).
+  eventEnds: f.properties?.ends ?? null,
+  zones: f.properties?.geocode?.UGC || [],
+  // NWS issues a Flash Flood Emergency as an ordinary "Flash Flood Warning"
+  // event; only this parameter (CATASTROPHIC) tells them apart.
+  ffThreat: f.properties?.parameters?.flashFloodDamageThreat?.[0] || null,
+  // Storm-based products (Severe Thunderstorm, Tornado, Flash Flood, Snow
+  // Squall, Special Marine, polygon SPS/MWS) carry the warned polygon and,
+  // for storm tracks, its motion; zone-based products have neither.
+  polygons: alertPolygons(f.geometry),
+  motion: alertMotion(f.properties?.parameters?.eventMotionDescription?.[0]),
+});
+async function alertsAt(query) {
   try {
-    const data = await getJSON(`${NWS}/alerts/active?point=${lat},${lon}`);
-    return dedupeAlerts((data?.features || []).map((f) => ({
-      event: f.properties?.event,
-      severity: f.properties?.severity,
-      headline: f.properties?.headline,
-      description: f.properties?.description,
-      sent: f.properties?.sent || f.properties?.effective || null,
-      ends: f.properties?.ends || f.properties?.expires,
-    })));
+    const data = await getJSON(`${NWS}/alerts/active?${query}`);
+    if (!data || !Array.isArray(data.features)) return null;
+    // Only real alerts: NWS also publishes Test/Exercise/System messages,
+    // which must never move a verdict.
+    return data.features.filter((f) => (f.properties?.status ?? "Actual") === "Actual").map(toAlert);
   } catch (e) {
     return null;
   }
 }
+// Active alerts for a spot: by its launch point AND by its marine zone. Marine
+// warnings (SCA, Gale) are issued per marine zone, and a launch point on the
+// shoreline is often outside its zone polygon, so a point-only lookup misses
+// them (Petoskey missed a Gale Warning that way). Returns { alerts, ok }:
+// alerts merges whatever answered (null only if nothing did), and ok is false
+// if any lookup failed, so a partial answer is never read as "no advisories".
+// Also by the launch point's land zones (forecast zone + county, see
+// landZonesFor), the same ones the tiles, digest and weekend email use: a
+// launch point on the water is in no land zone, so the point query alone
+// misses zone-issued land warnings (High Wind, Blizzard, Winter Storm, Lake
+// Effect Snow) and the page would read softer than its own tile. Unresolved
+// land zones count as a failed lookup (ok false).
+export async function fetchAlerts(spot) {
+  const queries = [`point=${spot.lat},${spot.lon}`];
+  if (spot.zone) queries.push(`zone=${encodeURIComponent(spot.zone)}`);
+  // Request path: inland steps only (no ring), so an arbitrary ?lat=&lon=
+  // can cost at most 4 /points lookups. Ring-only spots are resolved and
+  // cached by the summary/cron walk; until then the page reads "unknown".
+  const landQ = landZonesFor(spot, null, { ring: false }).catch(() => null)
+    .then((land) => (land && land.length ? alertsAt(`zone=${land.map(encodeURIComponent).join(",")}`) : null));
+  const results = await Promise.all([...queries.map(alertsAt), landQ]);
+  // The point query already matches warned polygons; zone/county queries
+  // return every alert listing the zone, so keep only those that reach the
+  // launch (see alertReachesSpot).
+  const answered = results.map((r, i) => (r == null || i === 0 ? r : r.filter((a) => alertReachesSpot(a, spot)))).filter((r) => r != null);
+  return {
+    alerts: answered.length ? dedupeAlerts(answered.flat()) : null, // one card per event type
+    all: answered.flat(), // every issuance, for timing (two SCAs can cover different hours)
+    ok: answered.length === results.length,
+  };
+}
+
+// How an active alert moves a boating verdict. Shore-side alerts (air
+// quality, rip currents for swimmers, coastal flooding, heat) are listed but
+// don't move it: on the coasts they run most days and would pin every launch
+// at CAUTION. Watches are a heads-up (CAUTION); marine warnings decide.
+const NOTE_ONLY = /air quality|rip current|beach hazard|coastal flood|lakeshore flood|flood (watch|warning|advisory|statement)|hydrologic|heat|frost|freeze|red flag|fire weather/;
+// Warnings that end a small-boat trip outright. Matched as substrings of the
+// lowercased NWS event name, alongside the broad gale/storm/hurricane terms.
+// Tornado and high/extreme wind warnings mean damaging wind at the launch;
+// heavy freezing spray ices a boat's topsides fast (late-season Great Lakes).
+// Blizzard, snow squall and lake effect snow warnings mean near-zero
+// visibility in strong wind over near-freezing water (lake effect bands come
+// with the fetch-aligned wind that builds Great Lakes chop). A high surf
+// warning makes inlet/bar crossings and beach launches unsafe. "typhoon"
+// keeps the tropical set complete (watches are caught above as CAUTION).
+const NO_GO_ALERTS = ["gale", "storm", "special marine", "hurricane", "typhoon", "hazardous seas", "tsunami",
+  "tornado warning", "high wind warning", "extreme wind warning", "heavy freezing spray warning",
+  "blizzard warning", "snow squall warning", "lake effect snow warning", "high surf warning"];
+export function alertLevel(a) {
+  const ev = (a?.event || "").toLowerCase();
+  if (!ev) return null;
+  // A Flash Flood Warning means flooding is happening or imminent: debris and
+  // fast current at river-mouth and estuary ramps. CAUTION, not a shore-only
+  // note. Flash Flood Watches/Statements stay notes (common in summer; they
+  // would pin coastal launches at CAUTION).
+  // A Flash Flood Emergency (catastrophic damage threat, severe threat to
+  // life) arrives as event "Flash Flood Warning" with flashFloodDamageThreat
+  // CATASTROPHIC: NO-GO. The literal event name is kept in case NWS ever
+  // issues it as its own event.
+  if (ev === "flash flood emergency") return "NO-GO";
+  if (ev === "flash flood warning") return /catastrophic/i.test(a?.ffThreat || "") ? "NO-GO" : "CAUTION";
+  if (NOTE_ONLY.test(ev)) return null;
+  if (ev.includes("watch")) return "CAUTION";
+  if (NO_GO_ALERTS.some((k) => ev.includes(k))) return "NO-GO";
+  return "CAUTION";
+}
+// [start, end) in epoch ms. No onset = already in effect; no end = open-ended.
+// A warning/watch/advisory with no event end (NWS "until further notice") is
+// open-ended: its `expires` is just the product's re-issue time, and treating
+// that as the end would show GO hours under a warning that is still in force.
+// Statements (Marine/Special Weather Statement) carry no event end by design;
+// for those `expires` is the meaningful end.
+function alertSpan(a) {
+  const s = Date.parse(a.onset || "");
+  const ufn = "eventEnds" in a && a.eventEnds == null && /warning|watch|advisory/i.test(a.event || "");
+  const e = ufn ? NaN : Date.parse(a.ends || "");
+  return [Number.isFinite(s) ? s : -Infinity, Number.isFinite(e) ? e : Infinity];
+}
+// The worst alert level in effect at any time in [fromMs, toMs).
+function alertLevelBetween(alerts, fromMs, toMs) {
+  let lvl = null;
+  for (const a of alerts || []) {
+    const al = alertLevel(a);
+    if (!al) continue;
+    const [s, e] = alertSpan(a);
+    if (s < toMs && e > fromMs) lvl = worseLevel(lvl, al);
+  }
+  return lvl;
+}
+// When the alerts lookup failed, how far ahead to refuse GO: a missing feed
+// hides whatever has already been issued. Small Craft Advisories usually lead
+// by 12-36 h, but gale/storm and tropical watches are issued up to ~48 h ahead,
+// so 48 h covers essentially every product that could exist.
+const ALERTS_UNKNOWN_CAP_H = 48;
+// Raise hourly rows ({time, level}) to any alert in effect that hour; when
+// alerts couldn't be checked, GO hours within ALERTS_UNKNOWN_CAP_H become CAUTION.
+export function applyAlertsToHours(hours, alerts, alertsOk = true, nowMs = Date.now()) {
+  return (hours || []).map((h) => {
+    const t = Date.parse(h.time);
+    if (!Number.isFinite(t)) return h;
+    let level = worseLevel(h.level, alertLevelBetween(alerts, t, t + 3600e3));
+    if (!alertsOk && level === "GO" && t < nowMs + ALERTS_UNKNOWN_CAP_H * 3600e3) level = "CAUTION";
+    return level === h.level ? h : { ...h, level, alert: true };
+  });
+}
+// Same for the week strip ({date, level} in the spot's local calendar).
+export function applyAlertsToWeek(week, alerts, alertsOk, tz, nowMs = Date.now()) {
+  if (!week || !week.length) return week;
+  const toLocal = localParts(tz || "America/New_York");
+  const spans = (alerts || []).filter((a) => alertLevel(a)).map((a) => {
+    const [s, e] = alertSpan(a);
+    const nowH = Math.floor(nowMs / 3600e3);
+    const from = Number.isFinite(s) ? toLocal(Math.floor(s / 3600e3)).date : toLocal(nowH).date;
+    const to = Number.isFinite(e) ? toLocal(Math.floor((e - 1) / 3600e3)).date : "9999-12-31";
+    return { from, to, level: alertLevel(a) };
+  });
+  // Alerts unknown: no GO on any local day the hourly cap reaches (same
+  // window as applyAlertsToHours, so the two strips agree).
+  const capTo = toLocal(Math.floor((nowMs + ALERTS_UNKNOWN_CAP_H * 3600e3 - 1) / 3600e3)).date;
+  return week.map((d) => {
+    let level = d.level;
+    for (const sp of spans) if (d.date >= sp.from && d.date <= sp.to) level = worseLevel(level, sp.level);
+    if (!alertsOk && d.date <= capTo && level === "GO") level = "CAUTION";
+    return level === d.level ? d : { ...d, level, alert: true };
+  });
+}
+// Active marine alerts for many zones at once (the directory, digest and
+// weekend email cover dozens of spots): the NWS API takes a comma-separated
+// zone list, so this is a handful of requests, not one per spot. Returns
+// { byZone: Map(zone -> alerts[]), ok } — ok false if any chunk failed.
+const ZONE_RE = /^[A-Z]{3}\d{3}$/;
+export async function fetchZoneAlerts(zones) {
+  const list = [...new Set((zones || []).filter((z) => ZONE_RE.test(z || "")))];
+  const byZone = new Map(list.map((z) => [z, []]));
+  if (!list.length) return { byZone, ok: true };
+  const chunks = [];
+  for (let i = 0; i < list.length; i += 25) chunks.push(list.slice(i, i + 25));
+  const results = await Promise.all(chunks.map((c) => alertsAt(`zone=${c.join(",")}`)));
+  for (const r of results) {
+    for (const a of r || []) for (const z of a.zones) if (byZone.has(z)) byZone.get(z).push(a);
+  }
+  // Not deduped: two issuances of one event can cover different hours.
+  return { byZone, ok: results.every((r) => r != null) };
+}
+// Land zones (NWS forecast zone + county) for a launch point. Land products —
+// flash flood, tornado, high wind, blizzard, severe thunderstorm warnings —
+// are issued for these, never for marine zones, so a marine-zone lookup alone
+// misses them. Curated spots carry them in SPOTS; user-built pages resolve
+// them from NWS /points (walked, budgeted, cached a week).
+// null = the lookup failed (unknown, not "none").
+const pointKey = (spot) => `${spot.lat},${spot.lon}`;
+// About half our launch points sit on the water itself: NWS maps them to a
+// marine forecast zone with no county. Step inland (away from the seaward
+// bearing, as fetchForecastsNear does) until a point lands in a county.
+// Barrier islands, keys and river launches can have water inland too, so
+// after the inland steps, search a small ring around the launch.
+const LAND_STEPS = [0, 0.02, 0.05, 0.1];
+const LAND_RING = [0.02, 0.05].flatMap((r) => [0, 45, 90, 135, 180, 225, 270, 315].map((b) => [r, b]));
+// The resolved zones are cached a week per launch point (counties don't move),
+// so steady state is one cache read per spot, not a /points walk.
+const landMemo = new Map();
+// `budget` ({ walks }) caps how many uncached walks one invocation may do (a
+// cold walk is 1-20 /points lookups); past it the spot is unknown (no GO)
+// until a later run resolves it. Omit it for a single spot (the spot page).
+export async function landZonesFor(spot, budget = null, { ring = true } = {}) {
+  // Every curated spot carries its land zones (SPOTS[*].land, resolved once
+  // and checked by hand: county lines, launches across a bay), so the walk
+  // below only runs for user-built pages.
+  if (Array.isArray(spot?.land) && spot.land.length) return spot.land;
+  if (spot?.lat == null || spot?.lon == null) return null;
+  const key = `https://land-zones.local/v1/${spot.lat},${spot.lon},${spot.sea ?? ""},${spot.lake || ""}`;
+  const edge = typeof caches !== "undefined" && caches.default;
+  if (edge) {
+    const hit = await caches.default.match(new Request(key)).then((r) => (r ? r.json() : null)).catch(() => null);
+    if (Array.isArray(hit) && hit.length) return hit;
+  } else if (landMemo.has(key)) return landMemo.get(key);
+  if (budget) { if (budget.walks <= 0) return null; budget.walks--; }
+  const { zones: found, clean } = await resolveLandZones(spot, ring);
+  // Only cache a clean walk: if an earlier (closer) candidate errored, the
+  // county found farther out may not be the launch's own. Use it this time,
+  // but walk again next time rather than pin a possibly-wrong county a week.
+  if (found && clean) {
+    if (edge) await caches.default.put(new Request(key), new Response(JSON.stringify(found), { headers: { "Cache-Control": "public, max-age=604800" } })).catch(() => {});
+    else landMemo.set(key, found);
+  }
+  return found; // null (unknown) is never cached, so a blip retries next time
+}
+async function resolveLandZones(spot, ring = true) {
+  const kLon = 1 / Math.max(0.2, Math.cos((spot.lat * Math.PI) / 180));
+  const candidates = [
+    ...LAND_STEPS.map((step) => (step ? seawardPoint(spot, -step) : { lat: spot.lat, lon: spot.lon })),
+    ...(ring ? LAND_RING : []).map(([r, b]) => ({ lat: round(spot.lat + Math.cos((b * Math.PI) / 180) * r, 4), lon: round(spot.lon + Math.sin((b * Math.PI) / 180) * r * kLon, 4) })),
+  ];
+  let clean = true;
+  for (const pt of candidates) {
+    try {
+      const p = (await cachedJSON(`${NWS}/points/${pt.lat},${pt.lon}`, 86400))?.properties;
+      const county = String(p?.county || "").split("/").pop();
+      if (!ZONE_RE.test(county)) continue; // on the water: no county here
+      const fz = String(p?.forecastZone || "").split("/").pop();
+      return { zones: ZONE_RE.test(fz) ? [fz, county] : [county], clean };
+    } catch (e) {
+      clean = false; // a failed lookup is not "no county": try the next, but don't cache
+    }
+  }
+  return { zones: null, clean };
+}
+// Alerts for many spots at once (directory, digest, weekend email): each
+// spot's marine zone plus its launch point's land zones, in one batched
+// zone query. Returns the fetchZoneAlerts shape plus land: Map(pointKey ->
+// zone ids | null).
+// Uncached built-spot walks allowed per invocation (curated spots never walk).
+// A caller that makes several fetchSpotsAlerts calls in one invocation (the
+// hourly cron: summary, built summaries, weeks) passes one shared budget from
+// landWalkBudget(); a lone call gets its own.
+const LAND_WALKS_PER_INVOCATION = 10;
+export const landWalkBudget = () => ({ walks: LAND_WALKS_PER_INVOCATION });
+export async function fetchSpotsAlerts(spots, budget = landWalkBudget()) {
+  const land = new Map();
+  const list = (spots || []).filter(Boolean);
+  const zonesPerSpot = await pooled(list, 8, (s) => landZonesFor(s, budget));
+  list.forEach((s, i) => land.set(pointKey(s), zonesPerSpot[i] ?? null));
+  const za = await fetchZoneAlerts([...list.map((s) => s.zone), ...zonesPerSpot.flat().filter(Boolean)]);
+  return { ...za, land };
+}
+const zoneAlertsFor = (za, spot) => {
+  if (!za || !spot) return [];
+  const zones = [spot.zone, ...((za.land && za.land.get(pointKey(spot))) || [])];
+  return zones.flatMap((z) => (z && za.byZone.get(z)) || []).filter((a) => alertReachesSpot(a, spot));
+};
+// Were this spot's zone alerts actually checked? Every directory spot is
+// marine (built pages require a marine zone), so a spot with no valid zone —
+// e.g. an old user-built record — had nothing looked up: missing data, not
+// "no advisories".
+// Land alerts count too: if the launch point's land zones couldn't be
+// resolved, its land warnings weren't checked either.
+// Fails closed: without land-zone results (za.land from fetchSpotsAlerts)
+// the spot's land warnings weren't checked.
+const zoneAlertsOkFor = (za, spot) => !!za && za.ok && ZONE_RE.test(spot?.zone || "")
+  && za.land instanceof Map && za.land.get(pointKey(spot)) != null;
 
 // NWS re-issues the same advisory repeatedly (e.g. three "Air Quality Alert"
 // features minutes apart). Collapse to one card per event type, keeping the
@@ -628,7 +1050,10 @@ function dedupeAlerts(alerts) {
   for (const a of alerts) {
     const key = (a.event || "").toLowerCase().trim();
     const prev = byEvent.get(key);
-    if (!prev || (a.sent || "") > (prev.sent || "")) byEvent.set(key, a);
+    // Keep the worse-graded issuance first (a Flash Flood Emergency and an
+    // ordinary Flash Flood Warning share an event name), then the latest.
+    const rank = (x) => ({ CAUTION: 1, "NO-GO": 2 })[alertLevel(x)] || 0;
+    if (!prev || rank(a) > rank(prev) || (rank(a) === rank(prev) && (a.sent || "") > (prev.sent || ""))) byEvent.set(key, a);
   }
   return [...byEvent.values()];
 }
@@ -1196,7 +1621,7 @@ export function computeOutlook(hours) {
     out.headInBy = h.time;
     out.goodHours = idx;
     const s = (h.short || "").toLowerCase();
-    out.headInReason = /thunder|tstm|waterspout/.test(s) ? "thunderstorms"
+    out.headInReason = h.alert ? "a marine warning" : /thunder|tstm|waterspout/.test(s) ? "thunderstorms"
       : (h.waveFt != null && h.waveFt >= 4 ? "building waves"
       : (h.windKt >= 22 ? "building wind" : "deteriorating weather"));
   }
@@ -1250,7 +1675,7 @@ export function windPhrase(wind) {
 // notoriously short, steep chop of Lake Erie's shallow western/central basin.
 // `forecastAgeMin`: minutes since the NWS forecast behind this call was last
 // updated (null = unknown). A stale forecast or buoy never carries a GO.
-export function buildRecommendation({ buoy, alerts, wind, waves, read, hours, profile = "lake", waterF = null, forecastAgeMin = null }) {
+export function buildRecommendation({ buoy, alerts, wind, waves, read, hours, profile = "lake", waterF = null, forecastAgeMin = null, alertsOk = true }) {
   const reasons = [];
   let level = "GO"; // GO < CAUTION < NO-GO
   const bump = (to, why) => {
@@ -1259,21 +1684,15 @@ export function buildRecommendation({ buoy, alerts, wind, waves, read, hours, pr
     if (why) reasons.push(why);
   };
 
-  // Active marine warnings dominate.
-  // Shore-side alerts (air quality, rip currents for swimmers, coastal
-  // flooding, heat) are listed but don't move a boating verdict: on the coasts
-  // they run most days and would pin every launch at CAUTION. Watches are a
-  // heads-up (CAUTION); marine warnings decide.
-  const NOTE_ONLY = /air quality|rip current|beach hazard|coastal flood|lakeshore flood|flood (watch|warning|advisory|statement)|hydrologic|heat|frost|freeze|red flag|fire weather/;
+  // Active marine warnings dominate (see alertLevel for what counts).
   for (const a of alerts || []) {
-    const ev = (a.event || "").toLowerCase();
-    if (!ev) continue;
-    if (NOTE_ONLY.test(ev)) reasons.push(`${a.event} in effect (shoreline, not a boating limit)`);
-    else if (ev.includes("watch")) bump("CAUTION", `Active ${a.event}`);
-    else if (ev.includes("gale") || ev.includes("storm") || ev.includes("special marine") || ev.includes("hurricane") || ev.includes("hazardous seas") || ev.includes("tsunami")) {
-      bump("NO-GO", `Active ${a.event}`);
-    } else bump("CAUTION", `Active ${a.event}`);
+    if (!a.event) continue;
+    const al = alertLevel(a);
+    if (al) bump(al, `Active ${a.event}`);
+    else reasons.push(`${a.event} in effect (shoreline, not a boating limit)`);
   }
+  // A failed alerts lookup is missing data, not "no advisories": never GO on it.
+  if (!alertsOk) bump("CAUTION", "Couldn't confirm NWS marine alerts; check for advisories before heading out");
 
   // Wave height — observed buoy if available, else NWS forecast, so it's never
   // blank (the western basin rarely has a reporting wave buoy).
@@ -1625,7 +2044,8 @@ async function handleCamStatus(url, env) {
 // directory. Per-spot NWS grid fetches through a small pool; /points lookups
 // are edge-cached a day and the whole result ~10 min, so the API isn't hammered.
 // One directory/email tile (verdict + wind/wave) from a spot and its grid.
-function summaryTile(id, s, g, nowH) {
+const TILE_ALERT_LOOKAHEAD_H = 6; // ~a half-day trip
+function summaryTile(id, s, g, nowH, za = null) {
   const windKt = round(sampleNear(g?.windKt, nowH), 0);
   const gustKt = round(sampleNear(g?.gustKt, nowH), 0);
   const dirDeg = sampleNear(g?.windDirDeg, nowH);
@@ -1638,9 +2058,19 @@ function summaryTile(id, s, g, nowH) {
   // verdict: this hour or the next.
   const precipPct = Math.max(g?.precipPct.get(nowH) ?? 0, g?.precipPct.get(nowH + 1) ?? 0);
   const thunder = g?.thunder.get(nowH) === true || g?.thunder.get(nowH + 1) === true;
-  const raw = riskLevel(windKt, gustKt, precipPct, thunder ? "thunderstorms" : "", waveFt, periodSec, waterProfile(s));
+  let level = riskLevel(windKt, gustKt, precipPct, thunder ? "thunderstorms" : "", waveFt, periodSec, waterProfile(s));
   // An overdue NWS grid can't carry a GO: no call ("—") instead.
-  const level = raw === "GO" && gridStale(g) ? null : raw;
+  if (level === "GO" && gridStale(g)) level = null;
+  // An advisory in effect for the spot's zone now or next hour (same window
+  // as above) raises the tile; if the zone alerts couldn't be checked, no GO.
+  // An alert starting within the next few hours (a trip launched now is still
+  // out when it begins) can't leave the tile at GO either: at least CAUTION.
+  if (za) {
+    const zoneAlerts = zoneAlertsFor(za, s);
+    level = worseLevel(level, alertLevelBetween(zoneAlerts, nowH * 3600e3, (nowH + 2) * 3600e3));
+    if (level === "GO" && alertLevelBetween(zoneAlerts, nowH * 3600e3, (nowH + TILE_ALERT_LOOKAHEAD_H) * 3600e3)) level = "CAUTION";
+    if (!zoneAlertsOkFor(za, s) && level === "GO") level = "CAUTION";
+  }
   // lat/lon travel with each spot so the homepage can find the nearest launch
   // from a ZIP or the browser's location without a second request.
   return { id, name: s.name, lake: s.lake || "Lake Erie", lat: s.lat, lon: s.lon, level, windKt, gustKt, dir, waveFt, periodSec: plausiblePeriod(waveFt, periodSec) }; // level above used the raw period
@@ -1665,44 +2095,53 @@ async function floorWithMarineText(entries, grids) {
   });
 }
 
-export async function fetchSummary(env) {
+export async function fetchSummary(env, { landBudget } = {}) {
   // Curated spots + admin-featured user-built pages (both render in the directory).
   const built = await listFeaturedBuiltSpots(env);
   const entries = [...Object.entries(SPOTS), ...built.map((b) => [b.slug, { name: b.name, lat: b.lat, lon: b.lon, zone: b.zone, office: b.office, product: b.product, lake: b.lake, buoys: b.buoys || [], water: b.water || waterFromZone(b.zone, b.zoneName), sea: b.sea ?? null }])];
-  const grids = await pooled(entries, 8, ([, s]) => fetchSpotGrid(s));
+  const [grids, za] = await Promise.all([
+    pooled(entries, 8, ([, s]) => fetchSpotGrid(s)),
+    fetchSpotsAlerts(entries.map(([, s]) => s), landBudget),
+  ]);
   await floorWithMarineText(entries, grids);
   const nowH = Math.floor(Date.now() / 3600000);
-  const spots = entries.map(([id, s], i) => summaryTile(id, s, grids[i], nowH));
+  const spots = entries.map(([id, s], i) => summaryTile(id, s, grids[i], nowH, za));
   return { spots, updatedAt: new Date().toISOString() };
 }
 
 // Summary tiles for specific user-built pages by slug — so the daily digest /
 // alert emails can cover a member's built page even before it's featured.
-export async function fetchBuiltSummaries(env, slugs) {
+export async function fetchBuiltSummaries(env, slugs, { landBudget } = {}) {
   const resolved = [];
   for (const slug of [...new Set(slugs)]) { const b = await getBuiltSpot(env, slug); if (b) resolved.push([slug, b]); }
   if (!resolved.length) return [];
-  const grids = await pooled(resolved, 8, ([, s]) => fetchSpotGrid(s));
+  const [grids, za] = await Promise.all([
+    pooled(resolved, 8, ([, s]) => fetchSpotGrid(s)),
+    fetchSpotsAlerts(resolved.map(([, s]) => s), landBudget),
+  ]);
   await floorWithMarineText(resolved, grids).catch(() => {}); // same nearshore wave floor as the directory
   const nowH = Math.floor(Date.now() / 3600000);
-  return resolved.map(([id, s], i) => summaryTile(id, s, grids[i], nowH));
+  return resolved.map(([id, s], i) => summaryTile(id, s, grids[i], nowH, za));
 }
 
 // 7-day outlook (same per-day verdicts as the spot page's week strip) for
 // specific ports, curated or user-built: { id: [{date, level, windKt, ...}] }.
 // Powers the Pro weekend-outlook email; only the requested ports are fetched.
-export async function fetchWeeks(env, ids) {
+export async function fetchWeeks(env, ids, { landBudget } = {}) {
   const entries = [];
   for (const id of [...new Set(ids)]) {
     if (SPOTS[id]) entries.push([id, SPOTS[id]]);
     else { const b = await getBuiltSpot(env, id).catch(() => null); if (b) entries.push([id, b]); }
   }
   if (!entries.length) return {};
-  const grids = await pooled(entries, 8, ([, s]) => fetchSpotGrid(s));
+  const [grids, za] = await Promise.all([
+    pooled(entries, 8, ([, s]) => fetchSpotGrid(s)),
+    fetchSpotsAlerts(entries.map(([, s]) => s), landBudget),
+  ]);
   await floorWithMarineText(entries, grids).catch(() => {});
   // Same per-day verdicts as the week strip (buildWeek → riskLevel: no wind
-  // data is "—", lake gusts count).
-  return Object.fromEntries(entries.map(([id, s], i) => [id, buildWeek(grids[i], waterProfile(s))]));
+  // data is "—", lake gusts count), raised by the zone's active alerts.
+  return Object.fromEntries(entries.map(([id, s], i) => [id, applyAlertsToWeek(buildWeek(grids[i], waterProfile(s)), zoneAlertsFor(za, s), zoneAlertsOkFor(za, s), grids[i]?.tz)]));
 }
 
 // The full spot-page verdict (alerts, gusts, buoy, nearshore text) for one
@@ -1725,14 +2164,19 @@ export async function fetchSpotVerdict(env, id) {
 // NWS grid hourlies, then the longest contiguous GO run between 6am and 8pm in
 // the spot's local time. Returns { spotId: {from, to, hours} | null }.
 const fmtH12 = (h) => `${h % 12 || 12}${h < 12 ? "am" : "pm"}`;
-export async function fetchTodayWindows() {
+export async function fetchTodayWindows({ landBudget } = {}) {
   const entries = Object.entries(SPOTS);
-  const grids = await pooled(entries, 8, ([, s]) => fetchSpotGrid(s));
+  const [grids, za] = await Promise.all([
+    pooled(entries, 8, ([, s]) => fetchSpotGrid(s)),
+    fetchSpotsAlerts(entries.map(([, s]) => s), landBudget),
+  ]);
   const nowH = Math.floor(Date.now() / 3600000);
   const out = {};
-  entries.forEach(([id], i) => {
+  entries.forEach(([id, s], i) => {
     const g = grids[i];
-    if (!g || gridStale(g)) { out[id] = null; return; } // no GO window from an overdue grid
+    // No grid, an overdue grid, or the zone alerts couldn't be checked: offer no GO window.
+    if (!g || gridStale(g) || !zoneAlertsOkFor(za, s)) { out[id] = null; return; }
+    const spotAlerts = zoneAlertsFor(za, s);
     const toLocal = localParts(g.tz);
     const today = toLocal(nowH).date;
     let best = null, run = null;
@@ -1741,7 +2185,8 @@ export async function fetchTodayWindows() {
       if (loc.date !== today || loc.hour < 6 || loc.hour > 20) { run = null; continue; }
       const windKt = round(g.windKt.get(h), 0);
       const waveFt = round(g.waveFt.get(h), 1);
-      const ok = riskLevel(windKt, round(g.gustKt.get(h), 0), g.precipPct.get(h) ?? 0, g.thunder.get(h) ? "thunderstorms" : "", waveFt, round(g.periodSec.get(h), 0), waterProfile(SPOTS[id] || {})) === "GO";
+      const lvl = riskLevel(windKt, round(g.gustKt.get(h), 0), g.precipPct.get(h) ?? 0, g.thunder.get(h) ? "thunderstorms" : "", waveFt, round(g.periodSec.get(h), 0), waterProfile(s));
+      const ok = worseLevel(lvl, alertLevelBetween(spotAlerts, h * 3600e3, (h + 1) * 3600e3)) === "GO";
       if (!ok) { run = null; continue; }
       if (!run) { run = { fromH: loc.hour, toH: loc.hour }; } else run.toH = loc.hour;
       if (!best || (run.toH - run.fromH) > (best.toH - best.fromH)) best = { ...run };
@@ -1811,15 +2256,16 @@ export async function onRequest(context) {
 
   // Fetch all sources concurrently; each resolves to null on failure so one
   // bad source never sinks the whole response.
-  const [{ buoy, tempsObs }, fc, marine, alerts, noaaReport, grid, waterStation] = await Promise.all([
+  const [{ buoy, tempsObs }, fc, marine, alertRes, noaaReport, grid, waterStation] = await Promise.all([
     fetchBuoy(spot.buoys),
     fetchForecastsNear(spot),
     fetchMarineForecast(spot.zone),
-    fetchAlerts(spot.lat, spot.lon),
+    fetchAlerts(spot),
     fetchMarineText(spot.office || "CLE", spot.product || "NSH"), // NSH on the lakes, CWF on the coasts
     fetchSpotGrid(spot),
     spot.waterBuoys && spot.waterBuoys.length ? fetchWaterTemp(spot.waterBuoys) : null,
   ]);
+  const { alerts, all: allAlerts, ok: alertsOk } = alertRes;
   const point = fc.daily;
   // The nearshore periods, from the marine-zone API or (fallback) the NSH text.
   const marinePeriods = (marine && marine.length) ? marine : nshPeriodsForZone(noaaReport?.text, spot.zone);
@@ -1828,7 +2274,9 @@ export async function onRequest(context) {
   // comes from one (nearshore-corrected) series and they can't disagree.
   applyMarineWaveFloor(grid, marinePeriods);
   const profile = waterProfile(spot);
-  const week = buildWeek(grid, profile);
+  // Alerts in effect raise the strips too, not just the headline, so the week
+  // and hourly views never show GO under an active advisory.
+  const week = applyAlertsToWeek(buildWeek(grid, profile), allAlerts, alertsOk, grid?.tz);
   const sun = sunTimes(spot.lat, spot.lon);
   // Merge hourly wave height (NWS grid) into the NWS hourly rows, then rate
   // risk. Keyed by epoch hour, so spots outside Eastern time line up too.
@@ -1836,7 +2284,7 @@ export async function onRequest(context) {
   // them), so the strip's first row, the outlook, and the headline's
   // imminent-hazard check all start at the current hour.
   const nowEH = Math.floor(Date.now() / 3600000);
-  const hourly = withRisk(
+  const hourly = applyAlertsToHours(withRisk(
     fc.hourly.filter((h) => Math.floor(Date.parse(h.time) / 3600000) >= nowEH).map((h) => {
       const eh = Math.floor(Date.parse(h.time) / 3600000);
       return {
@@ -1847,7 +2295,7 @@ export async function onRequest(context) {
       };
     }),
     profile
-  );
+  ), allAlerts, alertsOk);
   const outlook = computeOutlook(hourly);
 
   // Effective wind: prefer the live buoy, fall back to the NWS forecast so wind
@@ -1939,7 +2387,7 @@ export async function onRequest(context) {
   };
 
   const read = windReadFor(spot, wind.dir);
-  const recommendation = buildRecommendation({ buoy, alerts, wind, waves, read, hours: hourly, profile, waterF: waterTempF ?? null, forecastAgeMin });
+  const recommendation = buildRecommendation({ buoy, alerts, wind, waves, read, hours: hourly, profile, waterF: waterTempF ?? null, forecastAgeMin, alertsOk });
 
   // Display-only cleanup, AFTER every verdict above is computed from raw data.
   const showPeriod = (ft, sec) => plausiblePeriod(ft, sec);
@@ -1958,8 +2406,8 @@ export async function onRequest(context) {
     week: week.map((d) => ({ ...d, periodSec: showPeriod(d.waveFt, d.periodSec) })),
     sun,
     buoy,
-    alerts: alerts || [],
-    alertsOk: alerts != null, // false = the NWS alerts feed failed (not "no alerts")
+    alerts: (alerts || []).map(({ polygons, motion, ...a }) => a), // geometry is for matching, not the page
+    alertsOk, // false = an NWS alerts lookup failed (not "no alerts")
     marineForecast: marinePeriods,
     pointForecast: point || [],
     noaaReport,
