@@ -15,7 +15,7 @@
 // the same summary data the homepage directory shows (pooled NWS grid calls
 // for all ports, with cached /points lookups — cheap enough to run hourly).
 import { sendEmail, ensureUnsubToken, notify, emailFooter, isPro } from "./auth.js";
-import { fetchSummary, fetchTodayWindows, fetchBuiltSummaries, fetchWeeks, fetchSpotVerdict } from "./marine/conditions.js";
+import { fetchSummary, fetchTodayWindows, fetchBuiltSummaries, fetchWeeks, fetchSpotVerdict, landWalkBudget } from "./marine/conditions.js";
 
 const SITE = "https://shouldiboat.com";
 export const DIGEST_UTC_HOUR = 10; // 6am ET / 5am CT
@@ -141,16 +141,19 @@ export async function runScheduled(env, utcHour, now = new Date()) {
     for (const u of stale) await env.USERS.delete(`user:${u.email}`).catch(() => {});
     if (stale.length) users = users.filter((u) => !stale.includes(u));
   }
-  const summary = await fetchSummary(env); // curated + featured built pages
+  // One land-zone walk budget for the whole run (summary, built summaries,
+  // weeks), so a cold cache can't spend it three times over in one invocation.
+  const landBudget = landWalkBudget();
+  const summary = await fetchSummary(env, { landBudget }); // curated + featured built pages
   const byId = Object.fromEntries((summary.spots || []).map((s) => [s.id, s]));
   // Favorited user-built pages that aren't already covered (not featured yet):
   // resolve them so members get emails for their own built spots too.
   const missing = [...new Set(users.flatMap((u) => u.favorites || []))].filter((id) => !byId[id]);
   if (missing.length) {
-    for (const t of await fetchBuiltSummaries(env, missing).catch(() => [])) byId[t.id] = t;
+    for (const t of await fetchBuiltSummaries(env, missing, { landBudget }).catch(() => [])) byId[t.id] = t;
   }
   // Today's best GO window per port — digest runs only (pooled NWS grid calls).
-  const windows = isDigestRun ? await fetchTodayWindows().catch(() => ({})) : {};
+  const windows = isDigestRun ? await fetchTodayWindows({ landBudget }).catch(() => ({})) : {};
   const today = now.toISOString().slice(0, 10);
 
   // GO alerts compare each port's level with the previous hourly run's, so they
@@ -188,7 +191,7 @@ export async function runScheduled(env, utcHour, now = new Date()) {
   // Weekend outlook: only the starred ports of opted-in Pro members are fetched.
   const wantsWeekend = (u) => isPro(u) && (u.prefs || {}).weekendEmail && !u.emailOptOut && u.emailVerified !== false;
   const weeks = isWeekendRun
-    ? await fetchWeeks(env, users.filter(wantsWeekend).flatMap((u) => u.favorites || [])).catch(() => ({}))
+    ? await fetchWeeks(env, users.filter(wantsWeekend).flatMap((u) => u.favorites || []), { landBudget }).catch(() => ({}))
     : {};
 
   let digests = 0, alerts = 0, goAlerts = 0, weekends = 0, failures = 0;
