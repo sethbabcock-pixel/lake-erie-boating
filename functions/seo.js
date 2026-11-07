@@ -34,7 +34,7 @@ const websiteJsonld = () => ({
   "@type": "WebSite",
   name: "shouldiboat.com",
   url: `${SITE}/`,
-  description: "Live GO / CAUTION / NO-GO boating conditions for the Great Lakes and the warm-water coasts.",
+  description: "Live GO / CAUTION / NO-GO boating conditions for the Great Lakes and the US coasts.",
 });
 const spotJsonld = (id, s, lake) => ({
   "@context": "https://schema.org",
@@ -202,7 +202,7 @@ export function seoForPath(pathname, live = null) {
   const tiles = ((live && live.spots) || []).filter((t) => t && t.level);
   const asOf = live && live.updatedAt ? ` as of ${fmtET(live.updatedAt)}` : "";
   if (pathname === "/" || pathname === "") {
-    const description = "A clear GO / CAUTION / NO-GO call for boating on the Great Lakes and the warm-water coasts: Florida, the Gulf, the Carolinas, Southern California, Hawaii and Puerto Rico. Built from live NOAA wind, waves, swell, marine warnings, an hour-by-hour timeline, maps and webcams.";
+    const description = "A clear GO / CAUTION / NO-GO call for boating on the Great Lakes and the US coasts: Florida, the Gulf, the Carolinas, California, the Pacific Northwest, Oregon, the Northeast, Alaska, Hawaii and Puerto Rico. Built from live NOAA wind, waves, swell, marine warnings, an hour-by-hour timeline, maps and webcams.";
     return {
       url: `${SITE}/`,
       title: "Should I boat today? Live boating conditions · shouldiboat.com",

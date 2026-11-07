@@ -48,6 +48,7 @@ let priceResolves = true;
 let stormMode = false; // Open-Meteo stub: every spot NO-GO (true) vs calm GO (false)
 let scaMode = false; // NWS alerts stub: an active Small Craft Advisory at every point
 let alertsDown = false; // NWS alerts stub: the alerts endpoint fails
+let barMode = null; // NWS alerts stub: a Small Craft Advisory for this zone only (e.g. "PZZ210"), answered by zone lookups
 // NWS grid stub override: "gusty" = 13 kt gusting 24 kt, 1.5 ft (lake NO-GO on
 // the gust); "nowind" = no wind/gust layers at all, calm 1 ft waves;
 // "gustonly" = a 9 kt gust but no sustained wind (grid or hourly) and no waves.
@@ -108,6 +109,12 @@ function installFetchStub() {
       return jsonResp({ properties: { periods } });
     }
     if (u.includes("api.weather.gov/alerts/active") && alertsDown) return new Response("", { status: 503 });
+    if (u.includes("api.weather.gov/alerts/active") && barMode) {
+      // Zone-coded advisory: only a lookup that names the zone gets it (a shore
+      // point outside the marine polygon does not), as on the live API.
+      const hit = decodeURIComponent(u).includes(`zone=`) && decodeURIComponent(u).split("zone=")[1].split(",").some((z) => z.startsWith(barMode));
+      return jsonResp({ features: hit ? [{ id: `sca-${barMode}`, properties: { event: "Small Craft Advisory", severity: "Minor", headline: "Small Craft Advisory in effect", sent: new Date().toISOString(), geocode: { UGC: [barMode] } } }] : [] });
+    }
     if (u.includes("api.weather.gov/alerts/active") && scaMode) {
       return jsonResp({ features: [{ properties: { event: "Small Craft Advisory", severity: "Minor", headline: "Small Craft Advisory in effect", sent: new Date().toISOString() } }] });
     }
@@ -1919,6 +1926,61 @@ async function run() {
     check("no buoy: only the 'No live buoy' line, not both", f.reasons.some((x) => NO_BUOY.test(x)) && !f.reasons.some((x) => WAVES_FC.test(x)), JSON.stringify(f.reasons));
     const o = rec(buoyWind, { ft: 1, source: "forecast" }, "ocean");
     check("wind-only shore station on the coast: caveat shown too", o.reasons.some((x) => WAVES_FC.test(x)), JSON.stringify(o.reasons));
+  }
+
+  // ── Cold-water regions + bar harbors: bar advisories can never read GO ──
+  {
+    const { SPOTS, alertEffects, alertZonesFor, buildRecommendation, fetchSummary, fetchTodayWindows, onRequest } = await import("../functions/marine/conditions.js");
+    const { REGIONS } = await import("../src/regions.js");
+    const lakes = new Set(REGIONS.flatMap((r) => r.lakes));
+    const orphans = Object.entries(SPOTS).filter(([, s]) => !lakes.has(s.lake || "Lake Erie")).map(([id]) => id);
+    check("regions: every curated spot's water body belongs to a region", orphans.length === 0, orphans.join(","));
+    for (const slug of ["pnw", "oregon", "norcal", "northeast", "alaska"]) {
+      const r = REGIONS.find((x) => x.slug === slug);
+      const n = r ? Object.values(SPOTS).filter((s) => r.lakes.includes(s.lake)).length : 0;
+      check(`regions: ${slug} exists, is not warm, and has 5+ spots`, r && !r.warm && n >= 5, `n=${n}`);
+    }
+    const coldIds = Object.entries(SPOTS).filter(([, s]) => /Puget|San Juan|Washington|Oregon|California Coast|San Francisco|New England|Long Island|New York|Alaska/.test(s.lake || ""));
+    check("regions: new spots have zone, office, CWF product, and a seaward bearing", coldIds.every(([, s]) => /^[A-Z]{2}Z\d{3}$/.test(s.zone) && s.office && s.product === "CWF" && s.sea != null && s.water), coldIds.filter(([, s]) => !(s.zone && s.office && s.sea != null && s.water)).map(([id]) => id).join(","));
+    const barIds = Object.entries(SPOTS).filter(([, s]) => s.bar).map(([id]) => id);
+    check("bars: Oregon and Washington/Humboldt bar harbors are flagged", ["astoria", "garibaldi", "depoe-bay", "newport-or", "coos-bay", "brookings", "westport", "humboldt-bay"].every((id) => barIds.includes(id)), barIds.join(","));
+    const z = alertZonesFor(SPOTS.astoria);
+    check("bars: alert lookup names the spot zone, the bar zone and the outside zone", z.includes("PZZ210") && z.includes("PZZ251"), z.join(","));
+    check("bars: Humboldt lookup includes the bar and the bay", alertZonesFor(SPOTS["humboldt-bay"]).includes("PZZ410") && alertZonesFor(SPOTS["humboldt-bay"]).includes("PZZ415"));
+    const sca = [{ event: "Small Craft Advisory" }];
+    eq("bars: SCA at a bar harbor → NO-GO", alertEffects(sca, SPOTS["newport-or"])[0].to, "NO-GO");
+    eq("bars: SCA away from a bar → CAUTION (unchanged)", alertEffects(sca, SPOTS.seattle)[0].to, "CAUTION");
+    eq("bars: High Surf Advisory at a bar harbor → NO-GO", alertEffects([{ event: "High Surf Advisory" }], SPOTS["coos-bay"])[0].to, "NO-GO");
+    eq("bars: Gale Watch at a bar harbor → CAUTION", alertEffects([{ event: "Gale Watch" }], SPOTS.astoria)[0].to, "CAUTION");
+    eq("bars: Rip Current Statement stays a note", alertEffects([{ event: "Rip Current Statement" }], SPOTS.astoria)[0].to, null);
+    const calm = { buoy: null, wind: { speedKt: 6, gustKt: 8, source: "forecast", gustSrc: "forecast" }, waves: { ft: 2, periodSec: 12, source: "forecast" }, read: null, hours: [], profile: "ocean" };
+    const r0 = buildRecommendation({ ...calm, alerts: [], spot: SPOTS.astoria });
+    eq("bars: calm sea, no advisory → GO", r0.level, "GO");
+    check("bars: the standing bar-crossing note is listed", r0.reasons.some((x) => /Bar crossing: the Columbia River Bar/.test(x)), JSON.stringify(r0.reasons));
+    eq("bars: calm sea + SCA → NO-GO at the bar harbor", buildRecommendation({ ...calm, alerts: sca, spot: SPOTS.astoria }).level, "NO-GO");
+    eq("alerts feed down → never GO (bar harbor)", buildRecommendation({ ...calm, alerts: null, alertsOk: false, spot: SPOTS.astoria }).level, "CAUTION");
+    eq("alerts feed down → never GO (any spot)", buildRecommendation({ ...calm, alerts: null, alertsOk: false, spot: SPOTS.monterey }).level, "CAUTION");
+    const env = { USERS: makeKV() };
+    stormMode = false; scaMode = false; alertsDown = false; gridMode = null;
+    const page0 = await (await onRequest({ request: new Request("https://shouldiboat.com/marine/conditions?spot=astoria"), env })).json();
+    check("bars: astoria page runs with no advisory (not NO-GO from alerts)", page0.recommendation && !page0.recommendation.reasons.some((x) => /Don't cross/.test(x)), JSON.stringify(page0.recommendation));
+    barMode = "PZZ210";
+    const page = await (await onRequest({ request: new Request("https://shouldiboat.com/marine/conditions?spot=astoria"), env })).json();
+    eq("bars: zone-only bar advisory reaches the astoria page → NO-GO", page.recommendation?.level, "NO-GO");
+    const tile = (await fetchSummary(env)).spots.find((x) => x.id === "astoria");
+    eq("bars: directory tile is NO-GO under the bar advisory", tile?.level, "NO-GO");
+    const other = (await fetchSummary(env)).spots.find((x) => x.id === "newport-or");
+    check("bars: another bar's tile isn't touched by the Columbia advisory", other?.level !== "NO-GO", JSON.stringify(other));
+    const wins = await fetchTodayWindows();
+    eq("bars: no digest GO window at astoria under the bar advisory", wins.astoria, null);
+    barMode = "LEZ143";
+    const sand = await (await onRequest({ request: new Request("https://shouldiboat.com/marine/conditions?spot=sandusky"), env })).json();
+    check("alerts: a zone-coded marine advisory reaches a shore-point spot (sandusky, LEZ143) → not GO", sand.recommendation?.level !== "GO" && sand.alerts.some((a) => a.event === "Small Craft Advisory"), JSON.stringify(sand.recommendation));
+    barMode = null;
+    alertsDown = true;
+    const tDown = (await fetchSummary(env)).spots.find((x) => x.id === "astoria");
+    check("bars: alerts feed down → astoria tile is not GO", tDown?.level !== "GO", JSON.stringify(tDown));
+    alertsDown = false;
   }
 
   console.log(results.join("\n"));

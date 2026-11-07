@@ -598,7 +598,7 @@ const NEARPT_KEY = "boating.nearpt";
 const loadNearPt = () => { try { return JSON.parse(localStorage.getItem(NEARPT_KEY) || "null"); } catch (e) { return null; } };
 
 // "on the Great Lakes", "in Florida": reads naturally after "Should I boat".
-const ON_REGIONS = { greatlakes: "on the Great Lakes", chesapeake: "on the Chesapeake", carolina: "on the Carolina sounds", "gulf-coast": "on the Gulf Coast" };
+const ON_REGIONS = { greatlakes: "on the Great Lakes", chesapeake: "on the Chesapeake", carolina: "on the Carolina sounds", "gulf-coast": "on the Gulf Coast", pnw: "in the Pacific Northwest", oregon: "on the Oregon coast", northeast: "in the Northeast" };
 const regionPhrase = (r) => ON_REGIONS[r.slug] || `in ${r.title}`;
 
 export default function Landing({ adFree, showAds, onSelect, favorites, onCookieSettings, onJoin, onSignIn, signedIn, nudge, region, onRegion, userEmail, onPreview, prefs, metro, onCity }) {

@@ -48,6 +48,36 @@ export const REGIONS = [
     lakes: ["Hawaii", "Puerto Rico"],
   },
   {
+    slug: "pnw",
+    title: "Pacific Northwest",
+    blurb: "GO / CAUTION / NO-GO calls for Puget Sound, the San Juan Islands, Admiralty Inlet and the Washington coast, from Olympia to Friday Harbor and Westport.",
+    lakes: ["Puget Sound", "San Juan Islands & Admiralty Inlet", "Washington Coast"],
+  },
+  {
+    slug: "oregon",
+    title: "Oregon Coast",
+    blurb: "GO / CAUTION / NO-GO calls for Oregon's bar harbors, from the Columbia River Bar to Brookings, with bar advisories built into every call.",
+    lakes: ["Oregon Coast"],
+  },
+  {
+    slug: "norcal",
+    title: "Northern California",
+    blurb: "GO / CAUTION / NO-GO calls for San Francisco Bay and the Northern California coast, from Monterey and Santa Cruz to Bodega Bay and Humboldt Bay.",
+    lakes: ["San Francisco Bay", "Northern California Coast"],
+  },
+  {
+    slug: "northeast",
+    title: "Northeast",
+    blurb: "GO / CAUTION / NO-GO calls from Casco Bay and Boston Harbor to Cape Cod, Narragansett Bay, Long Island Sound, New York Harbor and the Jersey shore.",
+    lakes: ["New England Coast", "Long Island Sound", "New York & New Jersey Coast"],
+  },
+  {
+    slug: "alaska",
+    title: "Alaska",
+    blurb: "GO / CAUTION / NO-GO calls for Southeast and Southcentral Alaska harbors, from Ketchikan, Juneau and Sitka to Seward, Homer, Whittier and Valdez.",
+    lakes: ["Southeast Alaska", "Southcentral Alaska"],
+  },
+  {
     slug: "chesapeake",
     title: "Chesapeake Bay",
     blurb: "GO / CAUTION / NO-GO calls for the Chesapeake Bay and its tidal rivers.",
@@ -155,6 +185,18 @@ export const NEAR_METROS = [
   { slug: "san-diego-ca", name: "San Diego, CA", lat: 32.7157, lon: -117.1611, region: "socal" },
   // Mid-Atlantic
   { slug: "baltimore", name: "Baltimore, MD", lat: 39.2904, lon: -76.6122, region: "chesapeake" },
+  // Cold-water coasts
+  { slug: "seattle", name: "Seattle, WA", lat: 47.6062, lon: -122.3321, region: "pnw" },
+  { slug: "portland-or", name: "Portland, OR", lat: 45.5152, lon: -122.6784, region: "oregon" },
+  { slug: "san-francisco", name: "San Francisco, CA", lat: 37.7749, lon: -122.4194, region: "norcal" },
+  { slug: "sacramento", name: "Sacramento, CA", lat: 38.5816, lon: -121.4944, region: "norcal" },
+  { slug: "boston", name: "Boston, MA", lat: 42.3601, lon: -71.0589, region: "northeast" },
+  { slug: "providence", name: "Providence, RI", lat: 41.824, lon: -71.4128, region: "northeast" },
+  { slug: "hartford", name: "Hartford, CT", lat: 41.7658, lon: -72.6734, region: "northeast" },
+  { slug: "new-york", name: "New York, NY", lat: 40.7128, lon: -74.006, region: "northeast" },
+  { slug: "philadelphia", name: "Philadelphia, PA", lat: 39.9526, lon: -75.1652, region: "northeast" },
+  { slug: "anchorage", name: "Anchorage, AK", lat: 61.2181, lon: -149.9003, region: "alaska" },
+  { slug: "juneau-ak", name: "Juneau, AK", lat: 58.3019, lon: -134.4197, region: "alaska" },
 ];
 
 export const nearMetroBySlug = (slug) =>
