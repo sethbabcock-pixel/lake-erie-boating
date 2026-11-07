@@ -154,7 +154,7 @@ function HouseHero({ hero, spotName, verdict, adFree, splash, children, signedIn
           // Attribution (TASL): title + author linked to the file page, the
           // license linked to its deed, and a note of our changes.
           <p className="hero-band-credit">
-            Photo: <a href={pic.source} target="_blank" rel="noopener">{pic.title ? <>“{pic.title}” by </> : null}{pic.credit}</a>
+            Photo: <a href={pic.source} target="_blank" rel="noopener">{pic.title ? <>“{pic.title}”{pic.title.includes(pic.credit) ? "" : <> by {pic.credit}</>}</> : pic.credit}</a>
             {pic.license ? <> · {pic.licenseUrl ? <a href={pic.licenseUrl} target="_blank" rel="noopener license">{pic.license}</a> : pic.license}</> : null}
             {" · cropped, darkened"}
           </p>
