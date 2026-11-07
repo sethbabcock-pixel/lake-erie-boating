@@ -1997,6 +1997,21 @@ async function run() {
     check("flash flood: calm day under a Flash Flood Warning is CAUTION, with the reason", r.level === "CAUTION" && r.reasons.some((x) => /Active Flash Flood Warning/.test(x)), JSON.stringify(r));
   }
 
+  // 58b. Grid sampling: a spot's gridSteps override skips an enclosed inner-bay
+  //     cell; spots without one (all of Lake Erie) sample exactly as before.
+  {
+    const { SPOTS, gridStepsFor, gridSamplePoints } = await import("../functions/marine/conditions.js");
+    const erie = Object.entries(SPOTS).filter(([, s]) => (s.lake || "Lake Erie") === "Lake Erie");
+    check("grid steps: every Lake Erie spot keeps the default lake steps", erie.length > 0 && erie.every(([, s]) => gridStepsFor(s).join() === "0.035,0.1,0.22"), erie.filter(([, s]) => gridStepsFor(s).join() !== "0.035,0.1,0.22").map(([k]) => k).join());
+    const sand = gridSamplePoints(SPOTS.sandusky)[0];
+    check("grid steps: Sandusky's first sample is still 0.035 deg toward the lake center", sand.step === 0.035 && Math.abs(Math.hypot(sand.lat - SPOTS.sandusky.lat, sand.lon - SPOTS.sandusky.lon) - 0.035) < 1e-3, JSON.stringify(sand));
+    eq("grid steps: Alpena starts at the Thunder Bay mouth, not the inner bay", JSON.stringify(gridSamplePoints(SPOTS.alpena)[0]), JSON.stringify({ step: 0.14, lat: 45.0008, lon: -83.2404 }));
+    check("grid steps: Alpena never samples the inner-bay cell (0.035)", !gridSamplePoints(SPOTS.alpena).some((p) => p.step < 0.14));
+    eq("grid steps: ocean spots keep the ocean steps", gridStepsFor(SPOTS.jacksonville).join(), "0.06,0.1,0.22");
+    eq("grid steps: inland water samples the point only", gridStepsFor({ lat: 40, lon: -80, lake: "Some Reservoir" }).join(), "0");
+    eq("grid steps: an empty override falls back to the defaults", gridStepsFor({ ...SPOTS.alpena, gridSteps: [] }).join(), "0.035,0.1,0.22");
+  }
+
   // ── Launch-facts card: a configured buoy is not a live buoy ──
   {
     const { SPOTS, spotFacts } = await import("../functions/marine/conditions.js");
