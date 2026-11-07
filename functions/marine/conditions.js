@@ -599,23 +599,71 @@ async function fetchMarineForecast(zone) {
   }
 }
 
-// Outer rings ([[lon, lat], ...]) of a GeoJSON Polygon/MultiPolygon, or null.
+// Outer rings ([[lon, lat], ...]) of a GeoJSON Polygon/MultiPolygon, or null
+// (= no usable polygon, so the alert applies zone-wide). Fails toward
+// applying: any malformed ring (too few points, non-finite or out-of-range
+// coordinates) voids the whole geometry rather than being skipped, and other
+// geometry types (GeometryCollection, Point) count as no polygon.
+const okRing = (r) => Array.isArray(r) && r.length >= 4 &&
+  r.every((pt) => Array.isArray(pt) && Number.isFinite(pt[0]) && Number.isFinite(pt[1]) && Math.abs(pt[0]) <= 180 && Math.abs(pt[1]) <= 90);
 function alertPolygons(g) {
   if (!g) return null;
-  if (g.type === "Polygon" && Array.isArray(g.coordinates?.[0])) return [g.coordinates[0]];
-  if (g.type === "MultiPolygon" && Array.isArray(g.coordinates)) return g.coordinates.map((p) => p?.[0]).filter(Array.isArray);
-  return null;
+  let rings = null;
+  if (g.type === "Polygon" && Array.isArray(g.coordinates)) rings = [g.coordinates[0]];
+  else if (g.type === "MultiPolygon" && Array.isArray(g.coordinates)) rings = g.coordinates.map((p) => (Array.isArray(p) ? p[0] : null));
+  return rings && rings.length && rings.every(okRing) ? rings : null;
+}
+// Storm motion from NWS eventMotionDescription ("<time>...storm...259DEG...21KT...41.68,-71.1").
+// DEG is the direction the storm moves FROM (TIME...MOT...LOC convention), so
+// it travels toward DEG + 180. null when absent or unparseable.
+function alertMotion(desc) {
+  const m = /\.\.\.(\d{1,3})DEG\.\.\.(\d{1,3})KT/.exec(String(desc || ""));
+  if (!m || +m[1] > 360) return null;
+  return { towardDeg: (+m[1] + 180) % 360, kt: +m[2] };
 }
 // Does an alert reach this launch? An alert with a warned polygon applies
 // when the launch is inside it or within ALERT_POLYGON_BUFFER_NM of its edge
-// (a boat from that launch can be that far out; storms move). One without a
-// polygon applies to its whole zone, as listed. A county-wide UGC on a
-// storm-based warning otherwise flags launches at the far end of a big
-// county (Kona under a Hilo-side flash flood, Duluth under all of St. Louis).
+// (a boat from that launch can be that far out). One without a polygon
+// applies to its whole zone, as listed. A county-wide UGC on a storm-based
+// warning otherwise flags launches at the far end of a big county (Kona under
+// a Hilo-side flash flood, Grand Isle under a New Orleans one).
+// Exceptions, all failing toward applying the alert:
+// - Marine products (Special Marine Warning, Marine Weather Statement) stay
+//   zone-wide: the marine zone is the water the boater will be on, and the
+//   launch point sits on its shore, not at its centre.
+// - A Flash Flood Emergency (catastrophic damage threat) stays county-wide.
+// - Storm-track products (tornado, severe thunderstorm, snow squall, extreme
+//   wind, special weather statement) are drawn along a moving storm: the
+//   polygon is also carried ALERT_TRACK_SWEEP_H further along the storm's
+//   motion, so a launch just ahead of the leading edge (where the storm will
+//   be within the hour, and beyond our 5-10 min response cache) is still
+//   flagged. Without a parseable motion they apply county-wide.
 export const ALERT_POLYGON_BUFFER_NM = 10;
+export const ALERT_TRACK_SWEEP_H = 0.5;
+const ZONE_WIDE_ALERTS = /marine/;
+const TRACK_ALERTS = /tornado|thunderstorm|snow squall|extreme wind|special weather statement|dust storm/;
 export function alertReachesSpot(a, spot) {
-  if (!a?.polygons || !a.polygons.length || spot?.lat == null || spot?.lon == null) return true;
-  return a.polygons.some((ring) => pointInRing(spot.lon, spot.lat, ring) || ringDistanceNm(spot.lat, spot.lon, ring) <= ALERT_POLYGON_BUFFER_NM);
+  if (!a?.polygons || !a.polygons.length || !Number.isFinite(spot?.lat) || !Number.isFinite(spot?.lon)) return true;
+  const ev = String(a.event || "").toLowerCase();
+  if (ZONE_WIDE_ALERTS.test(ev) || /catastrophic/i.test(a.ffThreat || "") || ev === "flash flood emergency") return true;
+  const motion = a.motion || null;
+  if (TRACK_ALERTS.test(ev) && !motion) return true;
+  // Local plane centred on the launch, in nm (equirectangular; fine at
+  // warning-polygon scale). Longitudes are wrapped relative to the launch so
+  // a polygon across the antimeridian stays contiguous.
+  const kx = 60 * Math.cos((spot.lat * Math.PI) / 180);
+  const rings = a.polygons.map((r) => r.map(([lon, lat]) => [((((lon - spot.lon) % 360) + 540) % 360 - 180) * kx, (lat - spot.lat) * 60]));
+  // Shifts along the motion vector, every <= 1 nm out to the sweep distance.
+  const sweep = motion ? motion.kt * ALERT_TRACK_SWEEP_H : 0;
+  const n = Math.ceil(sweep);
+  const ux = motion ? Math.sin((motion.towardDeg * Math.PI) / 180) : 0, uy = motion ? Math.cos((motion.towardDeg * Math.PI) / 180) : 0;
+  for (let k = 0; k <= n; k++) {
+    const d = n ? (sweep * k) / n : 0;
+    // The launch is at the origin; shifting the ring by +d equals moving the launch by -d.
+    const px = -ux * d, py = -uy * d;
+    if (rings.some((ring) => pointInRing(px, py, ring) || ringDistance(px, py, ring) <= ALERT_POLYGON_BUFFER_NM)) return true;
+  }
+  return false;
 }
 function pointInRing(x, y, ring) {
   let inside = false;
@@ -625,15 +673,13 @@ function pointInRing(x, y, ring) {
   }
   return inside;
 }
-// Shortest distance (nm) from a point to a ring's edges, on a local
-// equirectangular projection (fine at warning-polygon scale).
-function ringDistanceNm(lat, lon, ring) {
-  const kx = 60 * Math.cos((lat * Math.PI) / 180), ky = 60; // nm per degree
+// Shortest distance from (x, y) to a ring's edges, same planar units. Walks
+// the closing edge too, so an unclosed ring isn't read as farther away.
+function ringDistance(x, y, ring) {
   let best = Infinity;
-  for (let i = 0; i < ring.length - 1; i++) {
-    const ax = (ring[i][0] - lon) * kx, ay = (ring[i][1] - lat) * ky;
-    const bx = (ring[i + 1][0] - lon) * kx, by = (ring[i + 1][1] - lat) * ky;
-    const dx = bx - ax, dy = by - ay, len2 = dx * dx + dy * dy;
+  for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+    const ax = ring[j][0] - x, ay = ring[j][1] - y;
+    const dx = ring[i][0] - ring[j][0], dy = ring[i][1] - ring[j][1], len2 = dx * dx + dy * dy;
     const t = len2 ? Math.max(0, Math.min(1, -(ax * dx + ay * dy) / len2)) : 0;
     best = Math.min(best, Math.hypot(ax + t * dx, ay + t * dy));
   }
@@ -656,9 +702,11 @@ const toAlert = (f) => ({
   // NWS issues a Flash Flood Emergency as an ordinary "Flash Flood Warning"
   // event; only this parameter (CATASTROPHIC) tells them apart.
   ffThreat: f.properties?.parameters?.flashFloodDamageThreat?.[0] || null,
-  // Storm-based warnings (Severe Thunderstorm, Tornado, Flash Flood, Special
-  // Marine) carry the warned polygon; zone-based products have none.
+  // Storm-based products (Severe Thunderstorm, Tornado, Flash Flood, Snow
+  // Squall, Special Marine, polygon SPS/MWS) carry the warned polygon and,
+  // for storm tracks, its motion; zone-based products have neither.
   polygons: alertPolygons(f.geometry),
+  motion: alertMotion(f.properties?.parameters?.eventMotionDescription?.[0]),
 });
 async function alertsAt(query) {
   try {
@@ -2169,7 +2217,7 @@ export async function onRequest(context) {
     week: week.map((d) => ({ ...d, periodSec: showPeriod(d.waveFt, d.periodSec) })),
     sun,
     buoy,
-    alerts: alerts || [],
+    alerts: (alerts || []).map(({ polygons, motion, ...a }) => a), // geometry is for matching, not the page
     alertsOk, // false = an NWS alerts lookup failed (not "no alerts")
     marineForecast: marinePeriods,
     pointForecast: point || [],
