@@ -1,0 +1,130 @@
+[
+ {
+  "spot": "alpena",
+  "name": "Alpena · Thunder Bay Camera (WATZ)",
+  "lake": "Lake Huron",
+  "lat": 45.063,
+  "lon": -83.43,
+  "kind": "yt",
+  "id": "BluUW4pk2ek",
+  "view": "Elevated view over Alpena waterfront and Thunder Bay horizon"
+ },
+ {
+  "spot": "alpena",
+  "name": "Alpena · Thunder Bay Harbor Camera (105.7 The Bird)",
+  "lake": "Lake Huron",
+  "lat": 45.063,
+  "lon": -83.43,
+  "kind": "yt",
+  "id": "cTL6RHF3WDs",
+  "view": "Marina basin, boat yard and open bay beyond breakwall"
+ },
+ {
+  "spot": "alpena",
+  "name": "Alpena · Thunder Bay Marina Camera (Radio Centre)",
+  "lake": "Lake Huron",
+  "lat": 45.063,
+  "lon": -83.43,
+  "kind": "yt",
+  "id": "FS9Iz-EJW5Y",
+  "view": "Marina docks and breakwall looking out to Thunder Bay"
+ },
+ {
+  "spot": "port-huron",
+  "name": "Algonac · St. Clair River (StreamTime)",
+  "lake": "Lake Huron",
+  "lat": 42.62,
+  "lon": -82.53,
+  "kind": "yt",
+  "id": "g4mpc2I5lhc",
+  "view": "St. Clair River with Algonac ferry; river view"
+ },
+ {
+  "spot": "port-huron",
+  "name": "Port Huron · St. Clair River shipping (BoatNerd PTZ)",
+  "lake": "Lake Huron",
+  "lat": 42.98,
+  "lon": -82.42,
+  "kind": "yt",
+  "id": "SrL74LPoXF8",
+  "view": "Freighter channel at the head of the St. Clair River, Blue Water Bridge beyond"
+ },
+ {
+  "spot": "erie",
+  "name": "North East, PA · Sunset Cam (Lake Erie)",
+  "lat": 42.215,
+  "lon": -79.83,
+  "kind": "yt",
+  "id": "Hg56IYpaF2A",
+  "view": "Lake Erie shoreline from North East Borough; ~15 mi east of Presque Isle"
+ },
+ {
+  "spot": "conneaut",
+  "name": "North East, PA · Sunset Cam (Lake Erie)",
+  "lat": 42.215,
+  "lon": -79.83,
+  "kind": "yt",
+  "id": "Hg56IYpaF2A",
+  "view": "Lake Erie shoreline from North East Borough; ~35 mi east of Conneaut"
+ },
+ {
+  "spot": "olcott",
+  "name": "Lyndonville · Lake Ontario Livestream",
+  "lake": "Lake Ontario",
+  "lat": 43.33,
+  "lon": -78.39,
+  "kind": "yt",
+  "id": "w2COKOM5USU",
+  "view": "Rocky shoreline and open Lake Ontario"
+ },
+ {
+  "spot": "grand-marais",
+  "name": "Silver Bay · Marina (Duluth Harbor Cam)",
+  "lake": "Lake Superior",
+  "lat": 47.295,
+  "lon": -91.257,
+  "kind": "yt",
+  "id": "zTVWJ3Mc0Ag",
+  "view": "Small-craft marina and breakwall on the North Shore, ~45 mi SW of Grand Marais"
+ },
+ {
+  "spot": "chicago",
+  "name": "Chicago · Lakefront Skyline 4K (Lakefront Live)",
+  "lake": "Lake Michigan",
+  "lat": 41.895,
+  "lon": -87.61,
+  "kind": "yt",
+  "id": "dBGt-W7onQ8",
+  "view": "Gold Coast shoreline and open lake; Navy Pier/Playpen views per title"
+ },
+ {
+  "spot": "michigan-city",
+  "name": "Michigan City · Lighthouse & Beach (Access LaPorte County)",
+  "lake": "Lake Michigan",
+  "lat": 41.73,
+  "lon": -86.91,
+  "kind": "yt",
+  "id": "Y2VkN45kj_0",
+  "view": "East Pierhead lighthouse, pier and beach"
+ },
+ {
+  "spot": "muskegon",
+  "name": "North Muskegon · Muskegon Lake (Muskegon Waterfront)",
+  "lake": "Lake Michigan",
+  "lat": 43.26,
+  "lon": -86.27,
+  "kind": "yt",
+  "id": "itIkc0INogQ",
+  "view": "Muskegon Lake open water, boats, city across the lake"
+ },
+ {
+  "spot": "holland",
+  "name": "South Haven · South Beach & Piers (City of South Haven)",
+  "lake": "Lake Michigan",
+  "lat": 42.4,
+  "lon": -86.28,
+  "kind": "yt",
+  "id": "G-tlKF32_p4",
+  "view": "Pierheads, red lighthouse, beach and open lake; ~35 mi S of Holland"
+ }
+]
