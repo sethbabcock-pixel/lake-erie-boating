@@ -15,6 +15,14 @@ const fmt = (v, unit) => (v == null ? "—" : `${v}${unit || ""}`);
 const kt = (v) => (v == null ? null : Math.round(v));
 // No level = no call (missing data): neutral, never painted as GO.
 const verdictClass = (lvl) => (lvl === "NO-GO" ? "nogo" : lvl === "CAUTION" ? "caution" : lvl === "GO" ? "go" : "unknown");
+// The headline call as shown. A CAUTION that exists only because no wind or
+// wave data arrived (rec.noData from the server) is shown as a neutral
+// "NO DATA" state, so "we can't see conditions" never looks like "conditions
+// are marginal" and never like GO. The level itself is unchanged (CAUTION in
+// the API, emails and tiles).
+const NO_DATA_LABEL = "NO DATA";
+const recClass = (rec) => (rec && rec.noData ? "unknown" : verdictClass(rec && rec.level));
+const recLabel = (rec) => (rec && rec.noData ? NO_DATA_LABEL : rec ? rec.level : null);
 const fmtHour = (t, withMin) =>
   new Date(t).toLocaleTimeString([], withMin ? { hour: "numeric", minute: "2-digit" } : { hour: "numeric" });
 
@@ -426,6 +434,79 @@ function obsAge(ld) {
   if (m == null) return null;
   return m < 60 ? `${m} min ago` : `${Math.floor(m / 60)} h${m % 60 ? ` ${m % 60} min` : ""} ago`;
 }
+// ── Freshness (N2) ──────────────────────────────────────────────────────────
+// Stale limits come from the server (functions/marine/conditions.js
+// STALE_LIMITS, documented in docs/forecast/freshness-and-wind-labels.md); these
+// are the fallback for a response cached from before the field existed.
+const STALE_FALLBACK = { buoyMin: 120, forecastMin: 18 * 60, pageMin: 30 };
+const minsSince = (iso, now) => { const t = Date.parse(iso); return Number.isFinite(t) ? Math.max(0, Math.round((now - t) / 60000)) : null; };
+const fmtMins = (m) => (m < 60 ? `${m} min` : m < 48 * 60 ? `${Math.floor(m / 60)} h${m % 60 ? ` ${m % 60} min` : ""}` : `${Math.round(m / 1440)} days`);
+function fmtIssued(iso, now) {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return null;
+  const t = d.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+  return new Date(now).toDateString() === d.toDateString() ? t : `${d.toLocaleDateString([], { month: "short", day: "numeric" })}, ${t}`;
+}
+// Ages are recomputed from timestamps against `now` (ticks each minute), so a
+// tab left open keeps counting instead of freezing at load time. The browser
+// never changes the level; it only labels and warns.
+function freshnessOf(data, now) {
+  const f = data.freshness || {};
+  const lim = { ...STALE_FALLBACK, ...(f.limits || {}) };
+  const wind = data.wind || {}, wv = data.waves || {};
+  // Older responses have no `freshness`: fall back to the buoy object.
+  const b = f.buoy || (data.buoy && (wind.source === "buoy" || wind.gustSrc === "buoy" || wv.source === "buoy")
+    ? { station: data.buoy.station, observedAt: data.buoy.observedAt, ageMinutes: data.buoy.ageMinutes } : null);
+  const buoyAge = b ? (minsSince(b.observedAt, now) ?? b.ageMinutes ?? null) : null;
+  const fcAge = f.forecastIssuedAt ? minsSince(f.forecastIssuedAt, now) : null;
+  const pageAge = minsSince(data.updatedAt, now);
+  const stale = [];
+  if (buoyAge != null && buoyAge >= lim.buoyMin) stale.push({ kind: "buoy", age: buoyAge, what: `buoy ${b.station} reading` });
+  if (fcAge != null && fcAge >= lim.forecastMin) stale.push({ kind: "forecast", age: fcAge, what: "NWS forecast" });
+  if (pageAge != null && pageAge >= lim.pageMin) stale.push({ kind: "page", age: pageAge, what: "this page" });
+  stale.sort((x, y) => y.age - x.age);
+  return { buoy: b, buoyAge, fcIssued: f.forecastIssuedAt || null, fcAge, pageAge, stale };
+}
+// One line under the verdict summary: what the call is built on and how old.
+// "Buoy 45005 · 12 min ago · NWS forecast issued 4:10 AM"
+function FreshLine({ data, rec, fr, now }) {
+  const wind = data.wind || {}, wv = data.waves || {};
+  const parts = [];
+  if (fr.buoy) {
+    const feeds = [wind.source === "buoy" || wind.gustSrc === "buoy" ? "wind" : null, wv.source === "buoy" ? "waves" : null].filter(Boolean);
+    parts.push(`Buoy ${fr.buoy.station}${feeds.length === 1 ? ` (${feeds[0]})` : ""} · ${fr.buoyAge != null ? `${fmtMins(fr.buoyAge)} ago` : "time unknown"}`);
+  } else if (!rec.noData) parts.push("No live buoy: forecast only");
+  const iss = fr.fcIssued ? fmtIssued(fr.fcIssued, now) : null;
+  if (rec.noData) parts.push("No wind or wave data received");
+  else parts.push(iss ? `NWS forecast issued ${iss}` : "NWS forecast (issue time not given)");
+  parts.push(`checked ${new Date(data.updatedAt).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}`);
+  return <div className="freshline">{parts.join(" · ")}</div>;
+}
+// Amber notice when any input is over its stale limit. Never changes the level.
+function StaleNotice({ fr, onRefresh }) {
+  if (!fr.stale.length) return null;
+  const worst = fr.stale[0];
+  const lead = worst.kind === "page"
+    ? `This page loaded ${fmtMins(worst.age)} ago`
+    : `Data is ${fmtMins(worst.age)} old (${worst.what})`;
+  return (
+    <div className="stale-note" role="status">
+      <IconAlert /> <span><b>{lead}.</b> Check before you go.</span>
+      {onRefresh && <button className="linklike" onClick={onRefresh}><IconRefresh /> Refresh</button>}
+    </div>
+  );
+}
+// What the WIND tile's big number is, in plain words.
+function windBasisText(wind, fr) {
+  if (wind.source === "buoy") {
+    const st = fr.buoy && fr.buoy.station;
+    return [`buoy${st ? ` ${st}` : ""}`, fr.buoyAge != null ? `${fmtMins(fr.buoyAge)} ago` : null].filter(Boolean).join(", ");
+  }
+  if (wind.basis === "period") return `NWS forecast${wind.periodName ? `, ${wind.periodName.toLowerCase()}` : ""} (top of range)`;
+  if (wind.source === "forecast") return "NWS forecast, this hour";
+  return null;
+}
+
 const notReported = (ids) => <>{stationList(ids)} {ids.length > 1 ? "haven't" : "hasn't"} reported wind or waves in the last 3 hours</>;
 function BuoyFact({ facts }) {
   const buoys = facts.buoys || [];
@@ -493,7 +574,9 @@ function ShareButton({ spot, rec, wind, wv }) {
   const [copied, setCopied] = useState(false);
   const share = async () => {
     track("event", "share_verdict", { spot: spot.id, level: rec.level });
-    const text = `${spot.name}: ${rec.level} right now. Wind ${kt(wind.speedKt) ?? "–"} kt, waves ${wv.ft ?? "–"} ft.`;
+    const text = rec.noData
+      ? `${spot.name}: no live wind or wave data right now. Check the NWS marine forecast.`
+      : `${spot.name}: ${rec.level} right now. Wind ${kt(wind.speedKt) ?? "–"} kt${wind.gustKt != null && kt(wind.gustKt) > (kt(wind.speedKt) ?? -1) ? `, gusts ${kt(wind.gustKt)}` : ""}, waves ${wv.ft ?? "–"} ft.`;
     const url = spot.adHoc
       ? `https://shouldiboat.com/preview?lat=${spot.lat}&lon=${spot.lon}&name=${encodeURIComponent(spot.name)}`
       : `https://shouldiboat.com/spot/${encodeURIComponent(spot.id)}`;
@@ -524,10 +607,10 @@ function WrongCallLink({ spot, rec, wind, wv, updatedAt }) {
   const url = spot.adHoc
     ? `https://shouldiboat.com/preview?lat=${spot.lat}&lon=${spot.lon}&name=${encodeURIComponent(spot.name)}`
     : `https://shouldiboat.com/spot/${encodeURIComponent(spot.id)}`;
-  const subject = `Wrong call? ${spot.name}: ${rec.level}`;
+  const subject = `Wrong call? ${spot.name}: ${recLabel(rec)}`;
   const body = [
     `Spot: ${spot.name} (${spot.id})`,
-    `Our call: ${rec.level}`,
+    `Our call: ${rec.noData ? `${NO_DATA_LABEL} (level ${rec.level})` : rec.level}`,
     `Wind ${kt(wind?.speedKt) ?? "–"} kt${wind?.gustKt != null ? `, gusts ${kt(wind.gustKt)} kt` : ""}; waves ${wv?.ft ?? "–"} ft`,
     `Data updated: ${updatedAt ? new Date(updatedAt).toLocaleString() : "unknown"}`,
     `Page: ${url}`,
@@ -1086,6 +1169,19 @@ export default function App() {
   const buoyLive = !!buoy && (wind.source === "buoy" || wind.gustSrc === "buoy" || wv.source === "buoy");
   const wr = data?.windRead;
   const comfort = data ? comfortCheck(auth.user?.prefs, wind.speedKt, wv.ft) : null;
+  // Clock for data ages: ticks each minute while a spot page is open, so the
+  // freshness line and the stale notice keep counting in a tab left open.
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    if (!data || data.notMarine) return undefined;
+    setNow(Date.now());
+    const t = setInterval(() => setNow(Date.now()), 60000);
+    return () => clearInterval(t);
+  }, [data]);
+  const fr = data && !data.notMarine && rec ? freshnessOf(data, now) : null;
+  // Which wind figure the verdict rates on (lakes: the stronger of sustained
+  // and gust), so the gust can be marked when it is the one that counts.
+  const gustDrives = wind.gustKt != null && kt(wind.gustKt) > (kt(wind.speedKt) ?? -1);
 
   // Location options grouped by lake (scales to all five lakes).
   const spotOptions = spots.length ? spots : (spot ? [{ ...spot, lake: "Lake Erie" }] : [{ id: active, name: "Loading…", lake: "Lake Erie" }]);
@@ -1120,12 +1216,14 @@ export default function App() {
           </div>
         </div>
         {!landing && callHidden && rec && data && !data.notMarine && (
-          <button className={`hdr-verdict ${verdictClass(rec.level)}`} onClick={() => window.scrollTo({ top: 0, behavior: "smooth" })}
-            aria-label={`${rec.level} at ${spot?.name || "this launch"}. Back to the top`}>
-            <span className="hdr-verdict-badge">{rec.level}</span>
+          <button className={`hdr-verdict ${recClass(rec)}`} onClick={() => window.scrollTo({ top: 0, behavior: "smooth" })}
+            aria-label={`${rec.noData ? "No data" : rec.level} at ${spot?.name || "this launch"}. Back to the top`}>
+            <span className="hdr-verdict-badge">{recLabel(rec)}</span>
             <span className="hdr-verdict-name">{spot?.name}</span>
             <span className="hdr-verdict-nums">
-              {wind.speedKt != null ? `${Math.round(wind.speedKt)} kt${wind.dir ? ` ${wind.dir}` : ""}` : ""}
+              {/* Same figures as the WIND tile: sustained, then gust when higher. */}
+              {wind.speedKt != null ? `${kt(wind.speedKt)} kt${wind.dir ? ` ${wind.dir}` : ""}` : ""}
+              {gustDrives ? `${wind.speedKt != null ? "," : ""} gusts ${kt(wind.gustKt)}` : ""}
               {wv.ft != null ? ` · ${fmtWaves(wv.ft, wv.periodSec)}` : ""}
             </span>
             <span className="hdr-verdict-up" aria-hidden="true">↑</span>
@@ -1146,7 +1244,7 @@ export default function App() {
       ) : (
       <>
       {/* FlightAware-style hero: sponsor takeover when sold, else house hero. */}
-      <Takeover adFree={adFree} spotName={activeName} verdict={rec?.level} signedIn={!gated} onJoin={() => setGateAuth("register")} authPending={auth.user === undefined}
+      <Takeover adFree={adFree} spotName={activeName} verdict={rec ? recLabel(rec) : undefined}signedIn={!gated} onJoin={() => setGateAuth("register")} authPending={auth.user === undefined}
         spot={spot && spot.adHoc && !spot.built ? null : active} region={sponsorRegion} />
 
       <main className="app">
@@ -1175,8 +1273,8 @@ export default function App() {
         {data && !data.notMarine && (
           <>
             {/* ── The Call ── */}
-            <section className={`call ${verdictClass(rec.level)}`} ref={callRef}>
-              <div className="call-badge"><span>{rec.level}</span></div>
+            <section className={`call ${recClass(rec)}`} ref={callRef}>
+              <div className="call-badge"><span>{recLabel(rec)}</span></div>
               <div className="call-body">
                 <div className="call-top">
                   <span className="call-spot">
@@ -1193,6 +1291,8 @@ export default function App() {
                   <ShareButton spot={spot} rec={rec} wind={wind} wv={wv} />
                 </div>
                 <div className="call-sum">{rec.summary}</div>
+                {fr && <FreshLine data={data} rec={rec} fr={fr} now={now} />}
+                {fr && <StaleNotice fr={fr} onRefresh={() => (preview ? loadPoint(preview) : loadSpot(active))} />}
                 <ul className="reasons">{rec.reasons.map((x, i) => <li key={i}>{x}</li>)}</ul>
                 {comfort && (
                   <div className={`comfort ${comfort.ok ? "ok" : "over"}`}>
@@ -1214,9 +1314,16 @@ export default function App() {
             {/* ── Right now ── */}
             <div className="grid stats">
               <div className="stat hero">
-                <div className="k">Wind</div>
+                <div className="k">Wind <span className="k-note">sustained</span></div>
                 <div className="v">{fmt(kt(wind.speedKt), "")}<small>kt</small> <Trend t={trendOf(data.hourly?.[0]?.windKt, data.hourly?.[3]?.windKt)} /></div>
-                <div className="sub">{[wind.dir, wind.gustKt ? `gust ${kt(wind.gustKt)}${wind.gustSrc === "forecast" && wind.source !== "forecast" ? " (forecast)" : ""}` : null, wind.source].filter(Boolean).join(" · ") || "—"}</div>
+                {/* Labelled so the tile, the header strip and the reasons read as one
+                    story: sustained here, the gust (which the verdict rates on when
+                    higher) next to it, and where/when the number came from. */}
+                <div className="sub">
+                  {[wind.dir,
+                    wind.gustKt != null ? `gusts ${kt(wind.gustKt)}${wind.gustSrc === "forecast" && wind.source !== "forecast" ? " (forecast)" : ""}` : null,
+                    fr ? windBasisText(wind, fr) : wind.source].filter(Boolean).join(" · ") || "—"}
+                </div>
               </div>
               <div className="stat">
                 <div className="k">Waves</div>
