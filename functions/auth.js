@@ -168,6 +168,9 @@ const adminUserView = (u) => ({
   favoriteSpots: u.favorites || [],
 });
 const safeUrl = (u) => (/^(https?:\/\/|\/(?!\/))/i.test(u || "") ? u : "");
+// Header photos are uploads or bundled files only: never a third-party host
+// that every visitor's browser would hit.
+const ownImageUrl = (u) => (/^\/(api\/asset\/[a-z0-9]+|spots\/[a-z0-9-]+\.(jpe?g|webp|png))$/i.test(u || "") ? u : "");
 function sanitizeSiteConfig(input) {
   const c = input && typeof input === "object" ? input : {};
   const str = (v, n) => (typeof v === "string" ? v.slice(0, n) : "");
@@ -196,12 +199,12 @@ function sanitizeSiteConfig(input) {
       // Per-region hero photo (REGIONS slug → URL); unset regions use the main
       // image, or the coastal illustration for warm-water regions.
       regions: Object.fromEntries(Object.entries(hero.regions && typeof hero.regions === "object" ? hero.regions : {})
-        .filter(([k, v]) => REGIONS.some((r) => r.slug === k) && typeof v === "string" && safeUrl(v.slice(0, 400)))
+        .filter(([k, v]) => REGIONS.some((r) => r.slug === k) && typeof v === "string" && ownImageUrl(v.slice(0, 400)))
         .map(([k, v]) => [k, v.slice(0, 400)])),
       // Per-launch header photo (spot id → uploaded image URL); overrides the
       // bundled photo in src/spot-photos.js. Ids are slugs (built pages included).
       spots: Object.fromEntries(Object.entries(hero.spots && typeof hero.spots === "object" ? hero.spots : {})
-        .filter(([k, v]) => /^[a-z0-9-]{1,60}$/.test(k) && typeof v === "string" && safeUrl(v.slice(0, 400)))
+        .filter(([k, v]) => /^[a-z0-9-]{1,60}$/.test(k) && typeof v === "string" && ownImageUrl(v.slice(0, 400)))
         .slice(0, 300)
         .map(([k, v]) => [k, v.slice(0, 400)])),
     },
@@ -1148,7 +1151,11 @@ export async function handleAuth(request, env, url, ctx) {
     const buf = await env.USERS.get(`asset:${id}`, "arrayBuffer");
     if (!buf) return new Response("Not found", { status: 404 });
     const ct = (await env.USERS.get(`asset:${id}:ct`)) || "image/jpeg";
-    return new Response(buf, { headers: { "Content-Type": ct, "Cache-Control": "public, max-age=31536000, immutable" } });
+    // Sandboxed: an uploaded SVG opened directly must not run script on our origin.
+    const headers = { "Content-Type": ct, "Cache-Control": "public, max-age=31536000, immutable",
+      "X-Content-Type-Options": "nosniff", "Content-Security-Policy": "default-src 'none'; style-src 'unsafe-inline'; sandbox" };
+    if (/svg/i.test(ct)) headers["Content-Disposition"] = "attachment";
+    return new Response(buf, { headers });
   }
 
   // ---- admin: upload an image (stored in KV, served at /api/asset/<id>) ----

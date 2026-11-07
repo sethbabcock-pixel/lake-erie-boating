@@ -609,7 +609,7 @@ async function run() {
     const admin = await seedUser(env, "admin@example.com");
     const config = {
       hero: { image: "/x.jpg", headline: "Boat?", sub: "s", showVerdict: false,
-        spots: { "put-in-bay": "/api/asset/abc123", "Bad Id!": "/y.jpg", sandusky: "javascript:alert(1)", erie: "//evil.test/x.jpg" } },
+        spots: { "put-in-bay": "/api/asset/abc123", "Bad Id!": "/y.jpg", sandusky: "javascript:alert(1)", erie: "//evil.test/x.jpg", toledo: "https://tracker.test/p.jpg" } },
       takeovers: [{ sponsor: "Acme", headline: "Buy", start: "2000-01-01", end: "2999-01-01", href: "https://acme.test" }],
       gam: { networkCode: "12345678" },
       bogusField: "should be dropped",
@@ -620,6 +620,12 @@ async function run() {
     eq("admin/config PUT: hero saved", saved.hero.image, "/x.jpg");
     eq("admin/config PUT: launch photo saved", saved.hero.spots["put-in-bay"], "/api/asset/abc123");
     eq("admin/config PUT: launch photos drop bad ids and unsafe URLs", JSON.stringify(Object.keys(saved.hero.spots)), JSON.stringify(["put-in-bay"]));
+    {
+      const { SPOT_PHOTOS } = await import("../src/spot-photos.js");
+      const bad = Object.entries(SPOT_PHOTOS).filter(([id, p]) => !/^\/spots\/[a-z0-9-]+\.jpe?g$/.test(p.src || "")
+        || !/^https:\/\/commons\.wikimedia\.org\/wiki\/File:/.test(p.source || "") || !p.credit || !p.license);
+      check("spot photos: bundled entries are local JPEGs with a Commons source, credit and license", !bad.length, JSON.stringify(bad.slice(0, 3)));
+    }
     check("admin/config PUT: strips unknown fields", !("bogusField" in saved), JSON.stringify(saved));
     check("admin/config PUT: assigns campaign id", !!saved.takeovers[0].id, JSON.stringify(saved.takeovers[0]));
     // public site-config now reflects it
@@ -657,6 +663,8 @@ async function run() {
     const got = await call(req("GET", url), env);
     eq("asset: served 200", got.status, 200);
     eq("asset: correct content-type", got.headers.get("Content-Type"), "image/png");
+    eq("asset: nosniff", got.headers.get("X-Content-Type-Options"), "nosniff");
+    check("asset: sandboxed CSP", /sandbox/.test(got.headers.get("Content-Security-Policy") || ""), got.headers.get("Content-Security-Policy"));
     const back = new Uint8Array(await got.arrayBuffer());
     check("asset: bytes round-trip", back.length === pngBytes.length && back[0] === 0x89, `len ${back.length}`);
     // missing asset → 404

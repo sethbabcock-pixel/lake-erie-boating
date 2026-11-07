@@ -133,7 +133,7 @@ function HouseHero({ hero, spotName, verdict, adFree, splash, children, signedIn
     const pic = spotPhoto(h, spot, region || null);
     return (
       <section className={`hero hero-band${pic ? " has-photo" : ""}`}>
-        {pic && <img className="hero-band-img" src={pic.src} alt="" fetchpriority="high" decoding="async" />}
+        {pic && <img className="hero-band-img" src={pic.src} alt="" fetchpriority="high" decoding="async" referrerPolicy="no-referrer" />}
         {pic && pic.credit && (
           <a className="hero-band-credit" href={pic.source} target="_blank" rel="noopener">
             Photo: {pic.credit}{pic.license ? ` · ${pic.license}` : ""}

@@ -315,7 +315,7 @@ function LaunchPhotos({ h, set }) {
           const shown = up || (def && def.src) || "";
           return (
             <div className="adm-regionhero" key={l.id}>
-              <div className={`adm-regionhero-img${shown ? "" : " empty"}`} style={shown ? { backgroundImage: `url(${shown})` } : undefined}>
+              <div className={`adm-regionhero-img${shown ? "" : " empty"}`} style={shown ? { backgroundImage: `url(${JSON.stringify(shown)})` } : undefined}>
                 <span>{l.name}</span>
                 <em>{up ? "uploaded" : def ? "bundled" : "no photo"}</em>
               </div>
@@ -366,7 +366,7 @@ export function HomepagePage({ cfg, setCfg }) {
             const shown = v || (r.warm ? "/hero-coast.svg" : h.image);
             return (
               <div className="adm-regionhero" key={r.slug}>
-                <div className="adm-regionhero-img" style={{ backgroundImage: `url(${shown})` }}>
+                <div className="adm-regionhero-img" style={{ backgroundImage: `url(${JSON.stringify(shown)})` }}>
                   <span>{r.title}</span>
                   {!v && <em>{r.warm ? "coastal default" : "main image"}</em>}
                 </div>
