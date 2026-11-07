@@ -634,7 +634,7 @@ function EmailNudge({ auth }) {
 }
 
 // The gold "yellow time" — when to head back in.
-function OutlookPill({ outlook }) {
+function OutlookPill({ outlook, level }) {
   if (!outlook) return null;
   // A known storm/NO-GO cutoff always shows, even alongside missing wind data.
   const cutoff = outlook.headInBy ? <> · be in by <b>{fmtHour(outlook.headInBy, true)}</b> · {outlook.headInReason || "weather turns"}</> : null;
@@ -644,6 +644,10 @@ function OutlookPill({ outlook }) {
     return <span className="opill warn"><IconClock /> wind data runs out at <b>{fmtHour(outlook.dataEndsAt, true)}</b>{cutoff || " · check back"}</span>;
   if (outlook.headInBy)
     return <span className="opill warn"><IconClock /> be in by <b>{fmtHour(outlook.headInBy, true)}</b> · {outlook.headInReason || "weather turns"}</span>;
+  // The hourly outlook ignores marine advisories; never show a green "good for"
+  // pill beside an advisory-driven CAUTION / NO-GO headline.
+  if (level === "NO-GO") return <span className="opill bad"><IconNoGo /> not right now</span>;
+  if (level === "CAUTION") return <span className="opill warn"><IconClock /> use caution · see the call above</span>;
   return <span className="opill good"><IconClock /> good for {outlook.goodHours}h+</span>;
 }
 
@@ -1191,7 +1195,7 @@ export default function App() {
                         onClick={() => toggleFav(active)}><IconStar filled={(auth.user.favorites || []).includes(active)} /></button>
                     )}
                   </span>
-                  <OutlookPill outlook={data.outlook} />
+                  <OutlookPill outlook={data.outlook} level={rec?.level} />
                   <SunTimes sun={data.sun} />
                   <ShareButton spot={spot} rec={rec} wind={wind} wv={wv} />
                 </div>

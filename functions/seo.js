@@ -12,6 +12,8 @@ import { REGIONS, regionBySlug, nearMetroBySlug, seasonalRegions, LAKE_GUIDES, r
 
 const SITE = "https://shouldiboat.com";
 const lakeOf = (s) => s.lake || "Lake Erie";
+// "on the Oregon Coast", but "on Lake Erie" / "on Puget Sound".
+const onWater = (lake) => (/ Coast$/.test(lake) ? `the ${lake}` : lake);
 
 // Great-circle miles — for ranking the nearest launches to a /near/<metro>.
 const haversineMi = (a, b) => {
@@ -41,7 +43,7 @@ const spotJsonld = (id, s, lake) => ({
   "@type": "WebPage",
   name: `Should I boat at ${s.name} today?`,
   url: `${SITE}/spot/${id}`,
-  about: `Boating conditions for ${s.name} on ${lake}`,
+  about: `Boating conditions for ${s.name} on ${onWater(lake)}`,
   isPartOf: { "@type": "WebSite", name: "shouldiboat.com", url: `${SITE}/` },
   // Two levels only: every non-final crumb needs a real URL, and we don't have
   // per-lake pages yet — a middle "lake" crumb with no `item` fails validation.
@@ -293,12 +295,12 @@ export function seoForPath(pathname, live = null) {
   if (m && SPOTS[m[1]]) {
     const s = SPOTS[m[1]];
     const lake = lakeOf(s);
-    const description = `Live GO / CAUTION / NO-GO boating conditions for ${s.name} on ${lake}, from NOAA wind, waves, gusts, an hour-by-hour risk timeline, marine warnings and live webcams.`;
+    const description = `Live GO / CAUTION / NO-GO boating conditions for ${s.name} on ${onWater(lake)}, from NOAA wind, waves, gusts, an hour-by-hour risk timeline, marine warnings and live webcams.`;
     const nearby = sameLakeSpots(m[1], lake);
     const byId = Object.fromEntries(tiles.map((t) => [t.id, t]));
     const { out } = spotSections(m[1], s, lake, byId[m[1]], live && live.updatedAt);
     if (nearby.length) {
-      out.push({ h2: `Nearby launches on ${lake}`, html: `<ul style="margin:0;padding-left:20px">${nearby.map((x) => {
+      out.push({ h2: `Nearby launches on ${onWater(lake)}`, html: `<ul style="margin:0;padding-left:20px">${nearby.map((x) => {
         const t = byId[x.id];
         return `<li>${link(x.href, x.text)} (${x.mi} mi)${t && t.level ? `: <strong>${esc(t.level)}</strong>${tileLine(t) ? `, ${esc(tileLine(t))}` : ""}` : ""}</li>`;
       }).join("")}</ul>` });
@@ -334,7 +336,7 @@ export async function seoForBuiltSpot(env, slug) {
   const b = await env.USERS.get(`builtspot:${slug}`, "json").catch(() => null);
   if (!b || b.disabled) return null;
   const lake = b.lake || "the water";
-  const description = `Live GO / CAUTION / NO-GO boating conditions for ${b.name} on ${lake}, from NOAA wind, waves, an hour-by-hour risk timeline and marine warnings.`;
+  const description = `Live GO / CAUTION / NO-GO boating conditions for ${b.name} on ${onWater(lake)}, from NOAA wind, waves, an hour-by-hour risk timeline and marine warnings.`;
   return {
     url: `${SITE}/spot/${slug}`,
     title: `Should I boat at ${b.name} today? Live conditions · shouldiboat.com`,
@@ -344,7 +346,7 @@ export async function seoForBuiltSpot(env, slug) {
     bodyHtml: ssrBody({
       h1: `Should I boat at ${b.name} today?`,
       description,
-      body: `${b.name} on ${lake}. Live GO / CAUTION / NO-GO verdict from NOAA/NWS wind, gusts and wave height, an hour-by-hour risk timeline and marine warnings. Loading live conditions…`,
+      body: `${b.name} on ${onWater(lake)}. Live GO / CAUTION / NO-GO verdict from NOAA/NWS wind, gusts and wave height, an hour-by-hour risk timeline and marine warnings. Loading live conditions…`,
       links: [{ href: "/", text: "All launches" }, { href: "/guides/", text: "Boating guides" }],
     }),
   };
@@ -414,7 +416,7 @@ const GUIDES = [
 // but only trusts it when it's accurate — so BUMP THIS when you ship a change
 // that alters what's on the pages (new content, layout, copy), not on every
 // deploy. W3C date format (YYYY-MM-DD).
-const CONTENT_UPDATED = "2026-11-06";
+const CONTENT_UPDATED = "2026-11-07";
 
 // Launch pages (/spot/*) are noindex and deliberately left out (see seoForPath).
 export async function sitemapXml() {
