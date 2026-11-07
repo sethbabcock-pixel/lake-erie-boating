@@ -25,142 +25,145 @@ const NWS = "https://api.weather.gov";
 export const SPOTS = {
   toledo: {
     name: "Toledo / Maumee Bay",
-    lat: 41.694, lon: -83.32, zone: "LEZ142", buoys: ["45005", "THLO1"],
+    lat: 41.694, lon: -83.32, zone: "LEZ142", land: ["OHZ003", "OHC095"], buoys: ["45005", "THLO1"],
   },
   "port-clinton": {
     name: "Port Clinton / Catawba",
-    lat: 41.512, lon: -82.94, zone: "LEZ143", buoys: ["45005"],
+    lat: 41.512, lon: -82.94, zone: "LEZ143", land: ["OHZ007", "OHC123"], buoys: ["45005"],
   },
   "put-in-bay": {
     name: "Put-in-Bay / South Bass Island",
-    lat: 41.652, lon: -82.82, zone: "LEZ143", buoys: ["SBIO1", "45005"],
+    lat: 41.652, lon: -82.82, zone: "LEZ143", land: ["OHZ007", "OHC123"], buoys: ["SBIO1", "45005"],
   },
   sandusky: {
     name: "Sandusky / Cedar Point",
-    lat: 41.46, lon: -82.71, zone: "LEZ143", buoys: ["45005"],
+    lat: 41.46, lon: -82.71, zone: "LEZ143", land: ["OHZ009", "OHC043"], buoys: ["45005"],
   },
   vermilion: {
     name: "Vermilion / Lorain",
     lat: 41.47, lon: -82.31, zone: "LEZ144", buoys: ["45176", "45164", "45005"],
+    // Spans the Erie/Lorain county line (launch point is on the Lorain side;
+    // the inland walk lands in Erie County): watch both.
+    land: ["OHZ009", "OHC043", "OHZ010", "OHC093"],
   },
   cleveland: {
     name: "Cleveland",
-    lat: 41.507, lon: -81.706, zone: "LEZ146", buoys: ["45164", "45176"],
+    lat: 41.507, lon: -81.706, zone: "LEZ146", land: ["OHZ011", "OHC035"], buoys: ["45164", "45176"],
   },
   fairport: {
     name: "Fairport Harbor / Mentor",
-    lat: 41.76, lon: -81.28, zone: "LEZ147", buoys: ["45207", "45164", "45167"],
+    lat: 41.76, lon: -81.28, zone: "LEZ147", land: ["OHZ012", "OHC085"], buoys: ["45207", "45164", "45167"],
   },
   conneaut: {
     name: "Conneaut / Ashtabula",
-    lat: 41.96, lon: -80.55, zone: "LEZ148", buoys: ["45207", "45167"],
+    lat: 41.96, lon: -80.55, zone: "LEZ148", land: ["OHZ089", "OHC007"], buoys: ["45207", "45167"],
   },
   erie: {
     name: "Erie, PA / Presque Isle",
-    lat: 42.16, lon: -80.11, zone: "LEZ149", buoys: ["45167"],
+    lat: 42.16, lon: -80.11, zone: "LEZ149", land: ["PAZ001", "PAC049"], buoys: ["45167"],
   },
 
   // ── Other Great Lakes (US shores). zone/office resolved from NWS; buoys
   // optional (wind from forecast, waves from the NWS grid cover spots w/o buoys).
-  rochester: { name: "Rochester", lat: 43.22, lon: -77.62, zone: "LOZ043", office: "BUF", buoys: ["45012"], lake: "Lake Ontario", sea: 0 },
-  "sodus-bay": { name: "Sodus Bay", lat: 43.27, lon: -76.97, zone: "LOZ043", office: "BUF", buoys: ["45012"], lake: "Lake Ontario", sea: 0 },
-  oswego: { name: "Oswego", lat: 43.47, lon: -76.51, zone: "LOZ044", office: "BUF", buoys: ["45012"], lake: "Lake Ontario", sea: 315 },
-  "sackets-harbor": { name: "Sackets Harbor", lat: 43.94, lon: -76.12, zone: "LOZ045", office: "BUF", buoys: [], lake: "Lake Ontario" },
-  olcott: { name: "Olcott / Wilson", lat: 43.34, lon: -78.72, zone: "LOZ042", office: "BUF", buoys: [], lake: "Lake Ontario", sea: 20 },
+  rochester: { name: "Rochester", lat: 43.22, lon: -77.62, zone: "LOZ043", land: ["NYZ003", "NYC055"], office: "BUF", buoys: ["45012"], lake: "Lake Ontario", sea: 0 },
+  "sodus-bay": { name: "Sodus Bay", lat: 43.27, lon: -76.97, zone: "LOZ043", land: ["NYZ004", "NYC117"], office: "BUF", buoys: ["45012"], lake: "Lake Ontario", sea: 0 },
+  oswego: { name: "Oswego", lat: 43.47, lon: -76.51, zone: "LOZ044", land: ["NYZ006", "NYC075"], office: "BUF", buoys: ["45012"], lake: "Lake Ontario", sea: 315 },
+  "sackets-harbor": { name: "Sackets Harbor", lat: 43.94, lon: -76.12, zone: "LOZ045", land: ["NYZ007", "NYC045"], office: "BUF", buoys: [], lake: "Lake Ontario" },
+  olcott: { name: "Olcott / Wilson", lat: 43.34, lon: -78.72, zone: "LOZ042", land: ["NYZ001", "NYC063"], office: "BUF", buoys: [], lake: "Lake Ontario", sea: 20 },
 
-  "port-huron": { name: "Port Huron", lat: 42.98, lon: -82.42, zone: "LHZ443", office: "DTX", buoys: [], lake: "Lake Huron", sea: 15, waterBuoys: ["45209", "AGCM4"] },
-  tawas: { name: "Tawas Bay", lat: 44.2775, lon: -83.488, zone: "LHZ349", office: "APX", buoys: [], lake: "Lake Huron", sea: 175, gridSteps: [0.1, 0.22] },
-  alpena: { name: "Alpena / Thunder Bay", lat: 45.06, lon: -83.42, zone: "LHZ348", office: "APX", buoys: ["45003"], lake: "Lake Huron", sea: 115, gridSteps: [0.14, 0.18, 0.22], waterBuoys: ["LPNM4", "45212"] },
-  "harbor-beach": { name: "Harbor Beach", lat: 43.84, lon: -82.64, zone: "LHZ442", office: "DTX", buoys: [], lake: "Lake Huron", sea: 45, waterBuoys: ["HRBM4", "45149"] },
-  mackinaw: { name: "Mackinaw City / Straits", lat: 45.78, lon: -84.72, zone: "LHZ345", office: "APX", buoys: [], lake: "Lake Michigan", waterBuoys: ["MACM4", "45194"] },
+  "port-huron": { name: "Port Huron", lat: 42.98, lon: -82.42, zone: "LHZ443", land: ["MIZ063", "MIC147"], office: "DTX", buoys: [], lake: "Lake Huron", sea: 15, waterBuoys: ["45209", "AGCM4"] },
+  tawas: { name: "Tawas Bay", lat: 44.2775, lon: -83.488, zone: "LHZ349", land: ["MIZ036", "MIC069"], office: "APX", buoys: [], lake: "Lake Huron", sea: 175, gridSteps: [0.1, 0.22] },
+  alpena: { name: "Alpena / Thunder Bay", lat: 45.06, lon: -83.42, zone: "LHZ348", land: ["MIZ024", "MIC007"], office: "APX", buoys: ["45003"], lake: "Lake Huron", sea: 115, gridSteps: [0.14, 0.18, 0.22], waterBuoys: ["LPNM4", "45212"] },
+  "harbor-beach": { name: "Harbor Beach", lat: 43.84, lon: -82.64, zone: "LHZ442", land: ["MIZ049", "MIC063"], office: "DTX", buoys: [], lake: "Lake Huron", sea: 45, waterBuoys: ["HRBM4", "45149"] },
+  mackinaw: { name: "Mackinaw City / Straits", lat: 45.78, lon: -84.72, zone: "LHZ345", land: ["MIZ017", "MIC031"], office: "APX", buoys: [], lake: "Lake Michigan", waterBuoys: ["MACM4", "45194"] },
 
-  chicago: { name: "Chicago", lat: 41.89, lon: -87.60, zone: "LMZ741", office: "LOT", buoys: ["45198"], lake: "Lake Michigan", waterBuoys: ["45170"] },
-  milwaukee: { name: "Milwaukee", lat: 43.03, lon: -87.88, zone: "LMZ645", office: "MKX", buoys: ["45013"], lake: "Lake Michigan" },
-  muskegon: { name: "Muskegon", lat: 43.23, lon: -86.34, zone: "LMZ844", office: "GRR", buoys: ["45161"], lake: "Lake Michigan", waterBuoys: ["45029", "HLNM4"] },
-  holland: { name: "Holland", lat: 42.77, lon: -86.21, zone: "LMZ846", office: "GRR", buoys: [], lake: "Lake Michigan", waterBuoys: ["HLNM4", "45029"] },
-  "traverse-city": { name: "Traverse City", lat: 44.76, lon: -85.62, zone: "LMZ323", office: "APX", buoys: [], lake: "Lake Michigan" },
-  sheboygan: { name: "Sheboygan", lat: 43.75, lon: -87.715, zone: "LMZ643", office: "MKX", buoys: [], lake: "Lake Michigan", waterBuoys: ["45210"] },
-  "michigan-city": { name: "Michigan City", lat: 41.72, lon: -86.91, zone: "LMZ046", office: "IWX", buoys: ["45198"], lake: "Lake Michigan", waterBuoys: ["45170", "45026"] },
-  petoskey: { name: "Petoskey", lat: 45.373, lon: -84.955, zone: "LMZ342", office: "APX", buoys: [], lake: "Lake Michigan", waterBuoys: ["MACM4", "45194"] },
-  "harbor-springs": { name: "Harbor Springs", lat: 45.431, lon: -84.992, zone: "LMZ342", office: "APX", buoys: [], lake: "Lake Michigan", waterBuoys: ["MACM4", "45194"] },
-  "cross-village": { name: "Cross Village", lat: 45.641, lon: -85.032, zone: "LMZ342", office: "APX", buoys: [], lake: "Lake Michigan", waterBuoys: ["45194", "MACM4"] },
+  chicago: { name: "Chicago", lat: 41.89, lon: -87.60, zone: "LMZ741", land: ["ILZ104", "ILC031"], office: "LOT", buoys: ["45198"], lake: "Lake Michigan", waterBuoys: ["45170"] },
+  milwaukee: { name: "Milwaukee", lat: 43.03, lon: -87.88, zone: "LMZ645", land: ["WIZ066", "WIC079"], office: "MKX", buoys: ["45013"], lake: "Lake Michigan" },
+  muskegon: { name: "Muskegon", lat: 43.23, lon: -86.34, zone: "LMZ844", land: ["MIZ050", "MIC121"], office: "GRR", buoys: ["45161"], lake: "Lake Michigan", waterBuoys: ["45029", "HLNM4"] },
+  holland: { name: "Holland", lat: 42.77, lon: -86.21, zone: "LMZ846", land: ["MIZ064", "MIC005"], office: "GRR", buoys: [], lake: "Lake Michigan", waterBuoys: ["HLNM4", "45029"] },
+  "traverse-city": { name: "Traverse City", lat: 44.76, lon: -85.62, zone: "LMZ323", land: ["MIZ026", "MIC055"], office: "APX", buoys: [], lake: "Lake Michigan" },
+  sheboygan: { name: "Sheboygan", lat: 43.75, lon: -87.715, zone: "LMZ643", land: ["WIZ052", "WIC117"], office: "MKX", buoys: [], lake: "Lake Michigan", waterBuoys: ["45210"] },
+  "michigan-city": { name: "Michigan City", lat: 41.72, lon: -86.91, zone: "LMZ046", land: ["INZ103", "INC091"], office: "IWX", buoys: ["45198"], lake: "Lake Michigan", waterBuoys: ["45170", "45026"] },
+  petoskey: { name: "Petoskey", lat: 45.373, lon: -84.955, zone: "LMZ342", land: ["MIZ016", "MIC047"], office: "APX", buoys: [], lake: "Lake Michigan", waterBuoys: ["MACM4", "45194"] },
+  "harbor-springs": { name: "Harbor Springs", lat: 45.431, lon: -84.992, zone: "LMZ342", land: ["MIZ016", "MIC047"], office: "APX", buoys: [], lake: "Lake Michigan", waterBuoys: ["MACM4", "45194"] },
+  "cross-village": { name: "Cross Village", lat: 45.641, lon: -85.032, zone: "LMZ342", land: ["MIZ016", "MIC047"], office: "APX", buoys: [], lake: "Lake Michigan", waterBuoys: ["45194", "MACM4"] },
 
-  duluth: { name: "Duluth", lat: 46.78, lon: -92.08, zone: "LSZ145", office: "DLH", buoys: ["45027"], lake: "Lake Superior", waterBuoys: ["DULM5"] },
-  bayfield: { name: "Bayfield / Apostle Is.", lat: 46.81, lon: -90.82, zone: "LSZ143", office: "DLH", buoys: [], lake: "Lake Superior" },
-  marquette: { name: "Marquette", lat: 46.54, lon: -87.38, zone: "LSZ249", office: "MQT", buoys: ["45004"], lake: "Lake Superior" },
-  houghton: { name: "Houghton / Keweenaw", lat: 47.12, lon: -88.57, zone: "LSZ267", office: "MQT", buoys: [], lake: "Lake Superior" },
-  "grand-marais": { name: "Grand Marais, MN", lat: 47.75, lon: -90.33, zone: "LSZ140", office: "DLH", buoys: [], lake: "Lake Superior", waterBuoys: ["GDMM5", "45006"] },
+  duluth: { name: "Duluth", lat: 46.78, lon: -92.08, zone: "LSZ145", land: ["MNZ037", "MNC137"], office: "DLH", buoys: ["45027"], lake: "Lake Superior", waterBuoys: ["DULM5"] },
+  bayfield: { name: "Bayfield / Apostle Is.", lat: 46.81, lon: -90.82, zone: "LSZ143", land: ["WIZ002", "WIC007"], office: "DLH", buoys: [], lake: "Lake Superior" },
+  marquette: { name: "Marquette", lat: 46.54, lon: -87.38, zone: "LSZ249", land: ["MIZ005", "MIC103"], office: "MQT", buoys: ["45004"], lake: "Lake Superior" },
+  houghton: { name: "Houghton / Keweenaw", lat: 47.12, lon: -88.57, zone: "LSZ267", land: ["MIZ003", "MIC061"], office: "MQT", buoys: [], lake: "Lake Superior" },
+  "grand-marais": { name: "Grand Marais, MN", lat: 47.75, lon: -90.33, zone: "LSZ140", land: ["MNZ021", "MNC031"], office: "DLH", buoys: [], lake: "Lake Superior", waterBuoys: ["GDMM5", "45006"] },
 
   // ── Beyond the Great Lakes: coastal / tidal waters. Same NWS grid + marine
   // zone + NDBC pipeline — the water body (`lake`) just needs a WATER_CENTERS
   // entry so a seaward wave cell gets sampled. Zone/office/buoy IDs are the
   // NWS/NDBC identifiers for each area; verify against live data when adding more.
-  "middle-river": { name: "Middle River / Essex, MD", lat: 39.31, lon: -76.40, zone: "ANZ531", office: "LWX", product: "CWF", buoys: ["FSKM2", "44062"], lake: "Chesapeake Bay", waterBuoys: ["44080", "BLTM2"] },
-  "bath-nc": { name: "Bath / Pamlico River, NC", lat: 35.44, lon: -76.75, zone: "AMZ136", office: "MHX", product: "CWF", buoys: [], lake: "Pamlico Sound" },
+  "middle-river": { name: "Middle River / Essex, MD", lat: 39.31, lon: -76.40, zone: "ANZ531", land: ["MDZ011", "MDC005"], office: "LWX", product: "CWF", buoys: ["FSKM2", "44062"], lake: "Chesapeake Bay", waterBuoys: ["44080", "BLTM2"] },
+  "bath-nc": { name: "Bath / Pamlico River, NC", lat: 35.44, lon: -76.75, zone: "AMZ136", land: ["NCZ080", "NCC013"], office: "MHX", product: "CWF", buoys: [], lake: "Pamlico Sound" },
   // ── Warm-weather coasts. Zone/office/buoys resolved from api.weather.gov and
   // NDBC's active-station list (Oct 2026); `sea` is the bearing toward open
   // water (wave sampling + onshore/offshore reads); `water` picks the verdict
   // thresholds (see waterProfile); `openWater` is the prose name.
   // Florida Atlantic Coast, Biscayne Bay and the Keys
-  jacksonville: { name: "Jacksonville / Mayport, FL", lat: 30.395, lon: -81.41, zone: "AMZ452", office: "JAX", product: "CWF", buoys: ["MYPF1", "BLIF1"], lake: "Florida Atlantic Coast", water: "ocean", sea: 68, openWater: "the Atlantic" },
-  "st-augustine": { name: "St. Augustine, FL", lat: 29.89, lon: -81.29, zone: "AMZ454", office: "JAX", product: "CWF", buoys: ["SAUF1"], lake: "Florida Atlantic Coast", water: "ocean", sea: 68, openWater: "the Atlantic", waterBuoys: ["41117", "MYPF1"] },
-  "ponce-inlet": { name: "Ponce Inlet / New Smyrna, FL", lat: 29.08, lon: -80.93, zone: "AMZ550", office: "MLB", product: "CWF", buoys: ["41069"], lake: "Florida Atlantic Coast", water: "ocean", sea: 68, openWater: "the Atlantic" },
-  "port-canaveral": { name: "Port Canaveral / Cocoa Beach, FL", lat: 28.41, lon: -80.61, zone: "AMZ552", office: "MLB", product: "CWF", buoys: ["TRDF1", "41009"], lake: "Florida Atlantic Coast", water: "ocean", sea: 68, openWater: "the Atlantic", waterBuoys: ["41113"] },
-  "sebastian-inlet": { name: "Sebastian Inlet, FL", lat: 27.86, lon: -80.45, zone: "AMZ552", office: "MLB", product: "CWF", buoys: ["SIPF1", "41068"], lake: "Florida Atlantic Coast", water: "ocean", sea: 68, openWater: "the Atlantic", waterBuoys: ["41114", "41113"] },
-  "fort-pierce": { name: "Fort Pierce, FL", lat: 27.47, lon: -80.3, zone: "AMZ555", office: "MLB", product: "CWF", buoys: ["41068", "SIPF1"], lake: "Florida Atlantic Coast", water: "ocean", sea: 68, openWater: "the Atlantic" },
-  jupiter: { name: "Jupiter Inlet, FL", lat: 26.945, lon: -80.075, zone: "AMZ650", office: "MFL", product: "CWF", buoys: ["LKWF1"], lake: "Florida Atlantic Coast", water: "ocean", sea: 68, openWater: "the Atlantic" },
-  "palm-beach": { name: "Palm Beach Inlet, FL", lat: 26.77, lon: -80.04, zone: "AMZ650", office: "MFL", product: "CWF", buoys: ["LKWF1"], lake: "Florida Atlantic Coast", water: "ocean", sea: 90, openWater: "the Atlantic" },
-  "fort-lauderdale": { name: "Fort Lauderdale, FL", lat: 26.1, lon: -80.11, zone: "AMZ651", office: "MFL", product: "CWF", buoys: ["PEGF1", "VAKF1"], lake: "Florida Atlantic Coast", water: "ocean", sea: 113, openWater: "the Atlantic", waterBuoys: ["41122", "LKWF1"] },
-  miami: { name: "Miami / Government Cut, FL", lat: 25.765, lon: -80.135, zone: "AMZ651", office: "MFL", product: "CWF", buoys: ["VAKF1", "PEGF1"], lake: "Florida Atlantic Coast", water: "ocean", sea: 135, openWater: "the Atlantic" },
-  "biscayne-bay": { name: "Biscayne Bay / Coconut Grove, FL", lat: 25.72, lon: -80.23, zone: "AMZ630", office: "MFL", product: "CWF", buoys: ["VAKF1", "PEGF1"], lake: "Florida Atlantic Coast", water: "sheltered", sea: 135, openWater: "Biscayne Bay" },
-  "key-largo": { name: "Key Largo, FL", lat: 25.09, lon: -80.44, zone: "GMZ042", office: "KEY", product: "CWF", buoys: [], lake: "Florida Keys", water: "ocean", sea: 120, openWater: "the Atlantic" },
-  islamorada: { name: "Islamorada, FL", lat: 24.92, lon: -80.63, zone: "GMZ042", office: "KEY", product: "CWF", buoys: ["WRBF1"], lake: "Florida Keys", water: "ocean", sea: 135, openWater: "the Atlantic" },
-  marathon: { name: "Marathon, FL", lat: 24.71, lon: -81.09, zone: "GMZ032", office: "KEY", product: "CWF", buoys: ["VCAF1", "SMKF1"], lake: "Florida Keys", water: "ocean", sea: 160, openWater: "the Atlantic" },
-  "key-west": { name: "Key West, FL", lat: 24.555, lon: -81.8, zone: "GMZ044", office: "KEY", product: "CWF", buoys: ["KYWF1", "SANF1"], lake: "Florida Keys", water: "ocean", sea: 180, openWater: "the Atlantic" },
+  jacksonville: { name: "Jacksonville / Mayport, FL", lat: 30.395, lon: -81.41, zone: "AMZ452", land: ["FLZ125", "FLC031"], office: "JAX", product: "CWF", buoys: ["MYPF1", "BLIF1"], lake: "Florida Atlantic Coast", water: "ocean", sea: 68, openWater: "the Atlantic" },
+  "st-augustine": { name: "St. Augustine, FL", lat: 29.89, lon: -81.29, zone: "AMZ454", land: ["FLZ333", "FLC109"], office: "JAX", product: "CWF", buoys: ["SAUF1"], lake: "Florida Atlantic Coast", water: "ocean", sea: 68, openWater: "the Atlantic", waterBuoys: ["41117", "MYPF1"] },
+  "ponce-inlet": { name: "Ponce Inlet / New Smyrna, FL", lat: 29.08, lon: -80.93, zone: "AMZ550", land: ["FLZ141", "FLC127"], office: "MLB", product: "CWF", buoys: ["41069"], lake: "Florida Atlantic Coast", water: "ocean", sea: 68, openWater: "the Atlantic" },
+  "port-canaveral": { name: "Port Canaveral / Cocoa Beach, FL", lat: 28.41, lon: -80.61, zone: "AMZ552", land: ["FLZ447", "FLC009"], office: "MLB", product: "CWF", buoys: ["TRDF1", "41009"], lake: "Florida Atlantic Coast", water: "ocean", sea: 68, openWater: "the Atlantic", waterBuoys: ["41113"] },
+  "sebastian-inlet": { name: "Sebastian Inlet, FL", lat: 27.86, lon: -80.45, zone: "AMZ552", land: ["FLZ747", "FLC009", "FLZ154", "FLC061"] /* inlet is the Brevard/Indian River line; walk picked the mainland zone */, office: "MLB", product: "CWF", buoys: ["SIPF1", "41068"], lake: "Florida Atlantic Coast", water: "ocean", sea: 68, openWater: "the Atlantic", waterBuoys: ["41114", "41113"] },
+  "fort-pierce": { name: "Fort Pierce, FL", lat: 27.47, lon: -80.3, zone: "AMZ555", land: ["FLZ159", "FLC111"], office: "MLB", product: "CWF", buoys: ["41068", "SIPF1"], lake: "Florida Atlantic Coast", water: "ocean", sea: 68, openWater: "the Atlantic" },
+  jupiter: { name: "Jupiter Inlet, FL", lat: 26.945, lon: -80.075, zone: "AMZ650", land: ["FLZ168", "FLC099"], office: "MFL", product: "CWF", buoys: ["LKWF1"], lake: "Florida Atlantic Coast", water: "ocean", sea: 68, openWater: "the Atlantic" },
+  "palm-beach": { name: "Palm Beach Inlet, FL", lat: 26.77, lon: -80.04, zone: "AMZ650", land: ["FLZ168", "FLC099"], office: "MFL", product: "CWF", buoys: ["LKWF1"], lake: "Florida Atlantic Coast", water: "ocean", sea: 90, openWater: "the Atlantic" },
+  "fort-lauderdale": { name: "Fort Lauderdale, FL", lat: 26.1, lon: -80.11, zone: "AMZ651", land: ["FLZ172", "FLC011"], office: "MFL", product: "CWF", buoys: ["PEGF1", "VAKF1"], lake: "Florida Atlantic Coast", water: "ocean", sea: 113, openWater: "the Atlantic", waterBuoys: ["41122", "LKWF1"] },
+  miami: { name: "Miami / Government Cut, FL", lat: 25.765, lon: -80.135, zone: "AMZ651", land: ["FLZ173", "FLC086"] /* coastal Miami-Dade; walk reached the inland metro zone */, office: "MFL", product: "CWF", buoys: ["VAKF1", "PEGF1"], lake: "Florida Atlantic Coast", water: "ocean", sea: 135, openWater: "the Atlantic" },
+  "biscayne-bay": { name: "Biscayne Bay / Coconut Grove, FL", lat: 25.72, lon: -80.23, zone: "AMZ630", land: ["FLZ173", "FLC086"], office: "MFL", product: "CWF", buoys: ["VAKF1", "PEGF1"], lake: "Florida Atlantic Coast", water: "sheltered", sea: 135, openWater: "Biscayne Bay" },
+  "key-largo": { name: "Key Largo, FL", lat: 25.09, lon: -80.44, zone: "GMZ042", land: ["FLZ076", "FLC087"], office: "KEY", product: "CWF", buoys: [], lake: "Florida Keys", water: "ocean", sea: 120, openWater: "the Atlantic" },
+  islamorada: { name: "Islamorada, FL", lat: 24.92, lon: -80.63, zone: "GMZ042", land: ["FLZ076", "FLC087"], office: "KEY", product: "CWF", buoys: ["WRBF1"], lake: "Florida Keys", water: "ocean", sea: 135, openWater: "the Atlantic" },
+  marathon: { name: "Marathon, FL", lat: 24.71, lon: -81.09, zone: "GMZ032", land: ["FLZ077", "FLC087"], office: "KEY", product: "CWF", buoys: ["VCAF1", "SMKF1"], lake: "Florida Keys", water: "ocean", sea: 160, openWater: "the Atlantic" },
+  "key-west": { name: "Key West, FL", lat: 24.555, lon: -81.8, zone: "GMZ044", land: ["FLZ078", "FLC087"], office: "KEY", product: "CWF", buoys: ["KYWF1", "SANF1"], lake: "Florida Keys", water: "ocean", sea: 180, openWater: "the Atlantic" },
   // Florida Gulf Coast
-  "marco-island": { name: "Marco Island, FL", lat: 25.94, lon: -81.72, zone: "GMZ656", office: "MFL", product: "CWF", buoys: ["RKXF1"], lake: "Florida Gulf Coast", water: "ocean", sea: 225, openWater: "the Gulf" },
-  naples: { name: "Naples, FL", lat: 26.14, lon: -81.8, zone: "GMZ656", office: "MFL", product: "CWF", buoys: ["RKXF1"], lake: "Florida Gulf Coast", water: "ocean", sea: 248, openWater: "the Gulf", waterBuoys: ["FMRF1"] },
-  "fort-myers-beach": { name: "Fort Myers Beach, FL", lat: 26.45, lon: -81.95, zone: "GMZ856", office: "TBW", product: "CWF", buoys: ["FMRF1"], lake: "Florida Gulf Coast", water: "ocean", sea: 248, openWater: "the Gulf" },
-  sarasota: { name: "Sarasota, FL", lat: 27.33, lon: -82.55, zone: "GMZ853", office: "TBW", product: "CWF", buoys: ["VENF1", "MTBF1"], lake: "Florida Gulf Coast", water: "ocean", sea: 248, openWater: "the Gulf", waterBuoys: ["PMAF1", "42013"] },
-  "tampa-bay": { name: "Tampa Bay / St. Petersburg, FL", lat: 27.77, lon: -82.63, zone: "GMZ830", office: "TBW", product: "CWF", buoys: ["SAPF1", "OPTF1"], lake: "Florida Gulf Coast", water: "sheltered", sea: 135, openWater: "Tampa Bay" },
-  clearwater: { name: "Clearwater, FL", lat: 27.98, lon: -82.83, zone: "GMZ853", office: "TBW", product: "CWF", buoys: ["CWBF1", "OPTF1"], lake: "Florida Gulf Coast", water: "ocean", sea: 293, openWater: "the Gulf" },
-  "panama-city": { name: "Panama City Beach, FL", lat: 30.16, lon: -85.8, zone: "GMZ751", office: "TAE", product: "CWF", buoys: ["PCBF1", "PACF1"], lake: "Florida Gulf Coast", water: "ocean", sea: 202, openWater: "the Gulf" },
-  destin: { name: "Destin, FL", lat: 30.39, lon: -86.51, zone: "GMZ655", office: "MOB", product: "CWF", buoys: [], lake: "Florida Gulf Coast", water: "ocean", sea: 180, openWater: "the Gulf", waterBuoys: ["PCBF1"] },
-  pensacola: { name: "Pensacola Beach, FL", lat: 30.33, lon: -87.14, zone: "GMZ655", office: "MOB", product: "CWF", buoys: ["PCLF1", "PPTA1"], lake: "Florida Gulf Coast", water: "ocean", sea: 135, openWater: "the Gulf" },
+  "marco-island": { name: "Marco Island, FL", lat: 25.94, lon: -81.72, zone: "GMZ656", land: ["FLZ069", "FLC021"], office: "MFL", product: "CWF", buoys: ["RKXF1"], lake: "Florida Gulf Coast", water: "ocean", sea: 225, openWater: "the Gulf" },
+  naples: { name: "Naples, FL", lat: 26.14, lon: -81.8, zone: "GMZ656", land: ["FLZ069", "FLC021"], office: "MFL", product: "CWF", buoys: ["RKXF1"], lake: "Florida Gulf Coast", water: "ocean", sea: 248, openWater: "the Gulf", waterBuoys: ["FMRF1"] },
+  "fort-myers-beach": { name: "Fort Myers Beach, FL", lat: 26.45, lon: -81.95, zone: "GMZ856", land: ["FLZ165", "FLC071"], office: "TBW", product: "CWF", buoys: ["FMRF1"], lake: "Florida Gulf Coast", water: "ocean", sea: 248, openWater: "the Gulf" },
+  sarasota: { name: "Sarasota, FL", lat: 27.33, lon: -82.55, zone: "GMZ853", land: ["FLZ160", "FLC115"], office: "TBW", product: "CWF", buoys: ["VENF1", "MTBF1"], lake: "Florida Gulf Coast", water: "ocean", sea: 248, openWater: "the Gulf", waterBuoys: ["PMAF1", "42013"] },
+  "tampa-bay": { name: "Tampa Bay / St. Petersburg, FL", lat: 27.77, lon: -82.63, zone: "GMZ830", land: ["FLZ050", "FLC103"], office: "TBW", product: "CWF", buoys: ["SAPF1", "OPTF1"], lake: "Florida Gulf Coast", water: "sheltered", sea: 135, openWater: "Tampa Bay" },
+  clearwater: { name: "Clearwater, FL", lat: 27.98, lon: -82.83, zone: "GMZ853", land: ["FLZ050", "FLC103"], office: "TBW", product: "CWF", buoys: ["CWBF1", "OPTF1"], lake: "Florida Gulf Coast", water: "ocean", sea: 293, openWater: "the Gulf" },
+  "panama-city": { name: "Panama City Beach, FL", lat: 30.16, lon: -85.8, zone: "GMZ751", land: ["FLZ112", "FLC005"], office: "TAE", product: "CWF", buoys: ["PCBF1", "PACF1"], lake: "Florida Gulf Coast", water: "ocean", sea: 202, openWater: "the Gulf" },
+  destin: { name: "Destin, FL", lat: 30.39, lon: -86.51, zone: "GMZ655", land: ["FLZ206", "FLC091"], office: "MOB", product: "CWF", buoys: [], lake: "Florida Gulf Coast", water: "ocean", sea: 180, openWater: "the Gulf", waterBuoys: ["PCBF1"] },
+  pensacola: { name: "Pensacola Beach, FL", lat: 30.33, lon: -87.14, zone: "GMZ655", land: ["FLZ202", "FLC033"], office: "MOB", product: "CWF", buoys: ["PCLF1", "PPTA1"], lake: "Florida Gulf Coast", water: "ocean", sea: 135, openWater: "the Gulf" },
   // Northern Gulf: Alabama, Mississippi, Louisiana and Texas
-  "orange-beach": { name: "Orange Beach / Gulf Shores, AL", lat: 30.27, lon: -87.58, zone: "GMZ650", office: "MOB", product: "CWF", buoys: ["PPTA1", "42012"], lake: "Alabama & Mississippi Coast", water: "ocean", sea: 158, openWater: "the Gulf" },
-  "mobile-bay": { name: "Fairhope / Mobile Bay, AL", lat: 30.52, lon: -87.91, zone: "GMZ630", office: "MOB", product: "CWF", buoys: ["WKXA1", "MCGA1"], lake: "Alabama & Mississippi Coast", water: "sheltered", sea: 248, openWater: "Mobile Bay", waterBuoys: ["OBLA1", "DILA1"] },
-  biloxi: { name: "Biloxi, MS", lat: 30.39, lon: -88.88, zone: "GMZ532", office: "LIX", product: "CWF", buoys: ["PTBM6", "WYCM6"], lake: "Alabama & Mississippi Coast", water: "sheltered", sea: 180, openWater: "the Mississippi Sound", waterBuoys: ["PNLM6"] },
-  "grand-isle": { name: "Grand Isle, LA", lat: 29.24, lon: -90, zone: "GMZ553", office: "LIX", product: "CWF", buoys: ["GISL1"], lake: "Louisiana & Texas Coast", water: "ocean", sea: 160, openWater: "the Gulf" },
-  galveston: { name: "Galveston, TX", lat: 29.3, lon: -94.78, zone: "GMZ355", office: "HGX", product: "CWF", buoys: ["GTOT2", "GNJT2"], lake: "Louisiana & Texas Coast", water: "ocean", sea: 135, openWater: "the Gulf" },
-  kemah: { name: "Kemah / Galveston Bay, TX", lat: 29.545, lon: -95.02, zone: "GMZ335", office: "HGX", product: "CWF", buoys: ["EPTT2", "MGPT2"], lake: "Louisiana & Texas Coast", water: "sheltered", sea: 90, openWater: "Galveston Bay" },
-  "port-aransas": { name: "Port Aransas, TX", lat: 27.83, lon: -97.06, zone: "GMZ255", office: "CRP", product: "CWF", buoys: ["MIST2", "RTAT2"], lake: "Louisiana & Texas Coast", water: "ocean", sea: 135, openWater: "the Gulf", waterBuoys: ["MHBT2", "RCPT2"] },
-  "south-padre": { name: "South Padre Island, TX", lat: 26.07, lon: -97.16, zone: "GMZ150", office: "BRO", product: "CWF", buoys: ["BZST2", "PCGT2"], lake: "Louisiana & Texas Coast", water: "ocean", sea: 90, openWater: "the Gulf" },
+  "orange-beach": { name: "Orange Beach / Gulf Shores, AL", lat: 30.27, lon: -87.58, zone: "GMZ650", land: ["ALZ266", "ALC003"], office: "MOB", product: "CWF", buoys: ["PPTA1", "42012"], lake: "Alabama & Mississippi Coast", water: "ocean", sea: 158, openWater: "the Gulf" },
+  "mobile-bay": { name: "Fairhope / Mobile Bay, AL", lat: 30.52, lon: -87.91, zone: "GMZ630", land: ["ALZ264", "ALC003"], office: "MOB", product: "CWF", buoys: ["WKXA1", "MCGA1"], lake: "Alabama & Mississippi Coast", water: "sheltered", sea: 248, openWater: "Mobile Bay", waterBuoys: ["OBLA1", "DILA1"] },
+  biloxi: { name: "Biloxi, MS", lat: 30.39, lon: -88.88, zone: "GMZ532", land: ["MSZ087", "MSC047"], office: "LIX", product: "CWF", buoys: ["PTBM6", "WYCM6"], lake: "Alabama & Mississippi Coast", water: "sheltered", sea: 180, openWater: "the Mississippi Sound", waterBuoys: ["PNLM6"] },
+  "grand-isle": { name: "Grand Isle, LA", lat: 29.24, lon: -90, zone: "GMZ553", land: ["LAZ093", "LAC051"], office: "LIX", product: "CWF", buoys: ["GISL1"], lake: "Louisiana & Texas Coast", water: "ocean", sea: 160, openWater: "the Gulf" },
+  galveston: { name: "Galveston, TX", lat: 29.3, lon: -94.78, zone: "GMZ355", land: ["TXZ438", "TXC167"], office: "HGX", product: "CWF", buoys: ["GTOT2", "GNJT2"], lake: "Louisiana & Texas Coast", water: "ocean", sea: 135, openWater: "the Gulf" },
+  kemah: { name: "Kemah / Galveston Bay, TX", lat: 29.545, lon: -95.02, zone: "GMZ335", land: ["TXZ338", "TXC167"], office: "HGX", product: "CWF", buoys: ["EPTT2", "MGPT2"], lake: "Louisiana & Texas Coast", water: "sheltered", sea: 90, openWater: "Galveston Bay" },
+  "port-aransas": { name: "Port Aransas, TX", lat: 27.83, lon: -97.06, zone: "GMZ255", land: ["TXZ443", "TXC355"], office: "CRP", product: "CWF", buoys: ["MIST2", "RTAT2"], lake: "Louisiana & Texas Coast", water: "ocean", sea: 135, openWater: "the Gulf", waterBuoys: ["MHBT2", "RCPT2"] },
+  "south-padre": { name: "South Padre Island, TX", lat: 26.07, lon: -97.16, zone: "GMZ150", land: ["TXZ455", "TXC061"], office: "BRO", product: "CWF", buoys: ["BZST2", "PCGT2"], lake: "Louisiana & Texas Coast", water: "ocean", sea: 90, openWater: "the Gulf" },
   // Southeast Atlantic: Georgia and the Carolinas
-  "st-simons": { name: "St. Simons Island / Brunswick, GA", lat: 31.14, lon: -81.39, zone: "AMZ450", office: "JAX", product: "CWF", buoys: ["SAXG1"], lake: "Georgia & South Carolina Coast", water: "ocean", sea: 135, openWater: "the Atlantic", waterBuoys: ["41112"] },
-  tybee: { name: "Savannah / Tybee Island, GA", lat: 32.01, lon: -80.85, zone: "AMZ362", office: "CHS", product: "CWF", buoys: ["FPKG1"], lake: "Georgia & South Carolina Coast", water: "ocean", sea: 135, openWater: "the Atlantic" },
-  "hilton-head": { name: "Hilton Head, SC", lat: 32.17, lon: -80.73, zone: "AMZ362", office: "CHS", product: "CWF", buoys: ["FPKG1", "41033"], lake: "Georgia & South Carolina Coast", water: "ocean", sea: 113, openWater: "the Atlantic" },
-  charleston: { name: "Charleston Harbor, SC", lat: 32.76, lon: -79.87, zone: "AMZ340", office: "CHS", product: "CWF", buoys: ["CHTS1", "FBIS1"], lake: "Georgia & South Carolina Coast", water: "sheltered", sea: 135, openWater: "Charleston Harbor" },
-  "murrells-inlet": { name: "Murrells Inlet / Myrtle Beach, SC", lat: 33.55, lon: -79.04, zone: "AMZ254", office: "ILM", product: "CWF", buoys: ["MROS1", "NIWS1"], lake: "Georgia & South Carolina Coast", water: "ocean", sea: 113, openWater: "the Atlantic" },
-  wrightsville: { name: "Wilmington / Wrightsville Beach, NC", lat: 34.21, lon: -77.79, zone: "AMZ250", office: "ILM", product: "CWF", buoys: ["JMPN7", "MBNN7"], lake: "North Carolina Coast", water: "ocean", sea: 113, openWater: "the Atlantic" },
-  "morehead-city": { name: "Morehead City / Beaufort, NC", lat: 34.7, lon: -76.69, zone: "AMZ158", office: "MHX", product: "CWF", buoys: ["BFTN7", "CLKN7"], lake: "North Carolina Coast", water: "ocean", sea: 180, openWater: "the Atlantic" },
-  "oregon-inlet": { name: "Oregon Inlet / Outer Banks, NC", lat: 35.79, lon: -75.54, zone: "AMZ150", office: "MHX", product: "CWF", buoys: ["ORIN7", "41082"], lake: "North Carolina Coast", water: "ocean", sea: 90, openWater: "the Atlantic" },
+  "st-simons": { name: "St. Simons Island / Brunswick, GA", lat: 31.14, lon: -81.39, zone: "AMZ450", land: ["GAZ154", "GAC127"], office: "JAX", product: "CWF", buoys: ["SAXG1"], lake: "Georgia & South Carolina Coast", water: "ocean", sea: 135, openWater: "the Atlantic", waterBuoys: ["41112"] },
+  tybee: { name: "Savannah / Tybee Island, GA", lat: 32.01, lon: -80.85, zone: "AMZ362", land: ["GAZ219", "GAC051"], office: "CHS", product: "CWF", buoys: ["FPKG1"], lake: "Georgia & South Carolina Coast", water: "ocean", sea: 135, openWater: "the Atlantic" },
+  "hilton-head": { name: "Hilton Head, SC", lat: 32.17, lon: -80.73, zone: "AMZ362", land: ["SCZ148", "SCC013"], office: "CHS", product: "CWF", buoys: ["FPKG1", "41033"], lake: "Georgia & South Carolina Coast", water: "ocean", sea: 113, openWater: "the Atlantic" },
+  charleston: { name: "Charleston Harbor, SC", lat: 32.76, lon: -79.87, zone: "AMZ340", land: ["SCZ150", "SCC019"], office: "CHS", product: "CWF", buoys: ["CHTS1", "FBIS1"], lake: "Georgia & South Carolina Coast", water: "sheltered", sea: 135, openWater: "Charleston Harbor" },
+  "murrells-inlet": { name: "Murrells Inlet / Myrtle Beach, SC", lat: 33.55, lon: -79.04, zone: "AMZ254", land: ["SCZ056", "SCC043"], office: "ILM", product: "CWF", buoys: ["MROS1", "NIWS1"], lake: "Georgia & South Carolina Coast", water: "ocean", sea: 113, openWater: "the Atlantic" },
+  wrightsville: { name: "Wilmington / Wrightsville Beach, NC", lat: 34.21, lon: -77.79, zone: "AMZ250", land: ["NCZ108", "NCC129"], office: "ILM", product: "CWF", buoys: ["JMPN7", "MBNN7"], lake: "North Carolina Coast", water: "ocean", sea: 113, openWater: "the Atlantic" },
+  "morehead-city": { name: "Morehead City / Beaufort, NC", lat: 34.7, lon: -76.69, zone: "AMZ158", land: ["NCZ195", "NCC031"], office: "MHX", product: "CWF", buoys: ["BFTN7", "CLKN7"], lake: "North Carolina Coast", water: "ocean", sea: 180, openWater: "the Atlantic" },
+  "oregon-inlet": { name: "Oregon Inlet / Outer Banks, NC", lat: 35.79, lon: -75.54, zone: "AMZ150", land: ["NCZ203", "NCC055"], office: "MHX", product: "CWF", buoys: ["ORIN7", "41082"], lake: "North Carolina Coast", water: "ocean", sea: 90, openWater: "the Atlantic" },
   // Southern California
-  "san-diego": { name: "San Diego / Point Loma, CA", lat: 32.71, lon: -117.18, zone: "PZZ740", office: "SGX", product: "CWF", buoys: ["TIXC1", "LJAC1"], lake: "Southern California Coast", water: "ocean", sea: 248, openWater: "the Pacific", waterBuoys: ["SDBC1", "46254"] },
-  "mission-bay": { name: "Mission Bay, CA", lat: 32.765, lon: -117.24, zone: "PZZ740", office: "SGX", product: "CWF", buoys: ["LJAC1", "LJPC1"], lake: "Southern California Coast", water: "ocean", sea: 225, openWater: "the Pacific" },
-  oceanside: { name: "Oceanside Harbor, CA", lat: 33.21, lon: -117.4, zone: "PZZ740", office: "SGX", product: "CWF", buoys: [], lake: "Southern California Coast", water: "ocean", sea: 248, openWater: "the Pacific", waterBuoys: ["46224", "46275"] },
-  "dana-point": { name: "Dana Point, CA", lat: 33.46, lon: -117.7, zone: "PZZ655", office: "LOX", product: "CWF", buoys: [], lake: "Southern California Coast", water: "ocean", sea: 225, openWater: "the Pacific", waterBuoys: ["46285", "46277"] },
-  "newport-beach": { name: "Newport Beach, CA", lat: 33.6, lon: -117.88, zone: "PZZ655", office: "LOX", product: "CWF", buoys: ["PRJC1", "PFXC1"], lake: "Southern California Coast", water: "ocean", sea: 203, openWater: "the Pacific", waterBuoys: ["46285", "46253"] },
-  "long-beach": { name: "Long Beach, CA", lat: 33.75, lon: -118.19, zone: "PZZ655", office: "LOX", product: "CWF", buoys: ["PRJC1", "PFXC1"], lake: "Southern California Coast", water: "ocean", sea: 180, openWater: "the Pacific", waterBuoys: ["46256", "46222"] },
-  "marina-del-rey": { name: "Marina del Rey, CA", lat: 33.97, lon: -118.45, zone: "PZZ655", office: "LOX", product: "CWF", buoys: ["ICAC1", "PXAC1"], lake: "Southern California Coast", water: "ocean", sea: 225, openWater: "the Pacific" },
-  "channel-islands": { name: "Channel Islands Harbor / Oxnard, CA", lat: 34.16, lon: -119.23, zone: "PZZ650", office: "LOX", product: "CWF", buoys: ["46025"], lake: "Southern California Coast", water: "ocean", sea: 225, openWater: "the Pacific" },
-  "santa-barbara": { name: "Santa Barbara, CA", lat: 34.4, lon: -119.69, zone: "PZZ650", office: "LOX", product: "CWF", buoys: ["46053"], lake: "Southern California Coast", water: "ocean", sea: 180, openWater: "the Pacific" },
+  "san-diego": { name: "San Diego / Point Loma, CA", lat: 32.71, lon: -117.18, zone: "PZZ740", land: ["CAZ043", "CAC073"], office: "SGX", product: "CWF", buoys: ["TIXC1", "LJAC1"], lake: "Southern California Coast", water: "ocean", sea: 248, openWater: "the Pacific", waterBuoys: ["SDBC1", "46254"] },
+  "mission-bay": { name: "Mission Bay, CA", lat: 32.765, lon: -117.24, zone: "PZZ740", land: ["CAZ043", "CAC073"], office: "SGX", product: "CWF", buoys: ["LJAC1", "LJPC1"], lake: "Southern California Coast", water: "ocean", sea: 225, openWater: "the Pacific" },
+  oceanside: { name: "Oceanside Harbor, CA", lat: 33.21, lon: -117.4, zone: "PZZ740", land: ["CAZ043", "CAC073"], office: "SGX", product: "CWF", buoys: [], lake: "Southern California Coast", water: "ocean", sea: 248, openWater: "the Pacific", waterBuoys: ["46224", "46275"] },
+  "dana-point": { name: "Dana Point, CA", lat: 33.46, lon: -117.7, zone: "PZZ655", land: ["CAZ552", "CAC059"], office: "LOX", product: "CWF", buoys: [], lake: "Southern California Coast", water: "ocean", sea: 225, openWater: "the Pacific", waterBuoys: ["46285", "46277"] },
+  "newport-beach": { name: "Newport Beach, CA", lat: 33.6, lon: -117.88, zone: "PZZ655", land: ["CAZ552", "CAC059"], office: "LOX", product: "CWF", buoys: ["PRJC1", "PFXC1"], lake: "Southern California Coast", water: "ocean", sea: 203, openWater: "the Pacific", waterBuoys: ["46285", "46253"] },
+  "long-beach": { name: "Long Beach, CA", lat: 33.75, lon: -118.19, zone: "PZZ655", land: ["CAZ366", "CAC037"], office: "LOX", product: "CWF", buoys: ["PRJC1", "PFXC1"], lake: "Southern California Coast", water: "ocean", sea: 180, openWater: "the Pacific", waterBuoys: ["46256", "46222"] },
+  "marina-del-rey": { name: "Marina del Rey, CA", lat: 33.97, lon: -118.45, zone: "PZZ655", land: ["CAZ366", "CAC037"], office: "LOX", product: "CWF", buoys: ["ICAC1", "PXAC1"], lake: "Southern California Coast", water: "ocean", sea: 225, openWater: "the Pacific" },
+  "channel-islands": { name: "Channel Islands Harbor / Oxnard, CA", lat: 34.16, lon: -119.23, zone: "PZZ650", land: ["CAZ354", "CAC111"], office: "LOX", product: "CWF", buoys: ["46025"], lake: "Southern California Coast", water: "ocean", sea: 225, openWater: "the Pacific" },
+  "santa-barbara": { name: "Santa Barbara, CA", lat: 34.4, lon: -119.69, zone: "PZZ650", land: ["CAZ350", "CAC083"], office: "LOX", product: "CWF", buoys: ["46053"], lake: "Southern California Coast", water: "ocean", sea: 180, openWater: "the Pacific" },
   // Hawaii and Puerto Rico
-  honolulu: { name: "Honolulu / Kewalo Basin, HI", lat: 21.29, lon: -157.86, zone: "PHZ115", office: "HFO", product: "CWF", buoys: ["OOUH1", "PRHH1"], lake: "Hawaii", water: "ocean", sea: 200, openWater: "the Pacific" },
-  kona: { name: "Kona / Honokohau Harbor, HI", lat: 19.67, lon: -156.03, zone: "PHZ123", office: "HFO", product: "CWF", buoys: ["KWHH1"], lake: "Hawaii", water: "ocean", sea: 270, openWater: "the Pacific" },
-  maalaea: { name: "Ma'alaea, Maui, HI", lat: 20.79, lon: -156.51, zone: "PHZ119", office: "HFO", product: "CWF", buoys: ["KLIH1"], lake: "Hawaii", water: "ocean", sea: 200, openWater: "Ma'alaea Bay" },
-  "san-juan": { name: "San Juan, PR", lat: 18.47, lon: -66.11, zone: "AMZ712", office: "SJU", product: "CWF", buoys: ["41053", "SJNP4"], lake: "Puerto Rico", water: "ocean", sea: 0, openWater: "the Atlantic", waterBuoys: ["41121"] },
-  fajardo: { name: "Fajardo, PR", lat: 18.33, lon: -65.63, zone: "AMZ726", office: "SJU", product: "CWF", buoys: ["41056", "ESPP4"], lake: "Puerto Rico", water: "ocean", sea: 90, openWater: "Vieques Sound", waterBuoys: ["CLBP4", "SJNP4"] },
+  honolulu: { name: "Honolulu / Kewalo Basin, HI", lat: 21.29, lon: -157.86, zone: "PHZ115", land: ["HIZ033", "HIC003"], office: "HFO", product: "CWF", buoys: ["OOUH1", "PRHH1"], lake: "Hawaii", water: "ocean", sea: 200, openWater: "the Pacific" },
+  kona: { name: "Kona / Honokohau Harbor, HI", lat: 19.67, lon: -156.03, zone: "PHZ123", land: ["HIZ023", "HIC001"], office: "HFO", product: "CWF", buoys: ["KWHH1"], lake: "Hawaii", water: "ocean", sea: 270, openWater: "the Pacific" },
+  maalaea: { name: "Ma'alaea, Maui, HI", lat: 20.79, lon: -156.51, zone: "PHZ119", land: ["HIZ046", "HIC009"], office: "HFO", product: "CWF", buoys: ["KLIH1"], lake: "Hawaii", water: "ocean", sea: 200, openWater: "Ma'alaea Bay" },
+  "san-juan": { name: "San Juan, PR", lat: 18.47, lon: -66.11, zone: "AMZ712", land: ["PRZ001", "PRC127"] /* San Juan municipio; the walk south crossed the bay into Guaynabo */, office: "SJU", product: "CWF", buoys: ["41053", "SJNP4"], lake: "Puerto Rico", water: "ocean", sea: 0, openWater: "the Atlantic", waterBuoys: ["41121"] },
+  fajardo: { name: "Fajardo, PR", lat: 18.33, lon: -65.63, zone: "AMZ726", land: ["PRZ002", "PRC053"], office: "SJU", product: "CWF", buoys: ["41056", "ESPP4"], lake: "Puerto Rico", water: "ocean", sea: 90, openWater: "Vieques Sound", waterBuoys: ["CLBP4", "SJNP4"] },
 };
 
 const json = (obj, status = 200) =>
@@ -646,10 +649,21 @@ async function alertsAt(query) {
 // them (Petoskey missed a Gale Warning that way). Returns { alerts, ok }:
 // alerts merges whatever answered (null only if nothing did), and ok is false
 // if any lookup failed, so a partial answer is never read as "no advisories".
+// Also by the launch point's land zones (forecast zone + county, see
+// landZonesFor), the same ones the tiles, digest and weekend email use: a
+// launch point on the water is in no land zone, so the point query alone
+// misses zone-issued land warnings (High Wind, Blizzard, Winter Storm, Lake
+// Effect Snow) and the page would read softer than its own tile. Unresolved
+// land zones count as a failed lookup (ok false).
 export async function fetchAlerts(spot) {
   const queries = [`point=${spot.lat},${spot.lon}`];
   if (spot.zone) queries.push(`zone=${encodeURIComponent(spot.zone)}`);
-  const results = await Promise.all(queries.map(alertsAt));
+  // Request path: inland steps only (no ring), so an arbitrary ?lat=&lon=
+  // can cost at most 4 /points lookups. Ring-only spots are resolved and
+  // cached by the summary/cron walk; until then the page reads "unknown".
+  const landQ = landZonesFor(spot, null, { ring: false }).catch(() => null)
+    .then((land) => (land && land.length ? alertsAt(`zone=${land.map(encodeURIComponent).join(",")}`) : null));
+  const results = await Promise.all([...queries.map(alertsAt), landQ]);
   const answered = results.filter((r) => r != null);
   return {
     alerts: answered.length ? dedupeAlerts(answered.flat()) : null, // one card per event type
@@ -771,12 +785,98 @@ export async function fetchZoneAlerts(zones) {
   // Not deduped: two issuances of one event can cover different hours.
   return { byZone, ok: results.every((r) => r != null) };
 }
-const zoneAlertsFor = (za, spot) => (za && spot?.zone && za.byZone.get(spot.zone)) || [];
+// Land zones (NWS forecast zone + county) for a launch point. Land products —
+// flash flood, tornado, high wind, blizzard, severe thunderstorm warnings —
+// are issued for these, never for marine zones, so a marine-zone lookup alone
+// misses them. Curated spots carry them in SPOTS; user-built pages resolve
+// them from NWS /points (walked, budgeted, cached a week).
+// null = the lookup failed (unknown, not "none").
+const pointKey = (spot) => `${spot.lat},${spot.lon}`;
+// About half our launch points sit on the water itself: NWS maps them to a
+// marine forecast zone with no county. Step inland (away from the seaward
+// bearing, as fetchForecastsNear does) until a point lands in a county.
+// Barrier islands, keys and river launches can have water inland too, so
+// after the inland steps, search a small ring around the launch.
+const LAND_STEPS = [0, 0.02, 0.05, 0.1];
+const LAND_RING = [0.02, 0.05].flatMap((r) => [0, 45, 90, 135, 180, 225, 270, 315].map((b) => [r, b]));
+// The resolved zones are cached a week per launch point (counties don't move),
+// so steady state is one cache read per spot, not a /points walk.
+const landMemo = new Map();
+// `budget` ({ walks }) caps how many uncached walks one invocation may do (a
+// cold walk is 1-20 /points lookups); past it the spot is unknown (no GO)
+// until a later run resolves it. Omit it for a single spot (the spot page).
+export async function landZonesFor(spot, budget = null, { ring = true } = {}) {
+  // Every curated spot carries its land zones (SPOTS[*].land, resolved once
+  // and checked by hand: county lines, launches across a bay), so the walk
+  // below only runs for user-built pages.
+  if (Array.isArray(spot?.land) && spot.land.length) return spot.land;
+  if (spot?.lat == null || spot?.lon == null) return null;
+  const key = `https://land-zones.local/v1/${spot.lat},${spot.lon},${spot.sea ?? ""},${spot.lake || ""}`;
+  const edge = typeof caches !== "undefined" && caches.default;
+  if (edge) {
+    const hit = await caches.default.match(new Request(key)).then((r) => (r ? r.json() : null)).catch(() => null);
+    if (Array.isArray(hit) && hit.length) return hit;
+  } else if (landMemo.has(key)) return landMemo.get(key);
+  if (budget) { if (budget.walks <= 0) return null; budget.walks--; }
+  const { zones: found, clean } = await resolveLandZones(spot, ring);
+  // Only cache a clean walk: if an earlier (closer) candidate errored, the
+  // county found farther out may not be the launch's own. Use it this time,
+  // but walk again next time rather than pin a possibly-wrong county a week.
+  if (found && clean) {
+    if (edge) await caches.default.put(new Request(key), new Response(JSON.stringify(found), { headers: { "Cache-Control": "public, max-age=604800" } })).catch(() => {});
+    else landMemo.set(key, found);
+  }
+  return found; // null (unknown) is never cached, so a blip retries next time
+}
+async function resolveLandZones(spot, ring = true) {
+  const kLon = 1 / Math.max(0.2, Math.cos((spot.lat * Math.PI) / 180));
+  const candidates = [
+    ...LAND_STEPS.map((step) => (step ? seawardPoint(spot, -step) : { lat: spot.lat, lon: spot.lon })),
+    ...(ring ? LAND_RING : []).map(([r, b]) => ({ lat: round(spot.lat + Math.cos((b * Math.PI) / 180) * r, 4), lon: round(spot.lon + Math.sin((b * Math.PI) / 180) * r * kLon, 4) })),
+  ];
+  let clean = true;
+  for (const pt of candidates) {
+    try {
+      const p = (await cachedJSON(`${NWS}/points/${pt.lat},${pt.lon}`, 86400))?.properties;
+      const county = String(p?.county || "").split("/").pop();
+      if (!ZONE_RE.test(county)) continue; // on the water: no county here
+      const fz = String(p?.forecastZone || "").split("/").pop();
+      return { zones: ZONE_RE.test(fz) ? [fz, county] : [county], clean };
+    } catch (e) {
+      clean = false; // a failed lookup is not "no county": try the next, but don't cache
+    }
+  }
+  return { zones: null, clean };
+}
+// Alerts for many spots at once (directory, digest, weekend email): each
+// spot's marine zone plus its launch point's land zones, in one batched
+// zone query. Returns the fetchZoneAlerts shape plus land: Map(pointKey ->
+// zone ids | null).
+const LAND_WALKS_PER_CALL = 10; // uncached built-spot walks per call (curated spots never walk)
+export async function fetchSpotsAlerts(spots) {
+  const land = new Map();
+  const list = (spots || []).filter(Boolean);
+  const budget = { walks: LAND_WALKS_PER_CALL };
+  const zonesPerSpot = await pooled(list, 8, (s) => landZonesFor(s, budget));
+  list.forEach((s, i) => land.set(pointKey(s), zonesPerSpot[i] ?? null));
+  const za = await fetchZoneAlerts([...list.map((s) => s.zone), ...zonesPerSpot.flat().filter(Boolean)]);
+  return { ...za, land };
+}
+const zoneAlertsFor = (za, spot) => {
+  if (!za || !spot) return [];
+  const zones = [spot.zone, ...((za.land && za.land.get(pointKey(spot))) || [])];
+  return zones.flatMap((z) => (z && za.byZone.get(z)) || []);
+};
 // Were this spot's zone alerts actually checked? Every directory spot is
 // marine (built pages require a marine zone), so a spot with no valid zone —
 // e.g. an old user-built record — had nothing looked up: missing data, not
 // "no advisories".
-const zoneAlertsOkFor = (za, spot) => !!za && za.ok && ZONE_RE.test(spot?.zone || "");
+// Land alerts count too: if the launch point's land zones couldn't be
+// resolved, its land warnings weren't checked either.
+// Fails closed: without land-zone results (za.land from fetchSpotsAlerts)
+// the spot's land warnings weren't checked.
+const zoneAlertsOkFor = (za, spot) => !!za && za.ok && ZONE_RE.test(spot?.zone || "")
+  && za.land instanceof Map && za.land.get(pointKey(spot)) != null;
 
 // NWS re-issues the same advisory repeatedly (e.g. three "Air Quality Alert"
 // features minutes apart). Collapse to one card per event type, keeping the
@@ -1769,7 +1869,7 @@ export async function fetchSummary(env) {
   const entries = [...Object.entries(SPOTS), ...built.map((b) => [b.slug, { name: b.name, lat: b.lat, lon: b.lon, zone: b.zone, office: b.office, product: b.product, lake: b.lake, buoys: b.buoys || [], water: b.water || waterFromZone(b.zone, b.zoneName), sea: b.sea ?? null }])];
   const [grids, za] = await Promise.all([
     pooled(entries, 8, ([, s]) => fetchSpotGrid(s)),
-    fetchZoneAlerts(entries.map(([, s]) => s.zone)),
+    fetchSpotsAlerts(entries.map(([, s]) => s)),
   ]);
   await floorWithMarineText(entries, grids);
   const nowH = Math.floor(Date.now() / 3600000);
@@ -1785,7 +1885,7 @@ export async function fetchBuiltSummaries(env, slugs) {
   if (!resolved.length) return [];
   const [grids, za] = await Promise.all([
     pooled(resolved, 8, ([, s]) => fetchSpotGrid(s)),
-    fetchZoneAlerts(resolved.map(([, s]) => s.zone)),
+    fetchSpotsAlerts(resolved.map(([, s]) => s)),
   ]);
   await floorWithMarineText(resolved, grids).catch(() => {}); // same nearshore wave floor as the directory
   const nowH = Math.floor(Date.now() / 3600000);
@@ -1804,7 +1904,7 @@ export async function fetchWeeks(env, ids) {
   if (!entries.length) return {};
   const [grids, za] = await Promise.all([
     pooled(entries, 8, ([, s]) => fetchSpotGrid(s)),
-    fetchZoneAlerts(entries.map(([, s]) => s.zone)),
+    fetchSpotsAlerts(entries.map(([, s]) => s)),
   ]);
   await floorWithMarineText(entries, grids).catch(() => {});
   // Same per-day verdicts as the week strip (buildWeek → riskLevel: no wind
@@ -1836,7 +1936,7 @@ export async function fetchTodayWindows() {
   const entries = Object.entries(SPOTS);
   const [grids, za] = await Promise.all([
     pooled(entries, 8, ([, s]) => fetchSpotGrid(s)),
-    fetchZoneAlerts(entries.map(([, s]) => s.zone)),
+    fetchSpotsAlerts(entries.map(([, s]) => s)),
   ]);
   const nowH = Math.floor(Date.now() / 3600000);
   const out = {};
