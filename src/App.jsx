@@ -1,10 +1,12 @@
 import React, { useEffect, useRef, useState } from "react";
 import Cams from "./Cams.jsx";
 import WxIcon from "./WxIcon.jsx";
-import { IconStar, IconCheck, IconClock, IconNoGo, IconAlert, IconSunrise, IconSunset, IconDoc, IconRefresh } from "./icons.jsx";
+import { IconStar, IconCheck, IconClock, IconNoGo, IconAlert, IconSunrise, IconSunset, IconDoc, IconRefresh, IconWave } from "./icons.jsx";
 import { useAdsense, useAnalytics, getConsent, updateConsentMode, AdSlot, GearBlock, ConsentBanner, StickyFooterAd, track } from "./monetize.jsx";
 import { useAuth, Account, AuthModal } from "./auth.jsx";
 import { UpgradeModal } from "./Pro.jsx";
+import VerdictMark, { VerdictIcon } from "./VerdictMark.jsx";
+import { scrollBehavior, pauseVideosIfReduced } from "./motion.js";
 import Takeover from "./Takeover.jsx";
 import Landing from "./Landing.jsx";
 import { fmtWaves, waveFeel, compassToDeg } from "./units.js";
@@ -167,10 +169,10 @@ function RawNSH({ text }) {
   );
 }
 
-// Theme choice: "dark" | "light" | "system" (default DARK).
+// Theme choice: "dark" | "light" | "system" (default SYSTEM; explicit choice is remembered).
 function useTheme() {
   const [choice, setChoice] = useState(() => {
-    try { return localStorage.getItem("theme") || "dark"; } catch (e) { return "dark"; }
+    try { return localStorage.getItem("theme") || "system"; } catch (e) { return "system"; }
   });
   const [effective, setEffective] = useState(
     () => document.documentElement.getAttribute("data-theme") || "dark"
@@ -315,7 +317,7 @@ function LocationPicker({ byLake, active, activeName, onSelect, favorites = [], 
           {onBuild && ql.length >= 2 && (
             <div className="locpick-build">
               <button className="locpick-buildbtn" onClick={buildFromSearch} disabled={busy}>
-                {busy ? "Looking up…" : <>🌊 Build a live page for “{q.trim()}” →</>}
+                {busy ? "Looking up…" : <><IconWave /> Build a live page for “{q.trim()}” →</>}
               </button>
               {err && <div className="locpick-err">{err}</div>}
             </div>
@@ -344,7 +346,7 @@ function GlanceBand({ hours }) {
   const jumpTo = (time) => {
     const tile = document.querySelector(`[data-t="${time}"]`);
     if (!tile) return;
-    tile.scrollIntoView({ behavior: "smooth", inline: "center", block: "nearest" });
+    tile.scrollIntoView({ behavior: scrollBehavior(), inline: "center", block: "nearest" });
     tile.classList.add("pulse");
     setTimeout(() => tile.classList.remove("pulse"), 1600);
   };
@@ -356,7 +358,9 @@ function GlanceBand({ hours }) {
           <button key={h.time} onClick={() => jumpTo(h.time)}
             className={`gb ${verdictClass(h.level)} ${best && i >= best.from && i <= best.to ? "best" : ""}`}
             title={`${fmtHour(h.time)} · ${h.level ?? "no data"}, see the detail`}
-            aria-label={`${fmtHour(h.time)}: ${h.level ?? "no data"}. Jump to hour detail.`} />
+            aria-label={`${fmtHour(h.time)}: ${h.level ?? "no data"}. Jump to hour detail.`}>
+            <VerdictIcon level={h.level} size="12px" />
+          </button>
         ))}
       </div>
       <div className="glance-x">
@@ -823,7 +827,7 @@ function HourStrip({ hours, headInBy }) {
           {hours.map((h) => <div key={h.time} className={cls(h, "hx-ico")} title={h.short}><WxIcon short={h.short} size={18} /></div>)}
           {/* verdict strip */}
           <Label>Verdict</Label>
-          {hours.map((h) => <div key={h.time} className={cls(h, "hx-vwrap")} title={`${fmtHour(h.time)} · ${h.level ?? "no data"}`}><i className={`hx-v ${verdictClass(h.level)}`} /></div>)}
+          {hours.map((h) => <div key={h.time} className={cls(h, "hx-vwrap")} title={`${fmtHour(h.time)} · ${h.level ?? "no data"}`}><span className={`hx-vi ${verdictClass(h.level)}`}><VerdictIcon level={h.level} size="12px" /></span><i className={`hx-v ${verdictClass(h.level)}`} /></div>)}
           {/* temp — diverging heat-strip behind the numbers */}
           <Label unit="°F">Temp</Label>
           {hours.map((h) => <div key={h.time} className={cls(h)} style={{ background: tempTint(h.tempF) }}>{h.tempF ?? "—"}</div>)}
@@ -928,7 +932,7 @@ function SignupNudge({ spotName, onSignup, onSignin }) {
         <IcoBoat />
         <div className="nudge-copy">
           <b>Boating {spotName || "these waters"} often?</b>
-          <span> Create a free account to ⭐ save your launch spots and get a morning verdict + NO-GO alerts by email.</span>
+          <span> Create a free account to <IconStar filled /> save your launch spots and get a morning verdict + NO-GO alerts by email.</span>
         </div>
       </div>
       <div className="nudge-actions">
@@ -941,6 +945,7 @@ function SignupNudge({ spotName, onSignup, onSignin }) {
 
 export default function App() {
   const { choice, setChoice, effective } = useTheme();
+  useEffect(() => pauseVideosIfReduced(), []);
   const auth = useAuth();
   const [consent, setConsent] = useState(getConsent());
   const chooseConsent = (c) => { try { if (c) localStorage.setItem("sib.consent", c); else localStorage.removeItem("sib.consent"); } catch (e) {} updateConsentMode(c); setConsent(c); };
@@ -1216,9 +1221,9 @@ export default function App() {
           </div>
         </div>
         {!landing && callHidden && rec && data && !data.notMarine && (
-          <button className={`hdr-verdict ${recClass(rec)}`} onClick={() => window.scrollTo({ top: 0, behavior: "smooth" })}
+          <button className={`hdr-verdict ${recClass(rec)}`} onClick={() => window.scrollTo({ top: 0, behavior: scrollBehavior() })}
             aria-label={`${rec.noData ? "No data" : rec.level} at ${spot?.name || "this launch"}. Back to the top`}>
-            <span className="hdr-verdict-badge">{recLabel(rec)}</span>
+            <span className="hdr-verdict-badge"><VerdictMark level={rec.noData ? null : rec.level} label={recLabel(rec)} /></span>
             <span className="hdr-verdict-name">{spot?.name}</span>
             <span className="hdr-verdict-nums">
               {/* Same figures as the WIND tile: sustained, then gust when higher. */}
@@ -1274,7 +1279,9 @@ export default function App() {
           <>
             {/* ── The Call ── */}
             <section className={`call ${recClass(rec)}`} ref={callRef}>
-              <div className="call-badge"><span>{recLabel(rec)}</span></div>
+              <div className="call-badge" aria-live="polite" aria-atomic="true">
+                <h2 className="call-verdict"><span className="sr-only">Verdict for {spot.name}: </span><VerdictMark level={rec.noData ? null : rec.level} label={recLabel(rec)} /></h2>
+              </div>
               <div className="call-body">
                 <div className="call-top">
                   <span className="call-spot">

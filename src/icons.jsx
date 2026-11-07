@@ -56,3 +56,25 @@ export const IconDoc = ({ size = "1em" }) => (
 export const IconRefresh = ({ size = "1em" }) => (
   <svg {...base(size)} strokeWidth={2.2}><path d="M20 12a8 8 0 1 1-2.3-5.6" /><path d="M20 3v4h-4" /></svg>
 );
+
+// ---- Added for the UX review (verdict marks + emoji replacement) ----
+export const IconX = ({ size = "1em" }) => (
+  <svg {...base(size)} strokeWidth={2.6}><path d="M6 6l12 12M18 6L6 18" /></svg>
+);
+
+// "No data / unknown": a neutral dash in a ring, deliberately not a check.
+export const IconDash = ({ size = "1em" }) => (
+  <svg {...base(size)} strokeWidth={2.4}><circle cx="12" cy="12" r="9" /><path d="M8 12h8" /></svg>
+);
+
+export const IconPin = ({ size = "1em" }) => (
+  <svg {...base(size)}><path d="M12 21s-6.5-6.2-6.5-11a6.5 6.5 0 0 1 13 0c0 4.8-6.5 11-6.5 11z" /><circle cx="12" cy="10" r="2.3" /></svg>
+);
+
+export const IconWave = ({ size = "1em" }) => (
+  <svg {...base(size)}><path d="M2 9c2.5 0 2.5-2 5-2s2.5 2 5 2 2.5-2 5-2 2.5 2 5 2M2 15c2.5 0 2.5-2 5-2s2.5 2 5 2 2.5-2 5-2 2.5 2 5 2" /></svg>
+);
+
+export const IconMail = ({ size = "1em" }) => (
+  <svg {...base(size)}><rect x="3" y="5" width="18" height="14" rx="2" /><path d="M3.5 7l8.5 6.5L20.5 7" /></svg>
+);

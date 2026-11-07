@@ -94,3 +94,20 @@ footer a { color: var(--muted); }
 .guide-ad.pending .guide-adlabel { visibility: hidden; }
 .guide-adlabel { display: block; font-size: 10px; text-transform: uppercase; letter-spacing: .08em; color: #8595a1; margin-bottom: 4px; }
 .byline { color: var(--muted); font-size: .88rem; margin: -6px 0 14px; }
+
+/* Dark mode — follows the visitor's system setting (prefers-color-scheme). */
+@media (prefers-color-scheme: dark) {
+  :root {
+    color-scheme: dark;
+    --navy: #8FD3EA; --teal: #4AC6E0; --green: #33CC99; --amber: #E3C04A; --red: #F08A76;
+    --ink: #EAF2F8; --body: #C9D8E4; --muted: #9FB6C9; --faint: #8AA2B7;
+    --bg: #07182B; --surface: #0F2942; --border: #1F405F;
+  }
+  .go { background: rgba(51,204,153,.16); }
+  .cau { background: rgba(227,192,74,.16); }
+  .nogo { background: rgba(240,138,118,.16); }
+  .callout { background: #0C2A40; border-color: #1F405F; }
+  .callout.warn { background: #2A2410; border-color: #5A4A1A; border-left-color: var(--amber); }
+  .callout.warn strong { color: #E3C04A; }
+  .guide-adlabel { color: #8AA2B7; }
+}
