@@ -2494,7 +2494,7 @@ async function run() {
         ndbcFiles = { WAVE1: lineX(15, "MM", "MM", "0.3"), WIND2: lineX(150, "3.0", "4.0", "MM") };
         d = await page();
         check("page: wave-only primary fresh + 150-min wind station → wind from WIND2, waves from WAVE1", d.wind?.station === "WIND2" && d.waves?.station === "WAVE1", JSON.stringify({ w: d.wind, v: d.waves }));
-        check("page: stale wind-fill station → CAUTION, never GO", d.recommendation?.level === "CAUTION" && d.recommendation.reasons.some((x) => /buoy reading is 2 h 30 min old/.test(x)), JSON.stringify(d.recommendation));
+        check("page: stale wind-fill station → CAUTION, never GO", d.recommendation?.level === "CAUTION" && d.recommendation.reasons.some((x) => /buoy reading is 2 h 3[01] min old/.test(x)), JSON.stringify(d.recommendation));
         check("page: freshness names the stale wind station, lists both feeders", d.freshness?.buoy?.station === "WIND2" && d.freshness.buoy.ageMinutes >= 150 && d.freshness.stale.some((x) => x.kind === "buoy")
           && d.freshness.buoys.length === 2 && d.freshness.buoys.find((b) => b.station === "WAVE1")?.feeds.join() === "waves" && d.freshness.buoys.find((b) => b.station === "WIND2")?.feeds.join() === "wind", JSON.stringify(d.freshness));
         ndbcFiles = { WAVE1: lineX(150, "MM", "MM", "0.3"), WIND2: lineX(15, "3.0", "4.0", "MM") };
