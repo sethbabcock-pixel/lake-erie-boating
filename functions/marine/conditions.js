@@ -97,11 +97,13 @@ export const SPOTS = {
   duluth: { name: "Duluth", lat: 46.78, lon: -92.08, zone: "LSZ145", land: ["MNZ037", "MNC137"], office: "DLH", buoys: ["45027"], lake: "Lake Superior", waterBuoys: ["DULM5"] },
   bayfield: { name: "Bayfield / Apostle Is.", lat: 46.81, lon: -90.82, zone: "LSZ147", land: ["WIZ002", "WIC007"], office: "DLH", buoys: [], lake: "Lake Superior", alertZones: ["LSZ121"] /* Chequamegon Bay, just south of the launch */ },
   marquette: { name: "Marquette", lat: 46.54, lon: -87.38, zone: "LSZ249", land: ["MIZ005", "MIC103"], office: "MQT", buoys: ["45004"], lake: "Lake Superior" },
-  // Houghton sits on Portage Lake, which has no marine zone and only
-  // placeholder grid cells, so it is rated on open Superior at the Portage
-  // Canal's North Entry (~13 km NNW), where its boaters head out: LSZ242 just
-  // west of the entry (the grid walk's cells), LSZ243 just east of it.
-  houghton: { name: "Houghton / Keweenaw", lat: 47.12, lon: -88.57, zone: "LSZ242", alertZones: ["LSZ243"], land: ["MIZ003", "MIC061"], office: "MQT", buoys: [], lake: "Lake Superior", sea: 330, gridSteps: [0.13, 0.16, 0.22] },
+  // Houghton sits on Portage Lake, whose grid cells are only placeholders, so
+  // its waves are rated on open Superior at the Portage Canal's North Entry
+  // (~13 km NNW): LSZ242 just west of the entry (the grid walk's cells),
+  // LSZ243 just east of it. The waterway itself and Keweenaw Bay at the
+  // Lower Entrance (the other way out) are LSZ246, which often carries its
+  // own advisories/gales on NE-E winds: watch all three.
+  houghton: { name: "Houghton / Keweenaw", lat: 47.12, lon: -88.57, zone: "LSZ242", alertZones: ["LSZ243", "LSZ246"], openWater: "Lake Superior off the North Entry", land: ["MIZ003", "MIC061"], office: "MQT", buoys: [], lake: "Lake Superior", sea: 330, gridSteps: [0.13, 0.16, 0.22] },
   "grand-marais": { name: "Grand Marais, MN", lat: 47.75, lon: -90.33, zone: "LSZ140", land: ["MNZ021", "MNC031"], office: "DLH", buoys: [], lake: "Lake Superior", waterBuoys: ["GDMM5", "45006"] },
 
   // ── Beyond the Great Lakes: coastal / tidal waters. Same NWS grid + marine
@@ -2381,6 +2383,9 @@ export async function fetchTodayWindows({ landBudget } = {}) {
     pooled(entries, 8, ([, s]) => fetchSpotGrid(s)),
     fetchSpotsAlerts(entries.map(([, s]) => s), landBudget),
   ]);
+  // Same nearshore wave floor as tiles and weeks: a window is never offered
+  // on a grid cell calmer than the official NSH/CWF text for the zone.
+  await floorWithMarineText(entries, grids).catch(() => {});
   const nowH = Math.floor(Date.now() / 3600000);
   const out = {};
   entries.forEach(([id, s], i) => {

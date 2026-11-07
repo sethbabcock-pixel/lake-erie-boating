@@ -71,6 +71,7 @@ let gridMode = null;
 // (one 0 m value held for 7 days, like DTX/84,67 off Port Huron), "zeros"
 // (several valid times, all 0 m), "calm" (a real 0–1 ft day: 0 m and 0.3 m
 // in turn), or a number = a real forecast of that many metres.
+let nshMock = null; // NWS products stub: CLE NSH text (null = no product)
 let gridWavesAt = null;
 let gridCalls = []; // NWS grid stub: the "lat,lon" sample point of each grid fetch
 let hourlyLagH = 0; // hourly stub: lead with this many already-past hours
@@ -177,6 +178,8 @@ function installFetchStub() {
     if (u.includes("api.weather.gov/alerts/active") && scaMode) {
       return jsonResp({ features: [{ properties: { event: "Small Craft Advisory", severity: "Minor", headline: "Small Craft Advisory in effect", sent: new Date().toISOString() } }] });
     }
+    if (nshMock && u.includes("api.weather.gov/products/types/NSH/locations/CLE")) return jsonResp({ "@graph": [{ id: "nsh-cle-test" }] });
+    if (nshMock && u.endsWith("api.weather.gov/products/nsh-cle-test")) return jsonResp({ productText: nshMock, issuanceTime: new Date().toISOString() });
     if (u.includes("api.weather.gov")) return jsonResp({ features: [], "@graph": [], properties: { periods: [] } });
     if (u.includes("ndbc.noaa.gov")) {
       const st = u.match(/realtime2\/([^/.]+)\.txt$/)?.[1];
@@ -2264,6 +2267,7 @@ async function run() {
     eq("geometry: Houghton's zone is LSZ242 (Ontonagon to the Portage Canal upper entrance), not LSZ267", h.zone, "LSZ242");
     eq("geometry: Houghton is forecast by MQT's NSH", `${h.office}|${h.product || "NSH"}`, "MQT|NSH");
     check("geometry: Houghton also watches LSZ243 (east of the North Entry)", alertZonesFor(h).includes("LSZ243") && alertZonesFor(h).includes("LSZ242"), JSON.stringify(alertZonesFor(h)));
+    check("geometry: Houghton also watches LSZ246 (Portage waterway / Keweenaw Bay)", alertZonesFor(h).includes("LSZ246"), JSON.stringify(alertZonesFor(h)));
     eq("geometry: Houghton's walk starts in Superior off the North Entry", JSON.stringify(gridSamplePoints(h)[0]), JSON.stringify({ step: 0.13, lat: 47.2326, lon: -88.6655 }));
     const exp = (id) => { const e = windExposure(SPOTS[id]); return `${e.onshore.join()}|${e.offshore.join()}`; };
     const bearings = {
@@ -2315,6 +2319,19 @@ async function run() {
     eq("nsh: LMZ345 still reads its own block", nshPeriodsForZone(apx, "LMZ345")[1]?.forecast, "Southwest wind 15 to 20 knots. Waves 4 to 6 feet.");
     eq("nsh: a zone that isn't in the product reads nothing", nshPeriodsForZone(apx, "LHZ346").length, 0);
     eq("nsh: a range header still matches (LEZ144>148)", nshPeriodsForZone("LEZ144>148-072115-\n.TODAY...NE wind 10 knots. Waves 2 feet.\n$$", "LEZ146")[0]?.name, "Today");
+  }
+
+  // 58d. Digest windows use the same nearshore wave floor as tiles and weeks:
+  //      no window on a calm grid cell when the official NSH says 5-7 ft.
+  {
+    const { fetchTodayWindows } = await import("../functions/marine/conditions.js");
+    stormMode = false; scaMode = false; alertsDown = false; gridMode = null; zoneAlert = null; gridWavesAt = null;
+    nshMock = null;
+    check("digest floor: calm grid, no NSH text → Sandusky gets a window", (await fetchTodayWindows()).sandusky != null);
+    const per = ["TODAY", "TONIGHT", "SUNDAY", "SUNDAY NIGHT", "MONDAY", "MONDAY NIGHT"].map((n) => `.${n}...Northeast wind 20 to 25 knots. Waves 5 to 7 feet.`);
+    nshMock = ["LEZ144>148-072115-", "Vermilion to Avon Point OH-", "", ...per, "", "$$"].join("\n");
+    eq("digest floor: NSH 5-7 ft for LEZ144 → no Sandusky window", (await fetchTodayWindows()).sandusky, null);
+    nshMock = null;
   }
 
   // ── Launch-facts card: a configured buoy is not a live buoy ──
