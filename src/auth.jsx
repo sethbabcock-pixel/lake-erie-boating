@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from "react";
+import React, { useEffect, useId, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { track } from "./monetize.jsx";
 
@@ -117,6 +117,8 @@ export function AuthModal({ auth, onClose, initialMode = "login", resetToken = "
   const [needsVerify, setNeedsVerify] = useState(""); // login blocked: email needing verification
   const [resent, setResent] = useState(false);
   const [verifyDone, setVerifyDone] = useState(false); // verify link confirmed
+  const [showPw, setShowPw] = useState(false); // show/hide password (applies to both password fields)
+  const uid = useId();
   const close = () => { clearAuthParams(); onClose(); };
 
   // Email-verification link (?verify=token): confirm on open.
@@ -190,7 +192,8 @@ export function AuthModal({ auth, onClose, initialMode = "login", resetToken = "
             <>
               {err && <div className="modal-err">{err}</div>}
               <p className="modal-sub">That link didn't work — it may have expired. Enter your email to get a fresh one.</p>
-              <input className="field" type="email" placeholder="Email" value={email} onChange={(e) => setEmail(e.target.value)} autoComplete="email" />
+              <label className="field-label" htmlFor={`${uid}-vemail`}>Email</label>
+              <input id={`${uid}-vemail`} className="field" type="email" inputMode="email" placeholder="you@example.com" value={email} onChange={(e) => setEmail(e.target.value)} autoComplete="email" />
               {resent ? <p className="modal-sub">Sent — check your inbox.</p> : <button className="cbtn modal-submit" onClick={resend} disabled={!email}>Resend verification</button>}
             </>
           )
@@ -213,21 +216,31 @@ export function AuthModal({ auth, onClose, initialMode = "login", resetToken = "
         ) : (
           <form onSubmit={submit}>
             {mode !== "reset" && (
-              <input className="field" type="email" placeholder="Email" value={email} onChange={(e) => setEmail(e.target.value)} autoComplete="email" required />
+              <>
+                <label className="field-label" htmlFor={`${uid}-email`}>Email</label>
+                <input id={`${uid}-email`} className="field" type="email" inputMode="email" placeholder="you@example.com" value={email} onChange={(e) => setEmail(e.target.value)} autoComplete="email" autoCapitalize="none" spellCheck={false} required />
+              </>
             )}
             {(mode === "login" || mode === "register" || mode === "reset") && (
-              <input className="field" type="password" placeholder={mode === "login" ? "Password" : "Password"} value={pw} onChange={(e) => setPw(e.target.value)} autoComplete={mode === "login" ? "current-password" : "new-password"} required />
+              <>
+                <label className="field-label" htmlFor={`${uid}-pw`}>{mode === "login" ? "Password" : mode === "reset" ? "New password" : "Create a password"}</label>
+                <div className="pw-wrap">
+                  <input id={`${uid}-pw`} className="field" type={showPw ? "text" : "password"} value={pw} onChange={(e) => setPw(e.target.value)}
+                    autoComplete={mode === "login" ? "current-password" : "new-password"} autoCapitalize="none" spellCheck={false}
+                    aria-describedby={mode !== "login" ? `${uid}-rule` : undefined} required />
+                  <button type="button" className="pw-toggle" onClick={() => setShowPw((v) => !v)} aria-pressed={showPw}>{showPw ? "Hide" : "Show"}</button>
+                </div>
+              </>
             )}
             {(mode === "register" || mode === "reset") && (
               <>
-                <input className="field" type="password" placeholder="Confirm password" value={pw2} onChange={(e) => setPw2(e.target.value)} autoComplete="new-password" required />
-                <p className="modal-hint">
-                  {pw2 && pw !== pw2
-                    ? <span className="modal-hint-bad">Passwords don't match.</span>
-                    : (passwordProblem(pw)
-                        ? <>At least 8 characters, with a letter, a number, and a special character.</>
-                        : <span className="modal-hint-ok">Strong password ✓</span>)}
+                <p className="modal-hint pw-rule" id={`${uid}-rule`}>
+                  Use 8 or more characters with at least one letter, one number and one symbol (like ! ? @ # $).
+                  {pw && !passwordProblem(pw) && <span className="modal-hint-ok"> Meets the rule ✓</span>}
                 </p>
+                <label className="field-label" htmlFor={`${uid}-pw2`}>Confirm password</label>
+                <input id={`${uid}-pw2`} className="field" type={showPw ? "text" : "password"} value={pw2} onChange={(e) => setPw2(e.target.value)} autoComplete="new-password" autoCapitalize="none" spellCheck={false} required />
+                {pw2 && pw !== pw2 && <p className="modal-hint" role="status"><span className="modal-hint-bad">Passwords don't match.</span></p>}
               </>
             )}
             {err && <div className="modal-err">{err}</div>}

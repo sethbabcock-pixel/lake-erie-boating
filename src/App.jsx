@@ -9,6 +9,7 @@ import VerdictMark, { VerdictIcon } from "./VerdictMark.jsx";
 import { scrollBehavior, pauseVideosIfReduced } from "./motion.js";
 import Takeover from "./Takeover.jsx";
 import Landing from "./Landing.jsx";
+import { getSummary, milesBetween } from "./summary.js";
 import { fmtWaves, waveFeel, compassToDeg } from "./units.js";
 import { regionBySlug, regionFromPath, regionForLake, nearMetroBySlug, nearMetroFromPath, LAKE_GUIDES } from "./regions.js";
 
@@ -216,7 +217,7 @@ function ThemeToggle({ effective, onToggle }) {
 }
 
 // Custom, searchable, lake-grouped location picker (replaces the bland select).
-function LocationPicker({ byLake, active, activeName, onSelect, favorites = [], onToggleFav, onBuild }) {
+function LocationPicker({ byLake, active, activeName, onSelect, favorites = [], onToggleFav, onBuild, live, from }) {
   const [open, setOpen] = useState(false);
   const [q, setQ] = useState("");
   const [busy, setBusy] = useState(false);
@@ -226,17 +227,26 @@ function LocationPicker({ byLake, active, activeName, onSelect, favorites = [], 
   const favSet = new Set(favorites);
   const allSpots = Object.values(byLake).flat();
   const favSpots = favorites.map((id) => allSpots.find((s) => s.id === id)).filter(Boolean);
-  const Row = (s) => (
+  // `live` = directory summary (verdict per spot) when already loaded; `from` =
+  // reference point for distance (the spot being viewed). Both optional.
+  const Row = (s) => {
+    const l = live && live.get(s.id);
+    const mi = from && s.id !== active ? milesBetween(from, l || s) : null;
+    return (
     <div key={s.id} className={`locpick-item ${s.id === active ? "active" : ""}`}>
       <button className="locpick-pick" onClick={() => { onSelect(s.id); setOpen(false); setQ(""); }}>
-        <span>{s.name}</span>{s.id === active && <span className="check"><IconCheck /></span>}
+        <span className="lp-name">{s.name}</span>
+        {mi != null && <span className="lp-mi">{Math.round(mi)} mi</span>}
+        {l && l.level && <span className={`loc-status ${verdictClass(l.level)}`}>{l.level}</span>}
+        {s.id === active && <span className="check"><IconCheck /></span>}
       </button>
       {onToggleFav && (
         <button className={`favstar ${favSet.has(s.id) ? "on" : ""}`} title="Favorite"
           onClick={(e) => { e.stopPropagation(); onToggleFav(s.id); }}><IconStar filled={favSet.has(s.id)} /></button>
       )}
     </div>
-  );
+    );
+  };
   useEffect(() => {
     if (!open) return;
     const onDoc = (e) => { if (ref.current && !ref.current.contains(e.target)) setOpen(false); };
@@ -384,35 +394,29 @@ const Trend = ({ t }) => (t ? <span className={`trend ${t.cls}`}>{t.glyph} {t.wo
 
 // Same-lake pivot: every other port on this lake with its live verdict.
 // "This launch is rough — where's it calmer?" answered without leaving the page.
-function NearbyPorts({ lake, current, from, onSelect }) {
-  const [sum, setSum] = useState(null);
-  useEffect(() => {
-    let ok = true;
-    fetch("/marine/conditions?summary")
-      .then((r) => (r.ok ? r.json() : null))
-      .then((d) => { if (ok) setSum((d && d.spots) || []); })
-      .catch(() => { if (ok) setSum([]); });
-    return () => { ok = false; };
-  }, []);
+function NearbyPorts({ lake, current, from, onSelect, sum, level, promoted }) {
   const order = { GO: 0, CAUTION: 1, "NO-GO": 2 };
   const milesTo = (a, b) => {
-    if (!a || a.lat == null || b.lat == null) return "";
-    const R = 3958.8, rad = (d) => (d * Math.PI) / 180;
-    const h = Math.sin(rad(b.lat - a.lat) / 2) ** 2 + Math.cos(rad(a.lat)) * Math.cos(rad(b.lat)) * Math.sin(rad(b.lon - a.lon) / 2) ** 2;
-    return ` · ${Math.round(2 * R * Math.asin(Math.sqrt(h)))} mi`;
+    const m = milesBetween(a, b);
+    return m == null ? "" : ` · ${Math.round(m)} mi`;
   };
-  const near = (sum || [])
+  const dist = (s) => milesBetween(from, s) ?? 1e9;
+  let near = (sum || [])
     .filter((s) => (s.lake || "Lake Erie") === lake && s.id !== current)
-    .sort((a, b) => (order[a.level] ?? 3) - (order[b.level] ?? 3));
+    .sort((a, b) => (order[a.level] ?? 3) - (order[b.level] ?? 3) || dist(a) - dist(b));
+  if (promoted) near = near.slice(0, 8);
   if (!near.length) return null;
+  // Only suggest a switch when something is actually better than here.
+  const better = order[level] != null && near.some((s) => (order[s.level] ?? 3) < order[level]);
   return (
-    <section className="card nearby">
-      <div className="card-head"><h2>Nearby on {lake}</h2><span className="legend">calmer launch? tap to switch</span></div>
+    <section className={`card nearby${promoted ? " nearby-promoted" : ""}`}>
+      <div className="card-head"><h2>Nearby on {lake}</h2><span className="legend">{promoted && order[level] != null && !better ? "none calmer right now" : "calmer launch? tap to switch"}</span></div>
       <div className="nearby-row">
         {near.map((s) => (
           <button key={s.id} className="nearby-chip" onClick={() => onSelect(s.id)}>
             <span className={`ndot ${verdictClass(s.level)}`} />
             <span className="nname">{s.name}</span>
+            <span className={`nlevel ${verdictClass(s.level)}`}>{s.level || "No data"}</span>
             <small>{s.windKt != null ? `${s.windKt}kt` : "—"}{s.waveFt != null ? ` · ${s.waveFt}ft${s.periodSec ? `@${s.periodSec}s` : ""}` : ""}{milesTo(from, s)}</small>
           </button>
         ))}
@@ -890,6 +894,8 @@ function HourStrip({ hours, headInBy }) {
 
 function MapCard({ spot }) {
   const [layer, setLayer] = useState("waves");
+  // Poster first: the Windy embed is heavy, so it only loads when asked for.
+  const [shown, setShown] = useState(false);
   const layers = [["waves", "Waves"], ["wind", "Wind"], ["gust", "Gusts"], ["radar", "Radar"], ["temp", "Temp"]];
   return (
     <section className="card">
@@ -897,14 +903,24 @@ function MapCard({ spot }) {
         <h2>Weather map</h2>
         <div className="maptabs">
           {layers.map(([k, label]) => (
-            <button key={k} className={layer === k ? "active" : ""} onClick={() => setLayer(k)}>{label}</button>
+            <button key={k} className={layer === k ? "active" : ""} onClick={() => { setLayer(k); setShown(true); }}>{label}</button>
           ))}
         </div>
       </div>
-      <div className="mapwrap">
-        <iframe key={layer} title={`Windy ${layer} map`} src={windyUrl(spot.lat, spot.lon, layer)} loading="lazy" allow="fullscreen" />
-      </div>
-      <div className="hint">{spot.name} · switch layers above; pan & zoom inside the map.</div>
+      {shown ? (
+        <div className="mapwrap">
+          <iframe key={layer} title={`Windy ${layer} map`} src={windyUrl(spot.lat, spot.lon, layer)} loading="lazy" allow="fullscreen" />
+        </div>
+      ) : (
+        <button type="button" className="mapposter" onClick={() => setShown(true)}>
+          <span className="mapposter-ico" aria-hidden="true">
+            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M9 4 3 6.5v13L9 17l6 3 6-2.5v-13L15 7 9 4z" /><path d="M9 4v13M15 7v13" /></svg>
+          </span>
+          <b>Show the {layers.find(([k]) => k === layer)[1].toLowerCase()} map</b>
+          <small>Loads a live Windy map around {spot.name}</small>
+        </button>
+      )}
+      <div className="hint">{spot.name} · {shown ? "switch layers above; pan & zoom inside the map." : "tap to load the interactive map."}</div>
     </section>
   );
 }
@@ -984,6 +1000,7 @@ export default function App() {
     }
   }, [auth.user]);
   const [spots, setSpots] = useState([]);
+  const [summary, setSummary] = useState(null); // per-spot verdicts (shared fetch) for the picker + nearby launches
   // Prefer the clean SEO path /spot/<id>; fall back to the legacy ?spot=<id>.
   const urlSpot = () => {
     const m = window.location.pathname.match(/^\/spot\/([a-z0-9-]{1,40})\/?$/);
@@ -1080,6 +1097,12 @@ export default function App() {
   }, []);
 
   useEffect(() => {
+    let alive = true;
+    getSummary().then((list) => { if (alive) setSummary(list); });
+    return () => { alive = false; };
+  }, []);
+
+  useEffect(() => {
     fetch("/marine/conditions?spots")
       .then((r) => r.json())
       .then((d) => setSpots(d.spots || []))
@@ -1166,6 +1189,7 @@ export default function App() {
     io.observe(el);
     return () => io.disconnect();
   }, [data && data.spot && data.spot.id, !!rec]);
+  const promoteNearby = !!rec && rec.level !== "GO" && !(spot && spot.adHoc && !spot.built);
   const wind = data?.wind || {};
   const wv = data?.waves || {};
   const buoy = data?.buoy;
@@ -1189,6 +1213,11 @@ export default function App() {
   const gustDrives = wind.gustKt != null && kt(wind.gustKt) > (kt(wind.speedKt) ?? -1);
 
   // Location options grouped by lake (scales to all five lakes).
+  const liveById = summary && summary.length ? new Map(summary.map((s) => [s.id, s])) : null;
+  // Distance reference: the launch on screen (landing: the remembered "near me" point, if any).
+  const pickerFrom = landing
+    ? (() => { try { const p = JSON.parse(localStorage.getItem("boating.nearpt") || "null"); return p && p.lat != null && p.lon != null ? p : null; } catch (e) { return null; } })()
+    : (spot && spot.lat != null ? spot : null);
   const spotOptions = spots.length ? spots : (spot ? [{ ...spot, lake: "Lake Erie" }] : [{ id: active, name: "Loading…", lake: "Lake Erie" }]);
   const byLake = {};
   spotOptions.forEach((s) => { (byLake[s.lake || "Lake Erie"] ||= []).push(s); });
@@ -1215,7 +1244,8 @@ export default function App() {
           </a>
           <div className="controls">
             <LocationPicker byLake={byLake} active={active} activeName={activeName} onSelect={selectLocation}
-              favorites={auth.user ? (auth.user.favorites || []) : []} onToggleFav={auth.user ? toggleFav : undefined} onBuild={goPreview} />
+              favorites={auth.user ? (auth.user.favorites || []) : []} onToggleFav={auth.user ? toggleFav : undefined} onBuild={goPreview}
+              live={liveById} from={pickerFrom} />
             <ThemeToggle effective={effective} onToggle={() => setChoice(effective === "dark" ? "light" : "dark")} />
             <Account auth={auth} />
           </div>
@@ -1360,6 +1390,12 @@ export default function App() {
               </div>
             </div>
 
+            {/* Not a GO day: the most useful next step is a calmer launch, so it
+                sits right under the call + numbers (on GO it stays further down). */}
+            {promoteNearby && (
+              <NearbyPorts lake={spot.lake || "Lake Erie"} current={active} from={spot} onSelect={selectLocation} sum={summary} level={rec.level} promoted />
+            )}
+
             <div className="learn-line">
               New to the numbers? <a href="/guides/reading-a-marine-forecast" target="_blank" rel="noopener">How to read a marine forecast</a> ·{" "}
               <a href="/guides/go-caution-nogo-explained" target="_blank" rel="noopener">what GO / CAUTION / NO-GO means</a>
@@ -1393,14 +1429,14 @@ export default function App() {
                 {/* ── Week ahead / weekend planning ── */}
                 <WeekStrip week={data.week} marineForecast={data.marineForecast} />
 
-                {/* ── Map + Cams ── */}
-                <div className="dash2">
-                  <MapCard spot={spot} />
+                {/* ── Cams, then the (tap-to-load) map ── */}
+                <div className="dash2 camsmap">
                   <Cams lat={spot.lat} lon={spot.lon} spotName={spot.name} lake={spot.lake} />
+                  <MapCard spot={spot} />
                 </div>
 
-                {/* ── Same-lake pivot ── */}
-                <NearbyPorts lake={spot.lake || "Lake Erie"} current={active} from={spot} onSelect={selectLocation} />
+                {/* ── Same-lake pivot (promoted under the verdict when not GO) ── */}
+                {!promoteNearby && <NearbyPorts lake={spot.lake || "Lake Erie"} current={active} from={spot} onSelect={selectLocation} sum={summary} level={rec.level} />}
 
                 <LaunchNotes spot={spot} facts={data.facts} />
 
@@ -1434,7 +1470,15 @@ export default function App() {
               </>
             )}
 
-            <GearBlock waterTempF={data.temps?.waterF ?? null} airTempF={data.temps?.airF ?? null} windKt={wind ? wind.speedKt : null} level={rec ? rec.level : null} />
+            {rec.level === "NO-GO" ? (
+              // Collapsed on a NO-GO day (the affiliate links stay labeled and one tap away).
+              <details className="card gearfold">
+                <summary>Gear picks · Amazon affiliate links</summary>
+                <GearBlock waterTempF={data.temps?.waterF ?? null} airTempF={data.temps?.airF ?? null} windKt={wind ? wind.speedKt : null} level={rec ? rec.level : null} />
+              </details>
+            ) : (
+              <GearBlock waterTempF={data.temps?.waterF ?? null} airTempF={data.temps?.airF ?? null} windKt={wind ? wind.speedKt : null} level={rec ? rec.level : null} />
+            )}
             {showAds && <AdSlot name="detailMid" />}
 
             <footer className="meta">
