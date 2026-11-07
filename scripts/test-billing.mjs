@@ -2391,7 +2391,7 @@ async function run() {
 
   // ── N1/N2/X4 (2026-11 UX review): one wind story, freshness, no-data state ──
   {
-    const { buildRecommendation, windPhrase, onRequest, fetchSummary, fetchTodayWindows, STALE_LIMITS } = await import("../functions/marine/conditions.js");
+    const { buildRecommendation, windPhrase, onRequest, fetchSummary, fetchTodayWindows, fetchWeeks, capStaleGo, STALE_LIMITS } = await import("../functions/marine/conditions.js");
     const R = (o) => buildRecommendation({ buoy: null, alerts: [], read: null, hours: [], profile: "lake", ...o });
 
     // N1: the reason names sustained AND gust with sources; the level still
@@ -2430,6 +2430,12 @@ async function run() {
     const sfNo = R({ wind: { speedKt: 25, source: "forecast" }, waves: { ft: 5, source: "forecast" }, forecastAgeMin: 30 * 60 });
     check("stale forecast: NO-GO stays NO-GO, not flagged as a stale cap", sfNo.level === "NO-GO" && sfNo.stale === false && sfNo.reasons.some((x) => /hasn't been updated/.test(x)), JSON.stringify(sfNo));
 
+    // Strip/email cap: GO → CAUTION (flagged stale) on an overdue forecast;
+    // CAUTION, NO-GO, no call and alert-raised rows are left alone.
+    const rows = [{ level: "GO" }, { level: "CAUTION" }, { level: "NO-GO", alert: true }, { level: null }];
+    eq("capStaleGo: stale → GO capped, others untouched", JSON.stringify(capStaleGo(rows, true)), JSON.stringify([{ level: "CAUTION", stale: true }, { level: "CAUTION" }, { level: "NO-GO", alert: true }, { level: null }]));
+    check("capStaleGo: fresh → same rows", capStaleGo(rows, false) === rows);
+
     // X4: a no-data CAUTION is flagged so the page can show it as NO DATA.
     const nd = R({ wind: { speedKt: null, source: null }, waves: { ft: null, source: null } });
     check("no data: level CAUTION (never GO), flagged noData", nd.level === "CAUTION" && nd.noData === true, JSON.stringify(nd));
@@ -2444,6 +2450,9 @@ async function run() {
       fcUpdateAgeH = 3;
       let d = await page();
       eq("page: fresh forecast, calm → GO", d.recommendation?.level, "GO");
+      check("page: fresh forecast → hourly strip has GO hours", (d.hourly || []).some((h) => h.level === "GO"), JSON.stringify((d.hourly || []).slice(0, 3).map((h) => h.level)));
+      check("page: fresh forecast → week strip has GO days", (d.week || []).some((x) => x.level === "GO"), JSON.stringify((d.week || []).map((x) => x.level)));
+      check("weekend email: fresh grid → GO days", ((await fetchWeeks({ USERS: makeKV() }, ["sandusky"])).sandusky || []).some((x) => x.level === "GO"));
       check("page: freshness reports the forecast issue time and age", d.freshness && d.freshness.forecastIssuedAt && d.freshness.forecastAgeMinutes >= 179 && d.freshness.forecastAgeMinutes <= 181 && d.freshness.stale.length === 0 && d.freshness.buoy === null, JSON.stringify(d.freshness));
       eq("page: wind basis is the hourly forecast", d.wind?.basis, "hour");
       fcUpdateAgeH = 20;
@@ -2453,6 +2462,22 @@ async function run() {
       const tile = (await fetchSummary({ USERS: makeKV() })).spots.find((x) => x.id === "sandusky");
       check("summary tile: stale grid → no call, not GO", tile && tile.level === null, JSON.stringify(tile));
       check("digest: stale grid → no GO window", Object.values(await fetchTodayWindows()).every((w) => w == null));
+      check("page: stale forecast → no GO hour in the hourly strip", (d.hourly || []).length && d.hourly.every((h) => h.level !== "GO"), JSON.stringify((d.hourly || []).map((h) => h.level)));
+      check("page: stale forecast → capped hours are CAUTION, flagged stale", d.hourly.some((h) => h.level === "CAUTION" && h.stale === true), JSON.stringify(d.hourly.slice(0, 3)));
+      check("page: stale forecast → no GO day in the week strip", (d.week || []).length && d.week.every((x) => x.level !== "GO"), JSON.stringify((d.week || []).map((x) => x.level)));
+      check("page: stale forecast → capped days are CAUTION, flagged stale", d.week.some((x) => x.level === "CAUTION" && x.stale === true), JSON.stringify(d.week));
+      eq("page: stale forecast → outlook's current hour isn't GO either", d.outlook?.nowLevel === "GO", false);
+      const sw = (await fetchWeeks({ USERS: makeKV() }, ["sandusky"])).sandusky || [];
+      check("weekend email: stale grid → no GO day (CAUTION, flagged stale)", sw.length && sw.every((x) => x.level !== "GO") && sw.some((x) => x.level === "CAUTION" && x.stale === true), JSON.stringify(sw.map((x) => x.level)));
+      // An advisory still raises a stale strip to its own level.
+      stormMode = true;
+      d = await page();
+      check("page: stale + storm → NO-GO hours/days stay NO-GO", d.hourly.some((h) => h.level === "NO-GO") && d.week.some((x) => x.level === "NO-GO"), JSON.stringify({ h: d.hourly.slice(0, 3).map((h) => h.level), w: d.week.map((x) => x.level) }));
+      stormMode = false;
+      alertsDown = true;
+      d = await page();
+      check("page: stale + alerts unknown → no GO hour or day", d.hourly.every((h) => h.level !== "GO") && d.week.every((x) => x.level !== "GO"), JSON.stringify({ h: d.hourly.slice(0, 3).map((h) => h.level), w: d.week.map((x) => x.level) }));
+      alertsDown = false;
       fcUpdateAgeH = null;
       d = await page();
       eq("page: no updateTime sent → age unknown, not stale", d.freshness?.forecastAgeMinutes, null);
