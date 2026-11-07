@@ -617,7 +617,14 @@ const toAlert = (f) => ({
   headline: f.properties?.headline,
   description: f.properties?.description,
   sent: f.properties?.sent || f.properties?.effective || null,
+  onset: f.properties?.onset || f.properties?.effective || null,
   ends: f.properties?.ends || f.properties?.expires,
+  // The event's own end, null when NWS gives none ("until further notice",
+  // e.g. hurricane/tropical warnings). `ends` above falls back to `expires`,
+  // which is only when the PRODUCT lapses (often hours before the event ends),
+  // so timing uses this instead (see alertSpan).
+  eventEnds: f.properties?.ends ?? null,
+  zones: f.properties?.geocode?.UGC || [],
 });
 async function alertsAt(query) {
   try {
@@ -639,10 +646,108 @@ export async function fetchAlerts(spot) {
   const results = await Promise.all(queries.map(alertsAt));
   const answered = results.filter((r) => r != null);
   return {
-    alerts: answered.length ? dedupeAlerts(answered.flat()) : null,
+    alerts: answered.length ? dedupeAlerts(answered.flat()) : null, // one card per event type
+    all: answered.flat(), // every issuance, for timing (two SCAs can cover different hours)
     ok: answered.length === results.length,
   };
 }
+
+// How an active alert moves a boating verdict. Shore-side alerts (air
+// quality, rip currents for swimmers, coastal flooding, heat) are listed but
+// don't move it: on the coasts they run most days and would pin every launch
+// at CAUTION. Watches are a heads-up (CAUTION); marine warnings decide.
+const NOTE_ONLY = /air quality|rip current|beach hazard|coastal flood|lakeshore flood|flood (watch|warning|advisory|statement)|hydrologic|heat|frost|freeze|red flag|fire weather/;
+export function alertLevel(a) {
+  const ev = (a?.event || "").toLowerCase();
+  if (!ev || NOTE_ONLY.test(ev)) return null;
+  if (ev.includes("watch")) return "CAUTION";
+  if (ev.includes("gale") || ev.includes("storm") || ev.includes("special marine") || ev.includes("hurricane") || ev.includes("hazardous seas") || ev.includes("tsunami")) return "NO-GO";
+  return "CAUTION";
+}
+// [start, end) in epoch ms. No onset = already in effect; no end = open-ended.
+// A warning/watch/advisory with no event end (NWS "until further notice") is
+// open-ended: its `expires` is just the product's re-issue time, and treating
+// that as the end would show GO hours under a warning that is still in force.
+// Statements (Marine/Special Weather Statement) carry no event end by design;
+// for those `expires` is the meaningful end.
+function alertSpan(a) {
+  const s = Date.parse(a.onset || "");
+  const ufn = "eventEnds" in a && a.eventEnds == null && /warning|watch|advisory/i.test(a.event || "");
+  const e = ufn ? NaN : Date.parse(a.ends || "");
+  return [Number.isFinite(s) ? s : -Infinity, Number.isFinite(e) ? e : Infinity];
+}
+// The worst alert level in effect at any time in [fromMs, toMs).
+function alertLevelBetween(alerts, fromMs, toMs) {
+  let lvl = null;
+  for (const a of alerts || []) {
+    const al = alertLevel(a);
+    if (!al) continue;
+    const [s, e] = alertSpan(a);
+    if (s < toMs && e > fromMs) lvl = worseLevel(lvl, al);
+  }
+  return lvl;
+}
+// When the alerts lookup failed, how far ahead to refuse GO: a missing feed
+// hides whatever has already been issued. Small Craft Advisories usually lead
+// by 12-36 h, but gale/storm and tropical watches are issued up to ~48 h ahead,
+// so 48 h covers essentially every product that could exist.
+const ALERTS_UNKNOWN_CAP_H = 48;
+// Raise hourly rows ({time, level}) to any alert in effect that hour; when
+// alerts couldn't be checked, GO hours within ALERTS_UNKNOWN_CAP_H become CAUTION.
+export function applyAlertsToHours(hours, alerts, alertsOk = true, nowMs = Date.now()) {
+  return (hours || []).map((h) => {
+    const t = Date.parse(h.time);
+    if (!Number.isFinite(t)) return h;
+    let level = worseLevel(h.level, alertLevelBetween(alerts, t, t + 3600e3));
+    if (!alertsOk && level === "GO" && t < nowMs + ALERTS_UNKNOWN_CAP_H * 3600e3) level = "CAUTION";
+    return level === h.level ? h : { ...h, level, alert: true };
+  });
+}
+// Same for the week strip ({date, level} in the spot's local calendar).
+export function applyAlertsToWeek(week, alerts, alertsOk, tz, nowMs = Date.now()) {
+  if (!week || !week.length) return week;
+  const toLocal = localParts(tz || "America/New_York");
+  const spans = (alerts || []).filter((a) => alertLevel(a)).map((a) => {
+    const [s, e] = alertSpan(a);
+    const nowH = Math.floor(nowMs / 3600e3);
+    const from = Number.isFinite(s) ? toLocal(Math.floor(s / 3600e3)).date : toLocal(nowH).date;
+    const to = Number.isFinite(e) ? toLocal(Math.floor((e - 1) / 3600e3)).date : "9999-12-31";
+    return { from, to, level: alertLevel(a) };
+  });
+  // Alerts unknown: no GO on any local day the hourly cap reaches (same
+  // window as applyAlertsToHours, so the two strips agree).
+  const capTo = toLocal(Math.floor((nowMs + ALERTS_UNKNOWN_CAP_H * 3600e3 - 1) / 3600e3)).date;
+  return week.map((d) => {
+    let level = d.level;
+    for (const sp of spans) if (d.date >= sp.from && d.date <= sp.to) level = worseLevel(level, sp.level);
+    if (!alertsOk && d.date <= capTo && level === "GO") level = "CAUTION";
+    return level === d.level ? d : { ...d, level, alert: true };
+  });
+}
+// Active marine alerts for many zones at once (the directory, digest and
+// weekend email cover dozens of spots): the NWS API takes a comma-separated
+// zone list, so this is a handful of requests, not one per spot. Returns
+// { byZone: Map(zone -> alerts[]), ok } — ok false if any chunk failed.
+const ZONE_RE = /^[A-Z]{3}\d{3}$/;
+export async function fetchZoneAlerts(zones) {
+  const list = [...new Set((zones || []).filter((z) => ZONE_RE.test(z || "")))];
+  const byZone = new Map(list.map((z) => [z, []]));
+  if (!list.length) return { byZone, ok: true };
+  const chunks = [];
+  for (let i = 0; i < list.length; i += 25) chunks.push(list.slice(i, i + 25));
+  const results = await Promise.all(chunks.map((c) => alertsAt(`zone=${c.join(",")}`)));
+  for (const r of results) {
+    for (const a of r || []) for (const z of a.zones) if (byZone.has(z)) byZone.get(z).push(a);
+  }
+  // Not deduped: two issuances of one event can cover different hours.
+  return { byZone, ok: results.every((r) => r != null) };
+}
+const zoneAlertsFor = (za, spot) => (za && spot?.zone && za.byZone.get(spot.zone)) || [];
+// Were this spot's zone alerts actually checked? Every directory spot is
+// marine (built pages require a marine zone), so a spot with no valid zone —
+// e.g. an old user-built record — had nothing looked up: missing data, not
+// "no advisories".
+const zoneAlertsOkFor = (za, spot) => !!za && za.ok && ZONE_RE.test(spot?.zone || "");
 
 // NWS re-issues the same advisory repeatedly (e.g. three "Air Quality Alert"
 // features minutes apart). Collapse to one card per event type, keeping the
@@ -1221,7 +1326,7 @@ export function computeOutlook(hours) {
     out.headInBy = h.time;
     out.goodHours = idx;
     const s = (h.short || "").toLowerCase();
-    out.headInReason = /thunder|tstm|waterspout/.test(s) ? "thunderstorms"
+    out.headInReason = h.alert ? "a marine warning" : /thunder|tstm|waterspout/.test(s) ? "thunderstorms"
       : (h.waveFt != null && h.waveFt >= 4 ? "building waves"
       : (h.windKt >= 22 ? "building wind" : "deteriorating weather"));
   }
@@ -1246,20 +1351,12 @@ export function buildRecommendation({ buoy, alerts, wind, waves, read, hours, pr
     if (why) reasons.push(why);
   };
 
-  // Active marine warnings dominate.
-  // Shore-side alerts (air quality, rip currents for swimmers, coastal
-  // flooding, heat) are listed but don't move a boating verdict: on the coasts
-  // they run most days and would pin every launch at CAUTION. Watches are a
-  // heads-up (CAUTION); marine warnings decide.
-  const NOTE_ONLY = /air quality|rip current|beach hazard|coastal flood|lakeshore flood|flood (watch|warning|advisory|statement)|hydrologic|heat|frost|freeze|red flag|fire weather/;
+  // Active marine warnings dominate (see alertLevel for what counts).
   for (const a of alerts || []) {
-    const ev = (a.event || "").toLowerCase();
-    if (!ev) continue;
-    if (NOTE_ONLY.test(ev)) reasons.push(`${a.event} in effect (shoreline, not a boating limit)`);
-    else if (ev.includes("watch")) bump("CAUTION", `Active ${a.event}`);
-    else if (ev.includes("gale") || ev.includes("storm") || ev.includes("special marine") || ev.includes("hurricane") || ev.includes("hazardous seas") || ev.includes("tsunami")) {
-      bump("NO-GO", `Active ${a.event}`);
-    } else bump("CAUTION", `Active ${a.event}`);
+    if (!a.event) continue;
+    const al = alertLevel(a);
+    if (al) bump(al, `Active ${a.event}`);
+    else reasons.push(`${a.event} in effect (shoreline, not a boating limit)`);
   }
   // A failed alerts lookup is missing data, not "no advisories": never GO on it.
   if (!alertsOk) bump("CAUTION", "Couldn't confirm NWS marine alerts; check for advisories before heading out");
@@ -1585,7 +1682,8 @@ async function handleCamStatus(url, env) {
 // directory. Per-spot NWS grid fetches through a small pool; /points lookups
 // are edge-cached a day and the whole result ~10 min, so the API isn't hammered.
 // One directory/email tile (verdict + wind/wave) from a spot and its grid.
-function summaryTile(id, s, g, nowH) {
+const TILE_ALERT_LOOKAHEAD_H = 6; // ~a half-day trip
+function summaryTile(id, s, g, nowH, za = null) {
   const windKt = round(sampleNear(g?.windKt, nowH), 0);
   const gustKt = round(sampleNear(g?.gustKt, nowH), 0);
   const dirDeg = sampleNear(g?.windDirDeg, nowH);
@@ -1598,7 +1696,17 @@ function summaryTile(id, s, g, nowH) {
   // verdict: this hour or the next.
   const precipPct = Math.max(g?.precipPct.get(nowH) ?? 0, g?.precipPct.get(nowH + 1) ?? 0);
   const thunder = g?.thunder.get(nowH) === true || g?.thunder.get(nowH + 1) === true;
-  const level = riskLevel(windKt, gustKt, precipPct, thunder ? "thunderstorms" : "", waveFt, periodSec, waterProfile(s));
+  let level = riskLevel(windKt, gustKt, precipPct, thunder ? "thunderstorms" : "", waveFt, periodSec, waterProfile(s));
+  // An advisory in effect for the spot's zone now or next hour (same window
+  // as above) raises the tile; if the zone alerts couldn't be checked, no GO.
+  // An alert starting within the next few hours (a trip launched now is still
+  // out when it begins) can't leave the tile at GO either: at least CAUTION.
+  if (za) {
+    const zoneAlerts = zoneAlertsFor(za, s);
+    level = worseLevel(level, alertLevelBetween(zoneAlerts, nowH * 3600e3, (nowH + 2) * 3600e3));
+    if (level === "GO" && alertLevelBetween(zoneAlerts, nowH * 3600e3, (nowH + TILE_ALERT_LOOKAHEAD_H) * 3600e3)) level = "CAUTION";
+    if (!zoneAlertsOkFor(za, s) && level === "GO") level = "CAUTION";
+  }
   // lat/lon travel with each spot so the homepage can find the nearest launch
   // from a ZIP or the browser's location without a second request.
   return { id, name: s.name, lake: s.lake || "Lake Erie", lat: s.lat, lon: s.lon, level, windKt, gustKt, dir, waveFt, periodSec: plausiblePeriod(waveFt, periodSec) }; // level above used the raw period
@@ -1627,10 +1735,13 @@ export async function fetchSummary(env) {
   // Curated spots + admin-featured user-built pages (both render in the directory).
   const built = await listFeaturedBuiltSpots(env);
   const entries = [...Object.entries(SPOTS), ...built.map((b) => [b.slug, { name: b.name, lat: b.lat, lon: b.lon, zone: b.zone, office: b.office, product: b.product, lake: b.lake, buoys: b.buoys || [], water: b.water || waterFromZone(b.zone, b.zoneName), sea: b.sea ?? null }])];
-  const grids = await pooled(entries, 8, ([, s]) => fetchSpotGrid(s));
+  const [grids, za] = await Promise.all([
+    pooled(entries, 8, ([, s]) => fetchSpotGrid(s)),
+    fetchZoneAlerts(entries.map(([, s]) => s.zone)),
+  ]);
   await floorWithMarineText(entries, grids);
   const nowH = Math.floor(Date.now() / 3600000);
-  const spots = entries.map(([id, s], i) => summaryTile(id, s, grids[i], nowH));
+  const spots = entries.map(([id, s], i) => summaryTile(id, s, grids[i], nowH, za));
   return { spots, updatedAt: new Date().toISOString() };
 }
 
@@ -1640,10 +1751,13 @@ export async function fetchBuiltSummaries(env, slugs) {
   const resolved = [];
   for (const slug of [...new Set(slugs)]) { const b = await getBuiltSpot(env, slug); if (b) resolved.push([slug, b]); }
   if (!resolved.length) return [];
-  const grids = await pooled(resolved, 8, ([, s]) => fetchSpotGrid(s));
+  const [grids, za] = await Promise.all([
+    pooled(resolved, 8, ([, s]) => fetchSpotGrid(s)),
+    fetchZoneAlerts(resolved.map(([, s]) => s.zone)),
+  ]);
   await floorWithMarineText(resolved, grids).catch(() => {}); // same nearshore wave floor as the directory
   const nowH = Math.floor(Date.now() / 3600000);
-  return resolved.map(([id, s], i) => summaryTile(id, s, grids[i], nowH));
+  return resolved.map(([id, s], i) => summaryTile(id, s, grids[i], nowH, za));
 }
 
 // 7-day outlook (same per-day verdicts as the spot page's week strip) for
@@ -1656,11 +1770,14 @@ export async function fetchWeeks(env, ids) {
     else { const b = await getBuiltSpot(env, id).catch(() => null); if (b) entries.push([id, b]); }
   }
   if (!entries.length) return {};
-  const grids = await pooled(entries, 8, ([, s]) => fetchSpotGrid(s));
+  const [grids, za] = await Promise.all([
+    pooled(entries, 8, ([, s]) => fetchSpotGrid(s)),
+    fetchZoneAlerts(entries.map(([, s]) => s.zone)),
+  ]);
   await floorWithMarineText(entries, grids).catch(() => {});
   // Same per-day verdicts as the week strip (buildWeek → riskLevel: no wind
-  // data is "—", lake gusts count).
-  return Object.fromEntries(entries.map(([id, s], i) => [id, buildWeek(grids[i], waterProfile(s))]));
+  // data is "—", lake gusts count), raised by the zone's active alerts.
+  return Object.fromEntries(entries.map(([id, s], i) => [id, applyAlertsToWeek(buildWeek(grids[i], waterProfile(s)), zoneAlertsFor(za, s), zoneAlertsOkFor(za, s), grids[i]?.tz)]));
 }
 
 // The full spot-page verdict (alerts, gusts, buoy, nearshore text) for one
@@ -1685,12 +1802,17 @@ export async function fetchSpotVerdict(env, id) {
 const fmtH12 = (h) => `${h % 12 || 12}${h < 12 ? "am" : "pm"}`;
 export async function fetchTodayWindows() {
   const entries = Object.entries(SPOTS);
-  const grids = await pooled(entries, 8, ([, s]) => fetchSpotGrid(s));
+  const [grids, za] = await Promise.all([
+    pooled(entries, 8, ([, s]) => fetchSpotGrid(s)),
+    fetchZoneAlerts(entries.map(([, s]) => s.zone)),
+  ]);
   const nowH = Math.floor(Date.now() / 3600000);
   const out = {};
-  entries.forEach(([id], i) => {
+  entries.forEach(([id, s], i) => {
     const g = grids[i];
-    if (!g) { out[id] = null; return; }
+    // No grid, or the zone alerts couldn't be checked: offer no GO window.
+    if (!g || !zoneAlertsOkFor(za, s)) { out[id] = null; return; }
+    const spotAlerts = zoneAlertsFor(za, s);
     const toLocal = localParts(g.tz);
     const today = toLocal(nowH).date;
     let best = null, run = null;
@@ -1699,7 +1821,8 @@ export async function fetchTodayWindows() {
       if (loc.date !== today || loc.hour < 6 || loc.hour > 20) { run = null; continue; }
       const windKt = round(g.windKt.get(h), 0);
       const waveFt = round(g.waveFt.get(h), 1);
-      const ok = riskLevel(windKt, round(g.gustKt.get(h), 0), g.precipPct.get(h) ?? 0, g.thunder.get(h) ? "thunderstorms" : "", waveFt, round(g.periodSec.get(h), 0), waterProfile(SPOTS[id] || {})) === "GO";
+      const lvl = riskLevel(windKt, round(g.gustKt.get(h), 0), g.precipPct.get(h) ?? 0, g.thunder.get(h) ? "thunderstorms" : "", waveFt, round(g.periodSec.get(h), 0), waterProfile(s));
+      const ok = worseLevel(lvl, alertLevelBetween(spotAlerts, h * 3600e3, (h + 1) * 3600e3)) === "GO";
       if (!ok) { run = null; continue; }
       if (!run) { run = { fromH: loc.hour, toH: loc.hour }; } else run.toH = loc.hour;
       if (!best || (run.toH - run.fromH) > (best.toH - best.fromH)) best = { ...run };
@@ -1778,7 +1901,7 @@ export async function onRequest(context) {
     fetchSpotGrid(spot),
     spot.waterBuoys && spot.waterBuoys.length ? fetchWaterTemp(spot.waterBuoys) : null,
   ]);
-  const { alerts, ok: alertsOk } = alertRes;
+  const { alerts, all: allAlerts, ok: alertsOk } = alertRes;
   const point = fc.daily;
   // The nearshore periods, from the marine-zone API or (fallback) the NSH text.
   const marinePeriods = (marine && marine.length) ? marine : nshPeriodsForZone(noaaReport?.text, spot.zone);
@@ -1787,7 +1910,9 @@ export async function onRequest(context) {
   // comes from one (nearshore-corrected) series and they can't disagree.
   applyMarineWaveFloor(grid, marinePeriods);
   const profile = waterProfile(spot);
-  const week = buildWeek(grid, profile);
+  // Alerts in effect raise the strips too, not just the headline, so the week
+  // and hourly views never show GO under an active advisory.
+  const week = applyAlertsToWeek(buildWeek(grid, profile), allAlerts, alertsOk, grid?.tz);
   const sun = sunTimes(spot.lat, spot.lon);
   // Merge hourly wave height (NWS grid) into the NWS hourly rows, then rate
   // risk. Keyed by epoch hour, so spots outside Eastern time line up too.
@@ -1795,7 +1920,7 @@ export async function onRequest(context) {
   // them), so the strip's first row, the outlook, and the headline's
   // imminent-hazard check all start at the current hour.
   const nowEH = Math.floor(Date.now() / 3600000);
-  const hourly = withRisk(
+  const hourly = applyAlertsToHours(withRisk(
     fc.hourly.filter((h) => Math.floor(Date.parse(h.time) / 3600000) >= nowEH).map((h) => {
       const eh = Math.floor(Date.parse(h.time) / 3600000);
       return {
@@ -1806,7 +1931,7 @@ export async function onRequest(context) {
       };
     }),
     profile
-  );
+  ), allAlerts, alertsOk);
   const outlook = computeOutlook(hourly);
 
   // Effective wind: prefer the live buoy, fall back to the NWS forecast so wind
