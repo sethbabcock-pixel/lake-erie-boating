@@ -2418,6 +2418,9 @@ async function run() {
     check("stale buoy: summary says data is out of date, flagged stale", sb.stale === true && /out of date/.test(sb.summary), JSON.stringify(sb));
     const tempsOnly = R({ buoy: { station: "T", ageMinutes: 170 }, wind: { speedKt: 6, source: "forecast" }, waves: { ft: 0.8, source: "forecast" } });
     eq("stale buoy: an old buoy that didn't feed wind/waves doesn't cap", tempsOnly.level, "GO");
+    const fill = (age) => R({ buoy: { station: "45005", ageMinutes: 10 }, buoyAgeMin: age, wind: { speedKt: 6, gustKt: 8, source: "buoy", gustSrc: "buoy" }, waves: { ft: 0.8, source: "buoy", periodSec: 3 } });
+    eq("stale buoy: fresh primary but 150-min feeding station (buoyAgeMin) → CAUTION", fill(150).level, "CAUTION");
+    eq("stale buoy: buoyAgeMin 20 → GO", fill(20).level, "GO");
     const calmFc = (age) => R({ wind: { speedKt: 6, gustKt: 8, source: "forecast", gustSrc: "forecast" }, waves: { ft: 0.8, source: "forecast" }, forecastAgeMin: age });
     eq("stale forecast: unknown age → GO (unknown is shown, not capped)", calmFc(null).level, "GO");
     eq("stale forecast: 6 h old → GO", calmFc(360).level, "GO");
@@ -2483,6 +2486,23 @@ async function run() {
         ndbcFiles = { FRSH1: line(150) };
         d = await page();
         check("page: 150-min buoy → CAUTION, flagged stale", d.recommendation?.level === "CAUTION" && d.freshness.stale.some((x) => x.kind === "buoy"), JSON.stringify({ f: d.freshness, r: d.recommendation }));
+
+        // Wind filled from a second station (windBuoy): ITS age must be checked,
+        // and the freshness line must name it, not the fresh wave-only primary.
+        const lineX = (ageMin, wspd, gst, wvht) => line(ageMin).replace(/\n(\S+ \S+ \S+ \S+ \S+) 220 3\.0 4\.0 0\.3 /, `\n$1 ${wspd === "MM" ? "MM" : "220"} ${wspd} ${gst} ${wvht} `);
+        sandusky.buoys = ["WAVE1", "WIND2"];
+        ndbcFiles = { WAVE1: lineX(15, "MM", "MM", "0.3"), WIND2: lineX(150, "3.0", "4.0", "MM") };
+        d = await page();
+        check("page: wave-only primary fresh + 150-min wind station → wind from WIND2, waves from WAVE1", d.wind?.station === "WIND2" && d.waves?.station === "WAVE1", JSON.stringify({ w: d.wind, v: d.waves }));
+        check("page: stale wind-fill station → CAUTION, never GO", d.recommendation?.level === "CAUTION" && d.recommendation.reasons.some((x) => /buoy reading is 2 h 30 min old/.test(x)), JSON.stringify(d.recommendation));
+        check("page: freshness names the stale wind station, lists both feeders", d.freshness?.buoy?.station === "WIND2" && d.freshness.buoy.ageMinutes >= 150 && d.freshness.stale.some((x) => x.kind === "buoy")
+          && d.freshness.buoys.length === 2 && d.freshness.buoys.find((b) => b.station === "WAVE1")?.feeds.join() === "waves" && d.freshness.buoys.find((b) => b.station === "WIND2")?.feeds.join() === "wind", JSON.stringify(d.freshness));
+        ndbcFiles = { WAVE1: lineX(150, "MM", "MM", "0.3"), WIND2: lineX(15, "3.0", "4.0", "MM") };
+        d = await page();
+        check("page: stale wave-only primary + fresh wind station → CAUTION, names WAVE1", d.recommendation?.level === "CAUTION" && d.freshness?.buoy?.station === "WAVE1", JSON.stringify({ f: d.freshness, r: d.recommendation }));
+        ndbcFiles = { WAVE1: lineX(15, "MM", "MM", "0.3"), WIND2: lineX(20, "3.0", "4.0", "MM") };
+        d = await page();
+        check("page: both feeding stations fresh → GO kept, oldest (WIND2, 20 min) reported", d.recommendation?.level === "GO" && d.freshness?.buoy?.station === "WIND2" && d.freshness.stale.length === 0, JSON.stringify({ f: d.freshness, r: d.recommendation }));
       } finally { sandusky.buoys = saved; ndbcFiles = {}; }
     } finally { fcUpdateAgeH = null; dailyStub = null; }
   }

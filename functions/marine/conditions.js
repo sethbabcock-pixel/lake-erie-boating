@@ -1851,7 +1851,10 @@ function spotNotes(spot) {
 
 // `forecastAgeMin`: minutes since the NWS forecast behind this call was last
 // updated (null = unknown). A stale forecast or buoy never carries a GO.
-export function buildRecommendation({ buoy, alerts, wind, waves, read, hours, profile = "lake", waterF = null, spot = null, forecastAgeMin = null, alertsOk = true }) {
+// `buoyAgeMin`: age of the OLDEST station that actually fed wind, gusts or
+// waves (fetchBuoy can fill wind from a second station, see windBuoy); when
+// omitted, the primary buoy's ageMinutes is used.
+export function buildRecommendation({ buoy, alerts, wind, waves, read, hours, profile = "lake", waterF = null, spot = null, forecastAgeMin = null, alertsOk = true, buoyAgeMin }) {
   const reasons = [];
   let level = "GO"; // GO < CAUTION < NO-GO
   const bump = (to, why) => {
@@ -1960,7 +1963,8 @@ export function buildRecommendation({ buoy, alerts, wind, waves, read, hours, pr
   // when the call is already CAUTION/NO-GO, so the boater knows the age.
   const liveObs = wind?.source === "buoy" || wind?.gustSrc === "buoy" || waves?.source === "buoy";
   const preStale = level;
-  const buoyAge = liveObs && Number.isFinite(buoy?.ageMinutes) ? Math.max(0, buoy.ageMinutes) : null;
+  const rawBuoyAge = buoyAgeMin !== undefined ? buoyAgeMin : buoy?.ageMinutes;
+  const buoyAge = liveObs && Number.isFinite(rawBuoyAge) ? Math.max(0, rawBuoyAge) : null;
   if (buoyAge != null && buoyAge >= STALE_LIMITS.buoyMin) {
     bump("CAUTION", `The buoy reading is ${fmtAge(buoyAge)} old; conditions may have changed. Check before you launch`);
   }
@@ -2561,16 +2565,26 @@ export async function onRequest(context) {
     airSource: tempsStation?.airTempF != null ? `NDBC ${tempsStation.station}` : buoy?.airTempF != null ? "buoy" : airTempF != null ? "NWS" : null,
   };
 
-  // Freshness: the buoy observation time (when it supplies wind/gust/waves)
-  // and the OLDEST known forecaster update across the NWS products feeding
-  // the call (hourly, daily, grid): conservative when they disagree.
-  const buoyUsed = buoy && (wind.source === "buoy" || wind.gustSrc === "buoy" || waves.source === "buoy");
+  // Freshness: the observation time of every station that actually supplied
+  // wind/gust/waves (the wind can come from windBuoy, a different station than
+  // the primary), and the OLDEST known forecaster update across the NWS
+  // products feeding the call (hourly, daily, grid): conservative when they
+  // disagree. freshness.buoy is the oldest feeding station, so the stale cap
+  // and the page's freshness line name the reading that is actually that old.
+  const obsAge = (o) => (Number.isFinite(Date.parse(o.observedAt)) ? ageMinOf(o.observedAt, nowMs) : o.ageMinutes ?? null);
+  const fedBy = new Map();
+  if (wb && (wind.source === "buoy" || wind.gustSrc === "buoy")) fedBy.set(wb, ["wind"]);
+  if (vb && waves.source === "buoy") fedBy.set(vb, [...(fedBy.get(vb) || []), "waves"]);
+  const buoyStations = [...fedBy].map(([o, feeds]) => ({ station: o.station, feeds, observedAt: o.observedAt || null, ageMinutes: obsAge(o) }));
+  // Oldest first; an unknown age doesn't outrank a known one.
+  const oldestBuoy = [...buoyStations].sort((x, y) => (y.ageMinutes ?? -1) - (x.ageMinutes ?? -1))[0] || null;
   const issued = [fc.issuedAt?.hourly, fc.issuedAt?.daily, grid?.updateTime].filter(Boolean).sort();
   const forecastIssuedAt = issued[0] || null;
   const forecastAgeMin = forecastIssuedAt ? ageMinOf(forecastIssuedAt, nowMs) : null;
-  const buoyAgeMin = buoyUsed ? (Number.isFinite(Date.parse(buoy.observedAt)) ? ageMinOf(buoy.observedAt, nowMs) : buoy.ageMinutes ?? null) : null;
+  const buoyAgeMin = oldestBuoy ? oldestBuoy.ageMinutes : null;
   const freshness = {
-    buoy: buoyUsed ? { station: buoy.station, observedAt: buoy.observedAt || null, ageMinutes: buoyAgeMin } : null,
+    buoy: oldestBuoy ? { station: oldestBuoy.station, observedAt: oldestBuoy.observedAt, ageMinutes: oldestBuoy.ageMinutes } : null,
+    buoys: buoyStations, // every station feeding the call, with what it fed
     forecastIssuedAt,
     forecastAgeMinutes: forecastAgeMin,
     stale: [
@@ -2581,7 +2595,7 @@ export async function onRequest(context) {
   };
 
   const read = windReadFor(spot, wind.dir);
-  const recommendation = buildRecommendation({ buoy, alerts, wind, waves, read, hours: hourly, profile, waterF: waterTempF ?? null, spot, forecastAgeMin, alertsOk });
+  const recommendation = buildRecommendation({ buoy, alerts, wind, waves, read, hours: hourly, profile, waterF: waterTempF ?? null, spot, forecastAgeMin, alertsOk, buoyAgeMin });
 
   // Display-only cleanup, AFTER every verdict above is computed from raw data.
   const showPeriod = (ft, sec) => plausiblePeriod(ft, sec);
