@@ -105,6 +105,39 @@ export const CAMS = [
   { name: "Havre de Grace · Upper Chesapeake (Decoy Museum)", lat: 39.545, lon: -76.09, yt: "uOC4CPHiOFM", lake: "Chesapeake Bay" },
   { name: "Baltimore · Shipping channel (StreamTime)", lat: 39.22, lon: -76.52, yt: "t_VfYNtprYE", lake: "Chesapeake Bay" },
   { name: "Myrtle Beach · Oceanfront (Captain's Quarters)", lat: 33.69, lon: -78.89, yt: "GKOyGoRE0Tg", lake: "Georgia & South Carolina Coast" },
+  // Cold-water coasts (2026-11-07 audit, docs/ops/cams-new-regions.md). Thumbnail frame
+  // checked for a water view; YouTube confirmed it exists + allows embedding.
+  // Puget Sound / San Juans / Admiralty Inlet
+  { name: "Seattle · Shilshole Bay (Ballard Elks Paddling Club)", lat: 47.68, lon: -122.41, yt: "JVTvtCZcSWk", lake: "Puget Sound" },
+  { name: "Everett · Port of Everett boat launch", lat: 47.99, lon: -122.226, yt: "ywLLbC8AUyQ", lake: "Puget Sound" },
+  { name: "Friday Harbor · Port of Friday Harbor", lat: 48.535, lon: -123.012, yt: "pr2p_uvmXh8", lake: "San Juan Islands & Admiralty Inlet" },
+  { name: "Friday Harbor · Shipyard Cove Marina", lat: 48.526, lon: -123.017, yt: "g2_KQNjZ0vg", lake: "San Juan Islands & Admiralty Inlet" },
+  { name: "Port Angeles · Harbor (Port of Port Angeles)", lat: 48.12, lon: -123.43, yt: "TXGu1Kv2bao", lake: "San Juan Islands & Admiralty Inlet" },
+  { name: "Bellingham Bay · Marine Park (Port of Bellingham)", lat: 48.72, lon: -122.51, yt: "DH0x6KOTreU", lake: "San Juan Islands & Admiralty Inlet" },
+  // Oregon coast
+  { name: "Newport · Yaquina Bay (OSU Hatfield)", lat: 44.625, lon: -124.045, yt: "sRPP5b3J_VY", lake: "Oregon Coast" },
+  // Northern California coast
+  { name: "Pacifica · Sharp Park Beach surf", lat: 37.62, lon: -122.5, yt: "lmec_rcEIL4", lake: "Northern California Coast" },
+  { name: "Monterey Bay · Shoreline (Monterey Bay Aquarium)", lat: 36.618, lon: -121.902, yt: "fVa6-zCBR7A", lake: "Northern California Coast" },
+  // New England coast
+  { name: "Boston · Gloucester Annisquam Yacht Club", lat: 42.66, lon: -70.68, yt: "_j1qgdMnifk", lake: "New England Coast" },
+  { name: "Beverly · Jubilee Yacht Club dock", lat: 42.55, lon: -70.85, yt: "5Vf5cSVHtQA", lake: "New England Coast" },
+  { name: "Old Orchard Beach · Casco Bay coast", lat: 43.52, lon: -70.38, yt: "HSQpqIWLViI", lake: "New England Coast" },
+  { name: "Woods Hole · Harbor (GOMV)", lat: 41.523, lon: -70.671, yt: "5-ClAzUV2UA", lake: "New England Coast" },
+  { name: "Barnstable · Harbor", lat: 41.71, lon: -70.3, yt: "cCg-J04fSuQ", lake: "New England Coast" },
+  { name: "Provincetown · MacMillan Pier (Dolphin Fleet)", lat: 42.05, lon: -70.18, yt: "Yy-Eo5NMkVE", lake: "New England Coast" },
+  { name: "Newport, RI · Sightsailing waterfront", lat: 41.484, lon: -71.315, yt: "yvJlIBJ5m1o", lake: "New England Coast" },
+  { name: "Block Island · North Lighthouse", lat: 41.227, lon: -71.58, yt: "ejDld-hWwiU", lake: "New England Coast" },
+  // Long Island Sound
+  { name: "Rocky Point · Tides Beach (Long Island Sound)", lat: 40.96, lon: -72.95, yt: "rBWBGg2c5Jg", lake: "Long Island Sound" },
+  // New York & New Jersey coast
+  { name: "New York Harbor · Brooklyn (StreamTime)", lat: 40.7, lon: -74.0, yt: "l7b5RFAkKhY", lake: "New York & New Jersey Coast" },
+  { name: "New York Harbor · Brooklyn Navy Yard", lat: 40.7, lon: -73.97, yt: "obqnslJKrxc", lake: "New York & New Jersey Coast" },
+  { name: "Highlands NJ · Shrewsbury River (Bahrs Landing)", lat: 40.4, lon: -73.99, yt: "Str1003ecZU", lake: "New York & New Jersey Coast" },
+  { name: "Holgate · Little Egg Harbor Bay", lat: 39.5, lon: -74.28, yt: "fkE4O-5qsKU", lake: "New York & New Jersey Coast" },
+  { name: "Cape May · Cove Beach", lat: 38.93, lon: -74.96, yt: "gV2Lj_a-IoQ", lake: "New York & New Jersey Coast" },
+  // Alaska
+  { name: "Valdez · South Boat Harbor (City of Valdez, rotating)", lat: 61.125, lon: -146.35, yt: "JsgsCLKnwB8", lake: "Southcentral Alaska" },
 ];
 
 // Extra cam directories to link out to, per lake (sites that block embedding).

@@ -2,7 +2,8 @@
 
 A go/no-go boating conditions app for the Great Lakes and US coastal waters —
 it started on Lake Erie and now covers the other Great Lakes plus Florida, the
-Gulf, the Southeast, Chesapeake Bay, Southern California, Hawaii and Puerto Rico.
+Gulf, the Southeast, Chesapeake Bay, the Northeast, California, Oregon, the
+Pacific Northwest, Alaska, Hawaii and Puerto Rico.
 Tap a launch spot and get a clear **GO / CAUTION / NO-GO** call backed by live
 NOAA data, a wind-direction read, a weather map, and live webcams — everything
 you need to decide whether to head out, in one place.
