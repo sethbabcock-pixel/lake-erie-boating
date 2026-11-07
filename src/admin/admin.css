@@ -245,7 +245,12 @@ select.adm-input { padding-right: 28px; }
   .adm-form { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 @media (max-width: 860px) {
-  .adm { grid-template-columns: minmax(0, 1fr); }
+  /* auto 1fr: the top bar sizes to its content and main takes the spare
+     height. Without it, a short tab (Sponsors, Built pages, Inbox) gave the
+     extra min-height to the top bar row, leaving a blank band under it. */
+  .adm { grid-template-columns: minmax(0, 1fr); grid-template-rows: auto 1fr; }
+  /* 16px text in form fields, so iOS doesn't zoom the page on focus. */
+  .adm input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="color"]):not([type="file"]), .adm select, .adm textarea { font-size: 16px; }
   .adm-side { position: sticky; top: 0; z-index: 70; height: auto; flex-direction: column; padding: var(--s3) var(--s4); border-right: 0; border-bottom: 1px solid var(--border); }
   .adm-brand { padding: 0; }
   .adm-navtoggle { display: inline-flex; }

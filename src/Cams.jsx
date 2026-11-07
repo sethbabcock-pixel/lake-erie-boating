@@ -123,7 +123,15 @@ function YouTubeCam({ videoId, onLoaded, onFail }) {
             }, 9000);
           },
           onStateChange: (e) => {
-            if (e.data === 1 || e.data === 3) { clearTimeout(watchdog); onLoaded(); } // playing / buffering
+            if (e.data === 1 || e.data === 3) {
+              clearTimeout(watchdog);
+              // An ended live stream replays as an old recording — not a live
+              // view of the water. The player flags live content; treat an
+              // explicit isLive === false as dead (absent flag → trust it).
+              const vd = player && player.getVideoData && player.getVideoData();
+              if (e.data === 1 && vd && vd.isLive === false) { onFail(); return; }
+              onLoaded();
+            } // playing / buffering
             else if (e.data === 0) onFail(); // ended
           },
           onError: () => { clearTimeout(watchdog); onFail(); },
