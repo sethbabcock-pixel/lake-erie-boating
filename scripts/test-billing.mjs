@@ -2093,6 +2093,18 @@ async function run() {
     const bud3 = await fetchSpotsAlerts(many2);
     eq("land walk budget: the next call finishes them (first 10 cached)", [...bud3.land.values()].filter(Boolean).length, 14);
 
+    // Shared budget: two calls in one invocation draw on one budget of 10.
+    const { landWalkBudget } = await import("../functions/marine/conditions.js");
+    const shared = landWalkBudget();
+    const sixA = Array.from({ length: 6 }, (_, i) => ({ lat: 39.1 + i * 0.01, lon: -81.3, zone: "LEZ145", lake: "Lake Erie" }));
+    const sixB = sixA.map((x) => ({ ...x, lon: -81.1 }));
+    const ra = await fetchSpotsAlerts(sixA, shared);
+    const rb = await fetchSpotsAlerts(sixB, shared);
+    eq("land walk budget: shared across calls (6 + 4 resolve, 2 wait)", [...ra.land.values(), ...rb.land.values()].filter(Boolean).length, 10);
+    eq("land walk budget: shared budget spent", shared.walks, 0);
+    const own = await fetchSpotsAlerts(sixB.map((x) => ({ ...x, lon: -80.9 })));
+    eq("land walk budget: a lone call still gets its own 10", [...own.land.values()].filter(Boolean).length, 6);
+
     // An errored closer candidate: use the farther county now, but don't cache it.
     pointsFail = (lat, lon) => lat === 39.5 && lon === -81.5;
     const errSpot = { lat: 39.5, lon: -81.5, zone: "LEZ145", lake: "Lake Erie" };

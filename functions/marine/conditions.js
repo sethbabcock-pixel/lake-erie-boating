@@ -852,11 +852,15 @@ async function resolveLandZones(spot, ring = true) {
 // spot's marine zone plus its launch point's land zones, in one batched
 // zone query. Returns the fetchZoneAlerts shape plus land: Map(pointKey ->
 // zone ids | null).
-const LAND_WALKS_PER_CALL = 10; // uncached built-spot walks per call (curated spots never walk)
-export async function fetchSpotsAlerts(spots) {
+// Uncached built-spot walks allowed per invocation (curated spots never walk).
+// A caller that makes several fetchSpotsAlerts calls in one invocation (the
+// hourly cron: summary, built summaries, weeks) passes one shared budget from
+// landWalkBudget(); a lone call gets its own.
+const LAND_WALKS_PER_INVOCATION = 10;
+export const landWalkBudget = () => ({ walks: LAND_WALKS_PER_INVOCATION });
+export async function fetchSpotsAlerts(spots, budget = landWalkBudget()) {
   const land = new Map();
   const list = (spots || []).filter(Boolean);
-  const budget = { walks: LAND_WALKS_PER_CALL };
   const zonesPerSpot = await pooled(list, 8, (s) => landZonesFor(s, budget));
   list.forEach((s, i) => land.set(pointKey(s), zonesPerSpot[i] ?? null));
   const za = await fetchZoneAlerts([...list.map((s) => s.zone), ...zonesPerSpot.flat().filter(Boolean)]);
@@ -1863,13 +1867,13 @@ async function floorWithMarineText(entries, grids) {
   });
 }
 
-export async function fetchSummary(env) {
+export async function fetchSummary(env, { landBudget } = {}) {
   // Curated spots + admin-featured user-built pages (both render in the directory).
   const built = await listFeaturedBuiltSpots(env);
   const entries = [...Object.entries(SPOTS), ...built.map((b) => [b.slug, { name: b.name, lat: b.lat, lon: b.lon, zone: b.zone, office: b.office, product: b.product, lake: b.lake, buoys: b.buoys || [], water: b.water || waterFromZone(b.zone, b.zoneName), sea: b.sea ?? null }])];
   const [grids, za] = await Promise.all([
     pooled(entries, 8, ([, s]) => fetchSpotGrid(s)),
-    fetchSpotsAlerts(entries.map(([, s]) => s)),
+    fetchSpotsAlerts(entries.map(([, s]) => s), landBudget),
   ]);
   await floorWithMarineText(entries, grids);
   const nowH = Math.floor(Date.now() / 3600000);
@@ -1879,13 +1883,13 @@ export async function fetchSummary(env) {
 
 // Summary tiles for specific user-built pages by slug — so the daily digest /
 // alert emails can cover a member's built page even before it's featured.
-export async function fetchBuiltSummaries(env, slugs) {
+export async function fetchBuiltSummaries(env, slugs, { landBudget } = {}) {
   const resolved = [];
   for (const slug of [...new Set(slugs)]) { const b = await getBuiltSpot(env, slug); if (b) resolved.push([slug, b]); }
   if (!resolved.length) return [];
   const [grids, za] = await Promise.all([
     pooled(resolved, 8, ([, s]) => fetchSpotGrid(s)),
-    fetchSpotsAlerts(resolved.map(([, s]) => s)),
+    fetchSpotsAlerts(resolved.map(([, s]) => s), landBudget),
   ]);
   await floorWithMarineText(resolved, grids).catch(() => {}); // same nearshore wave floor as the directory
   const nowH = Math.floor(Date.now() / 3600000);
@@ -1895,7 +1899,7 @@ export async function fetchBuiltSummaries(env, slugs) {
 // 7-day outlook (same per-day verdicts as the spot page's week strip) for
 // specific ports, curated or user-built: { id: [{date, level, windKt, ...}] }.
 // Powers the Pro weekend-outlook email; only the requested ports are fetched.
-export async function fetchWeeks(env, ids) {
+export async function fetchWeeks(env, ids, { landBudget } = {}) {
   const entries = [];
   for (const id of [...new Set(ids)]) {
     if (SPOTS[id]) entries.push([id, SPOTS[id]]);
@@ -1904,7 +1908,7 @@ export async function fetchWeeks(env, ids) {
   if (!entries.length) return {};
   const [grids, za] = await Promise.all([
     pooled(entries, 8, ([, s]) => fetchSpotGrid(s)),
-    fetchSpotsAlerts(entries.map(([, s]) => s)),
+    fetchSpotsAlerts(entries.map(([, s]) => s), landBudget),
   ]);
   await floorWithMarineText(entries, grids).catch(() => {});
   // Same per-day verdicts as the week strip (buildWeek → riskLevel: no wind
@@ -1932,11 +1936,11 @@ export async function fetchSpotVerdict(env, id) {
 // NWS grid hourlies, then the longest contiguous GO run between 6am and 8pm in
 // the spot's local time. Returns { spotId: {from, to, hours} | null }.
 const fmtH12 = (h) => `${h % 12 || 12}${h < 12 ? "am" : "pm"}`;
-export async function fetchTodayWindows() {
+export async function fetchTodayWindows({ landBudget } = {}) {
   const entries = Object.entries(SPOTS);
   const [grids, za] = await Promise.all([
     pooled(entries, 8, ([, s]) => fetchSpotGrid(s)),
-    fetchSpotsAlerts(entries.map(([, s]) => s)),
+    fetchSpotsAlerts(entries.map(([, s]) => s), landBudget),
   ]);
   const nowH = Math.floor(Date.now() / 3600000);
   const out = {};
