@@ -75,7 +75,7 @@ export const SPOTS = {
   tawas: { name: "Tawas Bay", lat: 44.2775, lon: -83.488, zone: "LHZ349", land: ["MIZ036", "MIC069"], office: "APX", buoys: [], lake: "Lake Huron", sea: 175, gridSteps: [0.1, 0.22] },
   alpena: { name: "Alpena / Thunder Bay", lat: 45.06, lon: -83.42, zone: "LHZ348", land: ["MIZ024", "MIC007"], office: "APX", buoys: ["45003"], lake: "Lake Huron", sea: 115, gridSteps: [0.14, 0.18, 0.22], waterBuoys: ["LPNM4", "45212"] },
   "harbor-beach": { name: "Harbor Beach", lat: 43.84, lon: -82.64, zone: "LHZ442", land: ["MIZ049", "MIC063"], office: "DTX", buoys: [], lake: "Lake Huron", sea: 45, waterBuoys: ["HRBM4", "45149"] },
-  mackinaw: { name: "Mackinaw City / Straits", lat: 45.78, lon: -84.72, zone: "LHZ345", land: ["MIZ017", "MIC031"], office: "APX", buoys: [], lake: "Lake Michigan", waterBuoys: ["MACM4", "45194"] },
+  mackinaw: { name: "Mackinaw City / Straits", lat: 45.78, lon: -84.72, zone: "LHZ345", land: ["MIZ017", "MIC031", "MIZ016", "MIC047"] /* ~1 km east of the Cheboygan/Emmet line: watch both counties */, office: "APX", buoys: [], lake: "Lake Michigan", waterBuoys: ["MACM4", "45194"] },
 
   chicago: { name: "Chicago", lat: 41.89, lon: -87.60, zone: "LMZ741", land: ["ILZ104", "ILC031"], office: "LOT", buoys: ["45198"], lake: "Lake Michigan", waterBuoys: ["45170"] },
   milwaukee: { name: "Milwaukee", lat: 43.03, lon: -87.88, zone: "LMZ645", land: ["WIZ066", "WIC079"], office: "MKX", buoys: ["45013"], lake: "Lake Michigan" },
