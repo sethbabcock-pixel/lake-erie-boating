@@ -4,6 +4,7 @@ import { loadSiteConfig } from "./siteConfig.js";
 import { pickCampaign } from "./sponsor-target.js";
 import { regionBySlug } from "./regions.js";
 import { readableOn } from "./contrast.js";
+import { spotPhoto } from "./spot-photos.js";
 
 // The hero photo for a page: the region's own upload, else the coastal
 // illustration for warm-water regions (the main photo is a Great Lakes scene),
@@ -121,14 +122,23 @@ function SponsorHero({ s, splash, children }) {
 // ── House hero (brand band over the hero photo or video) ─────────────────────
 // title / subtitle replace the admin headline on pages with their own subject
 // (a /near/<city> page reads "Boating near Cleveland, OH").
-function HouseHero({ hero, spotName, verdict, adFree, splash, children, signedIn, onJoin, title, subtitle, region, authPending }) {
+function HouseHero({ hero, spotName, verdict, adFree, splash, children, signedIn, onJoin, title, subtitle, region, authPending, spot }) {
   const h = { ...DEFAULT_HERO, ...(hero || {}) };
-  // Spot pages get a plain title band: the verdict card right below is the
-  // headline, so no photo, no second verdict badge, no billboard.
+  // Spot pages get a compact title band: the verdict card right below is the
+  // headline, so no second verdict badge. With a photo of that launch (or its
+  // region) the band sits on it; without one it's a plain title, never a
+  // photo of somewhere else.
   if (!splash) {
     const parts = (h.headline || DEFAULT_HERO.headline).split("{spot}");
+    const pic = spotPhoto(h, spot, region || null);
     return (
-      <section className="hero hero-band">
+      <section className={`hero hero-band${pic ? " has-photo" : ""}`}>
+        {pic && <img className="hero-band-img" src={pic.src} alt="" fetchpriority="high" decoding="async" />}
+        {pic && pic.credit && (
+          <a className="hero-band-credit" href={pic.source} target="_blank" rel="noopener">
+            Photo: {pic.credit}{pic.license ? ` · ${pic.license}` : ""}
+          </a>
+        )}
         <div className="hero-inner">
           <div className="hero-band-text">
             <div className="hero-eyebrow">Live conditions · NOAA / NWS data</div>
@@ -237,6 +247,6 @@ export default function Takeover({ adFree, spotName, verdict, splash = false, ch
       </section>
     );
   }
-  return <HouseHero hero={cfg.hero} spotName={spotName} verdict={verdict} adFree={adFree} splash={splash} signedIn={signedIn} onJoin={onJoin}
+  return <HouseHero hero={cfg.hero} spot={spot} spotName={spotName} verdict={verdict} adFree={adFree} splash={splash} signedIn={signedIn} onJoin={onJoin}
     title={title} subtitle={subtitle} region={region} authPending={authPending}>{splash ? children : null}</HouseHero>;
 }

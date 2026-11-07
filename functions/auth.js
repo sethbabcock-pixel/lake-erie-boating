@@ -198,6 +198,12 @@ function sanitizeSiteConfig(input) {
       regions: Object.fromEntries(Object.entries(hero.regions && typeof hero.regions === "object" ? hero.regions : {})
         .filter(([k, v]) => REGIONS.some((r) => r.slug === k) && typeof v === "string" && safeUrl(v.slice(0, 400)))
         .map(([k, v]) => [k, v.slice(0, 400)])),
+      // Per-launch header photo (spot id → uploaded image URL); overrides the
+      // bundled photo in src/spot-photos.js. Ids are slugs (built pages included).
+      spots: Object.fromEntries(Object.entries(hero.spots && typeof hero.spots === "object" ? hero.spots : {})
+        .filter(([k, v]) => /^[a-z0-9-]{1,60}$/.test(k) && typeof v === "string" && safeUrl(v.slice(0, 400)))
+        .slice(0, 300)
+        .map(([k, v]) => [k, v.slice(0, 400)])),
     },
     takeovers,
     gam: { networkCode: str(gam.networkCode, 30) },

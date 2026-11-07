@@ -608,7 +608,8 @@ async function run() {
     const env = { USERS: makeKV(), ADMIN_EMAIL: "admin@example.com" };
     const admin = await seedUser(env, "admin@example.com");
     const config = {
-      hero: { image: "/x.jpg", headline: "Boat?", sub: "s", showVerdict: false },
+      hero: { image: "/x.jpg", headline: "Boat?", sub: "s", showVerdict: false,
+        spots: { "put-in-bay": "/api/asset/abc123", "Bad Id!": "/y.jpg", sandusky: "javascript:alert(1)", erie: "//evil.test/x.jpg" } },
       takeovers: [{ sponsor: "Acme", headline: "Buy", start: "2000-01-01", end: "2999-01-01", href: "https://acme.test" }],
       gam: { networkCode: "12345678" },
       bogusField: "should be dropped",
@@ -617,6 +618,8 @@ async function run() {
     eq("admin/config PUT: → 200", r.status, 200);
     const saved = (await r.json()).config;
     eq("admin/config PUT: hero saved", saved.hero.image, "/x.jpg");
+    eq("admin/config PUT: launch photo saved", saved.hero.spots["put-in-bay"], "/api/asset/abc123");
+    eq("admin/config PUT: launch photos drop bad ids and unsafe URLs", JSON.stringify(Object.keys(saved.hero.spots)), JSON.stringify(["put-in-bay"]));
     check("admin/config PUT: strips unknown fields", !("bogusField" in saved), JSON.stringify(saved));
     check("admin/config PUT: assigns campaign id", !!saved.takeovers[0].id, JSON.stringify(saved.takeovers[0]));
     // public site-config now reflects it

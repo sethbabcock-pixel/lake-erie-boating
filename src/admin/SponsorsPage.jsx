@@ -3,6 +3,7 @@ import { PageHead, Panel, Field, Switch, Badge, Empty, Icon, todayISO, fmtNum, u
 import { REGIONS, regionForLake } from "../regions.js";
 import { targetLabel } from "../sponsor-target.js";
 import { AA, contrast, nearVerdict, readableOn } from "../contrast.js";
+import { SPOT_PHOTOS } from "../spot-photos.js";
 
 const blankCampaign = () => ({
   id: "", sponsor: "", start: todayISO(), end: todayISO(),
@@ -286,6 +287,52 @@ export default function SponsorsPage({ cfg, setCfg }) {
   );
 }
 
+// Per-launch header photos: the bundled default (src/spot-photos.js) or an
+// upload that overrides it. A launch with neither shows its region's photo,
+// else a plain title band.
+function LaunchPhotos({ h, set }) {
+  const launches = useLaunches();
+  const [q, setQ] = useState("");
+  const [only, setOnly] = useState("all"); // all | missing
+  const own = h.spots || {};
+  const rows = launches
+    .filter((l) => !q || `${l.name} ${l.lake || ""}`.toLowerCase().includes(q.toLowerCase()))
+    .filter((l) => only === "all" || !(own[l.id] || SPOT_PHOTOS[l.id]));
+  const missing = launches.filter((l) => !(own[l.id] || SPOT_PHOTOS[l.id])).length;
+  return (
+    <Panel title="Photo by launch" sub={`The picture behind each launch page's title. Bundled photos are freely licensed (credited on the photo); upload to replace one. ${missing} of ${launches.length} launches have no photo and show a plain title.`}>
+      <div className="adm-launchphoto-bar">
+        <input className="adm-input" placeholder="Filter launches…" value={q} onChange={(e) => setQ(e.target.value)} />
+        <select className="adm-input" value={only} onChange={(e) => setOnly(e.target.value)}>
+          <option value="all">All launches</option>
+          <option value="missing">No photo yet</option>
+        </select>
+      </div>
+      <div className="adm-regionheroes">
+        {rows.map((l) => {
+          const up = own[l.id] || "";
+          const def = SPOT_PHOTOS[l.id];
+          const shown = up || (def && def.src) || "";
+          return (
+            <div className="adm-regionhero" key={l.id}>
+              <div className={`adm-regionhero-img${shown ? "" : " empty"}`} style={shown ? { backgroundImage: `url(${shown})` } : undefined}>
+                <span>{l.name}</span>
+                <em>{up ? "uploaded" : def ? "bundled" : "no photo"}</em>
+              </div>
+              {def && !up && <small className="adm-muted">{def.credit} · {def.license}</small>}
+              <UploadField label={l.name} value={up} onChange={(x) => {
+                const next = { ...own };
+                if (x) next[l.id] = x; else delete next[l.id];
+                set("spots", next);
+              }} />
+            </div>
+          );
+        })}
+      </div>
+    </Panel>
+  );
+}
+
 export function HomepagePage({ cfg, setCfg }) {
   const h = cfg.hero;
   const set = (k, v) => setCfg((c) => ({ ...c, hero: { ...c.hero, [k]: v } }));
@@ -329,6 +376,7 @@ export function HomepagePage({ cfg, setCfg }) {
           })}
         </div>
       </Panel>
+      <LaunchPhotos h={h} set={set} />
     </>
   );
 }

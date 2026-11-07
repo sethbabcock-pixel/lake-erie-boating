@@ -306,3 +306,9 @@ select.adm-input { padding-right: 28px; }
 .adm-regionhero .adm-label { display: none; }
 
 .adm-contrast { align-self: center; }
+
+/* Photo by launch (Homepage hero page) */
+.adm-launchphoto-bar { display: flex; gap: var(--s2); margin-bottom: var(--s4); flex-wrap: wrap; }
+.adm-launchphoto-bar .adm-input:first-child { flex: 1 1 220px; }
+.adm-regionhero-img.empty { background: var(--surface-sunk); border: 1px dashed var(--border-strong); }
+.adm-regionhero-img.empty span { color: var(--text-muted); text-shadow: none; }
