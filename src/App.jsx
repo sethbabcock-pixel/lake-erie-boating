@@ -898,8 +898,9 @@ function HourStrip({ hours, headInBy }) {
 
 function MapCard({ spot }) {
   const [layer, setLayer] = useState("waves");
-  // Poster first: the Windy embed is heavy, so it only loads when asked for.
-  const [shown, setShown] = useState(false);
+  // The Windy embed is heavy, so the browser loads it only as the card nears
+  // the viewport (loading="lazy"); no tap-to-load poster, which read as a
+  // blank, broken map.
   const layers = [["waves", "Waves"], ["wind", "Wind"], ["gust", "Gusts"], ["radar", "Radar"], ["temp", "Temp"]];
   return (
     <section className="card">
@@ -907,24 +908,14 @@ function MapCard({ spot }) {
         <h2>Weather map</h2>
         <div className="maptabs">
           {layers.map(([k, label]) => (
-            <button key={k} className={layer === k ? "active" : ""} onClick={() => { setLayer(k); setShown(true); }}>{label}</button>
+            <button key={k} className={layer === k ? "active" : ""} aria-pressed={layer === k} onClick={() => setLayer(k)}>{label}</button>
           ))}
         </div>
       </div>
-      {shown ? (
-        <div className="mapwrap">
-          <iframe key={layer} title={`Windy ${layer} map`} src={windyUrl(spot.lat, spot.lon, layer)} loading="lazy" allow="fullscreen" />
-        </div>
-      ) : (
-        <button type="button" className="mapposter" onClick={() => setShown(true)}>
-          <span className="mapposter-ico" aria-hidden="true">
-            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M9 4 3 6.5v13L9 17l6 3 6-2.5v-13L15 7 9 4z" /><path d="M9 4v13M15 7v13" /></svg>
-          </span>
-          <b>Show the {layers.find(([k]) => k === layer)[1].toLowerCase()} map</b>
-          <small>Loads a live Windy map around {spot.name}</small>
-        </button>
-      )}
-      <div className="hint">{spot.name} · {shown ? "switch layers above; pan & zoom inside the map." : "tap to load the interactive map."}</div>
+      <div className="mapwrap">
+        <iframe key={layer} title={`Windy ${layer} map around ${spot.name}`} src={windyUrl(spot.lat, spot.lon, layer)} loading="lazy" allow="fullscreen" />
+      </div>
+      <div className="hint">{spot.name} · switch layers above; pan &amp; zoom inside the map.</div>
     </section>
   );
 }
