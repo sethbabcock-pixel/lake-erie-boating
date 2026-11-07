@@ -33,6 +33,7 @@ manager     designer   engineer      scientist      manager        analyst     e
 | frontend-engineer | sonnet | ✅ | React/Vite UI | `src/`, `public/` |
 | backend-engineer | sonnet | ✅ | Worker, APIs, auth, Stripe, KV, cron | `worker.js`, `functions/` |
 | devops-sre | sonnet | ✅ | Deploys, CI, monitoring, incidents | `wrangler.jsonc`, `.github/`, `docs/ops/` |
+| webcam-curator | sonnet | ✅ cams | Find, verify & maintain water-view live cams per spot | `src/cams.js`, `docs/ops/cams/` |
 | qa-engineer | sonnet | tests | Test plans, regression, ship/block | `scripts/`, reports |
 | marine-data-scientist | **opus** | ✅ | Verdict correctness & safety (veto power) | `functions/marine/`, `src/boats.js`, `docs/forecast/` |
 | security-engineer | **opus** | ❌ read-only | Security reviews & audits | returns report → `docs/security/` |
@@ -48,6 +49,7 @@ manager     designer   engineer      scientist      manager        analyst     e
 ### Why these beyond the original six
 - **Marine data / safety** — the verdict *is* the product and a wrong GO is a real-world liability. It deserves its own owner with veto power.
 - **QA** — separate from development so someone is paid to assume it's broken.
+- **Webcam curator** — cams are only useful if they show the water; auto-nearest webcams surfaced highways, so a dedicated owner finds, verifies and maintains them per spot.
 - **DevOps/SRE** — NOAA feeds, webcams, crons, and Stripe webhooks all fail in production in ways code review won't catch.
 - **Revenue/analytics** — four revenue streams already wired (`MONETIZATION.md`) need someone watching the numbers.
 - **Merch**: a new revenue stream, plus walking billboards at marinas and ramps.

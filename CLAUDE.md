@@ -24,6 +24,7 @@ You (the main session) act as COO: break work down, delegate to the right agent 
 | Engineering | `frontend-engineer` | React/Vite UI in `src/` |
 | Engineering | `backend-engineer` | Worker, APIs, auth, Stripe, KV, cron |
 | Engineering | `devops-sre` | Deploys, Cloudflare config, CI, monitoring, incidents |
+| Engineering | `webcam-curator` | Find, verify & maintain water-view live cams per spot (`src/cams.js`) |
 | Forecast & Safety | `marine-data-scientist` | Verdict logic, thresholds, data sources, regions |
 | Quality | `qa-engineer` | Test plans, automated tests, release readiness |
 | Security | `security-engineer` | Security reviews and audits (read-only) |
