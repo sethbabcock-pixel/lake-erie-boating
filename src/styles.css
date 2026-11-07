@@ -819,7 +819,12 @@ body.has-takeover .app { background: var(--bg); border-radius: var(--r-lg) var(-
   .hero-splash { min-height: 0; }
   .hero-splash .hero-inner { padding-top: var(--s7); padding-bottom: var(--s6); }
   .splash-search { min-height: 48px; }
-  .loc-grid { grid-template-columns: 1fr 1fr; gap: var(--s2); padding: var(--s3); }
+  /* minmax(0, 1fr): plain 1fr can't shrink below a card's content, which
+     pushed the right column ~6px off a 360px screen. Cards may shrink, and
+     the verdict chip wraps under a long name instead of crushing it. */
+  .loc-grid { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: var(--s2); padding: var(--s3); }
+  .loc-card { min-width: 0; }
+  .loc-card-top { flex-wrap: wrap; row-gap: 6px; }
   .region .region-head { flex-direction: column; align-items: flex-start; gap: var(--s2); }
   /* In the stacked (column) layout the desktop `flex: 0 1 320px` would become a
      320px HEIGHT basis, leaving a tall empty gap under the tally. Reset it to
@@ -1173,6 +1178,9 @@ body.has-takeover .app { background: var(--bg); border-radius: var(--r-lg) var(-
 .plan-actions { grid-column: 1 / -1; display: flex; flex-direction: column; align-items: center; gap: var(--s2); }
 .plan-actions .cbtn { width: 100%; max-width: 360px; min-height: 46px; font-weight: var(--fw-bold); }
 .plan-actions .pro-fine { text-align: center; }
+/* "Already have an account? Sign in": a text-styled button, but a full 44px
+   tap target (it was 19-22px tall, under WCAG 2.2's 24px minimum). */
+.plan-actions .linklike, .joinstrip-signin { min-height: 44px; padding: 0 8px; display: inline-flex; align-items: center; justify-content: center; }
 @media (max-width: 560px) { .plan-compare { grid-template-columns: 1fr; } }
 
 /* ── UX batch 2 ─────────────────────────────────────────────────────────── */
