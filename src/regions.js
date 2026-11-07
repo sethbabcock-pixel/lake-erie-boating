@@ -103,6 +103,11 @@ export const seasonalRegions = (d = new Date()) =>
 // In-depth guide for a water body, linked from its launches (spot page card +
 // server-rendered page).
 const GULF_GUIDE = { href: "/guides/boating-the-gulf-coast", text: "Boating the Gulf Coast guide" };
+const PUGET_GUIDE = { href: "/guides/boating-puget-sound", text: "Boating Puget Sound & the San Juans guide" };
+const OREGON_GUIDE = { href: "/guides/boating-the-oregon-coast", text: "Boating the Oregon coast guide" };
+const NORCAL_GUIDE = { href: "/guides/boating-northern-california", text: "Boating San Francisco Bay & Northern California guide" };
+const NORTHEAST_GUIDE = { href: "/guides/boating-the-northeast", text: "Boating the Northeast guide" };
+const ALASKA_GUIDE = { href: "/guides/boating-alaska", text: "Boating Alaska guide" };
 const SOUTHEAST_GUIDE = { href: "/guides/boating-georgia-and-the-carolinas", text: "Boating Georgia & the Carolinas guide" };
 export const LAKE_GUIDES = {
   "Lake Erie": { href: "/guides/boating-lake-erie", text: "Boating Lake Erie guide" },
@@ -122,6 +127,16 @@ export const LAKE_GUIDES = {
   "Pamlico Sound": SOUTHEAST_GUIDE,
   "Florida Keys": { href: "/guides/boating-the-florida-keys", text: "Boating the Florida Keys guide" },
   "Southern California Coast": { href: "/guides/boating-southern-california", text: "Boating Southern California guide" },
+  "Puget Sound": PUGET_GUIDE,
+  "San Juan Islands & Admiralty Inlet": PUGET_GUIDE,
+  "Oregon Coast": OREGON_GUIDE,
+  "San Francisco Bay": NORCAL_GUIDE,
+  "Northern California Coast": NORCAL_GUIDE,
+  "New England Coast": NORTHEAST_GUIDE,
+  "Long Island Sound": NORTHEAST_GUIDE,
+  "New York & New Jersey Coast": NORTHEAST_GUIDE,
+  "Southeast Alaska": ALASKA_GUIDE,
+  "Southcentral Alaska": ALASKA_GUIDE,
 };
 
 // Every water body in display order (was the hard-coded list in Landing).
