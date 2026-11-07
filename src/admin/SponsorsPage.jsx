@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from "react";
 import { PageHead, Panel, Field, Switch, Badge, Empty, Icon, todayISO, fmtNum, useAdminFetch } from "./ui.jsx";
 import { REGIONS, regionForLake } from "../regions.js";
 import { targetLabel } from "../sponsor-target.js";
+import { AA, contrast, nearVerdict, readableOn } from "../contrast.js";
 
 const blankCampaign = () => ({
   id: "", sponsor: "", start: todayISO(), end: todayISO(),
@@ -158,22 +159,38 @@ function SponsorPreview({ c }) {
     ? `linear-gradient(90deg, ${c.bg} 15%, color-mix(in srgb, ${c.bg} 35%, transparent)), url(${c.bgImage}) center/cover`
     : c.bg;
   return (
-    <div className="adm-preview" style={{ background: bg, color: c.fg }}>
+    <div className="adm-preview" style={{ background: bg, color: readableOn(c.fg, c.bg) }}>
       <div className="adm-preview-text">
-        <small>{c.eyebrow || "Sponsored"}</small>
+        <small><b className="adm-preview-tag">Sponsored</b>{c.eyebrow && c.eyebrow.trim().toLowerCase() !== "sponsored" ? ` ${c.eyebrow}` : ""}</small>
         {c.logo && <img src={c.logo} alt="" />}
         <strong>{c.headline || "Your headline here"}</strong>
         {c.sub && <span>{c.sub}</span>}
       </div>
-      {c.cta && <span className="adm-preview-cta" style={{ background: c.accent, color: c.accentFg }}>{c.cta} →</span>}
-      <em className="adm-preview-ad">Ad</em>
+      {c.cta && <span className="adm-preview-cta" style={{ background: c.accent, color: readableOn(c.accentFg, c.accent) }}>{c.cta} →</span>}
     </div>
   );
+}
+
+// Advisory colour checks (client-side only; nothing is blocked on save). The
+// live hero also falls back to white/near-black text if the pair fails AA.
+function colorWarnings(c) {
+  const out = [];
+  for (const [fgK, bgK, what] of [["fg", "bg", "Text on background"], ["accentFg", "accent", "Button text on button"]]) {
+    const r = contrast(c[fgK], c[bgK]);
+    if (r != null && r < AA) out.push(`${what} is ${r.toFixed(1)}:1, under the 4.5:1 minimum. Visitors will see white or near-black text instead.`);
+  }
+  for (const [k, what] of [["bg", "Background"], ["accent", "Button"]]) {
+    const v = nearVerdict(c[k]);
+    if (v) out.push(`${what} colour is close to ${v}. Pick something that can't be mistaken for a GO / CAUTION / NO-GO signal.`);
+  }
+  return out;
 }
 
 function CampaignEditor({ c, onChange, onRemove, onClose, launches, conflicts, stats }) {
   const set = (k, v) => onChange(k == null ? { ...c, ...v } : { ...c, [k]: v });
   const bad = c.end && c.start && c.end < c.start;
+  const colorWarns = colorWarnings(c);
+  const ratio = (a, b) => { const r = contrast(c[a], c[b]); return r == null ? "" : ` ${r.toFixed(1)}:1`; };
   return (
     <div className="adm-editor">
       <SponsorPreview c={c} />
@@ -199,7 +216,13 @@ function CampaignEditor({ c, onChange, onRemove, onClose, launches, conflicts, s
               <span>{l}<code>{c[k]}</code></span>
             </label>
           ))}
+          <span className="adm-muted adm-contrast">Contrast: text{ratio("fg", "bg")} · button{ratio("accentFg", "accent")}</span>
         </div>
+        {colorWarns.length > 0 && (
+          <div className="wide adm-warnbox" role="alert">
+            {colorWarns.map((w) => <div key={w}>{w}</div>)}
+          </div>
+        )}
         <Targeting c={c} set={set} launches={launches} />
         {conflicts.length > 0 && (
           <div className="wide adm-warnbox">

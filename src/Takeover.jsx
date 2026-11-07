@@ -3,6 +3,7 @@ import { activeTakeover, GAM } from "./sponsor.js";
 import { loadSiteConfig } from "./siteConfig.js";
 import { pickCampaign } from "./sponsor-target.js";
 import { regionBySlug } from "./regions.js";
+import { readableOn } from "./contrast.js";
 
 // The hero photo for a page: the region's own upload, else the coastal
 // illustration for warm-water regions (the main photo is a Great Lakes scene),
@@ -76,7 +77,10 @@ function SponsorSkin({ s }) {
   const bg = s.bgImage ? `${s.bg || "#102036"} url(${s.bgImage}) center/cover no-repeat` : s.bg;
   // The /advertise sample (no id) gets a plain, non-clickable background: a
   // full-page click target beside real ad units invites accidental clicks.
-  if (!s.id) return <div className="takeover-skin" aria-hidden="true" style={{ background: bg }} />;
+  // Touch devices (no hover / coarse pointer) get the same plain background:
+  // edge mis-taps must never open a sponsor. Desktop keeps the click-through.
+  const touch = typeof window !== "undefined" && window.matchMedia && window.matchMedia("(hover: none), (pointer: coarse)").matches;
+  if (!s.id || touch) return <div className="takeover-skin" aria-hidden="true" style={{ background: bg }} />;
   return (
     <a className="takeover-skin" href={s.href} target="_blank" rel="sponsored noopener" onClick={() => sponsorHit(s.id, "c")}
       aria-label={`${s.sponsor} sponsor`} style={{ background: bg }} />
@@ -84,7 +88,10 @@ function SponsorSkin({ s }) {
 }
 
 function SponsorHero({ s, splash, children }) {
-  const fg = s.fg || "#ffffff";
+  // Contrast guard: a sponsor's text colour that fails AA (4.5:1) on its
+  // background is replaced by white or near-black, whichever passes.
+  const fg = readableOn(s.fg || "#ffffff", s.bg || "#102036");
+  const ctaFg = readableOn(s.accentFg || "#11151c", s.accent || "#ffffff");
   const background = s.bgImage
     ? `linear-gradient(90deg, ${s.bg || "#102036"} 12%, color-mix(in srgb, ${s.bg || "#102036"} 40%, transparent) 100%), url(${s.bgImage}) center/cover no-repeat`
     : s.bg;
@@ -92,19 +99,21 @@ function SponsorHero({ s, splash, children }) {
     <section className={`hero hero-sponsor${splash ? " hero-splash" : ""}`} style={{ background, color: fg }}>
       <a className="hero-inner hero-sponsor-link" href={s.href} target="_blank" rel="sponsored noopener" style={{ color: fg }} onClick={() => sponsorHit(s.id, "c")}>
         <div className="hero-text">
-          <div className="hero-eyebrow">{s.eyebrow || "Sponsored"}</div>
+          <div className="hero-eyebrow">
+            <span className="hero-sponsored">Sponsored</span>
+            {s.eyebrow && s.eyebrow.trim().toLowerCase() !== "sponsored" && <span className="hero-eyebrow-text">{s.eyebrow}</span>}
+          </div>
           {s.logo && <img className="hero-logo" src={s.logo} alt={s.sponsor} />}
           <h2 className="hero-title">{s.headline}</h2>
           {s.sub && <p className="hero-subtitle">{s.sub}</p>}
         </div>
         {s.cta && (
-          <span className="hero-cta" style={{ background: s.accent || "#ffffff", color: s.accentFg || "#11151c" }}>
+          <span className="hero-cta" style={{ background: s.accent || "#ffffff", color: ctaFg }}>
             {s.cta} →
           </span>
         )}
       </a>
       {children && <div className="hero-inner hero-splash-slot">{children}</div>}
-      <span className="hero-adlabel">Ad</span>
     </section>
   );
 }
