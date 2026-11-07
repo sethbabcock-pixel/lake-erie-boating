@@ -625,6 +625,9 @@ const toAlert = (f) => ({
   // so timing uses this instead (see alertSpan).
   eventEnds: f.properties?.ends ?? null,
   zones: f.properties?.geocode?.UGC || [],
+  // NWS issues a Flash Flood Emergency as an ordinary "Flash Flood Warning"
+  // event; only this parameter (CATASTROPHIC) tells them apart.
+  ffThreat: f.properties?.parameters?.flashFloodDamageThreat?.[0] || null,
 });
 async function alertsAt(query) {
   try {
@@ -674,7 +677,18 @@ const NO_GO_ALERTS = ["gale", "storm", "special marine", "hurricane", "typhoon",
   "blizzard warning", "snow squall warning", "lake effect snow warning", "high surf warning"];
 export function alertLevel(a) {
   const ev = (a?.event || "").toLowerCase();
-  if (!ev || NOTE_ONLY.test(ev)) return null;
+  if (!ev) return null;
+  // A Flash Flood Warning means flooding is happening or imminent: debris and
+  // fast current at river-mouth and estuary ramps. CAUTION, not a shore-only
+  // note. Flash Flood Watches/Statements stay notes (common in summer; they
+  // would pin coastal launches at CAUTION).
+  // A Flash Flood Emergency (catastrophic damage threat, severe threat to
+  // life) arrives as event "Flash Flood Warning" with flashFloodDamageThreat
+  // CATASTROPHIC: NO-GO. The literal event name is kept in case NWS ever
+  // issues it as its own event.
+  if (ev === "flash flood emergency") return "NO-GO";
+  if (ev === "flash flood warning") return /catastrophic/i.test(a?.ffThreat || "") ? "NO-GO" : "CAUTION";
+  if (NOTE_ONLY.test(ev)) return null;
   if (ev.includes("watch")) return "CAUTION";
   if (NO_GO_ALERTS.some((k) => ev.includes(k))) return "NO-GO";
   return "CAUTION";
@@ -773,7 +787,10 @@ function dedupeAlerts(alerts) {
   for (const a of alerts) {
     const key = (a.event || "").toLowerCase().trim();
     const prev = byEvent.get(key);
-    if (!prev || (a.sent || "") > (prev.sent || "")) byEvent.set(key, a);
+    // Keep the worse-graded issuance first (a Flash Flood Emergency and an
+    // ordinary Flash Flood Warning share an event name), then the latest.
+    const rank = (x) => ({ CAUTION: 1, "NO-GO": 2 })[alertLevel(x)] || 0;
+    if (!prev || rank(a) > rank(prev) || (rank(a) === rank(prev) && (a.sent || "") > (prev.sent || ""))) byEvent.set(key, a);
   }
   return [...byEvent.values()];
 }
