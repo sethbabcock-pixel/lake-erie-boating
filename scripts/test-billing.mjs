@@ -2372,7 +2372,10 @@ async function run() {
     check("filler: one non-zero value for the whole week (MHX/61,90)", isFillerWaveLayer(L(["2026-11-06T18:00:00+00:00/P6DT19H", 0.3048])));
     check("filler: P6D of 0 plus 1-h stubs (TBW/73,83)", isFillerWaveLayer(L(["2026-11-06T13:00:00+00:00/P6D", 0], ["2026-11-12T18:00:00+00:00/PT1H", 0], ["2026-11-13T00:00:00+00:00/PT1H", 0], ["2026-11-13T06:00:00+00:00/PT1H", 0])));
     check("filler: many valid times, all 0", isFillerWaveLayer(L(["2026-11-06T00:00:00+00:00/PT12H", 0], ["2026-11-06T12:00:00+00:00/PT12H", 0], ["2026-11-07T00:00:00+00:00/P5D", 0])));
-    check("filler: one non-zero value over 90% of the period", isFillerWaveLayer(L(["2026-11-06T00:00:00+00:00/P6D", 0.6], ["2026-11-12T00:00:00+00:00/PT6H", 0.3], ["2026-11-12T06:00:00+00:00/PT6H", 0.3])));
+    check("filler: one small value (1 ft) over 90% of the period", isFillerWaveLayer(L(["2026-11-06T00:00:00+00:00/P6D", 0.3048], ["2026-11-12T00:00:00+00:00/PT6H", 0], ["2026-11-12T06:00:00+00:00/PT6H", 0])));
+    check("real: a 2 ft value held over 90% of the period is kept (real height)", !isFillerWaveLayer(L(["2026-11-06T00:00:00+00:00/P6D", 0.6], ["2026-11-12T00:00:00+00:00/PT6H", 0.3], ["2026-11-12T06:00:00+00:00/PT6H", 0.3])));
+    check("real: a 5 ft trade-wind sea held all week is kept (ocean)", !isFillerWaveLayer(L(["2026-11-06T00:00:00+00:00/P6DT20H", 1.524])));
+    check("real: a single 4 ft entry is kept, never dropped as filler", !isFillerWaveLayer(L(["2026-11-06T00:00:00+00:00/P7D", 1.2192])));
     check("filler: missing / empty layer", isFillerWaveLayer(null) && isFillerWaveLayer({ values: [] }));
     check("real: calm 0–1 ft lake week (DLH/93,69: 0, 0.3 m for 7 h, 0)", !isFillerWaveLayer(L(["2026-11-06T17:00:00+00:00/P1DT6H", 0], ["2026-11-07T23:00:00+00:00/PT7H", 0.3048], ["2026-11-08T06:00:00+00:00/P5DT1H", 0])));
     check("real: a long-held swell (SJU/210,120: 3 ft for 144 of 198 h)", !isFillerWaveLayer(L(["2026-11-06T00:00:00+00:00/P6D", 0.9144], ["2026-11-12T00:00:00+00:00/PT24H", 0.6096], ["2026-11-13T00:00:00+00:00/PT30H", 0.9144])));
@@ -2410,6 +2413,20 @@ async function run() {
       const p2 = await (await onRequest({ request: new Request("https://shouldiboat.com/marine/conditions?spot=sandusky"), env })).json();
       check(`all ${mode}: spot page hours have no waves and no GO`, (p2.hourly || []).length && p2.hourly.every((h) => h.waveFt == null && h.level !== "GO"), JSON.stringify((p2.hourly || []).slice(0, 2)));
       check(`all ${mode}: spot headline is not GO`, p2.recommendation?.level && p2.recommendation.level !== "GO", JSON.stringify(p2.recommendation?.level));
+    }
+
+    // 2b. Ocean spot: all-filler (no waves) rates the same level as a real
+    //     1 ft sea, so dropping placeholders changes no ocean verdict.
+    {
+      const jp = gridSamplePoints(SPOTS.jacksonville);
+      const jAt = (lat, lon) => jp.findIndex((p) => Math.abs(p.lat - lat) < 1e-6 && Math.abs(p.lon - lon) < 1e-6);
+      const jTile = async () => (await fetchSummary(env)).spots.find((x) => x.id === "jacksonville");
+      gridWavesAt = (lat, lon) => (jAt(lat, lon) >= 0 ? "filler" : undefined);
+      const jf = await jTile();
+      gridWavesAt = (lat, lon) => (jAt(lat, lon) >= 0 ? 0.3048 : undefined);
+      const j1 = await jTile();
+      check("ocean all-filler: no waves (not 0 ft)", jf?.waveFt == null, JSON.stringify(jf));
+      check("ocean all-filler: same level as a real 1 ft sea (wind decides)", jf?.level && jf.level === j1?.level && j1?.waveFt === 1, JSON.stringify({ filler: jf?.level, oneFt: j1?.level, ft: j1?.waveFt }));
     }
 
     // 3. A genuine calm 0–1 ft forecast is kept (and stops the walk).

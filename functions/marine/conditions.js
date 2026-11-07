@@ -384,8 +384,12 @@ const speedToKt = (prop) => (String(prop?.uom || "").includes("m_s") ? msToKt : 
 
 // Some grid cells carry a placeholder wave layer, not a forecast: one value
 // held for the whole ~7-day period (DTX/84,67 off Port Huron and APX/104,65
-// near Alpena were a single 0 m valid for P7DT4H; in Nov 2026 most APX/MQT
-// cells around Traverse City, Petoskey, Mackinaw and Houghton were the same).
+// near Alpena were a single 0 m valid for P7DT4H). They are mostly LAND
+// cells the seaward walk crosses on its way to open water: in Nov 2026 the
+// walks from Mackinaw, Petoskey and Traverse City (toward mid-Lake Michigan)
+// and Houghton (toward mid-Superior) hit only such cells, while real marine
+// cells sat a few km away in other directions; Bath, NC (MHX) was likewise
+// all-placeholder (0.3 m held all week).
 // Read as data, that is a false "0 ft, calm" that can enable a GO. Real
 // cells, even on flat-calm days, break the period into several valid times
 // and almost always carry some non-zero value (GFE encodes "1 ft or less" as
@@ -400,19 +404,27 @@ const speedToKt = (prop) => (String(prop?.uom || "").includes("m_s") ? msToKt : 
 //     a GO on lakes, which is the safe direction);
 //   - one value spans more than WAVE_FILLER_SPAN_H and covers at least
 //     WAVE_FILLER_SHARE of all the layer's hours.
+// …and only if no value exceeds WAVE_FILLER_MAX_M (~1 ft): dropping a layer
+// can only loosen a verdict when it held real height (ocean seas would go
+// unrated; a held 4 ft lake value would stop reading NO-GO), so a layer with
+// any value above ~1 ft is always kept. Every placeholder seen live was 0 or
+// 0.3048 m.
+const WAVE_FILLER_MAX_M = 0.31;
 const WAVE_MIN_TIMES = 2;
 const WAVE_FILLER_SPAN_H = 48;
 const WAVE_FILLER_SHARE = 0.9;
 export function isFillerWaveLayer(prop) {
   const spans = [];
-  let anyNonZero = false;
+  let anyNonZero = false, maxM = 0;
   for (const { validTime, value } of prop?.values || []) {
     if (value == null || !Number.isFinite(+value)) continue;
     const span = expandValidTime(validTime);
     if (!span) continue;
     spans.push(span[1]);
     if (+value > 0) anyNonZero = true;
+    maxM = Math.max(maxM, +value);
   }
+  if (maxM > WAVE_FILLER_MAX_M) return false; // real height: never drop it
   if (spans.length < WAVE_MIN_TIMES) return true;
   if (!anyNonZero) return true;
   const total = spans.reduce((a, b) => a + b, 0);
