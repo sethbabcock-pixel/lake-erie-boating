@@ -37,7 +37,10 @@ export const SPOTS = {
   },
   sandusky: {
     name: "Sandusky / Cedar Point",
-    lat: 41.46, lon: -82.71, zone: "LEZ143", land: ["OHZ009", "OHC043"], buoys: ["45005"],
+    lat: 41.46, lon: -82.71, zone: "LEZ144", land: ["OHZ009", "OHC043"], buoys: ["45005"],
+    // Sandusky Bay, Cedar Point and the launch are all in LEZ144 (The Islands
+    // to Vermilion); the islands a boater runs out to are LEZ143: watch both.
+    alertZones: ["LEZ143"],
   },
   vermilion: {
     name: "Vermilion / Lorain",
@@ -45,6 +48,9 @@ export const SPOTS = {
     // Spans the Erie/Lorain county line (launch point is on the Lorain side;
     // the inland walk lands in Erie County): watch both.
     land: ["OHZ009", "OHC043", "OHZ010", "OHC093"],
+    // Vermilion harbor is the LEZ144/LEZ145 line; the launch point and the
+    // whole grid walk sit in LEZ145 (Vermilion to Avon Point, Lorain): watch both.
+    alertZones: ["LEZ145"],
   },
   cleveland: {
     name: "Cleveland",
@@ -75,23 +81,29 @@ export const SPOTS = {
   tawas: { name: "Tawas Bay", lat: 44.2775, lon: -83.488, zone: "LHZ349", land: ["MIZ036", "MIC069"], office: "APX", buoys: [], lake: "Lake Huron", sea: 175, gridSteps: [0.1, 0.22] },
   alpena: { name: "Alpena / Thunder Bay", lat: 45.06, lon: -83.42, zone: "LHZ348", land: ["MIZ024", "MIC007"], office: "APX", buoys: ["45003"], lake: "Lake Huron", sea: 115, gridSteps: [0.14, 0.18, 0.22], waterBuoys: ["LPNM4", "45212"] },
   "harbor-beach": { name: "Harbor Beach", lat: 43.84, lon: -82.64, zone: "LHZ442", land: ["MIZ049", "MIC063"], office: "DTX", buoys: [], lake: "Lake Huron", sea: 45, waterBuoys: ["HRBM4", "45149"] },
-  mackinaw: { name: "Mackinaw City / Straits", lat: 45.78, lon: -84.72, zone: "LHZ345", land: ["MIZ017", "MIC031", "MIZ016", "MIC047"] /* ~1 km east of the Cheboygan/Emmet line: watch both counties */, office: "APX", buoys: [], lake: "Lake Michigan", waterBuoys: ["MACM4", "45194"] },
+  mackinaw: { name: "Mackinaw City / Straits", lat: 45.78, lon: -84.72, zone: "LHZ345", land: ["MIZ017", "MIC031", "MIZ016", "MIC047"] /* ~1 km east of the Cheboygan/Emmet line: watch both counties */, office: "APX", buoys: [], lake: "Lake Michigan", sea: 20, waterBuoys: ["MACM4", "45194"] },
 
   chicago: { name: "Chicago", lat: 41.89, lon: -87.60, zone: "LMZ741", land: ["ILZ104", "ILC031"], office: "LOT", buoys: ["45198"], lake: "Lake Michigan", waterBuoys: ["45170"] },
   milwaukee: { name: "Milwaukee", lat: 43.03, lon: -87.88, zone: "LMZ645", land: ["WIZ066", "WIC079"], office: "MKX", buoys: ["45013"], lake: "Lake Michigan" },
-  muskegon: { name: "Muskegon", lat: 43.23, lon: -86.34, zone: "LMZ844", land: ["MIZ050", "MIC121"], office: "GRR", buoys: ["45161"], lake: "Lake Michigan", waterBuoys: ["45029", "HLNM4"] },
-  holland: { name: "Holland", lat: 42.77, lon: -86.21, zone: "LMZ846", land: ["MIZ064", "MIC005"], office: "GRR", buoys: [], lake: "Lake Michigan", waterBuoys: ["HLNM4", "45029"] },
-  "traverse-city": { name: "Traverse City", lat: 44.76, lon: -85.62, zone: "LMZ323", land: ["MIZ026", "MIC055"], office: "APX", buoys: [], lake: "Lake Michigan" },
+  muskegon: { name: "Muskegon", lat: 43.23, lon: -86.34, zone: "LMZ847", land: ["MIZ050", "MIC121"], office: "GRR", buoys: ["45161"], lake: "Lake Michigan", sea: 270, waterBuoys: ["45029", "HLNM4"] },
+  holland: { name: "Holland", lat: 42.77, lon: -86.21, zone: "LMZ846", land: ["MIZ064", "MIC005"], office: "GRR", buoys: [], lake: "Lake Michigan", sea: 270, waterBuoys: ["HLNM4", "45029"] },
+  "traverse-city": { name: "Traverse City", lat: 44.76, lon: -85.62, zone: "LMZ323", land: ["MIZ026", "MIC055"], office: "APX", buoys: [], lake: "Lake Michigan", sea: 15 },
   sheboygan: { name: "Sheboygan", lat: 43.75, lon: -87.715, zone: "LMZ643", land: ["WIZ052", "WIC117"], office: "MKX", buoys: [], lake: "Lake Michigan", waterBuoys: ["45210"] },
   "michigan-city": { name: "Michigan City", lat: 41.72, lon: -86.91, zone: "LMZ046", land: ["INZ103", "INC091"], office: "IWX", buoys: ["45198"], lake: "Lake Michigan", waterBuoys: ["45170", "45026"] },
-  petoskey: { name: "Petoskey", lat: 45.373, lon: -84.955, zone: "LMZ342", land: ["MIZ016", "MIC047"], office: "APX", buoys: [], lake: "Lake Michigan", waterBuoys: ["MACM4", "45194"] },
+  petoskey: { name: "Petoskey", lat: 45.373, lon: -84.955, zone: "LMZ342", land: ["MIZ016", "MIC047"], office: "APX", buoys: [], lake: "Lake Michigan", sea: 300, waterBuoys: ["MACM4", "45194"] },
   "harbor-springs": { name: "Harbor Springs", lat: 45.431, lon: -84.992, zone: "LMZ342", land: ["MIZ016", "MIC047"], office: "APX", buoys: [], lake: "Lake Michigan", waterBuoys: ["MACM4", "45194"] },
-  "cross-village": { name: "Cross Village", lat: 45.641, lon: -85.032, zone: "LMZ342", land: ["MIZ016", "MIC047"], office: "APX", buoys: [], lake: "Lake Michigan", waterBuoys: ["45194", "MACM4"] },
+  "cross-village": { name: "Cross Village", lat: 45.641, lon: -85.032, zone: "LMZ342", land: ["MIZ016", "MIC047"], office: "APX", buoys: [], lake: "Lake Michigan", sea: 270, waterBuoys: ["45194", "MACM4"] },
 
   duluth: { name: "Duluth", lat: 46.78, lon: -92.08, zone: "LSZ145", land: ["MNZ037", "MNC137"], office: "DLH", buoys: ["45027"], lake: "Lake Superior", waterBuoys: ["DULM5"] },
-  bayfield: { name: "Bayfield / Apostle Is.", lat: 46.81, lon: -90.82, zone: "LSZ143", land: ["WIZ002", "WIC007"], office: "DLH", buoys: [], lake: "Lake Superior" },
+  bayfield: { name: "Bayfield / Apostle Is.", lat: 46.81, lon: -90.82, zone: "LSZ147", land: ["WIZ002", "WIC007"], office: "DLH", buoys: [], lake: "Lake Superior", alertZones: ["LSZ121"] /* Chequamegon Bay, just south of the launch */ },
   marquette: { name: "Marquette", lat: 46.54, lon: -87.38, zone: "LSZ249", land: ["MIZ005", "MIC103"], office: "MQT", buoys: ["45004"], lake: "Lake Superior" },
-  houghton: { name: "Houghton / Keweenaw", lat: 47.12, lon: -88.57, zone: "LSZ267", land: ["MIZ003", "MIC061"], office: "MQT", buoys: [], lake: "Lake Superior" },
+  // Houghton sits on Portage Lake, whose grid cells are only placeholders, so
+  // its waves are rated on open Superior at the Portage Canal's North Entry
+  // (~13 km NNW): LSZ242 just west of the entry (the grid walk's cells),
+  // LSZ243 just east of it. The waterway itself and Keweenaw Bay at the
+  // Lower Entrance (the other way out) are LSZ246, which often carries its
+  // own advisories/gales on NE-E winds: watch all three.
+  houghton: { name: "Houghton / Keweenaw", lat: 47.12, lon: -88.57, zone: "LSZ242", alertZones: ["LSZ243", "LSZ246"], openWater: "Lake Superior off the North Entry", land: ["MIZ003", "MIC061"], office: "MQT", buoys: [], lake: "Lake Superior", sea: 330, gridSteps: [0.13, 0.16, 0.22] },
   "grand-marais": { name: "Grand Marais, MN", lat: 47.75, lon: -90.33, zone: "LSZ140", land: ["MNZ021", "MNC031"], office: "DLH", buoys: [], lake: "Lake Superior", waterBuoys: ["GDMM5", "45006"] },
 
   // ── Beyond the Great Lakes: coastal / tidal waters. Same NWS grid + marine
@@ -137,11 +149,11 @@ export const SPOTS = {
   "grand-isle": { name: "Grand Isle, LA", lat: 29.24, lon: -90, zone: "GMZ553", land: ["LAZ093", "LAC051"], office: "LIX", product: "CWF", buoys: ["GISL1"], lake: "Louisiana & Texas Coast", water: "ocean", sea: 160, openWater: "the Gulf" },
   galveston: { name: "Galveston, TX", lat: 29.3, lon: -94.78, zone: "GMZ355", land: ["TXZ438", "TXC167"], office: "HGX", product: "CWF", buoys: ["GTOT2", "GNJT2"], lake: "Louisiana & Texas Coast", water: "ocean", sea: 135, openWater: "the Gulf" },
   kemah: { name: "Kemah / Galveston Bay, TX", lat: 29.545, lon: -95.02, zone: "GMZ335", land: ["TXZ338", "TXC167"], office: "HGX", product: "CWF", buoys: ["EPTT2", "MGPT2"], lake: "Louisiana & Texas Coast", water: "sheltered", sea: 90, openWater: "Galveston Bay" },
-  "port-aransas": { name: "Port Aransas, TX", lat: 27.83, lon: -97.06, zone: "GMZ255", land: ["TXZ443", "TXC355"], office: "CRP", product: "CWF", buoys: ["MIST2", "RTAT2"], lake: "Louisiana & Texas Coast", water: "ocean", sea: 135, openWater: "the Gulf", waterBuoys: ["MHBT2", "RCPT2"] },
+  "port-aransas": { name: "Port Aransas, TX", lat: 27.83, lon: -97.06, zone: "GMZ255", land: ["TXZ443", "TXC355"], office: "CRP", product: "CWF", buoys: ["MIST2", "RTAT2"], lake: "Louisiana & Texas Coast", water: "ocean", sea: 135, openWater: "the Gulf", alertZones: ["GMZ250"] /* the inlet is the GMZ250/255 line; the grid walk is in GMZ250 */, waterBuoys: ["MHBT2", "RCPT2"] },
   "south-padre": { name: "South Padre Island, TX", lat: 26.07, lon: -97.16, zone: "GMZ150", land: ["TXZ455", "TXC061"], office: "BRO", product: "CWF", buoys: ["BZST2", "PCGT2"], lake: "Louisiana & Texas Coast", water: "ocean", sea: 90, openWater: "the Gulf" },
   // Southeast Atlantic: Georgia and the Carolinas
   "st-simons": { name: "St. Simons Island / Brunswick, GA", lat: 31.14, lon: -81.39, zone: "AMZ450", land: ["GAZ154", "GAC127"], office: "JAX", product: "CWF", buoys: ["SAXG1"], lake: "Georgia & South Carolina Coast", water: "ocean", sea: 135, openWater: "the Atlantic", waterBuoys: ["41112"] },
-  tybee: { name: "Savannah / Tybee Island, GA", lat: 32.01, lon: -80.85, zone: "AMZ362", land: ["GAZ219", "GAC051"], office: "CHS", product: "CWF", buoys: ["FPKG1"], lake: "Georgia & South Carolina Coast", water: "ocean", sea: 135, openWater: "the Atlantic" },
+  tybee: { name: "Savannah / Tybee Island, GA", lat: 32.01, lon: -80.85, zone: "AMZ362", land: ["GAZ219", "GAC051"], office: "CHS", product: "CWF", buoys: ["FPKG1"], lake: "Georgia & South Carolina Coast", water: "ocean", sea: 135, openWater: "the Atlantic", alertZones: ["AMZ364"] /* the Savannah River entrance is the AMZ362/364 line; the grid walk is in AMZ364 */ },
   "hilton-head": { name: "Hilton Head, SC", lat: 32.17, lon: -80.73, zone: "AMZ362", land: ["SCZ148", "SCC013"], office: "CHS", product: "CWF", buoys: ["FPKG1", "41033"], lake: "Georgia & South Carolina Coast", water: "ocean", sea: 113, openWater: "the Atlantic" },
   charleston: { name: "Charleston Harbor, SC", lat: 32.76, lon: -79.87, zone: "AMZ340", land: ["SCZ150", "SCC019"], office: "CHS", product: "CWF", buoys: ["CHTS1", "FBIS1"], lake: "Georgia & South Carolina Coast", water: "sheltered", sea: 135, openWater: "Charleston Harbor" },
   "murrells-inlet": { name: "Murrells Inlet / Myrtle Beach, SC", lat: 33.55, lon: -79.04, zone: "AMZ254", land: ["SCZ056", "SCC043"], office: "ILM", product: "CWF", buoys: ["MROS1", "NIWS1"], lake: "Georgia & South Carolina Coast", water: "ocean", sea: 113, openWater: "the Atlantic" },
@@ -501,7 +513,8 @@ const speedToKt = (prop) => (String(prop?.uom || "").includes("m_s") ? msToKt : 
 // near Alpena were a single 0 m valid for P7DT4H). They are mostly LAND
 // cells the seaward walk crosses on its way to open water: in Nov 2026 the
 // walks from Mackinaw, Petoskey and Traverse City (toward mid-Lake Michigan)
-// and Houghton (toward mid-Superior) hit only such cells, while real marine
+// and Houghton (toward mid-Superior) hit only such cells (they now carry
+// `sea` bearings that reach real cells), while real marine
 // cells sat a few km away in other directions; Bath, NC (MHX) was likewise
 // all-placeholder (0.3 m held all week).
 // Read as data, that is a false "0 ft, calm" that can enable a GO. Real
@@ -1442,18 +1455,24 @@ function parseForecastWaves(periods) {
   return null;
 }
 
-// Expand a UGC zone spec ("LEZ142>144", "LEZ145-146") to its zone numbers.
-function zoneNumbers(spec) {
-  const nums = [];
-  let prev = null, m;
-  const re = /([>-]?)(\d{3})/g;
-  while ((m = re.exec(spec.replace(/^[A-Z]{3}/, "")))) {
-    const n = +m[2];
-    if (m[1] === ">" && prev != null) for (let k = prev + 1; k <= n; k++) nums.push(k);
-    else nums.push(n);
+// Expand a UGC zone spec ("LEZ142>144", "LEZ145-146", "LMZ344-345-LHZ345")
+// to full zone IDs. The prefix matters: one office's NSH carries the same
+// number on different lakes (APX: LMZ345 is Point Betsie to Sleeping Bear
+// Point, LHZ345 the Straits of Mackinac), and matching on the number alone
+// gave Mackinaw City the Sleeping Bear forecast from ~150 km away.
+export function ugcZones(spec) {
+  const ids = [];
+  let prefix = null, prev = null, m;
+  const re = /([>-]?)([A-Z]{3})?(\d{3})/g;
+  while ((m = re.exec(String(spec || "")))) {
+    if (m[2]) { prefix = m[2]; if (m[1] !== ">") prev = null; }
+    if (!prefix) continue;
+    const n = +m[3];
+    if (m[1] === ">" && prev != null) for (let k = prev + 1; k <= n; k++) ids.push(prefix + String(k).padStart(3, "0"));
+    else ids.push(prefix + String(n).padStart(3, "0"));
     prev = n;
   }
-  return nums;
+  return ids;
 }
 
 // Raise the grid's hourly waves to the authoritative nearshore forecast. The
@@ -1531,17 +1550,19 @@ const titleCase = (s) => s.toLowerCase().replace(/\b\w/g, (c) => c.toUpperCase()
 
 // Parse the named periods (.TODAY... / .TONIGHT... / .THURSDAY...) for a zone
 // out of the NSH text — the real nearshore forecast (the API leaves it blank).
-function nshPeriodsForZone(text, zone) {
+// A UGC header line: zone list (a prefix may change mid-list) + expiry.
+const UGC_LINE = /^([A-Z]{3}\d{3}(?:[>-](?:[A-Z]{3})?\d{3})*)-\d{6}-\s*$/;
+export function nshPeriodsForZone(text, zone) {
   if (!text || !zone) return [];
-  const want = parseInt(String(zone).replace(/\D/g, ""), 10);
-  if (!want) return [];
+  const want = String(zone).trim().toUpperCase();
+  if (!/^[A-Z]{3}\d{3}$/.test(want)) return [];
   const lines = text.split("\n");
   for (let i = 0; i < lines.length; i++) {
-    const h = lines[i].match(/^([A-Z]{3}[\d>\-]+?)-\d{6}-\s*$/);
-    if (!h || !zoneNumbers(h[1]).includes(want)) continue;
+    const h = lines[i].match(UGC_LINE);
+    if (!h || !ugcZones(h[1]).includes(want)) continue;
     let body = "";
     for (let j = i + 1; j < lines.length; j++) {
-      if (/^[A-Z]{3}[\d>\-]+?-\d{6}-\s*$/.test(lines[j])) break;
+      if (UGC_LINE.test(lines[j])) break;
       body += lines[j] + " ";
     }
     const periods = [];
@@ -2372,6 +2393,9 @@ export async function fetchTodayWindows({ landBudget } = {}) {
     pooled(entries, 8, ([, s]) => fetchSpotGrid(s)),
     fetchSpotsAlerts(entries.map(([, s]) => s), landBudget),
   ]);
+  // Same nearshore wave floor as tiles and weeks: a window is never offered
+  // on a grid cell calmer than the official NSH/CWF text for the zone.
+  await floorWithMarineText(entries, grids).catch(() => {});
   const nowH = Math.floor(Date.now() / 3600000);
   const out = {};
   entries.forEach(([id, s], i) => {

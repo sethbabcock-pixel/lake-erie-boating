@@ -71,6 +71,7 @@ let gridMode = null;
 // (one 0 m value held for 7 days, like DTX/84,67 off Port Huron), "zeros"
 // (several valid times, all 0 m), "calm" (a real 0–1 ft day: 0 m and 0.3 m
 // in turn), or a number = a real forecast of that many metres.
+let nshMock = null; // NWS products stub: CLE NSH text (null = no product)
 let gridWavesAt = null;
 let gridCalls = []; // NWS grid stub: the "lat,lon" sample point of each grid fetch
 let hourlyLagH = 0; // hourly stub: lead with this many already-past hours
@@ -177,6 +178,8 @@ function installFetchStub() {
     if (u.includes("api.weather.gov/alerts/active") && scaMode) {
       return jsonResp({ features: [{ properties: { event: "Small Craft Advisory", severity: "Minor", headline: "Small Craft Advisory in effect", sent: new Date().toISOString() } }] });
     }
+    if (nshMock && u.includes("api.weather.gov/products/types/NSH/locations/CLE")) return jsonResp({ "@graph": [{ id: "nsh-cle-test" }] });
+    if (nshMock && u.endsWith("api.weather.gov/products/nsh-cle-test")) return jsonResp({ productText: nshMock, issuanceTime: new Date().toISOString() });
     if (u.includes("api.weather.gov")) return jsonResp({ features: [], "@graph": [], properties: { periods: [] } });
     if (u.includes("ndbc.noaa.gov")) {
       const st = u.match(/realtime2\/([^/.]+)\.txt$/)?.[1];
@@ -2252,6 +2255,83 @@ async function run() {
     eq("grid steps: ocean spots keep the ocean steps", gridStepsFor(SPOTS.jacksonville).join(), "0.06,0.1,0.22");
     eq("grid steps: inland water samples the point only", gridStepsFor({ lat: 40, lon: -80, lake: "Some Reservoir" }).join(), "0");
     eq("grid steps: an empty override falls back to the defaults", gridStepsFor({ ...SPOTS.alpena, gridSteps: [] }).join(), "0.035,0.1,0.22");
+  }
+
+  // 58c. Spot geometry (Nov 2026 live audit): zones that cover the launch,
+  //      sea bearings whose grid walk reaches real wave cells, and exposure
+  //      lists that match the shoreline.
+  {
+    const { SPOTS, gridSamplePoints, windExposure, alertZonesFor, ugcZones, nshPeriodsForZone } = await import("../functions/marine/conditions.js");
+    const { regionForLake } = await import("../src/regions.js");
+    const h = SPOTS.houghton;
+    eq("geometry: Houghton's zone is LSZ242 (Ontonagon to the Portage Canal upper entrance), not LSZ267", h.zone, "LSZ242");
+    eq("geometry: Houghton is forecast by MQT's NSH", `${h.office}|${h.product || "NSH"}`, "MQT|NSH");
+    check("geometry: Houghton also watches LSZ243 (east of the North Entry)", alertZonesFor(h).includes("LSZ243") && alertZonesFor(h).includes("LSZ242"), JSON.stringify(alertZonesFor(h)));
+    check("geometry: Houghton also watches LSZ246 (Portage waterway / Keweenaw Bay)", alertZonesFor(h).includes("LSZ246"), JSON.stringify(alertZonesFor(h)));
+    eq("geometry: Houghton's walk starts in Superior off the North Entry", JSON.stringify(gridSamplePoints(h)[0]), JSON.stringify({ step: 0.13, lat: 47.2326, lon: -88.6655 }));
+    const exp = (id) => { const e = windExposure(SPOTS[id]); return `${e.onshore.join()}|${e.offshore.join()}`; };
+    const bearings = {
+      mackinaw: [20, "N,NNE,NE,ENE,NNW|SSE,S,SSW,SW,WSW"],          // the Straits, north of the tip
+      petoskey: [300, "WSW,W,WNW,NW,NNW|ENE,E,ESE,SE,SSE"],          // out Little Traverse Bay
+      "traverse-city": [15, "N,NNE,NE,ENE,NNW|SSE,S,SSW,SW,WSW"],   // up West Grand Traverse Bay
+      houghton: [330, "N,NNE,WNW,NW,NNW|ESE,SE,SSE,S,SSW"],          // toward the North Entry
+      muskegon: [270, "SW,WSW,W,WNW,NW|NE,ENE,E,ESE,SE"],            // west-facing shore
+      holland: [270, "SW,WSW,W,WNW,NW|NE,ENE,E,ESE,SE"],
+      "cross-village": [270, "SW,WSW,W,WNW,NW|NE,ENE,E,ESE,SE"],
+    };
+    for (const [id, [sea, want]] of Object.entries(bearings)) {
+      eq(`geometry: ${id} sea bearing`, SPOTS[id].sea, sea);
+      eq(`geometry: ${id} onshore|offshore`, exp(id), want);
+    }
+    eq("geometry: Muskegon's zone is LMZ847 (Grand Haven to Whitehall), not St Joseph's LMZ844", SPOTS.muskegon.zone, "LMZ847");
+    eq("geometry: Bayfield's zone is LSZ147 (Sand Island to Bayfield), not Silver Bay MN's LSZ143", SPOTS.bayfield.zone, "LSZ147");
+    eq("geometry: Sandusky's zone is LEZ144 (Sandusky Bay, Cedar Point)", SPOTS.sandusky.zone, "LEZ144");
+    check("geometry: Sandusky still watches LEZ143 (the islands)", alertZonesFor(SPOTS.sandusky).includes("LEZ143"));
+    check("geometry: Vermilion watches LEZ144 and LEZ145", ["LEZ144", "LEZ145"].every((z) => alertZonesFor(SPOTS.vermilion).includes(z)));
+    // Every curated zone is a well-formed marine zone whose prefix belongs to
+    // its region (a Superior spot can't carry an Erie zone, etc.).
+    const PREFIXES = {
+      greatlakes: /^L[EOHMS]Z/, florida: /^(AMZ|GMZ)/, "gulf-coast": /^GMZ/, southeast: /^AMZ/, socal: /^PZZ/,
+      islands: /^(PHZ|AMZ)/, pnw: /^PZZ/, oregon: /^PZZ/, norcal: /^PZZ/, northeast: /^ANZ/, alaska: /^PKZ/,
+      chesapeake: /^ANZ/, carolina: /^AMZ/,
+    };
+    const bad = Object.entries(SPOTS).filter(([, s]) => {
+      const r = regionForLake(s.lake || "Lake Erie");
+      const zones = [s.zone, ...(s.alertZones || []), ...(s.bar?.zone ? [s.bar.zone] : [])];
+      return !r || !PREFIXES[r.slug] || !zones.every((z) => /^[A-Z]{3}\d{3}$/.test(String(z)) && PREFIXES[r.slug].test(z));
+    }).map(([id, s]) => `${id}:${s.zone}`);
+    check("geometry: every spot zone is ^[A-Z]{3}\\d{3}$ with its region's prefix", Object.keys(SPOTS).length >= 90 && bad.length === 0, bad.join(", "));
+    const glNsh = Object.entries(SPOTS).filter(([, s]) => /^L[EOHMS]Z/.test(s.zone) !== ((s.product || "NSH") === "NSH")).map(([id]) => id);
+    check("geometry: Great Lakes zones read NSH, coastal zones CWF", glNsh.length === 0, glNsh.join(", "));
+
+    // UGC parsing keeps the zone prefix: APX's NSH carries LMZ345 (Point
+    // Betsie to Sleeping Bear) ahead of LHZ345 (Straits of Mackinac).
+    eq("ugc: range", ugcZones("LEZ144>148").join(), "LEZ144,LEZ145,LEZ146,LEZ147,LEZ148");
+    eq("ugc: list", ugcZones("LMZ344-345").join(), "LMZ344,LMZ345");
+    eq("ugc: prefix change mid-list", ugcZones("LMZ344-345-LHZ345>346").join(), "LMZ344,LMZ345,LHZ345,LHZ346");
+    const apx = [
+      "LMZ344-345-071930-", "Sleeping Bear Point to Grand Traverse Light MI-", "626 AM EST Sat Nov 7 2026", "",
+      ".TODAY...West wind 10 knots. Waves 2 feet or less.", ".TONIGHT...Southwest wind 15 to 20 knots. Waves 4 to 6 feet.", "", "$$",
+      "LHZ345-071930-", "Straits of Mackinac within 5 nm of Mackinac Bridge-", "626 AM EST Sat Nov 7 2026", "",
+      ".TODAY...West wind 10 to 15 knots. Waves 1 foot or less.", ".TONIGHT...Southwest wind 15 to 25 knots. Waves 3 to 5 feet.", "", "$$",
+    ].join("\n");
+    eq("nsh: LHZ345 reads the Straits forecast, not LMZ345's", nshPeriodsForZone(apx, "LHZ345")[1]?.forecast, "Southwest wind 15 to 25 knots. Waves 3 to 5 feet.");
+    eq("nsh: LMZ345 still reads its own block", nshPeriodsForZone(apx, "LMZ345")[1]?.forecast, "Southwest wind 15 to 20 knots. Waves 4 to 6 feet.");
+    eq("nsh: a zone that isn't in the product reads nothing", nshPeriodsForZone(apx, "LHZ346").length, 0);
+    eq("nsh: a range header still matches (LEZ144>148)", nshPeriodsForZone("LEZ144>148-072115-\n.TODAY...NE wind 10 knots. Waves 2 feet.\n$$", "LEZ146")[0]?.name, "Today");
+  }
+
+  // 58d. Digest windows use the same nearshore wave floor as tiles and weeks:
+  //      no window on a calm grid cell when the official NSH says 5-7 ft.
+  {
+    const { fetchTodayWindows } = await import("../functions/marine/conditions.js");
+    stormMode = false; scaMode = false; alertsDown = false; gridMode = null; zoneAlert = null; gridWavesAt = null;
+    nshMock = null;
+    check("digest floor: calm grid, no NSH text → Sandusky gets a window", (await fetchTodayWindows()).sandusky != null);
+    const per = ["TODAY", "TONIGHT", "SUNDAY", "SUNDAY NIGHT", "MONDAY", "MONDAY NIGHT"].map((n) => `.${n}...Northeast wind 20 to 25 knots. Waves 5 to 7 feet.`);
+    nshMock = ["LEZ144>148-072115-", "Vermilion to Avon Point OH-", "", ...per, "", "$$"].join("\n");
+    eq("digest floor: NSH 5-7 ft for LEZ144 → no Sandusky window", (await fetchTodayWindows()).sandusky, null);
+    nshMock = null;
   }
 
   // ── Launch-facts card: a configured buoy is not a live buoy ──
