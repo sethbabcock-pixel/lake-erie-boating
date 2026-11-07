@@ -629,7 +629,10 @@ const toAlert = (f) => ({
 async function alertsAt(query) {
   try {
     const data = await getJSON(`${NWS}/alerts/active?${query}`);
-    return data && Array.isArray(data.features) ? data.features.map(toAlert) : null;
+    if (!data || !Array.isArray(data.features)) return null;
+    // Only real alerts: NWS also publishes Test/Exercise/System messages,
+    // which must never move a verdict.
+    return data.features.filter((f) => (f.properties?.status ?? "Actual") === "Actual").map(toAlert);
   } catch (e) {
     return null;
   }
@@ -657,11 +660,23 @@ export async function fetchAlerts(spot) {
 // don't move it: on the coasts they run most days and would pin every launch
 // at CAUTION. Watches are a heads-up (CAUTION); marine warnings decide.
 const NOTE_ONLY = /air quality|rip current|beach hazard|coastal flood|lakeshore flood|flood (watch|warning|advisory|statement)|hydrologic|heat|frost|freeze|red flag|fire weather/;
+// Warnings that end a small-boat trip outright. Matched as substrings of the
+// lowercased NWS event name, alongside the broad gale/storm/hurricane terms.
+// Tornado and high/extreme wind warnings mean damaging wind at the launch;
+// heavy freezing spray ices a boat's topsides fast (late-season Great Lakes).
+// Blizzard, snow squall and lake effect snow warnings mean near-zero
+// visibility in strong wind over near-freezing water (lake effect bands come
+// with the fetch-aligned wind that builds Great Lakes chop). A high surf
+// warning makes inlet/bar crossings and beach launches unsafe. "typhoon"
+// keeps the tropical set complete (watches are caught above as CAUTION).
+const NO_GO_ALERTS = ["gale", "storm", "special marine", "hurricane", "typhoon", "hazardous seas", "tsunami",
+  "tornado warning", "high wind warning", "extreme wind warning", "heavy freezing spray warning",
+  "blizzard warning", "snow squall warning", "lake effect snow warning", "high surf warning"];
 export function alertLevel(a) {
   const ev = (a?.event || "").toLowerCase();
   if (!ev || NOTE_ONLY.test(ev)) return null;
   if (ev.includes("watch")) return "CAUTION";
-  if (ev.includes("gale") || ev.includes("storm") || ev.includes("special marine") || ev.includes("hurricane") || ev.includes("hazardous seas") || ev.includes("tsunami")) return "NO-GO";
+  if (NO_GO_ALERTS.some((k) => ev.includes(k))) return "NO-GO";
   return "CAUTION";
 }
 // [start, end) in epoch ms. No onset = already in effect; no end = open-ended.
