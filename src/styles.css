@@ -34,7 +34,9 @@ svg.ico { vertical-align: -0.15em; flex: 0 0 auto; }
   --info: #008BA8; --focus-ring: #008BA8;
   --bg: #F6F8F4; --surface: #FFFFFF; --surface-sunk: #EEF1EC;
   --border: #DCE2DA; --border-strong: #C3CCC0;
-  --text: #10202E; --text-muted: #50616F; --text-faint: #8595A1;
+  --text: #10202E; --text-muted: #50616F; --text-faint: #5E6D79;   /* faint: AA (4.7+) on bg/surface/sunk */
+  /* AA text tokens (>=4.5:1 on bg, surface, surface-sunk and 12-18% verdict tints) for small coloured text. */
+  --success-text: #0E6B4B; --warning-text: #7A5800; --danger-text: #A82D20; --accent-text: #00667D; --on-accent: #fff;
 }
 [data-theme="dark"] {
   --brand: #2BB4D4; --brand-hover: #4AC6E0;
@@ -46,29 +48,24 @@ svg.ico { vertical-align: -0.15em; flex: 0 0 auto; }
   --info: #2BB4D4; --focus-ring: #33CC99;
   --bg: #07182B; --surface: #0F2942; --surface-sunk: #0A2038;
   --border: #1F405F; --border-strong: #2C5476;
-  --text: #EAF2F8; --text-muted: #9FB6C9; --text-faint: #6B8299;
+  --text: #EAF2F8; --text-muted: #9FB6C9; --text-faint: #8CA3B8;
+  --success-text: #33CC99; --warning-text: #E3C04A; --danger-text: #F08A76; --accent-text: #4AC6E0; --on-accent: #07182B;
 }
 
 .app { max-width: var(--maxw-wide); margin: 0 auto; padding: var(--s5) clamp(var(--s4), 3.5vw, var(--s6)) var(--s8); }
 
 /* ---------- Sticky header ---------- */
-.appheader { position: sticky; top: 0; z-index: 50; border-bottom: 1px solid var(--border);
-  background: color-mix(in srgb, var(--bg) 85%, transparent);
-  -webkit-backdrop-filter: saturate(140%) blur(10px); backdrop-filter: saturate(140%) blur(10px); }
+/* One quiet row at every width: solid background, the brand mark + a plain
+   wordmark on the left, small square-cornered controls on the right. */
+.appheader { position: sticky; top: 0; z-index: 50; border-bottom: 1px solid var(--border); background: var(--bg); }
 .appheader-inner { max-width: var(--maxw-wide); margin: 0 auto; display: flex; align-items: center;
-  justify-content: space-between; gap: var(--s3) var(--s4); flex-wrap: wrap;
-  padding: var(--s3) clamp(var(--s4), 3.5vw, var(--s6)); }
-.brand { display: flex; align-items: center; gap: var(--s3); min-width: 0; text-decoration: none; }
+  justify-content: space-between; gap: var(--s3); min-height: 60px;
+  padding: var(--s2) clamp(var(--s4), 3.5vw, var(--s6)); }
+.brand { display: flex; align-items: center; gap: 10px; min-width: 0; flex: 0 0 auto; text-decoration: none; color: var(--text); }
 .brand:hover { text-decoration: none; }
-.brand .logo { height: 40px; width: auto; flex: 0 0 auto; }
-.wordmark { display: flex; flex-direction: column; min-width: 0; }
-.wm-name { font-weight: var(--fw-semibold); font-size: var(--fs-xl); letter-spacing: 0.02em;
-  color: var(--text); line-height: 1.05; }
-.wm-name b { font-weight: var(--fw-extrabold); color: var(--brand); }
-[data-theme="dark"] .wm-name b { color: var(--accent); }
-.wm-dot { color: var(--accent); font-weight: var(--fw-semibold); font-size: 0.62em; vertical-align: text-top; margin-left: 1px; }
-.wm-tag { font-size: var(--fs-xs); color: var(--text-muted); margin-top: 1px; font-weight: var(--fw-regular); letter-spacing: 0; }
-.controls { display: flex; align-items: center; gap: var(--s2); flex-wrap: wrap; justify-content: flex-end; }
+.brand .logo { height: 28px; width: auto; flex: 0 0 auto; display: block; }
+.wordmark { font-size: 1.0625rem; font-weight: var(--fw-bold); letter-spacing: -0.01em; color: var(--text); white-space: nowrap; line-height: 1; }
+.controls { display: flex; align-items: center; gap: var(--s2); min-width: 0; justify-content: flex-end; }
 .live { display: inline-flex; align-items: center; gap: 6px; font-size: var(--fs-xs); font-weight: var(--fw-semibold);
   color: var(--success); text-transform: uppercase; letter-spacing: var(--tracking-wide); }
 .live::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: var(--success);
@@ -86,15 +83,16 @@ svg.ico { vertical-align: -0.15em; flex: 0 0 auto; }
 .sel.themesel { min-width: 92px; }
 
 /* SVG sun/moon theme toggle */
-.theme-toggle { display: inline-flex; align-items: center; justify-content: center; width: 44px; height: 44px; flex: 0 0 auto;
-  border-radius: var(--r-pill); background: var(--surface); border: 1px solid var(--border-strong); color: var(--text);
-  cursor: pointer; transition: border-color var(--dur-fast), color var(--dur-fast), background var(--dur-fast); }
-.theme-toggle:hover { border-color: var(--accent); color: var(--accent); }
+.theme-toggle { display: inline-flex; align-items: center; justify-content: center; width: 40px; height: 40px; flex: 0 0 auto;
+  border-radius: var(--r-md); background: transparent; border: 0; color: var(--text-muted);
+  cursor: pointer; transition: color var(--dur-fast), background var(--dur-fast); }
+.theme-toggle svg { width: 18px; height: 18px; }
+.theme-toggle:hover { background: var(--surface-sunk); color: var(--text); }
 
 /* Custom location picker */
 .locpick { position: relative; }
-.locpick-btn { display: inline-flex; align-items: center; gap: var(--s2); min-height: 44px; padding: 0 12px;
-  background: var(--surface); color: var(--text); border: 1px solid var(--border-strong); border-radius: var(--r-md);
+.locpick-btn { display: inline-flex; align-items: center; gap: var(--s2); min-height: 40px; padding: 0 12px;
+  background: var(--surface); color: var(--text); border: 1px solid var(--border); border-radius: var(--r-md);
   font-family: var(--font-sans); font-size: var(--fs-sm); font-weight: var(--fw-semibold); cursor: pointer;
   transition: border-color var(--dur-fast); max-width: 240px; }
 .locpick-btn:hover { border-color: var(--accent); }
@@ -141,19 +139,17 @@ svg.ico { vertical-align: -0.15em; flex: 0 0 auto; }
 .mweather { margin: 7px 0 0 32px; font-size: var(--fs-sm); color: var(--text-muted); line-height: 1.4; }
 
 @media (max-width: 620px) {
-  .wm-tag { display: none; }
-  .wm-name { font-size: var(--fs-lg); }
-  /* Use the full header width on phones instead of hugging the right edge:
-     the location picker stretches across the row beside the theme toggle, and
-     the two auth buttons split an equal, full-width row beneath it. */
-  .controls { width: 100%; justify-content: flex-start; row-gap: var(--s2); }
-  /* flex-basis 0 so line-wrapping ignores the picker's text width: it shares a
-     row with the theme toggle (signed-out) or the toggle + avatar (signed-in)
-     and grows to fill, instead of taking a full row and pushing them to wrap. */
+  /* Phones: the mark alone is the home link; the picker takes the free space
+     on the same row, so the sticky header stays one 56px row. */
+  .wordmark { display: none; }
+  .appheader-inner { min-height: 56px; gap: var(--s2); }
+  .brand .logo { height: 24px; }
+  .controls { flex: 1 1 auto; }
   .controls .locpick { flex: 1 1 0; min-width: 0; }
-  .locpick-btn { width: 100%; max-width: none; }
-  .controls .auth-ctas { flex: 1 1 100%; width: 100%; justify-content: stretch; }
-  .auth-ctas .signin-btn { flex: 1 1 0; min-width: 0; display: flex; align-items: center; justify-content: center; }
+  .locpick-btn { width: 100%; max-width: none; padding: 0 10px; gap: 6px; }
+  .locpick-btn .chev { display: none; }
+  .theme-toggle { width: 36px; }
+  .auth-ctas .signin-btn { padding: 0 12px; }
   .sel.locsel { flex: 1 1 auto; }
 }
 
@@ -384,16 +380,19 @@ details.card[open] > summary { margin-bottom: var(--s3); }
 
 /* ---------- Accounts ---------- */
 .auth-ctas { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; justify-content: flex-end; }
-.signin-btn { min-height: 44px; padding: 0 16px; border-radius: var(--r-pill); background: var(--brand); color: #fff;
+.signin-btn { min-height: 40px; padding: 0 14px; border-radius: var(--r-md); background: var(--brand); color: #fff;
   border: 1px solid transparent; font-family: var(--font-sans); font-size: var(--fs-sm); font-weight: var(--fw-semibold); cursor: pointer; }
 .signin-btn:hover { background: var(--brand-hover); }
-.signin-btn.ghost { background: transparent; color: var(--text); border-color: var(--border-strong); }
-.signin-btn.ghost:hover { border-color: var(--accent); color: var(--text); background: var(--surface-sunk); }
+/* Dark theme's brand is a bright cyan: white text on it failed contrast. */
+[data-theme="dark"] .signin-btn:not(.ghost) { color: #04121e; }
+.signin-btn.ghost { background: transparent; color: var(--text); }
+.signin-btn.ghost:hover { background: var(--surface-sunk); }
 .acct { position: relative; }
-.acct-btn { width: 44px; height: 44px; border-radius: var(--r-pill); background: var(--surface); border: 1px solid var(--border-strong); cursor: pointer; padding: 0; }
-.acct-btn:hover { border-color: var(--accent); }
+.acct-btn { width: 40px; height: 40px; border-radius: var(--r-pill); background: transparent; border: 0; cursor: pointer; padding: 2px; }
+.acct-btn:hover .acct-avatar { border-color: var(--accent); }
 .acct-avatar { display: flex; align-items: center; justify-content: center; width: 100%; height: 100%; border-radius: var(--r-pill);
-  background: var(--brand); color: #fff; font-weight: var(--fw-bold); font-size: var(--fs-base); }
+  background: var(--surface-sunk); color: var(--text); border: 1px solid var(--border-strong);
+  font-weight: var(--fw-semibold); font-size: var(--fs-sm); }
 .acct-menu { position: absolute; top: calc(100% + 8px); right: 0; z-index: 80; width: 256px; background: var(--surface);
   border: 1px solid var(--border-strong); border-radius: var(--r-lg); box-shadow: var(--shadow-lg); padding: var(--s2); }
 .acct-menu-head { display: flex; align-items: center; gap: var(--s3); padding: var(--s2) var(--s2) var(--s3); }
@@ -479,13 +478,8 @@ details.card[open] > summary { margin-bottom: var(--s3); }
 
 /* ---------- Account page (/account) ---------- */
 .acctpage { min-height: 100vh; background: var(--bg); }
-.acctpage-header { display: flex; align-items: center; justify-content: space-between; gap: var(--s4);
-  padding: var(--s4) var(--s5); border-bottom: 1px solid var(--border); background: var(--surface); }
-.acctpage-back { color: var(--text-muted); font-size: var(--fs-sm); font-weight: var(--fw-semibold); text-decoration: none; }
-.acctpage-back:hover { color: var(--accent); }
-.acctpage-brand { display: inline-flex; align-items: center; gap: var(--s2); color: var(--text);
-  font-weight: var(--fw-bold); font-size: var(--fs-base); text-decoration: none; }
-.acctpage-brand .logo { height: 30px; width: auto; flex: 0 0 auto; }
+.acctpage-back { display: inline-flex; align-items: center; text-decoration: none; }
+.acctpage-back:hover { text-decoration: none; }
 .acctpage-main { max-width: 620px; margin: 0 auto; padding: var(--s5) var(--s4) var(--s8); }
 .acctpage-title { font-size: var(--fs-2xl); font-weight: var(--fw-bold); color: var(--text); margin: var(--s3) 0 var(--s5); }
 .acct-sec { margin-bottom: var(--s4); }
@@ -1224,3 +1218,270 @@ body.has-takeover .app { background: var(--bg); border-radius: var(--r-lg) var(-
 
 /* Text for screen readers only (e.g. the ⚡ storm cue in the week strip). */
 .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
+
+/* ── Spot-page title band (replaces the photo billboard) ─────────────────── */
+/* The verdict card right below is the headline; this is just the page title. */
+.hero-band { background: var(--bg); }
+.hero-band .hero-inner { display: flex; align-items: flex-end; justify-content: space-between; gap: var(--s2) var(--s5);
+  flex-wrap: wrap; padding: var(--s5) clamp(var(--s4), 3.5vw, var(--s6)) 0; }
+.hero-band-text { min-width: 0; }
+.hero-band .hero-eyebrow { color: var(--text-muted); opacity: 1; font-weight: var(--fw-semibold); margin-bottom: 6px; }
+.hero-band .hero-title { font-size: clamp(var(--fs-xl), 2.6vw, var(--fs-2xl)); font-weight: var(--fw-bold);
+  letter-spacing: var(--tracking-tight); line-height: var(--lh-snug); color: var(--text); }
+.hero-band .hero-subtitle { font-size: var(--fs-base); color: var(--text-muted); opacity: 1; margin-top: var(--s2); }
+.hero-band .hero-housecta { margin: 0; font-size: var(--fs-sm); text-align: left; }
+.hero-band + .app { padding-top: var(--s4); }
+@media (max-width: 640px) {
+  .hero-band .hero-inner { padding-top: var(--s4); }
+  .hero-band .hero-eyebrow { display: none; }
+  .hero-band .hero-title { font-size: var(--fs-lg); }
+  .hero-band + .app { padding-top: var(--s3); }
+}
+
+/* ===================================================================
+   Verdict trust (2026-11 UX review N1, N2, X4)
+   docs/forecast/freshness-and-wind-labels.md
+   - "unknown" = NO DATA: no wind/wave data arrived (server level stays
+     CAUTION). Neutral slate grey, dashed outline as a non-colour cue, so it
+     can't be read as a real CAUTION and never as GO.
+   - .freshline: data age/source directly under the verdict summary.
+   - .stale-note: amber "Data is N min old" notice (level never changed).
+   =================================================================== */
+.call.unknown { --vc: var(--text-muted); border-style: dashed;
+  background: linear-gradient(135deg, color-mix(in srgb, var(--text-muted) 8%, var(--surface)), var(--surface)); }
+.call.unknown .call-badge { background: color-mix(in srgb, var(--text-muted) 10%, transparent); border-right-style: dashed; }
+.call.unknown .call-badge span { color: var(--text-muted); font-size: var(--fs-2xl); letter-spacing: 0; white-space: nowrap; }
+@media (max-width: 560px) { .call.unknown .call-badge { border-right: none; border-bottom-style: dashed; } }
+.hdr-verdict.unknown { --vc: #5B6770; }
+.hdr-verdict.unknown .hdr-verdict-badge { color: #fff; }
+.hv-badge.unknown { background: #5B6770; color: #fff; }
+
+.stat .k .k-note { text-transform: none; letter-spacing: 0; font-weight: var(--fw-regular); color: var(--text-faint); margin-left: 4px; }
+
+.freshline { margin-top: 4px; font-size: var(--fs-xs); color: var(--text-muted); line-height: 1.45; }
+
+.stale-note { display: flex; align-items: center; flex-wrap: wrap; gap: 6px var(--s2); margin-top: var(--s2);
+  padding: 7px 11px; border-radius: var(--r-sm); font-size: var(--fs-sm); line-height: 1.4; color: var(--text);
+  background: color-mix(in srgb, var(--warning) 16%, var(--surface));
+  border: 1px solid color-mix(in srgb, var(--warning) 55%, var(--border)); border-left-width: 4px; }
+.stale-note svg { color: var(--warning); flex: 0 0 auto; }
+.stale-note .linklike { margin-left: auto; display: inline-flex; align-items: center; gap: 4px; min-height: 32px; font-size: var(--fs-sm); }
+
+/* ============================================================================
+   UX review 2026-11 (N3 N4/X5 N6 X1 X10). Appended block; keep together.
+   ============================================================================ */
+
+/* N3: AA text colours for small verdict-coloured text, links, faint text. */
+a, .linklike { color: var(--accent-text); }
+.live { color: var(--success-text); }
+.opill.good { color: var(--success-text); }
+.opill.warn { color: var(--warning-text); }
+.opill.bad { color: var(--danger-text); }
+.comfort.ok { color: var(--success-text); }
+.comfort.over { color: var(--danger-text); }
+.alert .ev, .acct-danger h2 { color: var(--danger-text); }
+.camsuggest-done { color: var(--success-text); }
+.region-tally em.go { color: var(--success-text); }
+.region-tally em.caution { color: var(--warning-text); }
+.region-tally em.nogo { color: var(--danger-text); }
+.glance-label b { color: var(--warning-text); }
+.camlink.primary, .splash-loc, .splash-build { color: var(--accent-text); }
+.cam-kind.video, .hour .hm.wave b { color: var(--accent-text); }
+.wm-dot { color: var(--accent-text); }
+.region-chip.on, .maptabs button.active, .camtabs button.active { background: var(--accent-text); border-color: var(--accent-text); color: var(--on-accent); }
+
+/* N4/X5: one verdict mark = icon + word, never colour alone. Unknown is neutral. */
+.vmark { display: inline-flex; align-items: center; gap: .35em; white-space: nowrap; }
+.vmark svg.ico { flex: 0 0 auto; }
+.vm-go { color: var(--success-text); }
+.vm-caution { color: var(--warning-text); }
+.vm-nogo { color: var(--danger-text); }
+.vm-unknown { color: var(--text-muted); }
+
+.call-verdict { margin: 0; font-size: inherit; font-weight: inherit; line-height: 1; }
+.call-badge { min-height: 48px; }
+.call-badge .vmark { font-size: var(--fs-3xl); font-weight: var(--fw-extrabold); letter-spacing: var(--tracking-tight); line-height: 1; gap: .3em; }
+.call-badge .vm-word { font-size: inherit; color: inherit; font-weight: inherit; letter-spacing: inherit; }
+.call-badge .vmark svg.ico { width: .8em; height: .8em; }
+@media (max-width: 560px) {
+  /* N6: phone verdict badge is at least 40px tall (48px here). */
+  .call-badge { min-height: 48px; }
+  .call-badge .vmark { font-size: var(--fs-2xl); }
+}
+
+.hdr-verdict-badge { display: inline-flex; background: color-mix(in srgb, var(--vc, var(--accent)) 16%, var(--surface));
+  border: 1px solid color-mix(in srgb, var(--vc, var(--accent)) 45%, transparent); color: var(--text); }
+.hdr-verdict.caution .hdr-verdict-badge { color: var(--text); }
+.hdr-verdict-badge .vmark { font-size: var(--fs-xs); font-weight: var(--fw-extrabold); letter-spacing: var(--tracking-wide); }
+
+.loc-status { display: inline-flex; background: color-mix(in srgb, var(--vc, var(--border-strong)) 16%, var(--surface));
+  border: 1px solid color-mix(in srgb, var(--vc, var(--border-strong)) 50%, transparent); color: var(--text); }
+.loc-status.go { --vc: var(--success); background: color-mix(in srgb, var(--success) 14%, var(--surface)); }
+.loc-status.caution { --vc: var(--warning); background: color-mix(in srgb, var(--warning) 16%, var(--surface)); color: var(--text); }
+.loc-status.nogo { --vc: var(--danger); background: color-mix(in srgb, var(--danger) 14%, var(--surface)); }
+.loc-status.unknown { background: var(--surface-sunk); border-color: var(--border-strong); color: var(--text-muted); }
+.loc-status .vmark { font-size: 10px; gap: 4px; }
+
+/* Glance band: icon in every bar so it is not colour-only; taller scrub/tap area. */
+.glance-band { height: 44px; }
+.glance-band .gb { display: flex; align-items: center; justify-content: center; opacity: 1; min-width: 0; overflow: hidden;
+  background: color-mix(in srgb, var(--gc, var(--border-strong)) 38%, var(--surface)); color: var(--gc-text, var(--text-muted)); }
+.glance-band .gb.go { --gc: var(--success); --gc-text: var(--success-text); background: color-mix(in srgb, var(--success) 38%, var(--surface)); }
+.glance-band .gb.caution { --gc: var(--warning); --gc-text: var(--warning-text); background: color-mix(in srgb, var(--warning) 38%, var(--surface)); }
+.glance-band .gb.nogo { --gc: var(--danger); --gc-text: var(--danger-text); background: color-mix(in srgb, var(--danger) 38%, var(--surface)); }
+.glance-band .gb.unknown { background: var(--surface-sunk); }
+.glance-band .gb.best.go { background: var(--success); color: #fff; }
+.glance-band .gb.best.caution { background: var(--warning); color: #1a1206; }
+.glance-band .gb.best.nogo { background: var(--danger); color: #fff; }
+
+/* Hour-by-hour verdict row: small icon above the bar. */
+.hx-vwrap { display: flex; flex-direction: column; align-items: center; gap: 3px; }
+.hx-vi { display: inline-flex; line-height: 0; color: var(--text-muted); }
+.hx-vi.go { color: var(--success-text); } .hx-vi.caution { color: var(--warning-text); } .hx-vi.nogo { color: var(--danger-text); }
+
+/* X1: tap targets >= 44px. */
+.cbtn { min-height: 44px; }
+.region-chip { min-height: 44px; }
+.maptabs button, .camtabs button, .camlink { min-height: 44px; }
+.footlinks { gap: 0 var(--s2); }
+.footlinks a, .footlinks .linklike, .meta button { display: inline-flex; align-items: center; min-height: 44px; padding: 0 10px; }
+.modal-x { width: 44px; height: 44px; top: 4px; right: 4px; display: inline-flex; align-items: center; justify-content: center; }
+.wpanel-close { min-height: 44px; padding: 0 8px; }
+.theme-toggle:focus-visible { outline-offset: 2px; }
+
+/* X10: reduced motion = no smooth scrolling (video is paused in motion.js). */
+@media (prefers-reduced-motion: reduce) {
+  html { scroll-behavior: auto; }
+  .hdr-verdict { animation: none; }
+  .live::before { animation: none; }
+}
+
+/* ── UX review 2026-11: X2 / X3 / X6 ──────────────────────────────────────────
+   Landing "Right now" strip, picker verdict+distance, non-GO spot-page
+   ordering (promoted nearby, map poster, collapsed gear), auth form labels. */
+
+/* X2: landing "Right now" strip */
+.rightnow { margin: 0 0 var(--s4); }
+.rightnow-title { margin: 0 0 var(--s2); font-size: var(--fs-lg); font-weight: var(--fw-bold); color: var(--text); }
+.rightnow-title span { margin-left: 6px; font-size: var(--fs-xs); font-weight: var(--fw-medium); color: var(--text-muted); }
+.rightnow-row { display: flex; gap: var(--s2); overflow-x: auto; padding-bottom: 4px; scrollbar-width: thin; -webkit-overflow-scrolling: touch; }
+.rightnow-chip { flex: 0 0 auto; display: inline-flex; align-items: center; gap: var(--s2); min-height: 44px; max-width: 78vw; padding: 0 8px 0 14px;
+  background: var(--surface); border: 1px solid var(--border); border-radius: var(--r-pill); color: var(--text);
+  font-family: var(--font-sans); font-size: var(--fs-sm); font-weight: var(--fw-semibold); cursor: pointer; }
+.rightnow-chip:hover { border-color: var(--accent); }
+.rightnow-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* X2: picker rows carry distance + verdict */
+.locpick-pick { gap: var(--s2); min-height: 44px; }
+.locpick-pick .lp-name { flex: 1 1 auto; min-width: 0; }
+.locpick-pick .lp-mi { flex: 0 0 auto; font-size: var(--fs-xs); color: var(--text-muted); font-family: var(--font-mono); }
+.locpick-pick .loc-status { flex: 0 0 auto; }
+
+/* X3: promoted nearby list (non-GO) */
+.nlevel { font-size: 10px; font-weight: var(--fw-extrabold); letter-spacing: var(--tracking-wide); text-transform: uppercase; color: var(--text-muted); }
+.nlevel.go { color: var(--success); }
+.nlevel.caution { color: var(--warning); }
+.nlevel.nogo { color: var(--danger); }
+.nearby-promoted .nearby-row { flex-direction: column; flex-wrap: nowrap; }
+.nearby-promoted .nearby-chip { width: 100%; min-height: 44px; border-radius: var(--r-md); }
+.nearby-promoted .nname { flex: 1 1 auto; text-align: left; }
+.nearby-promoted .nearby-chip small { margin-left: auto; text-align: right; }
+
+/* X3: map poster (embed loads on tap) */
+.mapposter { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; width: 100%; min-height: 132px; padding: var(--s4);
+  background: var(--surface-sunk); border: 1px dashed var(--border-strong); border-radius: var(--r-md); color: var(--text);
+  font-family: var(--font-sans); font-size: var(--fs-sm); cursor: pointer; }
+.mapposter:hover { border-color: var(--accent); }
+.mapposter-ico { color: var(--accent); }
+.mapposter small { color: var(--text-muted); font-size: var(--fs-xs); }
+@media (min-width: 1024px) { .dash2 .mapposter { flex: 1 1 auto; } }
+
+/* X3: gear block collapsed on NO-GO (still labeled as affiliate links) */
+
+/* X6: auth modal labels, show/hide password, tap-size close */
+.field-label { display: block; margin: 0 0 4px; font-size: var(--fs-sm); font-weight: var(--fw-semibold); color: var(--text); }
+.pw-wrap { position: relative; }
+.pw-wrap .field { padding-right: 64px; }
+.pw-toggle { position: absolute; top: 0; right: 0; height: 44px; min-width: 56px; padding: 0 12px; background: none; border: 0; color: var(--accent);
+  font-family: var(--font-sans); font-size: var(--fs-sm); font-weight: var(--fw-semibold); cursor: pointer; }
+.modal .pw-rule { margin: calc(-1 * 4px) 0 var(--s3); line-height: 1.45; }
+.modal-x { width: 44px; height: 44px; top: 4px; right: 4px; display: flex; align-items: center; justify-content: center; }
+.modal h2 { padding-right: 36px; }
+
+/* ===== Ads / consent / sponsor / gear polish (UX review 2026-11: N7, X7, X8) =====
+   Ad labels 12px with AA contrast, 44px sticky-ad close, compact non-modal
+   consent bar, sponsor skin inert on touch, collapsed gear on NO-GO. ===== */
+/* Ad labels: --text-muted is >= 5.9:1 on --bg/--surface in both themes (faint was 3.1:1). */
+.adlabel { font-size: 12px; color: var(--text-muted); }
+.hero-adlabel { font-size: 12px; opacity: 1; color: var(--text-muted); }
+.hero-gam .hero-adlabel { top: 4px; right: 11px; }
+/* Sponsor hero: "Sponsored" sits inline with the eyebrow; no opacity, so the
+   contrast guard in SponsorHero holds for every line of text. */
+.hero-sponsor .hero-eyebrow { opacity: 1; display: flex; flex-wrap: wrap; align-items: center; gap: 4px var(--s2); font-size: 12px; }
+.hero-sponsor .hero-subtitle { opacity: 1; }
+.hero-sponsored { display: inline-block; font-weight: var(--fw-extrabold); border: 1px solid currentColor; border-radius: 4px; padding: 1px 6px; line-height: 1.4; }
+.hero-eyebrow-text { font-weight: var(--fw-bold); }
+/* Sticky footer ad: a 44x44 close tab above the ad's top-right corner (the bar
+   used to clip its own half-height button). Sits above the consent bar when both show. */
+.sticky-ad { overflow: visible; }
+.sticky-ad .adsbygoogle { overflow: hidden; }
+.sticky-ad-close { top: -44px; right: 0; width: 44px; height: 44px; border-radius: var(--r-md) 0 0 0; font-size: 24px;
+  border-bottom: 0; box-shadow: none; color: var(--text); }
+body.has-consent .sticky-ad { bottom: var(--consent-h, 0px); }
+/* Consent: compact full-width bar, non-modal; body padding keeps the last content reachable. */
+body.has-consent { padding-bottom: var(--consent-h, 0px); }
+.consent { left: 0; right: 0; bottom: 0; transform: none; width: auto; max-width: none; border-radius: 0; border-width: 1px 0 0;
+  gap: var(--s2) var(--s4); flex-wrap: wrap; padding: var(--s2) var(--s3) calc(var(--s2) + env(safe-area-inset-bottom, 0px));
+  font-size: 12px; line-height: 1.4; color: var(--text); }
+.consent > span { flex: 1 1 320px; min-width: 0; }
+.consent a { color: var(--text); text-decoration: underline; }
+.consent-actions { flex: 1 1 100%; gap: var(--s3); }
+/* Reject and Accept: identical size, weight and fill (equal prominence). */
+.consent .cbtn { flex: 1 1 0; min-height: 44px; padding: 8px 14px; font-size: var(--fs-sm); font-weight: var(--fw-bold); background: var(--brand); color: #fff; border: 1px solid transparent; }
+[data-theme="dark"] .consent .cbtn { color: #07182B; }
+@media (min-width: 720px) {
+  .consent { flex-wrap: nowrap; align-items: center; justify-content: center; }
+  .consent > span { flex: 0 1 640px; }
+  .consent-actions { flex: 0 0 auto; }
+  .consent .cbtn { flex: 0 0 auto; min-width: 110px; }
+}
+/* Sponsor skin: never a click target on touch devices (desktop keeps the link). */
+@media (hover: none), (pointer: coarse) { .takeover-skin { pointer-events: none; cursor: default; } }
+/* Gear: NO-GO collapses to a neutral safety-prep fold. */
+.gear .legend, .gear .hint { color: var(--text-muted); }
+.gear-fold > summary { display: flex; align-items: center; justify-content: space-between; gap: var(--s3); flex-wrap: wrap; cursor: pointer; min-height: 44px; list-style: none; }
+.gear-fold > summary::-webkit-details-marker { display: none; }
+.gear-fold > summary h2 { margin: 0; }
+.gear-fold > summary::after { content: "+"; font-size: 20px; color: var(--text-muted); margin-left: auto; }
+.gear-fold[open] > summary::after { content: "\2212"; }
+.gear-fold[open] > summary { margin-bottom: var(--s3); }
+.gear-tag { font-size: 12px; white-space: nowrap; letter-spacing: 0; }
+.gear-tag.top { color: var(--text-muted); background: var(--surface-sunk); }
+.gear-tag.pick { color: var(--text); }
+
+/* ── Spot-page title band over a photo of the launch (src/spot-photos.js) ── */
+.hero-band.has-photo { position: relative; overflow: hidden; background: #0b2238; color: #fff; }
+.hero-band-img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; object-position: center 72%; z-index: 0; }
+.hero-band.has-photo::before { content: ""; position: absolute; inset: 0; z-index: 1;
+  background: linear-gradient(90deg, rgba(7,24,43,0.86) 0%, rgba(7,24,43,0.55) 50%, rgba(7,24,43,0.12) 100%),
+              linear-gradient(0deg, rgba(7,24,43,0.55) 0%, rgba(7,24,43,0) 45%); }
+.hero-band.has-photo .hero-inner { position: relative; z-index: 2; min-height: 220px; align-items: flex-end;
+  padding-top: var(--s7); padding-bottom: var(--s5); }
+.hero-band.has-photo .hero-eyebrow { color: rgba(255,255,255,0.86); }
+.hero-band.has-photo .hero-title { color: #fff; font-size: clamp(var(--fs-xl), 3vw, var(--fs-3xl)); text-shadow: 0 1px 12px rgba(0,0,0,0.35); }
+.hero-band.has-photo .hero-subtitle { color: rgba(255,255,255,0.9); }
+.hero-band.has-photo .hero-housecta { color: #9fe6ff; }
+.hero-band-credit { position: absolute; right: 8px; top: 6px; z-index: 3; margin: 0; max-width: min(60%, 460px);
+  font-size: 11px; line-height: 1.35; text-align: right; color: rgba(255,255,255,0.88); text-shadow: 0 1px 3px rgba(0,0,0,0.8); }
+.hero-band-credit a { color: inherit; text-decoration: underline; text-decoration-color: rgba(255,255,255,0.45); }
+.hero-band-credit a:hover { color: #fff; }
+.hero-band.has-photo + .app { padding-top: var(--s5); }
+@media (max-width: 640px) {
+  .hero-band.has-photo .hero-inner { min-height: 150px; padding-top: var(--s6); padding-bottom: var(--s4); }
+  .hero-band.has-photo .hero-title { font-size: var(--fs-xl); }
+  .hero-band-credit { position: relative; right: auto; top: auto; max-width: none; text-align: left; padding: 6px var(--s4); background: rgba(7,24,43,0.72); }
+}
+
+/* Safety disclaimers on the spot page (legal review 2026-11, B1). */
+.call-disclaimer { margin: var(--s3) 0 0; font-size: var(--fs-xs); line-height: 1.45; color: var(--text-muted); max-width: 70ch; }
+.meta-disclaimer { max-width: 72ch; margin: 0 auto var(--s3); font-size: var(--fs-xs); line-height: 1.5; color: var(--text-muted); }

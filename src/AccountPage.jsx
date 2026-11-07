@@ -322,12 +322,17 @@ export default function AccountPage() {
 
   return (
     <div className="acctpage">
-      <header className="acctpage-header">
-        <a className="acctpage-back" href="/">← Back to conditions</a>
-        <a className="acctpage-brand" href="/">
-          <img className="logo" width="248" height="82" src={dark ? "/boat-mark-white.png" : "/boat-mark.png"} alt="" />
-          <span>shouldiboat.com</span>
-        </a>
+      {/* Same header as the main app (styles.css .appheader). */}
+      <header className="appheader">
+        <div className="appheader-inner">
+          <a className="brand" href="/" aria-label="shouldiboat.com home">
+            <img className="logo" width="248" height="82" src={dark ? "/boat-mark-white.png" : "/boat-mark.png"} alt="" />
+            <span className="wordmark">Should I Boat</span>
+          </a>
+          <div className="controls">
+            <a className="signin-btn ghost acctpage-back" href="/">← Back to conditions</a>
+          </div>
+        </div>
       </header>
 
       <main className="acctpage-main">

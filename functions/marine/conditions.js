@@ -385,6 +385,7 @@ async function fetchWaterTemp(stations) {
 }
 
 // One /points lookup → both the day/night forecast AND the hourly forecast.
+const validIso = (t) => (t && Number.isFinite(Date.parse(t)) ? new Date(Date.parse(t)).toISOString() : null);
 async function fetchForecasts(lat, lon) {
   try {
     const pt = await cachedJSON(`${NWS}/points/${lat},${lon}`, 86400);
@@ -396,6 +397,8 @@ async function fetchForecasts(lat, lon) {
     ]);
     const daily = (fc?.properties?.periods || []).slice(0, 4).map((p) => ({
       name: p.name,
+      startTime: p.startTime || null,
+      endTime: p.endTime || null,
       isDaytime: p.isDaytime,
       tempF: p.temperature,
       wind: `${p.windDirection || ""} ${p.windSpeed || ""}`.trim(),
@@ -417,9 +420,12 @@ async function fetchForecasts(lat, lon) {
         short: p.shortForecast || "",
       };
     });
-    return { daily, hourly };
+    // When the forecaster last updated each product (not when the API served
+    // it): the age that matters for "is this forecast stale?".
+    const issuedAt = { daily: validIso(fc?.properties?.updateTime), hourly: validIso(hc?.properties?.updateTime) };
+    return { daily, hourly, issuedAt };
   } catch (e) {
-    return { daily: [], hourly: [] };
+    return { daily: [], hourly: [], issuedAt: { daily: null, hourly: null } };
   }
 }
 
@@ -553,6 +559,7 @@ async function fetchGridAt(lat, lon) {
     return {
       waveFiller,
       tz: pt?.properties?.timeZone || "America/New_York",
+      updateTime: validIso(p.updateTime), // forecaster's last grid update (staleness)
       windKt: gridSeries(p.windSpeed, speedToKt(p.windSpeed)),
       gustKt: gridSeries(p.windGust, speedToKt(p.windGust)),
       windDirDeg: gridSeries(p.windDirection),
@@ -1796,6 +1803,42 @@ export function computeOutlook(hours) {
   return out;
 }
 
+// ---- Data freshness ----
+// When an input is too old to support a GO (docs/forecast/freshness-and-wind-labels.md).
+//   buoyMin     — a live buoy reading this old (or older) can't carry a GO. NDBC
+//                 stations report hourly (some every 10 min) and land ~20-50 min
+//                 later, so 120 min means at least one report cycle was missed.
+//                 Readings over 180 min are already dropped by fetchBuoy.
+//   forecastMin — NWS forecasts are routinely re-issued at least twice a day and
+//                 the grids amended between; 18 h without an update means a
+//                 missed issuance (or a stuck api.weather.gov cache).
+//   pageMin     — client-only: a page left open this long gets the amber notice
+//                 (the level itself is never changed in the browser).
+export const STALE_LIMITS = { buoyMin: 120, forecastMin: 18 * 60, pageMin: 30 };
+const ageMinOf = (iso, now = Date.now()) => { const t = Date.parse(iso); return Number.isFinite(t) ? Math.max(0, Math.round((now - t) / 60000)) : null; };
+const fmtAge = (m) => (m < 60 ? `${m} min` : m < 48 * 60 ? `${Math.floor(m / 60)} h${m % 60 ? ` ${m % 60} min` : ""}` : `${Math.round(m / 1440)} days`);
+// A grid whose forecaster update is known and overdue. Unknown age is not
+// stale (the NWS doesn't always send updateTime); it's shown as unknown.
+export function gridStale(g, now = Date.now()) {
+  const a = g?.updateTime ? ageMinOf(g.updateTime, now) : null;
+  return a != null && a >= STALE_LIMITS.forecastMin;
+}
+
+// Wind as one phrase that names the sustained speed AND the gust, each with
+// its source, so the reason matches the stat tile and the header strip (the
+// level itself rates on the stronger of the two; see buildRecommendation).
+// "16 kt, gusts 19 kt (buoy)", "7 kt (buoy), gusts 16 kt (forecast)".
+export function windPhrase(wind) {
+  const w = wind?.speedKt != null ? round(wind.speedKt, 0) : null;
+  const g = wind?.gustKt != null ? round(wind.gustKt, 0) : null;
+  const tag = (src) => (src === "buoy" ? " (buoy)" : src === "forecast" ? " (forecast)" : "");
+  const showG = g != null && (w == null || g > w);
+  if (w == null) return g == null ? null : `gusts ${g} kt${tag(wind.gustSrc)}, no sustained wind reading`;
+  if (!showG) return `${w} kt${tag(wind.source)}`;
+  if (wind.source === wind.gustSrc) return `${w} kt, gusts ${g} kt${tag(wind.source)}`;
+  return `${w} kt${tag(wind.source)}, gusts ${g} kt${tag(wind.gustSrc)}`;
+}
+
 // ---- Recommendation engine ----
 // Thresholds tuned for small/mid recreational power boats (16-26 ft) on the
 // notoriously short, steep chop of Lake Erie's shallow western/central basin.
@@ -1806,7 +1849,12 @@ function spotNotes(spot) {
   return [...out, ...(spot?.notes || [])];
 }
 
-export function buildRecommendation({ buoy, alerts, wind, waves, read, hours, profile = "lake", waterF = null, spot = null, alertsOk = true }) {
+// `forecastAgeMin`: minutes since the NWS forecast behind this call was last
+// updated (null = unknown). A stale forecast or buoy never carries a GO.
+// `buoyAgeMin`: age of the OLDEST station that actually fed wind, gusts or
+// waves (fetchBuoy can fill wind from a second station, see windBuoy); when
+// omitted, the primary buoy's ageMinutes is used.
+export function buildRecommendation({ buoy, alerts, wind, waves, read, hours, profile = "lake", waterF = null, spot = null, forecastAgeMin = null, alertsOk = true, buoyAgeMin }) {
   const reasons = [];
   let level = "GO"; // GO < CAUTION < NO-GO
   const bump = (to, why) => {
@@ -1849,27 +1897,25 @@ export function buildRecommendation({ buoy, alerts, wind, waves, read, hours, pr
 
   // Wind / gusts — buoy if reporting, otherwise NWS forecast, so wind ALWAYS
   // factors in (the decisive signal when wave data is missing).
+  // The level rates on topWind (the stronger of sustained and gust); the
+  // reason names both, with sources, so it reads the same as the stat tile.
   const topWind = Math.max(wind?.speedKt ?? 0, wind?.gustKt ?? 0);
   if (topWind) {
-    // Tag forecast numbers, including a grid gust driving the call while a
-    // buoy reports the sustained wind.
-    const gustLeads = wind?.gustSrc === "forecast" && (wind?.gustKt ?? 0) > (wind?.speedKt ?? 0);
-    const tag = wind?.source === "forecast" || gustLeads ? " (forecast)" : "";
+    const desc = windPhrase(wind);
     // Ocean: no "breezy" step at 12 kt; a 12-15 kt sea breeze is a normal
     // coastal afternoon, and the seas rule above carries the wave risk.
     if (profile === "ocean") {
       // Ocean trade/sea-breeze gusts run well above the sustained wind, and NWS
       // coastal advisories key on sustained speed, so rate them separately.
       const w = wind?.speedKt ?? 0, gu = wind?.gustKt ?? 0;
-      const desc = `${round(w, 0)} kt${gu > w ? `, gusts ${round(gu, 0)}` : ""}${tag}`;
-      if (w >= 22 || gu >= 28) bump("NO-GO", `Wind ~${desc}`);
-      else if (w >= 17 || gu >= 24) bump("CAUTION", `Wind ~${desc}`);
-      else if (w >= 15 || gu >= 20) bump("CAUTION", `Breezy ~${desc}`);
+      if (w >= 22 || gu >= 28) bump("NO-GO", `Strong wind: ${desc}`);
+      else if (w >= 17 || gu >= 24) bump("CAUTION", `Windy: ${desc}`);
+      else if (w >= 15 || gu >= 20) bump("CAUTION", `Breezy: ${desc}`);
     }
-    else if (topWind >= 22) bump("NO-GO", `Wind/gusts ~${round(topWind, 0)} kt${tag}`);
-    else if (topWind >= 17) bump("CAUTION", `Wind ~${round(topWind, 0)} kt${tag}`);
-    else if (topWind >= 12) bump("CAUTION", `Breezy ~${round(topWind, 0)} kt${tag}`);
-    else if (wv == null) reasons.push(`Wind ~${round(topWind, 0)} kt${tag}, light`);
+    else if (topWind >= 22) bump("NO-GO", `Strong wind: ${desc}`);
+    else if (topWind >= 17) bump("CAUTION", `Windy: ${desc}`);
+    else if (topWind >= 12) bump("CAUTION", `Breezy: ${desc}`);
+    else if (wv == null) reasons.push(`Light wind: ${desc}`);
   }
 
   // Wind DIRECTION on the lake's fetch — only matters once there's some wind.
@@ -1913,6 +1959,21 @@ export function buildRecommendation({ buoy, alerts, wind, waves, read, hours, pr
     reasons.push("Thunderstorms later, watch the hourly timeline");
   }
 
+  // Stale inputs never carry a GO (standing rule). The reason is added even
+  // when the call is already CAUTION/NO-GO, so the boater knows the age.
+  const liveObs = wind?.source === "buoy" || wind?.gustSrc === "buoy" || waves?.source === "buoy";
+  const preStale = level;
+  const rawBuoyAge = buoyAgeMin !== undefined ? buoyAgeMin : buoy?.ageMinutes;
+  const buoyAge = liveObs && Number.isFinite(rawBuoyAge) ? Math.max(0, rawBuoyAge) : null;
+  if (buoyAge != null && buoyAge >= STALE_LIMITS.buoyMin) {
+    bump("CAUTION", `The buoy reading is ${fmtAge(buoyAge)} old; conditions may have changed. Check before you launch`);
+  }
+  const anyData = wv != null || wind?.speedKt != null || wind?.gustKt != null || (hours || []).length > 0;
+  if (anyData && forecastAgeMin != null && forecastAgeMin >= STALE_LIMITS.forecastMin) {
+    bump("CAUTION", `The NWS forecast hasn't been updated in ${fmtAge(forecastAgeMin)}; check the latest marine forecast before you launch`);
+  }
+  const staleCapped = preStale === "GO" && level !== "GO";
+
   // No wind AND no waves means the upstream feeds failed (NOAA outage, timeout),
   // not that it's calm. Never call GO on missing data — fail to CAUTION and
   // say why, so a blank page can't read as "looks good".
@@ -1940,7 +2001,6 @@ export function buildRecommendation({ buoy, alerts, wind, waves, read, hours, pr
   }
   // Say so whenever neither wind nor waves came from a live buoy, even if some
   // station reported temperatures: the verdict is then the forecast alone.
-  const liveObs = wind?.source === "buoy" || wind?.gustSrc === "buoy" || waves?.source === "buoy";
   if (!liveObs && !noData) reasons.push("No live buoy here; using the NWS forecast, so verify before launch");
   // A buoy that supplies wind (or gusts) but no wave height leaves the wave
   // half of the call on the forecast. Say so: a live wind reading must not
@@ -1951,8 +2011,14 @@ export function buildRecommendation({ buoy, alerts, wind, waves, read, hours, pr
 
   // The "no data" line only when that's the whole story: a gust or storm that
   // drove the call higher gets the normal summary for its level.
-  const summary = noData && level === "CAUTION"
+  // noCall: the CAUTION is there only because nothing was received; the page
+  // shows it as a neutral "NO DATA" state, never as GO (level stays CAUTION
+  // for every API consumer, e.g. emails and the summary tiles).
+  const noCall = noData && level === "CAUTION";
+  const summary = noCall
     ? "No live data right now. Check before you go."
+    : staleCapped && level === "CAUTION"
+    ? "Data is out of date. Check before you go."
     : {
         GO: "Looks good to boat.",
         CAUTION: "Boatable with caution. Small boats take care.",
@@ -1961,7 +2027,7 @@ export function buildRecommendation({ buoy, alerts, wind, waves, read, hours, pr
 
   // Collapse duplicates (e.g. three concurrent Air Quality Alerts) so the
   // reason list stays clean instead of repeating the same line.
-  return { level, summary, reasons: [...new Set(reasons)] };
+  return { level, summary, reasons: [...new Set(reasons)], noData: noCall, stale: staleCapped };
 }
 
 // ── Live-cam health, checked at view time ───────────────────────────────────
@@ -2059,11 +2125,23 @@ async function fetchWindyCams(env, lat, lon, lake) {
   try {
     // Over-fetch so we can rank: water views (harbor, bay, beach…) beat city
     // and traffic cams for a boating audience, and live streams beat replays.
-    const u = `https://api.windy.com/webcams/api/v3/webcams?nearby=${round(lat, 3)},${round(lon, 3)},60&limit=20&include=categories,location,player,urls`;
-    const r = await fetch(u, { headers: { "X-WINDY-API-KEY": key, Accept: "application/json" }, signal: AbortSignal.timeout(8000) });
-    if (!r.ok) return null;
-    const d = await r.json();
-    const list = d?.webcams || d?.result?.webcams || [];
+    // The ranking below throws away road/city cams, so ask Windy for water
+    // categories FIRST: in dense coastal metros (LA / Orange County / San Diego)
+    // the 20 nearest cams are all city/traffic cams and the post-filter left 0
+    // ("ok:0/20"). If the category filter is rejected or empty, fall back to the
+    // plain nearby list (wider limit, still filtered below).
+    const base = `https://api.windy.com/webcams/api/v3/webcams?nearby=${round(lat, 3)},${round(lon, 3)},60&include=categories,location,player,urls`;
+    const hdrs = { "X-WINDY-API-KEY": key, Accept: "application/json" };
+    const grab = async (u) => {
+      const r = await fetch(u, { headers: hdrs, signal: AbortSignal.timeout(8000) });
+      if (!r.ok) return null;
+      const d = await r.json();
+      return d?.webcams || d?.result?.webcams || [];
+    };
+    let list = null;
+    try { list = await grab(`${base}&categories=beach,coast,harbor,lake,port&limit=50`); } catch { list = null; }
+    if (!list || !list.length) list = await grab(`${base}&limit=50`);
+    if (list == null) return null;
     // Boaters need to see the water. Windy's "nearest" list is mostly traffic
     // and city cams (St. Augustine's top hit was an I-95 cam), so a cam is only
     // used when its categories or title say water AND nothing says road.
@@ -2173,6 +2251,8 @@ function summaryTile(id, s, g, nowH, za = null) {
   const precipPct = Math.max(g?.precipPct.get(nowH) ?? 0, g?.precipPct.get(nowH + 1) ?? 0);
   const thunder = g?.thunder.get(nowH) === true || g?.thunder.get(nowH + 1) === true;
   let level = riskLevel(windKt, gustKt, precipPct, thunder ? "thunderstorms" : "", waveFt, periodSec, waterProfile(s));
+  // An overdue NWS grid can't carry a GO: no call ("—") instead.
+  if (level === "GO" && gridStale(g)) level = null;
   // An advisory in effect for the spot's zones now or next hour raises the
   // tile to its level (bar/inlet rule included); one starting within the
   // next few hours (a trip launched now is still out when it begins) leaves
@@ -2286,8 +2366,8 @@ export async function fetchTodayWindows({ landBudget } = {}) {
   const out = {};
   entries.forEach(([id, s], i) => {
     const g = grids[i];
-    // No grid, or the zone alerts couldn't be checked: offer no GO window.
-    if (!g || !zoneAlertsOkFor(za, s)) { out[id] = null; return; }
+    // No grid, an overdue grid, or the zone alerts couldn't be checked: offer no GO window.
+    if (!g || gridStale(g) || !zoneAlertsOkFor(za, s)) { out[id] = null; return; }
     const spotAlerts = zoneAlertsFor(za, s);
     const toLocal = localParts(g.tz);
     const today = toLocal(nowH).date;
@@ -2412,7 +2492,13 @@ export async function onRequest(context) {
 
   // Effective wind: prefer the live buoy, fall back to the NWS forecast so wind
   // is present even when no buoy (and no wave data) is available.
-  const forecastWind = parseForecastWind(point?.[0]);
+  // The daily period that covers NOW. Not blindly point[0]: a stale/cached
+  // NWS forecast can lead with a period that has already ended, and its wind
+  // must not stand in for the current wind. No current period → fall through
+  // to the hourly forecast's current hour (time-filtered) or to "no data".
+  const nowMs = Date.now();
+  const curPeriod = (point || []).find((p) => { const e = Date.parse(p.endTime); return !Number.isFinite(e) || e > nowMs; }) || null;
+  const forecastWind = parseForecastWind(curPeriod);
   // "Now or imminent" rows of the hourly strip (this hour or the next, like the
   // directory tiles), picked by timestamp: the hourly product can lead with
   // hours that have already passed.
@@ -2436,6 +2522,11 @@ export async function onRequest(context) {
     dir: wb?.windDir ?? forecastWind?.dir ?? null,
     station: wb?.windKt != null || wb?.windGustKt != null ? wb.station : null,
     source: wb?.windKt != null ? "buoy" : (forecastWind?.speedKt ?? hourlyNowWind) != null ? "forecast" : null,
+    // What the sustained figure IS, for labels: "buoy" (measured now), "period"
+    // (upper end of the NWS forecast range for `periodName`), "hour" (the NWS
+    // hourly forecast for this hour), null (none).
+    basis: wb?.windKt != null ? "buoy" : forecastWind?.speedKt != null ? "period" : hourlyNowWind != null ? "hour" : null,
+    periodName: wb?.windKt == null && forecastWind?.speedKt != null ? (curPeriod?.name || null) : null,
   };
 
   // Effective waves reflect RIGHT NOW and agree with the hour-by-hour strip,
@@ -2474,14 +2565,44 @@ export async function onRequest(context) {
     airSource: tempsStation?.airTempF != null ? `NDBC ${tempsStation.station}` : buoy?.airTempF != null ? "buoy" : airTempF != null ? "NWS" : null,
   };
 
+  // Freshness: the observation time of every station that actually supplied
+  // wind/gust/waves (the wind can come from windBuoy, a different station than
+  // the primary), and the OLDEST known forecaster update across the NWS
+  // products feeding the call (hourly, daily, grid): conservative when they
+  // disagree. freshness.buoy is the oldest feeding station, so the stale cap
+  // and the page's freshness line name the reading that is actually that old.
+  const obsAge = (o) => (Number.isFinite(Date.parse(o.observedAt)) ? ageMinOf(o.observedAt, nowMs) : o.ageMinutes ?? null);
+  const fedBy = new Map();
+  if (wb && (wind.source === "buoy" || wind.gustSrc === "buoy")) fedBy.set(wb, ["wind"]);
+  if (vb && waves.source === "buoy") fedBy.set(vb, [...(fedBy.get(vb) || []), "waves"]);
+  const buoyStations = [...fedBy].map(([o, feeds]) => ({ station: o.station, feeds, observedAt: o.observedAt || null, ageMinutes: obsAge(o) }));
+  // Oldest first; an unknown age doesn't outrank a known one.
+  const oldestBuoy = [...buoyStations].sort((x, y) => (y.ageMinutes ?? -1) - (x.ageMinutes ?? -1))[0] || null;
+  const issued = [fc.issuedAt?.hourly, fc.issuedAt?.daily, grid?.updateTime].filter(Boolean).sort();
+  const forecastIssuedAt = issued[0] || null;
+  const forecastAgeMin = forecastIssuedAt ? ageMinOf(forecastIssuedAt, nowMs) : null;
+  const buoyAgeMin = oldestBuoy ? oldestBuoy.ageMinutes : null;
+  const freshness = {
+    buoy: oldestBuoy ? { station: oldestBuoy.station, observedAt: oldestBuoy.observedAt, ageMinutes: oldestBuoy.ageMinutes } : null,
+    buoys: buoyStations, // every station feeding the call, with what it fed
+    forecastIssuedAt,
+    forecastAgeMinutes: forecastAgeMin,
+    stale: [
+      ...(buoyAgeMin != null && buoyAgeMin >= STALE_LIMITS.buoyMin ? [{ kind: "buoy", ageMinutes: buoyAgeMin }] : []),
+      ...(forecastAgeMin != null && forecastAgeMin >= STALE_LIMITS.forecastMin ? [{ kind: "forecast", ageMinutes: forecastAgeMin }] : []),
+    ],
+    limits: STALE_LIMITS,
+  };
+
   const read = windReadFor(spot, wind.dir);
-  const recommendation = buildRecommendation({ buoy, alerts, wind, waves, read, hours: hourly, profile, waterF: waterTempF ?? null, spot, alertsOk });
+  const recommendation = buildRecommendation({ buoy, alerts, wind, waves, read, hours: hourly, profile, waterF: waterTempF ?? null, spot, forecastAgeMin, alertsOk, buoyAgeMin });
 
   // Display-only cleanup, AFTER every verdict above is computed from raw data.
   const showPeriod = (ft, sec) => plausiblePeriod(ft, sec);
   return json({
     spot: { id: spotId, name: spot.name, zone: spot.zone, lat: spot.lat, lon: spot.lon, lake: spot.lake || "Lake Erie", adHoc: !!spot.adHoc, zoneName: spot.zoneName || null, built: !!spot.built, slug: spot.slug || null, featured: !!spot.featured },
     updatedAt: new Date().toISOString(),
+    freshness,
     recommendation,
     wind,
     waves: { ...waves, periodSec: showPeriod(waves.ft, waves.periodSec) },

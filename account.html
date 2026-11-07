@@ -12,10 +12,10 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400..800&family=JetBrains+Mono:wght@400..600&display=swap" rel="stylesheet" />
   <script>
-    // Set the theme before first paint to avoid a flash. Defaults to dark.
+    // Set the theme before first paint to avoid a flash. Defaults to the system setting.
     (function () {
       try {
-        var c = localStorage.getItem("theme") || "dark";
+        var c = localStorage.getItem("theme") || "system";
         var eff = c === "system"
           ? (matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark")
           : c;

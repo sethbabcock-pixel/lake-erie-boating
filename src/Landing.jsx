@@ -1,8 +1,11 @@
 import React, { useEffect, useState, useRef } from "react";
 import Takeover from "./Takeover.jsx";
-import { IconStar } from "./icons.jsx";
+import { IconStar, IconPin, IconWave, IconCheck, IconAlert } from "./icons.jsx";
+import VerdictMark from "./VerdictMark.jsx";
+import { scrollBehavior } from "./motion.js";
 import { fmtWaves } from "./units.js";
 import { AdSlot } from "./monetize.jsx";
+import { getSummary } from "./summary.js";
 import { LAKE_ORDER, NEAR_METROS, seasonalRegions, seasonalLakeOrder, regionBySlug, regionGuides } from "./regions.js";
 
 const vclass = (v) => (v === "NO-GO" ? "nogo" : v === "CAUTION" ? "caution" : v === "GO" ? "go" : "unknown");
@@ -61,8 +64,11 @@ const comfortFlag = (prefs, s) => {
   return over.length ? { ok: false, text: `Over your ${over.join(" & ")} limit` } : { ok: true, text: "Within your limits" };
 };
 
+// The boater's "home" port: first starred port, else the last spot they opened.
+const homeIdFor = (favorites) => (favorites || [])[0] || (() => { try { return localStorage.getItem("boating.spot"); } catch (e) { return null; } })();
+
 function StatusChip({ level }) {
-  return <span className={`loc-status ${level ? vclass(level) : "unknown"}`}>{level || "—"}</span>;
+  return <span className={`loc-status ${level ? vclass(level) : "unknown"}`}><VerdictMark level={level} /></span>;
 }
 
 function LocCard({ s, onSelect }) {
@@ -83,7 +89,7 @@ function LocCard({ s, onSelect }) {
 // location" to rank the nearest launches, and — when nothing's covered — build
 // a live NOAA page for that exact place (routing through the account gate).
 // Absorbs what used to be a second "find or build" card lower on the page.
-function SplashSearch({ summary, favorites, onSelect, onPreview, onRequest, onLocate }) {
+function SplashSearch({ summary, favorites, onSelect, onPreview, onRequest, onLocate, refPt }) {
   const [q, setQ] = useState("");
   const [focused, setFocused] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -100,7 +106,7 @@ function SplashSearch({ summary, favorites, onSelect, onPreview, onRequest, onLo
   const canBuild = ql.length >= 2;
   // Returning visitor: their home port (first star) or the last spot they
   // opened, with its live verdict, one tap from the fold.
-  const homeId = (favorites || [])[0] || (() => { try { return localStorage.getItem("boating.spot"); } catch (e) { return null; } })();
+  const homeId = homeIdFor(favorites);
   const home = homeId ? (summary || []).find((s) => s.id === homeId) : null;
 
   useEffect(() => {
@@ -177,7 +183,7 @@ function SplashSearch({ summary, favorites, onSelect, onPreview, onRequest, onLo
         <button className="splash-go" type="submit" disabled={busy}>{busy ? "…" : "Search"}</button>
       </form>
       <div className="splash-quick">
-        <button type="button" className="splash-near" onClick={useMyLocation} disabled={busy}>📍 Near me</button>
+        <button type="button" className="splash-near" onClick={useMyLocation} disabled={busy}><IconPin /> Near me</button>
         {home && (
           <button type="button" className="splash-home" onClick={() => onSelect(home.id)} title={`Open ${home.name}`}>
             <StatusChip level={home.level} />
@@ -204,7 +210,7 @@ function SplashSearch({ summary, favorites, onSelect, onPreview, onRequest, onLo
                 ))}
                 {onPreview && (
                   <button className="splash-opt splash-build" onClick={buildPoint}>
-                    🌊 Or build a live page for this exact spot →
+                    <IconWave /> Or build a live page for this exact spot →
                   </button>
                 )}
               </>
@@ -219,7 +225,7 @@ function SplashSearch({ summary, favorites, onSelect, onPreview, onRequest, onLo
                 )}
                 {onPreview && (
                   <button className="splash-opt splash-build" onClick={buildPoint}>
-                    🌊 Or build a live page for {label} straight from NOAA →
+                    <IconWave /> Or build a live page for {label} straight from NOAA →
                   </button>
                 )}
               </>
@@ -228,13 +234,13 @@ function SplashSearch({ summary, favorites, onSelect, onPreview, onRequest, onLo
             <>
               {matches.map((s) => (
                 <button key={s.id} className="splash-opt" onClick={() => onSelect(s.id)}>
-                  <span className="splash-opt-main">{s.name} <em className="splash-lake">{s.lake}</em></span>
+                  <span className="splash-opt-main">{s.name} <em className="splash-lake">{s.lake}{refPt && s.lat != null ? ` · ${Math.round(haversineMi(refPt, s))} mi` : ""}</em></span>
                   <StatusChip level={s.level} />
                 </button>
               ))}
               {canBuild && (
                 <button className="splash-opt splash-build" onClick={() => geocodeSearch(q.trim())} disabled={busy}>
-                  {busy ? "Searching…" : <>📍 Find the closest launches to “{q.trim()}” →</>}
+                  {busy ? "Searching…" : <><IconPin /> Find the closest launches to “{q.trim()}” →</>}
                 </button>
               )}
               {matches.length === 0 && !busy && (
@@ -245,7 +251,7 @@ function SplashSearch({ summary, favorites, onSelect, onPreview, onRequest, onLo
             </>
           ) : (
             <>
-              <button className="splash-opt splash-loc" onClick={useMyLocation} disabled={busy}>📍 Use my location</button>
+              <button className="splash-opt splash-loc" onClick={useMyLocation} disabled={busy}><IconPin /> Use my location</button>
               {favCards.length > 0 ? (
                 <>
                   <div className="splash-phead"><IconStar filled /> Your ports</div>
@@ -318,7 +324,7 @@ function RegionDirectory({ summary, q, onSelect, deepLake, region, onRegion }) {
   useEffect(() => {
     if (!deepLake || summary == null) return;
     const el = document.getElementById(`lake-${deepLake.toLowerCase().replace(/\s+/g, "-")}`);
-    if (el) setTimeout(() => el.scrollIntoView({ behavior: "smooth", block: "start" }), 150);
+    if (el) setTimeout(() => el.scrollIntoView({ behavior: scrollBehavior(), block: "start" }), 150);
   }, [deepLake, summary == null]);
   const tally = (list) => {
     const c = { GO: 0, CAUTION: 0, "NO-GO": 0 };
@@ -478,7 +484,7 @@ function NearCard({ s, mi, prefs, onSelect }) {
         {s.windKt != null ? <>{s.windKt} kt{s.dir ? ` ${s.dir}` : ""}</> : "—"}
         {s.waveFt != null ? <> · {fmtWaves(s.waveFt, s.periodSec)}</> : null}
       </div>
-      {flag && <div className={`nearflag ${flag.ok ? "ok" : "over"}`}>{flag.ok ? "✓ " : "⚠ "}{flag.text}</div>}
+      {flag && <div className={`nearflag ${flag.ok ? "ok" : "over"}`}>{flag.ok ? <IconCheck /> : <IconAlert />} {flag.text}</div>}
     </button>
   );
 }
@@ -506,7 +512,7 @@ function NearYou({ summary, pt, prefs, onSelect, heading, limit = 6, radius = CO
     : <><b>Stay in today:</b> {nogo} of {n} launches near {label} {nogo === 1 ? "is" : "are"} NO-GO right now and the rest have no reading. Check the week ahead on each launch for a better day.</>;
   return (
     <section className="directory nearyou">
-      <h2 className="directory-title">📍 {heading || <>Best bets near {label}</>}</h2>
+      <h2 className="directory-title"><IconPin /> {heading || <>Best bets near {label}</>}</h2>
       {answer && <p className="near-answer">{answer}</p>}
       <p className="directory-blurb" style={{ margin: "0 0 var(--s3)" }}>
         Best conditions first{prefs && (prefs.maxWaveFt != null || prefs.maxWindKt != null) ? ", flagged against your comfort limits" : ""}. Drive times are rough estimates.
@@ -592,6 +598,35 @@ function GuidesTeaser() {
   );
 }
 
+// "Right now" strip: live verdict chips for the boater's starred ports,
+// topped up with a few popular launches. Reads only the directory summary the
+// page already loads; a spot without a live level shows "No data", never a default.
+const POPULAR_IDS = ["cleveland", "chicago", "tampa-bay", "san-diego", "galveston"];
+function RightNow({ summary, favorites, skipId, onSelect }) {
+  if (!summary || !summary.length) return null;
+  const byId = new Map(summary.map((s) => [s.id, s]));
+  const ids = [];
+  const add = (id) => { if (id && id !== skipId && byId.has(id) && !ids.includes(id)) ids.push(id); };
+  (favorites || []).forEach(add);
+  const mine = Math.min(ids.length, 3);
+  POPULAR_IDS.forEach((id) => { if (ids.length < mine + 3) add(id); });
+  const chips = ids.slice(0, 6).map((id) => byId.get(id));
+  if (!chips.length) return null;
+  return (
+    <section className="rightnow" aria-label="Right now">
+      <h2 className="rightnow-title">Right now <span>{mine ? "your ports + popular launches" : "popular launches"}</span></h2>
+      <div className="rightnow-row">
+        {chips.map((s) => (
+          <button key={s.id} type="button" className="rightnow-chip" onClick={() => onSelect(s.id)}>
+            <span className="rightnow-name">{s.name}</span>
+            {s.level ? <StatusChip level={s.level} /> : <span className="loc-status unknown">No data</span>}
+          </button>
+        ))}
+      </div>
+    </section>
+  );
+}
+
 // Remembered "near me" point — the last place the boater searched or located
 // from, so a returning inland visitor gets their launches without re-typing.
 const NEARPT_KEY = "boating.nearpt";
@@ -617,17 +652,14 @@ export default function Landing({ adFree, showAds, onSelect, favorites, onCookie
   const openRequest = (name = "") => {
     setReqPrefill(name);
     setReqToken((n) => n + 1);
-    setTimeout(() => document.getElementById("request-location")?.scrollIntoView({ behavior: "smooth", block: "center" }), 60);
+    setTimeout(() => document.getElementById("request-location")?.scrollIntoView({ behavior: scrollBehavior(), block: "center" }), 60);
   };
   const deepLake = lakeParam();
   // A city page focuses the directory (and any regional sponsor) on its region.
   const dirRegion = region || (metro ? regionBySlug(metro.region) : null);
   useEffect(() => {
     let alive = true;
-    fetch("/marine/conditions?summary")
-      .then((r) => (r.ok ? r.json() : null))
-      .then((d) => { if (alive) setSummary((d && d.spots) || []); })
-      .catch(() => { if (alive) setSummary([]); });
+    getSummary().then((list) => { if (alive) setSummary(list); });
     return () => { alive = false; };
   }, []);
   // A region page (/greatlakes, /florida…) leads with its own subject and live
@@ -647,7 +679,8 @@ export default function Landing({ adFree, showAds, onSelect, favorites, onCookie
         subtitle={metro ? "The closest launches, best conditions first, with a live GO / CAUTION / NO-GO call from NOAA for each."
           : regionPage ? (regionTally || regionPage.blurb) : null}>
         <SplashSearch summary={summary} favorites={favorites}
-          onSelect={onSelect} onPreview={onPreview} onRequest={openRequest} onLocate={rememberPt} />
+          onSelect={onSelect} onPreview={onPreview} onRequest={openRequest} onLocate={rememberPt}
+          refPt={nearPt && nearPt.lat != null && nearPt.lon != null ? nearPt : null} />
       </Takeover>
       <main className="app">
         {/* City pages lead with the answer: the closest launches. */}
@@ -656,9 +689,10 @@ export default function Landing({ adFree, showAds, onSelect, favorites, onCookie
             heading={<>Closest launches to {metro.name}</>} />
         )}
         {regionPage && directory}
+        {!metro && !regionPage && <RightNow summary={summary} favorites={favorites} skipId={homeIdFor(favorites)} onSelect={onSelect} />}
         {onJoin && (
           <div className="joinstrip">
-            <span><b>Every verdict, forecast and cam here is free.</b> A free account adds ⭐ saved ports, your ports' verdict by email at 6am, and NO-GO alerts.</span>
+            <span><b>Every verdict, forecast and cam here is free.</b> A free account adds <IconStar filled /> saved ports, your ports' verdict by email at 6am, and NO-GO alerts.</span>
             <div className="joinstrip-actions">
               <button className="cbtn" onClick={onJoin}>Create free account</button>
               {onSignIn && <button className="linklike joinstrip-signin" onClick={onSignIn}>Already have an account? Sign in</button>}

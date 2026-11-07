@@ -23,6 +23,14 @@
     .cau { background:rgba(169,131,28,.16); color:#9a7212; }
     .nogo { background:rgba(192,57,43,.14); color:#c0392b; }
     footer { color:var(--muted); font-size:.85rem; margin-top:28px; }
+    @media (prefers-color-scheme: dark) {
+      :root { color-scheme:dark; --navy:#8FD3EA; --teal:#4AC6E0; --green:#33CC99; --ink:#EAF2F8; --muted:#9FB6C9; --bg:#07182B; --border:#1F405F; }
+      p, li { color:#C9D8E4; }
+      .card { background:#0F2942; }
+      .go { background:rgba(51,204,153,.16); }
+      .cau { background:rgba(227,192,74,.16); color:#E3C04A; }
+      .nogo { background:rgba(240,138,118,.16); color:#F08A76; }
+    }
   </style>
   <!-- Google AdSense — site review + ad serving. Consent Mode v2 default (denied
        unless the visitor accepted on the main app) runs before the ad library. -->

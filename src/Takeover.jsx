@@ -3,6 +3,8 @@ import { activeTakeover, GAM } from "./sponsor.js";
 import { loadSiteConfig } from "./siteConfig.js";
 import { pickCampaign } from "./sponsor-target.js";
 import { regionBySlug } from "./regions.js";
+import { readableOn } from "./contrast.js";
+import { spotPhoto } from "./spot-photos.js";
 
 // The hero photo for a page: the region's own upload, else the coastal
 // illustration for warm-water regions (the main photo is a Great Lakes scene),
@@ -76,7 +78,10 @@ function SponsorSkin({ s }) {
   const bg = s.bgImage ? `${s.bg || "#102036"} url(${s.bgImage}) center/cover no-repeat` : s.bg;
   // The /advertise sample (no id) gets a plain, non-clickable background: a
   // full-page click target beside real ad units invites accidental clicks.
-  if (!s.id) return <div className="takeover-skin" aria-hidden="true" style={{ background: bg }} />;
+  // Touch devices (no hover / coarse pointer) get the same plain background:
+  // edge mis-taps must never open a sponsor. Desktop keeps the click-through.
+  const touch = typeof window !== "undefined" && window.matchMedia && window.matchMedia("(hover: none), (pointer: coarse)").matches;
+  if (!s.id || touch) return <div className="takeover-skin" aria-hidden="true" style={{ background: bg }} />;
   return (
     <a className="takeover-skin" href={s.href} target="_blank" rel="sponsored noopener" onClick={() => sponsorHit(s.id, "c")}
       aria-label={`${s.sponsor} sponsor`} style={{ background: bg }} />
@@ -84,7 +89,10 @@ function SponsorSkin({ s }) {
 }
 
 function SponsorHero({ s, splash, children }) {
-  const fg = s.fg || "#ffffff";
+  // Contrast guard: a sponsor's text colour that fails AA (4.5:1) on its
+  // background is replaced by white or near-black, whichever passes.
+  const fg = readableOn(s.fg || "#ffffff", s.bg || "#102036");
+  const ctaFg = readableOn(s.accentFg || "#11151c", s.accent || "#ffffff");
   const background = s.bgImage
     ? `linear-gradient(90deg, ${s.bg || "#102036"} 12%, color-mix(in srgb, ${s.bg || "#102036"} 40%, transparent) 100%), url(${s.bgImage}) center/cover no-repeat`
     : s.bg;
@@ -92,19 +100,21 @@ function SponsorHero({ s, splash, children }) {
     <section className={`hero hero-sponsor${splash ? " hero-splash" : ""}`} style={{ background, color: fg }}>
       <a className="hero-inner hero-sponsor-link" href={s.href} target="_blank" rel="sponsored noopener" style={{ color: fg }} onClick={() => sponsorHit(s.id, "c")}>
         <div className="hero-text">
-          <div className="hero-eyebrow">{s.eyebrow || "Sponsored"}</div>
+          <div className="hero-eyebrow">
+            <span className="hero-sponsored">Sponsored</span>
+            {s.eyebrow && s.eyebrow.trim().toLowerCase() !== "sponsored" && <span className="hero-eyebrow-text">{s.eyebrow}</span>}
+          </div>
           {s.logo && <img className="hero-logo" src={s.logo} alt={s.sponsor} />}
           <h2 className="hero-title">{s.headline}</h2>
           {s.sub && <p className="hero-subtitle">{s.sub}</p>}
         </div>
         {s.cta && (
-          <span className="hero-cta" style={{ background: s.accent || "#ffffff", color: s.accentFg || "#11151c" }}>
+          <span className="hero-cta" style={{ background: s.accent || "#ffffff", color: ctaFg }}>
             {s.cta} →
           </span>
         )}
       </a>
       {children && <div className="hero-inner hero-splash-slot">{children}</div>}
-      <span className="hero-adlabel">Ad</span>
     </section>
   );
 }
@@ -112,8 +122,46 @@ function SponsorHero({ s, splash, children }) {
 // ── House hero (brand band over the hero photo or video) ─────────────────────
 // title / subtitle replace the admin headline on pages with their own subject
 // (a /near/<city> page reads "Boating near Cleveland, OH").
-function HouseHero({ hero, spotName, verdict, adFree, splash, children, signedIn, onJoin, title, subtitle, region, authPending }) {
+function HouseHero({ hero, spotName, verdict, adFree, splash, children, signedIn, onJoin, title, subtitle, region, authPending, spot }) {
   const h = { ...DEFAULT_HERO, ...(hero || {}) };
+  // Spot pages get a compact title band: the verdict card right below is the
+  // headline, so no second verdict badge. With a photo of that launch (or its
+  // region) the band sits on it; without one it's a plain title, never a
+  // photo of somewhere else.
+  if (!splash) {
+    const parts = (h.headline || DEFAULT_HERO.headline).split("{spot}");
+    const pic = spotPhoto(h, spot, region || null);
+    return (
+      <section className={`hero hero-band${pic ? " has-photo" : ""}`}>
+        {pic && <img className="hero-band-img" src={pic.src} alt="" fetchpriority="high" decoding="async" referrerPolicy="no-referrer" />}
+        <div className="hero-inner">
+          <div className="hero-band-text">
+            <div className="hero-eyebrow">Live conditions · NOAA / NWS data</div>
+            {title ? <h1 className="hero-title">{title}</h1> : <h1 className="hero-title">
+              {parts[0]}
+              {parts.length > 1 && spotName ? <> at {spotName}</> : ""}
+              {parts[1] ?? ""}
+            </h1>}
+            {subtitle && <p className="hero-subtitle">{subtitle}</p>}
+          </div>
+          {authPending && <span className="hero-housecta hero-cta-pending" aria-hidden="true">&nbsp;</span>}
+          {!authPending && !signedIn && onJoin && (
+            <button className="hero-housecta linkbtn" onClick={onJoin}>Get this port's 6am verdict by email, free →</button>
+          )}
+          {!authPending && signedIn && !adFree && <a className="hero-housecta" href="/account#pro">Go Pro: no Google ads + GO alerts →</a>}
+        </div>
+        {pic && pic.credit && (
+          // Attribution (TASL): title + author linked to the file page, the
+          // license linked to its deed, and a note of our changes.
+          <p className="hero-band-credit">
+            Photo: <a href={pic.source} target="_blank" rel="noopener">{pic.title ? <>“{pic.title}”{pic.title.includes(pic.credit) ? "" : <> by {pic.credit}</>}</> : pic.credit}</a>
+            {pic.license ? <> · {pic.licenseUrl ? <a href={pic.licenseUrl} target="_blank" rel="noopener license">{pic.license}</a> : pic.license}</> : null}
+            {" · cropped, darkened"}
+          </p>
+        )}
+      </section>
+    );
+  }
   const photo = heroImageFor(h, region);
   // A hero video belongs to the main hero; a regional photo replaces it.
   const pending = region === undefined; // keep the photo styling; image arrives once the region is known
@@ -203,6 +251,6 @@ export default function Takeover({ adFree, spotName, verdict, splash = false, ch
       </section>
     );
   }
-  return <HouseHero hero={cfg.hero} spotName={spotName} verdict={verdict} adFree={adFree} splash={splash} signedIn={signedIn} onJoin={onJoin}
+  return <HouseHero hero={cfg.hero} spot={spot} spotName={spotName} verdict={verdict} adFree={adFree} splash={splash} signedIn={signedIn} onJoin={onJoin}
     title={title} subtitle={subtitle} region={region} authPending={authPending}>{splash ? children : null}</HouseHero>;
 }

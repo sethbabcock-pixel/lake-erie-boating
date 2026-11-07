@@ -1,12 +1,15 @@
 import React, { useEffect, useRef, useState } from "react";
 import Cams from "./Cams.jsx";
 import WxIcon from "./WxIcon.jsx";
-import { IconStar, IconCheck, IconClock, IconNoGo, IconAlert, IconSunrise, IconSunset, IconDoc, IconRefresh } from "./icons.jsx";
+import { IconStar, IconCheck, IconClock, IconNoGo, IconAlert, IconSunrise, IconSunset, IconDoc, IconRefresh, IconWave } from "./icons.jsx";
 import { useAdsense, useAnalytics, getConsent, updateConsentMode, AdSlot, GearBlock, ConsentBanner, StickyFooterAd, track } from "./monetize.jsx";
 import { useAuth, Account, AuthModal } from "./auth.jsx";
 import { UpgradeModal } from "./Pro.jsx";
+import VerdictMark, { VerdictIcon } from "./VerdictMark.jsx";
+import { scrollBehavior, pauseVideosIfReduced } from "./motion.js";
 import Takeover from "./Takeover.jsx";
 import Landing from "./Landing.jsx";
+import { getSummary, milesBetween } from "./summary.js";
 import { fmtWaves, waveFeel, compassToDeg } from "./units.js";
 import { regionBySlug, regionFromPath, regionForLake, nearMetroBySlug, nearMetroFromPath, LAKE_GUIDES } from "./regions.js";
 
@@ -15,6 +18,14 @@ const fmt = (v, unit) => (v == null ? "—" : `${v}${unit || ""}`);
 const kt = (v) => (v == null ? null : Math.round(v));
 // No level = no call (missing data): neutral, never painted as GO.
 const verdictClass = (lvl) => (lvl === "NO-GO" ? "nogo" : lvl === "CAUTION" ? "caution" : lvl === "GO" ? "go" : "unknown");
+// The headline call as shown. A CAUTION that exists only because no wind or
+// wave data arrived (rec.noData from the server) is shown as a neutral
+// "NO DATA" state, so "we can't see conditions" never looks like "conditions
+// are marginal" and never like GO. The level itself is unchanged (CAUTION in
+// the API, emails and tiles).
+const NO_DATA_LABEL = "NO DATA";
+const recClass = (rec) => (rec && rec.noData ? "unknown" : verdictClass(rec && rec.level));
+const recLabel = (rec) => (rec && rec.noData ? NO_DATA_LABEL : rec ? rec.level : null);
 const fmtHour = (t, withMin) =>
   new Date(t).toLocaleTimeString([], withMin ? { hour: "numeric", minute: "2-digit" } : { hour: "numeric" });
 
@@ -159,10 +170,10 @@ function RawNSH({ text }) {
   );
 }
 
-// Theme choice: "dark" | "light" | "system" (default DARK).
+// Theme choice: "dark" | "light" | "system" (default SYSTEM; explicit choice is remembered).
 function useTheme() {
   const [choice, setChoice] = useState(() => {
-    try { return localStorage.getItem("theme") || "dark"; } catch (e) { return "dark"; }
+    try { return localStorage.getItem("theme") || "system"; } catch (e) { return "system"; }
   });
   const [effective, setEffective] = useState(
     () => document.documentElement.getAttribute("data-theme") || "dark"
@@ -206,7 +217,7 @@ function ThemeToggle({ effective, onToggle }) {
 }
 
 // Custom, searchable, lake-grouped location picker (replaces the bland select).
-function LocationPicker({ byLake, active, activeName, onSelect, favorites = [], onToggleFav, onBuild }) {
+function LocationPicker({ byLake, active, activeName, onSelect, favorites = [], onToggleFav, onBuild, live, from }) {
   const [open, setOpen] = useState(false);
   const [q, setQ] = useState("");
   const [busy, setBusy] = useState(false);
@@ -216,17 +227,26 @@ function LocationPicker({ byLake, active, activeName, onSelect, favorites = [], 
   const favSet = new Set(favorites);
   const allSpots = Object.values(byLake).flat();
   const favSpots = favorites.map((id) => allSpots.find((s) => s.id === id)).filter(Boolean);
-  const Row = (s) => (
+  // `live` = directory summary (verdict per spot) when already loaded; `from` =
+  // reference point for distance (the spot being viewed). Both optional.
+  const Row = (s) => {
+    const l = live && live.get(s.id);
+    const mi = from && s.id !== active ? milesBetween(from, l || s) : null;
+    return (
     <div key={s.id} className={`locpick-item ${s.id === active ? "active" : ""}`}>
       <button className="locpick-pick" onClick={() => { onSelect(s.id); setOpen(false); setQ(""); }}>
-        <span>{s.name}</span>{s.id === active && <span className="check"><IconCheck /></span>}
+        <span className="lp-name">{s.name}</span>
+        {mi != null && <span className="lp-mi">{Math.round(mi)} mi</span>}
+        {l && l.level && <span className={`loc-status ${verdictClass(l.level)}`}>{l.level}</span>}
+        {s.id === active && <span className="check"><IconCheck /></span>}
       </button>
       {onToggleFav && (
         <button className={`favstar ${favSet.has(s.id) ? "on" : ""}`} title="Favorite"
           onClick={(e) => { e.stopPropagation(); onToggleFav(s.id); }}><IconStar filled={favSet.has(s.id)} /></button>
       )}
     </div>
-  );
+    );
+  };
   useEffect(() => {
     if (!open) return;
     const onDoc = (e) => { if (ref.current && !ref.current.contains(e.target)) setOpen(false); };
@@ -307,7 +327,7 @@ function LocationPicker({ byLake, active, activeName, onSelect, favorites = [], 
           {onBuild && ql.length >= 2 && (
             <div className="locpick-build">
               <button className="locpick-buildbtn" onClick={buildFromSearch} disabled={busy}>
-                {busy ? "Looking up…" : <>🌊 Build a live page for “{q.trim()}” →</>}
+                {busy ? "Looking up…" : <><IconWave /> Build a live page for “{q.trim()}” →</>}
               </button>
               {err && <div className="locpick-err">{err}</div>}
             </div>
@@ -336,7 +356,7 @@ function GlanceBand({ hours }) {
   const jumpTo = (time) => {
     const tile = document.querySelector(`[data-t="${time}"]`);
     if (!tile) return;
-    tile.scrollIntoView({ behavior: "smooth", inline: "center", block: "nearest" });
+    tile.scrollIntoView({ behavior: scrollBehavior(), inline: "center", block: "nearest" });
     tile.classList.add("pulse");
     setTimeout(() => tile.classList.remove("pulse"), 1600);
   };
@@ -348,7 +368,9 @@ function GlanceBand({ hours }) {
           <button key={h.time} onClick={() => jumpTo(h.time)}
             className={`gb ${verdictClass(h.level)} ${best && i >= best.from && i <= best.to ? "best" : ""}`}
             title={`${fmtHour(h.time)} · ${h.level ?? "no data"}, see the detail`}
-            aria-label={`${fmtHour(h.time)}: ${h.level ?? "no data"}. Jump to hour detail.`} />
+            aria-label={`${fmtHour(h.time)}: ${h.level ?? "no data"}. Jump to hour detail.`}>
+            <VerdictIcon level={h.level} size="12px" />
+          </button>
         ))}
       </div>
       <div className="glance-x">
@@ -372,35 +394,29 @@ const Trend = ({ t }) => (t ? <span className={`trend ${t.cls}`}>{t.glyph} {t.wo
 
 // Same-lake pivot: every other port on this lake with its live verdict.
 // "This launch is rough — where's it calmer?" answered without leaving the page.
-function NearbyPorts({ lake, current, from, onSelect }) {
-  const [sum, setSum] = useState(null);
-  useEffect(() => {
-    let ok = true;
-    fetch("/marine/conditions?summary")
-      .then((r) => (r.ok ? r.json() : null))
-      .then((d) => { if (ok) setSum((d && d.spots) || []); })
-      .catch(() => { if (ok) setSum([]); });
-    return () => { ok = false; };
-  }, []);
+function NearbyPorts({ lake, current, from, onSelect, sum, level, promoted }) {
   const order = { GO: 0, CAUTION: 1, "NO-GO": 2 };
   const milesTo = (a, b) => {
-    if (!a || a.lat == null || b.lat == null) return "";
-    const R = 3958.8, rad = (d) => (d * Math.PI) / 180;
-    const h = Math.sin(rad(b.lat - a.lat) / 2) ** 2 + Math.cos(rad(a.lat)) * Math.cos(rad(b.lat)) * Math.sin(rad(b.lon - a.lon) / 2) ** 2;
-    return ` · ${Math.round(2 * R * Math.asin(Math.sqrt(h)))} mi`;
+    const m = milesBetween(a, b);
+    return m == null ? "" : ` · ${Math.round(m)} mi`;
   };
-  const near = (sum || [])
+  const dist = (s) => milesBetween(from, s) ?? 1e9;
+  let near = (sum || [])
     .filter((s) => (s.lake || "Lake Erie") === lake && s.id !== current)
-    .sort((a, b) => (order[a.level] ?? 3) - (order[b.level] ?? 3));
+    .sort((a, b) => (order[a.level] ?? 3) - (order[b.level] ?? 3) || dist(a) - dist(b));
+  if (promoted) near = near.slice(0, 8);
   if (!near.length) return null;
+  // Only suggest a switch when something is actually better than here.
+  const better = order[level] != null && near.some((s) => (order[s.level] ?? 3) < order[level]);
   return (
-    <section className="card nearby">
-      <div className="card-head"><h2>Nearby on {lake}</h2><span className="legend">calmer launch? tap to switch</span></div>
+    <section className={`card nearby${promoted ? " nearby-promoted" : ""}`}>
+      <div className="card-head"><h2>Nearby on {lake}</h2><span className="legend">{promoted && order[level] != null && !better ? "none calmer right now" : "calmer launch? tap to switch"}</span></div>
       <div className="nearby-row">
         {near.map((s) => (
           <button key={s.id} className="nearby-chip" onClick={() => onSelect(s.id)}>
             <span className={`ndot ${verdictClass(s.level)}`} />
             <span className="nname">{s.name}</span>
+            <span className={`nlevel ${verdictClass(s.level)}`}>{s.level || "No data"}</span>
             <small>{s.windKt != null ? `${s.windKt}kt` : "—"}{s.waveFt != null ? ` · ${s.waveFt}ft${s.periodSec ? `@${s.periodSec}s` : ""}` : ""}{milesTo(from, s)}</small>
           </button>
         ))}
@@ -426,6 +442,79 @@ function obsAge(ld) {
   if (m == null) return null;
   return m < 60 ? `${m} min ago` : `${Math.floor(m / 60)} h${m % 60 ? ` ${m % 60} min` : ""} ago`;
 }
+// ── Freshness (N2) ──────────────────────────────────────────────────────────
+// Stale limits come from the server (functions/marine/conditions.js
+// STALE_LIMITS, documented in docs/forecast/freshness-and-wind-labels.md); these
+// are the fallback for a response cached from before the field existed.
+const STALE_FALLBACK = { buoyMin: 120, forecastMin: 18 * 60, pageMin: 30 };
+const minsSince = (iso, now) => { const t = Date.parse(iso); return Number.isFinite(t) ? Math.max(0, Math.round((now - t) / 60000)) : null; };
+const fmtMins = (m) => (m < 60 ? `${m} min` : m < 48 * 60 ? `${Math.floor(m / 60)} h${m % 60 ? ` ${m % 60} min` : ""}` : `${Math.round(m / 1440)} days`);
+function fmtIssued(iso, now) {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return null;
+  const t = d.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+  return new Date(now).toDateString() === d.toDateString() ? t : `${d.toLocaleDateString([], { month: "short", day: "numeric" })}, ${t}`;
+}
+// Ages are recomputed from timestamps against `now` (ticks each minute), so a
+// tab left open keeps counting instead of freezing at load time. The browser
+// never changes the level; it only labels and warns.
+function freshnessOf(data, now) {
+  const f = data.freshness || {};
+  const lim = { ...STALE_FALLBACK, ...(f.limits || {}) };
+  const wind = data.wind || {}, wv = data.waves || {};
+  // Older responses have no `freshness`: fall back to the buoy object.
+  const b = f.buoy || (data.buoy && (wind.source === "buoy" || wind.gustSrc === "buoy" || wv.source === "buoy")
+    ? { station: data.buoy.station, observedAt: data.buoy.observedAt, ageMinutes: data.buoy.ageMinutes } : null);
+  const buoyAge = b ? (minsSince(b.observedAt, now) ?? b.ageMinutes ?? null) : null;
+  const fcAge = f.forecastIssuedAt ? minsSince(f.forecastIssuedAt, now) : null;
+  const pageAge = minsSince(data.updatedAt, now);
+  const stale = [];
+  if (buoyAge != null && buoyAge >= lim.buoyMin) stale.push({ kind: "buoy", age: buoyAge, what: `buoy ${b.station} reading` });
+  if (fcAge != null && fcAge >= lim.forecastMin) stale.push({ kind: "forecast", age: fcAge, what: "NWS forecast" });
+  if (pageAge != null && pageAge >= lim.pageMin) stale.push({ kind: "page", age: pageAge, what: "this page" });
+  stale.sort((x, y) => y.age - x.age);
+  return { buoy: b, buoyAge, fcIssued: f.forecastIssuedAt || null, fcAge, pageAge, stale };
+}
+// One line under the verdict summary: what the call is built on and how old.
+// "Buoy 45005 · 12 min ago · NWS forecast issued 4:10 AM"
+function FreshLine({ data, rec, fr, now }) {
+  const wind = data.wind || {}, wv = data.waves || {};
+  const parts = [];
+  if (fr.buoy) {
+    const feeds = [wind.source === "buoy" || wind.gustSrc === "buoy" ? "wind" : null, wv.source === "buoy" ? "waves" : null].filter(Boolean);
+    parts.push(`Buoy ${fr.buoy.station}${feeds.length === 1 ? ` (${feeds[0]})` : ""} · ${fr.buoyAge != null ? `${fmtMins(fr.buoyAge)} ago` : "time unknown"}`);
+  } else if (!rec.noData) parts.push("No live buoy: forecast only");
+  const iss = fr.fcIssued ? fmtIssued(fr.fcIssued, now) : null;
+  if (rec.noData) parts.push("No wind or wave data received");
+  else parts.push(iss ? `NWS forecast issued ${iss}` : "NWS forecast (issue time not given)");
+  parts.push(`checked ${new Date(data.updatedAt).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}`);
+  return <div className="freshline">{parts.join(" · ")}</div>;
+}
+// Amber notice when any input is over its stale limit. Never changes the level.
+function StaleNotice({ fr, onRefresh }) {
+  if (!fr.stale.length) return null;
+  const worst = fr.stale[0];
+  const lead = worst.kind === "page"
+    ? `This page loaded ${fmtMins(worst.age)} ago`
+    : `Data is ${fmtMins(worst.age)} old (${worst.what})`;
+  return (
+    <div className="stale-note" role="status">
+      <IconAlert /> <span><b>{lead}.</b> Check before you go.</span>
+      {onRefresh && <button className="linklike" onClick={onRefresh}><IconRefresh /> Refresh</button>}
+    </div>
+  );
+}
+// What the WIND tile's big number is, in plain words.
+function windBasisText(wind, fr) {
+  if (wind.source === "buoy") {
+    const st = fr.buoy && fr.buoy.station;
+    return [`buoy${st ? ` ${st}` : ""}`, fr.buoyAge != null ? `${fmtMins(fr.buoyAge)} ago` : null].filter(Boolean).join(", ");
+  }
+  if (wind.basis === "period") return `NWS forecast${wind.periodName ? `, ${wind.periodName.toLowerCase()}` : ""} (top of range)`;
+  if (wind.source === "forecast") return "NWS forecast, this hour";
+  return null;
+}
+
 const notReported = (ids) => <>{stationList(ids)} {ids.length > 1 ? "haven't" : "hasn't"} reported wind or waves in the last 3 hours</>;
 function BuoyFact({ facts }) {
   const buoys = facts.buoys || [];
@@ -493,7 +582,9 @@ function ShareButton({ spot, rec, wind, wv }) {
   const [copied, setCopied] = useState(false);
   const share = async () => {
     track("event", "share_verdict", { spot: spot.id, level: rec.level });
-    const text = `${spot.name}: ${rec.level} right now. Wind ${kt(wind.speedKt) ?? "–"} kt, waves ${wv.ft ?? "–"} ft.`;
+    const text = rec.noData
+      ? `${spot.name}: no live wind or wave data right now. Check the NWS marine forecast.`
+      : `${spot.name}: ${rec.level} right now. Wind ${kt(wind.speedKt) ?? "–"} kt${wind.gustKt != null && kt(wind.gustKt) > (kt(wind.speedKt) ?? -1) ? `, gusts ${kt(wind.gustKt)}` : ""}, waves ${wv.ft ?? "–"} ft.`;
     const url = spot.adHoc
       ? `https://shouldiboat.com/preview?lat=${spot.lat}&lon=${spot.lon}&name=${encodeURIComponent(spot.name)}`
       : `https://shouldiboat.com/spot/${encodeURIComponent(spot.id)}`;
@@ -524,10 +615,10 @@ function WrongCallLink({ spot, rec, wind, wv, updatedAt }) {
   const url = spot.adHoc
     ? `https://shouldiboat.com/preview?lat=${spot.lat}&lon=${spot.lon}&name=${encodeURIComponent(spot.name)}`
     : `https://shouldiboat.com/spot/${encodeURIComponent(spot.id)}`;
-  const subject = `Wrong call? ${spot.name}: ${rec.level}`;
+  const subject = `Wrong call? ${spot.name}: ${recLabel(rec)}`;
   const body = [
     `Spot: ${spot.name} (${spot.id})`,
-    `Our call: ${rec.level}`,
+    `Our call: ${rec.noData ? `${NO_DATA_LABEL} (level ${rec.level})` : rec.level}`,
     `Wind ${kt(wind?.speedKt) ?? "–"} kt${wind?.gustKt != null ? `, gusts ${kt(wind.gustKt)} kt` : ""}; waves ${wv?.ft ?? "–"} ft`,
     `Data updated: ${updatedAt ? new Date(updatedAt).toLocaleString() : "unknown"}`,
     `Page: ${url}`,
@@ -744,7 +835,7 @@ function HourStrip({ hours, headInBy }) {
           {hours.map((h) => <div key={h.time} className={cls(h, "hx-ico")} title={h.short}><WxIcon short={h.short} size={18} /></div>)}
           {/* verdict strip */}
           <Label>Verdict</Label>
-          {hours.map((h) => <div key={h.time} className={cls(h, "hx-vwrap")} title={`${fmtHour(h.time)} · ${h.level ?? "no data"}`}><i className={`hx-v ${verdictClass(h.level)}`} /></div>)}
+          {hours.map((h) => <div key={h.time} className={cls(h, "hx-vwrap")} title={`${fmtHour(h.time)} · ${h.level ?? "no data"}`}><span className={`hx-vi ${verdictClass(h.level)}`}><VerdictIcon level={h.level} size="12px" /></span><i className={`hx-v ${verdictClass(h.level)}`} /></div>)}
           {/* temp — diverging heat-strip behind the numbers */}
           <Label unit="°F">Temp</Label>
           {hours.map((h) => <div key={h.time} className={cls(h)} style={{ background: tempTint(h.tempF) }}>{h.tempF ?? "—"}</div>)}
@@ -807,6 +898,8 @@ function HourStrip({ hours, headInBy }) {
 
 function MapCard({ spot }) {
   const [layer, setLayer] = useState("waves");
+  // Poster first: the Windy embed is heavy, so it only loads when asked for.
+  const [shown, setShown] = useState(false);
   const layers = [["waves", "Waves"], ["wind", "Wind"], ["gust", "Gusts"], ["radar", "Radar"], ["temp", "Temp"]];
   return (
     <section className="card">
@@ -814,14 +907,24 @@ function MapCard({ spot }) {
         <h2>Weather map</h2>
         <div className="maptabs">
           {layers.map(([k, label]) => (
-            <button key={k} className={layer === k ? "active" : ""} onClick={() => setLayer(k)}>{label}</button>
+            <button key={k} className={layer === k ? "active" : ""} onClick={() => { setLayer(k); setShown(true); }}>{label}</button>
           ))}
         </div>
       </div>
-      <div className="mapwrap">
-        <iframe key={layer} title={`Windy ${layer} map`} src={windyUrl(spot.lat, spot.lon, layer)} loading="lazy" allow="fullscreen" />
-      </div>
-      <div className="hint">{spot.name} · switch layers above; pan & zoom inside the map.</div>
+      {shown ? (
+        <div className="mapwrap">
+          <iframe key={layer} title={`Windy ${layer} map`} src={windyUrl(spot.lat, spot.lon, layer)} loading="lazy" allow="fullscreen" />
+        </div>
+      ) : (
+        <button type="button" className="mapposter" onClick={() => setShown(true)}>
+          <span className="mapposter-ico" aria-hidden="true">
+            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M9 4 3 6.5v13L9 17l6 3 6-2.5v-13L15 7 9 4z" /><path d="M9 4v13M15 7v13" /></svg>
+          </span>
+          <b>Show the {layers.find(([k]) => k === layer)[1].toLowerCase()} map</b>
+          <small>Loads a live Windy map around {spot.name}</small>
+        </button>
+      )}
+      <div className="hint">{spot.name} · {shown ? "switch layers above; pan & zoom inside the map." : "tap to load the interactive map."}</div>
     </section>
   );
 }
@@ -849,7 +952,7 @@ function SignupNudge({ spotName, onSignup, onSignin }) {
         <IcoBoat />
         <div className="nudge-copy">
           <b>Boating {spotName || "these waters"} often?</b>
-          <span> Create a free account to ⭐ save your launch spots and get a morning verdict + NO-GO alerts by email.</span>
+          <span> Create a free account to <IconStar filled /> save your launch spots and get a morning verdict + NO-GO alerts by email.</span>
         </div>
       </div>
       <div className="nudge-actions">
@@ -862,6 +965,7 @@ function SignupNudge({ spotName, onSignup, onSignin }) {
 
 export default function App() {
   const { choice, setChoice, effective } = useTheme();
+  useEffect(() => pauseVideosIfReduced(), []);
   const auth = useAuth();
   const [consent, setConsent] = useState(getConsent());
   const chooseConsent = (c) => { try { if (c) localStorage.setItem("sib.consent", c); else localStorage.removeItem("sib.consent"); } catch (e) {} updateConsentMode(c); setConsent(c); };
@@ -900,6 +1004,7 @@ export default function App() {
     }
   }, [auth.user]);
   const [spots, setSpots] = useState([]);
+  const [summary, setSummary] = useState(null); // per-spot verdicts (shared fetch) for the picker + nearby launches
   // Prefer the clean SEO path /spot/<id>; fall back to the legacy ?spot=<id>.
   const urlSpot = () => {
     const m = window.location.pathname.match(/^\/spot\/([a-z0-9-]{1,40})\/?$/);
@@ -996,6 +1101,12 @@ export default function App() {
   }, []);
 
   useEffect(() => {
+    let alive = true;
+    getSummary().then((list) => { if (alive) setSummary(list); });
+    return () => { alive = false; };
+  }, []);
+
+  useEffect(() => {
     fetch("/marine/conditions?spots")
       .then((r) => r.json())
       .then((d) => setSpots(d.spots || []))
@@ -1082,6 +1193,7 @@ export default function App() {
     io.observe(el);
     return () => io.disconnect();
   }, [data && data.spot && data.spot.id, !!rec]);
+  const promoteNearby = !!rec && rec.level !== "GO" && !(spot && spot.adHoc && !spot.built);
   const wind = data?.wind || {};
   const wv = data?.waves || {};
   const buoy = data?.buoy;
@@ -1090,8 +1202,26 @@ export default function App() {
   const buoyLive = !!buoy && (wind.source === "buoy" || wind.gustSrc === "buoy" || wv.source === "buoy");
   const wr = data?.windRead;
   const comfort = data ? comfortCheck(auth.user?.prefs, wind.speedKt, wv.ft) : null;
+  // Clock for data ages: ticks each minute while a spot page is open, so the
+  // freshness line and the stale notice keep counting in a tab left open.
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    if (!data || data.notMarine) return undefined;
+    setNow(Date.now());
+    const t = setInterval(() => setNow(Date.now()), 60000);
+    return () => clearInterval(t);
+  }, [data]);
+  const fr = data && !data.notMarine && rec ? freshnessOf(data, now) : null;
+  // Which wind figure the verdict rates on (lakes: the stronger of sustained
+  // and gust), so the gust can be marked when it is the one that counts.
+  const gustDrives = wind.gustKt != null && kt(wind.gustKt) > (kt(wind.speedKt) ?? -1);
 
   // Location options grouped by lake (scales to all five lakes).
+  const liveById = summary && summary.length ? new Map(summary.map((s) => [s.id, s])) : null;
+  // Distance reference: the launch on screen (landing: the remembered "near me" point, if any).
+  const pickerFrom = landing
+    ? (() => { try { const p = JSON.parse(localStorage.getItem("boating.nearpt") || "null"); return p && p.lat != null && p.lon != null ? p : null; } catch (e) { return null; } })()
+    : (spot && spot.lat != null ? spot : null);
   const spotOptions = spots.length ? spots : (spot ? [{ ...spot, lake: "Lake Erie" }] : [{ id: active, name: "Loading…", lake: "Lake Erie" }]);
   const byLake = {};
   spotOptions.forEach((s) => { (byLake[s.lake || "Lake Erie"] ||= []).push(s); });
@@ -1114,25 +1244,25 @@ export default function App() {
         <div className="appheader-inner">
           <a className="brand" href="/" aria-label="shouldiboat.com home" onClick={(e) => { e.preventDefault(); goLanding(); }}>
             <img className="logo" width="248" height="82" src={effective === "dark" ? "/boat-mark-white.png" : "/boat-mark.png"} alt="" />
-            <span className="wordmark">
-              <span className="wm-name">SHOULDI<b>BOAT</b><span className="wm-dot">.com</span></span>
-              <span className="wm-tag">Live boating conditions</span>
-            </span>
+            <span className="wordmark">Should I Boat</span>
           </a>
           <div className="controls">
             <LocationPicker byLake={byLake} active={active} activeName={activeName} onSelect={selectLocation}
-              favorites={auth.user ? (auth.user.favorites || []) : []} onToggleFav={auth.user ? toggleFav : undefined} onBuild={goPreview} />
+              favorites={auth.user ? (auth.user.favorites || []) : []} onToggleFav={auth.user ? toggleFav : undefined} onBuild={goPreview}
+              live={liveById} from={pickerFrom} />
             <ThemeToggle effective={effective} onToggle={() => setChoice(effective === "dark" ? "light" : "dark")} />
             <Account auth={auth} />
           </div>
         </div>
         {!landing && callHidden && rec && data && !data.notMarine && (
-          <button className={`hdr-verdict ${verdictClass(rec.level)}`} onClick={() => window.scrollTo({ top: 0, behavior: "smooth" })}
-            aria-label={`${rec.level} at ${spot?.name || "this launch"}. Back to the top`}>
-            <span className="hdr-verdict-badge">{rec.level}</span>
+          <button className={`hdr-verdict ${recClass(rec)}`} onClick={() => window.scrollTo({ top: 0, behavior: scrollBehavior() })}
+            aria-label={`${rec.noData ? "No data" : rec.level} at ${spot?.name || "this launch"}. Back to the top`}>
+            <span className="hdr-verdict-badge"><VerdictMark level={rec.noData ? null : rec.level} label={recLabel(rec)} /></span>
             <span className="hdr-verdict-name">{spot?.name}</span>
             <span className="hdr-verdict-nums">
-              {wind.speedKt != null ? `${Math.round(wind.speedKt)} kt${wind.dir ? ` ${wind.dir}` : ""}` : ""}
+              {/* Same figures as the WIND tile: sustained, then gust when higher. */}
+              {wind.speedKt != null ? `${kt(wind.speedKt)} kt${wind.dir ? ` ${wind.dir}` : ""}` : ""}
+              {gustDrives ? `${wind.speedKt != null ? "," : ""} gusts ${kt(wind.gustKt)}` : ""}
               {wv.ft != null ? ` · ${fmtWaves(wv.ft, wv.periodSec)}` : ""}
             </span>
             <span className="hdr-verdict-up" aria-hidden="true">↑</span>
@@ -1153,7 +1283,7 @@ export default function App() {
       ) : (
       <>
       {/* FlightAware-style hero: sponsor takeover when sold, else house hero. */}
-      <Takeover adFree={adFree} spotName={activeName} verdict={rec?.level} signedIn={!gated} onJoin={() => setGateAuth("register")} authPending={auth.user === undefined}
+      <Takeover adFree={adFree} spotName={activeName} verdict={rec ? recLabel(rec) : undefined}signedIn={!gated} onJoin={() => setGateAuth("register")} authPending={auth.user === undefined}
         spot={spot && spot.adHoc && !spot.built ? null : active} region={sponsorRegion} />
 
       <main className="app">
@@ -1182,8 +1312,10 @@ export default function App() {
         {data && !data.notMarine && (
           <>
             {/* ── The Call ── */}
-            <section className={`call ${verdictClass(rec.level)}`} ref={callRef}>
-              <div className="call-badge"><span>{rec.level}</span></div>
+            <section className={`call ${recClass(rec)}`} ref={callRef}>
+              <div className="call-badge" aria-live="polite" aria-atomic="true">
+                <h2 className="call-verdict"><span className="sr-only">Verdict for {spot.name}: </span><VerdictMark level={rec.noData ? null : rec.level} label={recLabel(rec)} /></h2>
+              </div>
               <div className="call-body">
                 <div className="call-top">
                   <span className="call-spot">
@@ -1200,6 +1332,8 @@ export default function App() {
                   <ShareButton spot={spot} rec={rec} wind={wind} wv={wv} />
                 </div>
                 <div className="call-sum">{rec.summary}</div>
+                {fr && <FreshLine data={data} rec={rec} fr={fr} now={now} />}
+                {fr && <StaleNotice fr={fr} onRefresh={() => (preview ? loadPoint(preview) : loadSpot(active))} />}
                 <ul className="reasons">{rec.reasons.map((x, i) => <li key={i}>{x}</li>)}</ul>
                 {comfort && (
                   <div className={`comfort ${comfort.ok ? "ok" : "over"}`}>
@@ -1207,6 +1341,7 @@ export default function App() {
                     {comfort.ok ? "today's conditions are within your limits." : `above your limit: ${comfort.over.join("; ")}.`}
                   </div>
                 )}
+                <p className="call-disclaimer">An automated summary of NOAA data, not a guarantee of safety. Check the latest NWS marine forecast and warnings; the decision to go is yours.</p>
                 <WrongCallLink spot={spot} rec={rec} wind={wind} wv={wv} updatedAt={data.updatedAt} />
               </div>
             </section>
@@ -1221,9 +1356,16 @@ export default function App() {
             {/* ── Right now ── */}
             <div className="grid stats">
               <div className="stat hero">
-                <div className="k">Wind</div>
+                <div className="k">Wind <span className="k-note">sustained</span></div>
                 <div className="v">{fmt(kt(wind.speedKt), "")}<small>kt</small> <Trend t={trendOf(data.hourly?.[0]?.windKt, data.hourly?.[3]?.windKt)} /></div>
-                <div className="sub">{[wind.dir, wind.gustKt ? `gust ${kt(wind.gustKt)}${wind.gustSrc === "forecast" && wind.source !== "forecast" ? " (forecast)" : ""}` : null, wind.source].filter(Boolean).join(" · ") || "—"}</div>
+                {/* Labelled so the tile, the header strip and the reasons read as one
+                    story: sustained here, the gust (which the verdict rates on when
+                    higher) next to it, and where/when the number came from. */}
+                <div className="sub">
+                  {[wind.dir,
+                    wind.gustKt != null ? `gusts ${kt(wind.gustKt)}${wind.gustSrc === "forecast" && wind.source !== "forecast" ? " (forecast)" : ""}` : null,
+                    fr ? windBasisText(wind, fr) : wind.source].filter(Boolean).join(" · ") || "—"}
+                </div>
               </div>
               <div className="stat">
                 <div className="k">Waves</div>
@@ -1252,6 +1394,12 @@ export default function App() {
                 <div className="sub">{data.temps?.airSource || "—"}</div>
               </div>
             </div>
+
+            {/* Not a GO day: the most useful next step is a calmer launch, so it
+                sits right under the call + numbers (on GO it stays further down). */}
+            {promoteNearby && (
+              <NearbyPorts lake={spot.lake || "Lake Erie"} current={active} from={spot} onSelect={selectLocation} sum={summary} level={rec.level} promoted />
+            )}
 
             <div className="learn-line">
               New to the numbers? <a href="/guides/reading-a-marine-forecast" target="_blank" rel="noopener">How to read a marine forecast</a> ·{" "}
@@ -1286,14 +1434,14 @@ export default function App() {
                 {/* ── Week ahead / weekend planning ── */}
                 <WeekStrip week={data.week} marineForecast={data.marineForecast} />
 
-                {/* ── Map + Cams ── */}
-                <div className="dash2">
-                  <MapCard spot={spot} />
+                {/* ── Cams, then the (tap-to-load) map ── */}
+                <div className="dash2 camsmap">
                   <Cams lat={spot.lat} lon={spot.lon} spotName={spot.name} lake={spot.lake} />
+                  <MapCard spot={spot} />
                 </div>
 
-                {/* ── Same-lake pivot ── */}
-                <NearbyPorts lake={spot.lake || "Lake Erie"} current={active} from={spot} onSelect={selectLocation} />
+                {/* ── Same-lake pivot (promoted under the verdict when not GO) ── */}
+                {!promoteNearby && <NearbyPorts lake={spot.lake || "Lake Erie"} current={active} from={spot} onSelect={selectLocation} sum={summary} level={rec.level} />}
 
                 <LaunchNotes spot={spot} facts={data.facts} />
 
@@ -1327,10 +1475,12 @@ export default function App() {
               </>
             )}
 
+            {/* GearBlock folds itself on NO-GO (safety-prep items only, collapsed). */}
             <GearBlock waterTempF={data.temps?.waterF ?? null} airTempF={data.temps?.airF ?? null} windKt={wind ? wind.speedKt : null} level={rec ? rec.level : null} />
             {showAds && <AdSlot name="detailMid" />}
 
             <footer className="meta">
+              <p className="meta-disclaimer">shouldiboat.com is a planning aid, not an official forecast or a navigation tool. Conditions can change quickly and local conditions can differ from the data. GO / CAUTION / NO-GO is an automated summary, not a guarantee of safety. You are responsible for the decision to boat. Check the latest NWS marine forecast and warnings before you launch.</p>
               Source: {buoyLive ? `Buoy ${buoy.station} · ${buoy.ageMinutes != null ? `${buoy.ageMinutes} min ago` : "latest"}` : "forecast only"}
               {" · NWS & NDBC (NOAA), Windy. Updated "}{new Date(data.updatedAt).toLocaleTimeString()}
               <span className="buildtag" title="Deployed version">{typeof __BUILD__ !== "undefined" ? ` · v ${__BUILD__}` : ""}</span>

@@ -75,6 +75,8 @@ let gridWavesAt = null;
 let gridCalls = []; // NWS grid stub: the "lat,lon" sample point of each grid fetch
 let hourlyLagH = 0; // hourly stub: lead with this many already-past hours
 let ndbcFiles = {}; // NDBC realtime2 stub: station → file text (unlisted → 404)
+let fcUpdateAgeH = null; // NWS stub: hours since the forecaster's last update (null → no updateTime sent)
+let dailyStub = null; // NWS daily point-forecast stub: periods array (null → none served)
 let subGetCancelState = false; // what a GET subscription retrieve reports
 let subStatus = {}; // sub id → status a GET retrieve reports ("missing" → 404); default active
 let subCustomer = {}; // sub id → customer a GET retrieve reports (default: none)
@@ -130,6 +132,7 @@ function installFetchStub() {
         : typeof ov === "number" ? steps(ov)
         : steps(gridMode === "gustonly" ? null : gridMode === "gusty" ? 0.457 : stormMode ? 1.83 : 0.3);
       return jsonResp({ properties: {
+        ...(fcUpdateAgeH != null ? { updateTime: new Date(Date.now() - fcUpdateAgeH * 3600e3).toISOString() } : {}),
         windSpeed: { uom: "wmoUnit:km_h-1", ...span(gridMode === "nowind" || gridMode === "gustonly" ? null : gridMode === "gusty" ? 24 : stormMode ? 52 : 15) },
         windGust: { uom: "wmoUnit:km_h-1", ...span(gridMode === "nowind" ? null : gridMode === "gustonly" ? 16.7 : gridMode === "gusty" ? 44.5 : stormMode ? 65 : 20) },
         windDirection: span(225),
@@ -144,8 +147,9 @@ function installFetchStub() {
       const t0 = new Date(Date.now() - hourlyLagH * 3600e3); t0.setUTCMinutes(0, 0, 0);
       const periods = Array.from({ length: 48 }, (_, i) => ({ startTime: new Date(t0.getTime() + i * 3600e3).toISOString(), temperature: 60,
         windSpeed: stormMode ? "32 mph" : gridMode === "gusty" ? "15 mph" : gridMode === "gustonly" ? "" : "9 mph", windDirection: "SW", shortForecast: "Sunny", probabilityOfPrecipitation: { value: 0 } }));
-      return jsonResp({ properties: { periods } });
+      return jsonResp({ properties: { periods, ...(fcUpdateAgeH != null ? { updateTime: new Date(Date.now() - fcUpdateAgeH * 3600e3).toISOString() } : {}) } });
     }
+    if (/\/forecast$/.test(u) && dailyStub) return jsonResp({ properties: { periods: dailyStub } });
     if (u.includes("api.weather.gov/alerts/active") && alertsDown) return new Response("", { status: 503 });
     if (u.includes("api.weather.gov/alerts/active") && alertFeatures) return jsonResp({ features: alertFeatures });
     if (u.includes("api.weather.gov/alerts/active") && alertTestStatus) {
@@ -666,7 +670,8 @@ async function run() {
     const env = { USERS: makeKV(), ADMIN_EMAIL: "admin@example.com" };
     const admin = await seedUser(env, "admin@example.com");
     const config = {
-      hero: { image: "/x.jpg", headline: "Boat?", sub: "s", showVerdict: false },
+      hero: { image: "/x.jpg", headline: "Boat?", sub: "s", showVerdict: false,
+        spots: { "put-in-bay": "/api/asset/abc123", "Bad Id!": "/y.jpg", sandusky: "javascript:alert(1)", erie: "//evil.test/x.jpg", toledo: "https://tracker.test/p.jpg" } },
       takeovers: [{ sponsor: "Acme", headline: "Buy", start: "2000-01-01", end: "2999-01-01", href: "https://acme.test" }],
       gam: { networkCode: "12345678" },
       bogusField: "should be dropped",
@@ -675,6 +680,14 @@ async function run() {
     eq("admin/config PUT: → 200", r.status, 200);
     const saved = (await r.json()).config;
     eq("admin/config PUT: hero saved", saved.hero.image, "/x.jpg");
+    eq("admin/config PUT: launch photo saved", saved.hero.spots["put-in-bay"], "/api/asset/abc123");
+    eq("admin/config PUT: launch photos drop bad ids and unsafe URLs", JSON.stringify(Object.keys(saved.hero.spots)), JSON.stringify(["put-in-bay"]));
+    {
+      const { SPOT_PHOTOS } = await import("../src/spot-photos.js");
+      const bad = Object.entries(SPOT_PHOTOS).filter(([id, p]) => !/^\/spots\/[a-z0-9-]+\.jpe?g$/.test(p.src || "")
+        || !/^https:\/\/commons\.wikimedia\.org\/wiki\/File:/.test(p.source || "") || !p.credit || !p.license);
+      check("spot photos: bundled entries are local JPEGs with a Commons source, credit and license", !bad.length, JSON.stringify(bad.slice(0, 3)));
+    }
     check("admin/config PUT: strips unknown fields", !("bogusField" in saved), JSON.stringify(saved));
     check("admin/config PUT: assigns campaign id", !!saved.takeovers[0].id, JSON.stringify(saved.takeovers[0]));
     // public site-config now reflects it
@@ -712,6 +725,8 @@ async function run() {
     const got = await call(req("GET", url), env);
     eq("asset: served 200", got.status, 200);
     eq("asset: correct content-type", got.headers.get("Content-Type"), "image/png");
+    eq("asset: nosniff", got.headers.get("X-Content-Type-Options"), "nosniff");
+    check("asset: sandboxed CSP", /sandbox/.test(got.headers.get("Content-Security-Policy") || ""), got.headers.get("Content-Security-Policy"));
     const back = new Uint8Array(await got.arrayBuffer());
     check("asset: bytes round-trip", back.length === pngBytes.length && back[0] === 0x89, `len ${back.length}`);
     // missing asset → 404
@@ -1741,7 +1756,7 @@ async function run() {
     eq("gusty lake: no-buoy headline gets the grid gust", page.wind?.gustKt, 24);
     eq("gusty lake: headline gust source is forecast", page.wind?.gustSrc, "forecast");
     eq("gusty lake: spot headline is NO-GO", page.recommendation?.level, "NO-GO");
-    check("gusty lake: forecast gust reason is tagged (forecast)", (page.recommendation?.reasons || []).some((r) => /Wind\/gusts ~24 kt \(forecast\)/.test(r)), JSON.stringify(page.recommendation?.reasons));
+    check("gusty lake: forecast gust reason is tagged (forecast)", (page.recommendation?.reasons || []).some((r) => /Strong wind: 13 kt, gusts 24 kt \(forecast\)/.test(r)), JSON.stringify(page.recommendation?.reasons));
     const pageWeek = page.week || [];
     check("gusty lake: spot page week strip agrees (NO-GO)", pageWeek.length && pageWeek.every((d) => d.level === "NO-GO"), JSON.stringify(pageWeek.map((d) => d.level)));
 
@@ -2372,6 +2387,124 @@ async function run() {
     check("no buoy: only the 'No live buoy' line, not both", f.reasons.some((x) => NO_BUOY.test(x)) && !f.reasons.some((x) => WAVES_FC.test(x)), JSON.stringify(f.reasons));
     const o = rec(buoyWind, { ft: 1, source: "forecast" }, "ocean");
     check("wind-only shore station on the coast: caveat shown too", o.reasons.some((x) => WAVES_FC.test(x)), JSON.stringify(o.reasons));
+  }
+
+  // ── N1/N2/X4 (2026-11 UX review): one wind story, freshness, no-data state ──
+  {
+    const { buildRecommendation, windPhrase, onRequest, fetchSummary, fetchTodayWindows, STALE_LIMITS } = await import("../functions/marine/conditions.js");
+    const R = (o) => buildRecommendation({ buoy: null, alerts: [], read: null, hours: [], profile: "lake", ...o });
+
+    // N1: the reason names sustained AND gust with sources; the level still
+    // rates on the stronger of the two (thresholds unchanged).
+    eq("wind phrase: buoy sustained + buoy gust", windPhrase({ speedKt: 16.2, gustKt: 19.4, source: "buoy", gustSrc: "buoy" }), "16 kt, gusts 19 kt (buoy)");
+    eq("wind phrase: buoy sustained + forecast gust", windPhrase({ speedKt: 7, gustKt: 16, source: "buoy", gustSrc: "forecast" }), "7 kt (buoy), gusts 16 kt (forecast)");
+    eq("wind phrase: gust not above sustained is omitted", windPhrase({ speedKt: 12, gustKt: 12, source: "forecast", gustSrc: "forecast" }), "12 kt (forecast)");
+    eq("wind phrase: gust only", windPhrase({ speedKt: null, gustKt: 24, source: null, gustSrc: "forecast" }), "gusts 24 kt (forecast), no sustained wind reading");
+    const sdk = R({ buoy: { station: "45005", ageMinutes: 12 }, wind: { speedKt: 16.2, gustKt: 19.4, source: "buoy", gustSrc: "buoy" }, waves: { ft: 1, source: "buoy", periodSec: 4 } });
+    eq("Sandusky case: 16 kt gusting 19 → CAUTION on the gust (unchanged)", sdk.level, "CAUTION");
+    check("Sandusky case: reason shows the tile's 16 kt and the 19 kt gust", sdk.reasons.includes("Windy: 16 kt, gusts 19 kt (buoy)"), JSON.stringify(sdk.reasons));
+    eq("wind level: 13 kt gust 24 lake still NO-GO", R({ wind: { speedKt: 13, gustKt: 24, source: "forecast", gustSrc: "forecast" }, waves: { ft: 1, source: "forecast" } }).level, "NO-GO");
+    eq("wind level: 10 kt gust 13 lake still CAUTION (breezy)", R({ wind: { speedKt: 10, gustKt: 13, source: "forecast", gustSrc: "forecast" }, waves: { ft: 1, source: "forecast" } }).level, "CAUTION");
+    eq("wind level: ocean 12 g18 still GO", R({ profile: "ocean", wind: { speedKt: 12, gustKt: 18, source: "forecast", gustSrc: "forecast" }, waves: { ft: 2, periodSec: 10, source: "forecast" } }).level, "GO");
+
+    // N2: stale inputs never carry a GO; fresh ones are unchanged.
+    const calmBuoy = (age) => R({ buoy: { station: "45005", ageMinutes: age }, wind: { speedKt: 6, gustKt: 8, source: "buoy", gustSrc: "buoy" }, waves: { ft: 0.8, source: "buoy", periodSec: 3 } });
+    eq("stale: thresholds", JSON.stringify(STALE_LIMITS), JSON.stringify({ buoyMin: 120, forecastMin: 1080, pageMin: 30 }));
+    eq("stale buoy: 60 min calm → GO", calmBuoy(60).level, "GO");
+    eq("stale buoy: 119 min calm → GO", calmBuoy(119).level, "GO");
+    const sb = calmBuoy(150);
+    eq("stale buoy: 150 min calm → CAUTION (never GO)", sb.level, "CAUTION");
+    check("stale buoy: reason gives the age", sb.reasons.some((x) => /buoy reading is 2 h 30 min old/.test(x)), JSON.stringify(sb.reasons));
+    check("stale buoy: summary says data is out of date, flagged stale", sb.stale === true && /out of date/.test(sb.summary), JSON.stringify(sb));
+    const tempsOnly = R({ buoy: { station: "T", ageMinutes: 170 }, wind: { speedKt: 6, source: "forecast" }, waves: { ft: 0.8, source: "forecast" } });
+    eq("stale buoy: an old buoy that didn't feed wind/waves doesn't cap", tempsOnly.level, "GO");
+    const fill = (age) => R({ buoy: { station: "45005", ageMinutes: 10 }, buoyAgeMin: age, wind: { speedKt: 6, gustKt: 8, source: "buoy", gustSrc: "buoy" }, waves: { ft: 0.8, source: "buoy", periodSec: 3 } });
+    eq("stale buoy: fresh primary but 150-min feeding station (buoyAgeMin) → CAUTION", fill(150).level, "CAUTION");
+    eq("stale buoy: buoyAgeMin 20 → GO", fill(20).level, "GO");
+    const calmFc = (age) => R({ wind: { speedKt: 6, gustKt: 8, source: "forecast", gustSrc: "forecast" }, waves: { ft: 0.8, source: "forecast" }, forecastAgeMin: age });
+    eq("stale forecast: unknown age → GO (unknown is shown, not capped)", calmFc(null).level, "GO");
+    eq("stale forecast: 6 h old → GO", calmFc(360).level, "GO");
+    const sf = calmFc(20 * 60);
+    eq("stale forecast: 20 h old → CAUTION", sf.level, "CAUTION");
+    check("stale forecast: reason gives the age", sf.reasons.some((x) => /hasn't been updated in 20 h/.test(x)), JSON.stringify(sf.reasons));
+    const sfNo = R({ wind: { speedKt: 25, source: "forecast" }, waves: { ft: 5, source: "forecast" }, forecastAgeMin: 30 * 60 });
+    check("stale forecast: NO-GO stays NO-GO, not flagged as a stale cap", sfNo.level === "NO-GO" && sfNo.stale === false && sfNo.reasons.some((x) => /hasn't been updated/.test(x)), JSON.stringify(sfNo));
+
+    // X4: a no-data CAUTION is flagged so the page can show it as NO DATA.
+    const nd = R({ wind: { speedKt: null, source: null }, waves: { ft: null, source: null } });
+    check("no data: level CAUTION (never GO), flagged noData", nd.level === "CAUTION" && nd.noData === true, JSON.stringify(nd));
+    const ndGust = R({ wind: { speedKt: null, gustKt: 24, source: null, gustSrc: "forecast" }, waves: { ft: null } });
+    check("no data but a 24 kt gust → NO-GO, not flagged noData", ndGust.level === "NO-GO" && ndGust.noData === false, JSON.stringify(ndGust));
+    check("real CAUTION is not flagged noData", sdk.noData === false);
+
+    // End to end through the spot page (stubbed calm NWS, no buoy).
+    stormMode = false; scaMode = false; alertsDown = false; gridMode = null; ndbcFiles = {};
+    const page = async () => (await onRequest({ request: new Request("https://shouldiboat.com/marine/conditions?spot=sandusky"), env: { USERS: makeKV() } })).json();
+    try {
+      fcUpdateAgeH = 3;
+      let d = await page();
+      eq("page: fresh forecast, calm → GO", d.recommendation?.level, "GO");
+      check("page: freshness reports the forecast issue time and age", d.freshness && d.freshness.forecastIssuedAt && d.freshness.forecastAgeMinutes >= 179 && d.freshness.forecastAgeMinutes <= 181 && d.freshness.stale.length === 0 && d.freshness.buoy === null, JSON.stringify(d.freshness));
+      eq("page: wind basis is the hourly forecast", d.wind?.basis, "hour");
+      fcUpdateAgeH = 20;
+      d = await page();
+      eq("page: 20 h old forecast, calm → CAUTION (GO on stale data was possible before)", d.recommendation?.level, "CAUTION");
+      check("page: freshness flags the stale forecast", (d.freshness?.stale || []).some((x) => x.kind === "forecast"), JSON.stringify(d.freshness));
+      const tile = (await fetchSummary({ USERS: makeKV() })).spots.find((x) => x.id === "sandusky");
+      check("summary tile: stale grid → no call, not GO", tile && tile.level === null, JSON.stringify(tile));
+      check("digest: stale grid → no GO window", Object.values(await fetchTodayWindows()).every((w) => w == null));
+      fcUpdateAgeH = null;
+      d = await page();
+      eq("page: no updateTime sent → age unknown, not stale", d.freshness?.forecastAgeMinutes, null);
+
+      // An expired daily period must not stand in for the current wind.
+      const iso = (h) => new Date(Date.now() + h * 3600e3).toISOString();
+      dailyStub = [
+        { name: "This Afternoon", startTime: iso(-14), endTime: iso(-2), windSpeed: "5 mph", windDirection: "SW", temperature: 60, shortForecast: "Sunny" },
+        { name: "Tonight", startTime: iso(-2), endTime: iso(10), windSpeed: "25 to 30 mph", windDirection: "W", temperature: 50, shortForecast: "Windy" },
+      ];
+      d = await page();
+      eq("page: current daily period used (Tonight, 30 mph → 26 kt), not the expired one", d.wind?.speedKt, 26.1);
+      eq("page: wind basis/period labelled", `${d.wind?.basis}|${d.wind?.periodName}`, "period|Tonight");
+      eq("page: current-period wind drives the call", d.recommendation?.level, "NO-GO");
+      dailyStub = [{ name: "This Afternoon", startTime: iso(-14), endTime: iso(-2), windSpeed: "5 mph", windDirection: "SW", temperature: 60, shortForecast: "Sunny" }];
+      d = await page();
+      eq("page: only an expired daily period → falls back to the hourly forecast (8 kt)", d.wind?.speedKt, 8);
+
+      // A fresh buoy is reported with its age; a 150-min one caps GO.
+      const p2 = (n) => String(n).padStart(2, "0");
+      const line = (ageMin) => { const t = new Date(Date.now() - ageMin * 60000);
+        return "#YY  MM DD hh mm WDIR WSPD GST  WVHT   DPD   APD MWD   PRES  ATMP  WTMP  DEWP  VIS PTDY  TIDE\n"
+          + [t.getUTCFullYear(), p2(t.getUTCMonth() + 1), p2(t.getUTCDate()), p2(t.getUTCHours()), p2(t.getUTCMinutes()), "220", "3.0", "4.0", "0.3", "3", "MM", "MM", "1015.0", "14.0", "MM", "MM", "MM", "MM", "MM"].join(" ") + "\n"; };
+      dailyStub = null; fcUpdateAgeH = 2;
+      const sandusky = (await import("../functions/marine/conditions.js")).SPOTS.sandusky;
+      const saved = sandusky.buoys;
+      try {
+        sandusky.buoys = ["FRSH1"]; ndbcFiles = { FRSH1: line(15) };
+        d = await page();
+        check("page: fresh buoy → freshness.buoy with age, GO kept", d.freshness?.buoy?.station === "FRSH1" && d.freshness.buoy.ageMinutes >= 15 && d.freshness.buoy.ageMinutes <= 16 && d.recommendation?.level === "GO", JSON.stringify({ f: d.freshness, r: d.recommendation }));
+        ndbcFiles = { FRSH1: line(150) };
+        d = await page();
+        check("page: 150-min buoy → CAUTION, flagged stale", d.recommendation?.level === "CAUTION" && d.freshness.stale.some((x) => x.kind === "buoy"), JSON.stringify({ f: d.freshness, r: d.recommendation }));
+
+        // Wind filled from a second station (windBuoy): ITS age must be checked,
+        // and the freshness line must name it, not the fresh wave-only primary.
+        const lineX = (ageMin, wspd, gst, wvht) => line(ageMin).replace(/\n(\S+ \S+ \S+ \S+ \S+) 220 3\.0 4\.0 0\.3 /, `\n$1 ${wspd === "MM" ? "MM" : "220"} ${wspd} ${gst} ${wvht} `);
+        sandusky.buoys = ["WAVE1", "WIND2"];
+        ndbcFiles = { WAVE1: lineX(15, "MM", "MM", "0.3"), WIND2: lineX(150, "3.0", "4.0", "MM") };
+        d = await page();
+        check("page: wave-only primary fresh + 150-min wind station → wind from WIND2, waves from WAVE1", d.wind?.station === "WIND2" && d.waves?.station === "WAVE1", JSON.stringify({ w: d.wind, v: d.waves }));
+        check("page: stale wind-fill station → CAUTION, never GO", d.recommendation?.level === "CAUTION" && d.recommendation.reasons.some((x) => /buoy reading is 2 h 3[01] min old/.test(x)), JSON.stringify(d.recommendation));
+        check("page: freshness names the stale wind station, lists both feeders", d.freshness?.buoy?.station === "WIND2" && d.freshness.buoy.ageMinutes >= 150 && d.freshness.stale.some((x) => x.kind === "buoy")
+          && d.freshness.buoys.length === 2 && d.freshness.buoys.find((b) => b.station === "WAVE1")?.feeds.join() === "waves" && d.freshness.buoys.find((b) => b.station === "WIND2")?.feeds.join() === "wind", JSON.stringify(d.freshness));
+        ndbcFiles = { WAVE1: lineX(150, "MM", "MM", "0.3"), WIND2: lineX(15, "3.0", "4.0", "MM") };
+        d = await page();
+        check("page: stale wave-only primary + fresh wind station → CAUTION, names WAVE1", d.recommendation?.level === "CAUTION" && d.freshness?.buoy?.station === "WAVE1", JSON.stringify({ f: d.freshness, r: d.recommendation }));
+        ndbcFiles = { WAVE1: lineX(15, "MM", "MM", "0.3"), WIND2: lineX(20, "3.0", "4.0", "MM") };
+        d = await page();
+        check("page: both feeding stations fresh → GO kept, oldest (WIND2, 20 min) reported", d.recommendation?.level === "GO" && d.freshness?.buoy?.station === "WIND2" && d.freshness.stale.length === 0, JSON.stringify({ f: d.freshness, r: d.recommendation }));
+      } finally { sandusky.buoys = saved; ndbcFiles = {}; }
+    } finally { fcUpdateAgeH = null; dailyStub = null; }
   }
 
   // ── Cold-water regions + bar harbors: bar advisories can never read GO ──

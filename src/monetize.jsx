@@ -45,8 +45,13 @@ function adTestOn() {
   try { return new URLSearchParams(window.location.search).get("adtest") === "1"; } catch (e) { return false; }
 }
 
+// A stored choice wins; with none, a Global Privacy Control signal counts as
+// Reject (essential only) so those visitors are never asked or tracked.
 export function getConsent() {
-  try { return localStorage.getItem("sib.consent"); } catch (e) { return null; }
+  let c = null;
+  try { c = localStorage.getItem("sib.consent"); } catch (e) { /* ignore */ }
+  if (!c && typeof navigator !== "undefined" && navigator.globalPrivacyControl === true) return "essential";
+  return c;
 }
 
 // Google Consent Mode v2 update — flips cookie permissions when the user makes
@@ -195,12 +200,12 @@ export function StickyFooterAd({ enabled }) {
 // after the account's first qualifying sales; the card is structured for them.)
 const GEAR = {
   pfd:    { icon: "🦺", label: "Life jacket (PFD)", q: "coast guard approved life jacket", why: "Required gear", asin: "" },
-  vhf:    { icon: "📻", label: "Handheld VHF radio", q: "floating handheld marine VHF radio", why: "Reach help anywhere", asin: "" },
+  vhf:    { icon: "📻", label: "Handheld VHF radio", q: "floating handheld marine VHF radio", why: "For calling for help", asin: "" },
   anchor: { icon: "⚓", label: "Anchor kit", q: "boat anchor kit with rode", why: "Hold your spot", asin: "" },
   aid:    { icon: "🧰", label: "Marine first-aid kit", q: "marine first aid kit", why: "On-water essentials", asin: "" },
   dry:    { icon: "🎒", label: "Dry bag", q: "waterproof dry bag", why: "Keep phone & keys dry", asin: "" },
-  cold:   { icon: "🥶", label: "Cold-water layer", q: "neoprene wetsuit top", why: "Cold-shock protection", asin: "" },
-  bail:   { icon: "🪣", label: "Bilge / bailing pump", q: "portable bilge pump boat", why: "For a sloppy day", asin: "" },
+  cold:   { icon: "🥶", label: "Cold-water layer", q: "neoprene wetsuit top", why: "For cold water", asin: "" },
+  bail:   { icon: "🪣", label: "Bilge / bailing pump", q: "portable bilge pump boat", why: "Moves water out of the boat", asin: "" },
   cooler: { icon: "🧊", label: "Cooler", q: "marine cooler", why: "Long day on the water", asin: "" },
   tube:   { icon: "🛟", label: "Towable tube", q: "towable tube for boating", why: "Flat-water fun", asin: "" },
   sun:    { icon: "🧴", label: "Reef-safe sunscreen", q: "reef safe sport sunscreen", why: "Sunny & calm", asin: "" },
@@ -225,20 +230,23 @@ export function GearBlock({ waterTempF, airTempF, windKt, level }) {
   const seen = new Set();
   const items = [...featured, GEAR.pfd, GEAR.vhf, GEAR.anchor, GEAR.aid, GEAR.dry]
     .filter((it) => (seen.has(it.q) ? false : seen.add(it.q)));
-  const heading = cold ? "Gear for cold water" : rough ? "Rough-day gear" : nice ? "Gear for a day out" : "Gear for the water";
-  return (
-    <section className="card gear">
-      <div className="card-head"><h2>{heading}</h2><span className="legend">picked for today's conditions</span></div>
+  const noGo = level === "NO-GO";
+  const heading = noGo ? "Safety-prep gear" : cold ? "Gear for cold water" : rough ? "Gear to have aboard" : nice ? "Gear for a day out" : "Gear for the water";
+  // NO-GO: no "rough-day" or fun gear that reads as encouragement to launch.
+  // Show only neutral safety-prep items, collapsed by default.
+  const shown = noGo ? [...(cold ? [GEAR.cold] : []), GEAR.pfd, GEAR.vhf, GEAR.aid, GEAR.dry] : items;
+  const body = (
+    <>
       <div className="gear-rail">
-        {items.map((it) => {
+        {shown.map((it) => {
           const pick = isAsin(it.asin);
           return (
             <a key={it.q} className={`gear-card${pick ? " ourpick" : ""}`} href={gearUrl(it)} target="_blank" rel="sponsored nofollow noopener">
-              <span className={`gear-tag ${pick ? "pick" : "top"}`}>{pick ? "Our pick" : "Top rated"}</span>
+              <span className={`gear-tag ${pick ? "pick" : "top"}`}>{pick ? "Our pick" : "Amazon search"}</span>
               <span className="gear-ic" aria-hidden="true">{it.icon}</span>
               <span className="gear-label">{it.label}</span>
               <span className="gear-why">{it.why}</span>
-              <span className="gear-cta">{pick ? "See it on Amazon ↗" : "Top-rated on Amazon ↗"}</span>
+              <span className="gear-cta">{pick ? "See it on Amazon ↗" : "Search on Amazon ↗"}</span>
             </a>
           );
         })}
@@ -248,7 +256,22 @@ export function GearBlock({ waterTempF, airTempF, windKt, level }) {
           Shop all our recommended gear on Amazon →
         </a>
       )}
-      {AMAZON_TAG && <div className="hint">As an Amazon Associate, shouldiboat.com earns from qualifying purchases.</div>}
+      {AMAZON_TAG && <div className="hint gear-disclosure">As an Amazon Associate, shouldiboat.com earns from qualifying purchases.</div>}
+    </>
+  );
+  return (
+    <section className="card gear">
+      {noGo ? (
+        <details className="gear-fold">
+          <summary><h2>{heading}</h2><span className="legend">Amazon links · tap to open</span></summary>
+          {body}
+        </details>
+      ) : (
+        <>
+          <div className="card-head"><h2>{heading}</h2><span className="legend">Amazon search links · we earn from qualifying purchases</span></div>
+          {body}
+        </>
+      )}
     </section>
   );
 }
@@ -257,13 +280,27 @@ export function GearBlock({ waterTempF, airTempF, windKt, level }) {
 // certified consent management in your AdSense account.)
 // GDPR/CCPA banner: non-essential cookies (analytics + ads) load only on Accept.
 export function ConsentBanner({ consent, onChoose }) {
-  if (consent === "all" || consent === "essential") return null;
+  const open = consent !== "all" && consent !== "essential";
+  const ref = useRef(null);
+  // Non-modal bar: reserve its height as body padding (and tell the sticky ad
+  // to sit above it) so it never hides the last content or the page's footer.
+  useEffect(() => {
+    if (!open || !ref.current) return;
+    const el = ref.current, b = document.body;
+    const sync = () => { b.style.setProperty("--consent-h", Math.ceil(el.getBoundingClientRect().height) + "px"); };
+    b.classList.add("has-consent");
+    sync();
+    const ro = typeof ResizeObserver !== "undefined" ? new ResizeObserver(sync) : null;
+    if (ro) ro.observe(el); else window.addEventListener("resize", sync);
+    return () => { b.classList.remove("has-consent"); b.style.removeProperty("--consent-h"); if (ro) ro.disconnect(); else window.removeEventListener("resize", sync); };
+  }, [open]);
+  if (!open) return null;
   return (
-    <div className="consent" role="dialog" aria-label="Cookie notice">
-      <span>We use cookies for analytics and ads to keep shouldiboat.com free. Accept to allow them, or reject non-essential cookies.{" "}
+    <div className="consent" ref={ref} role="region" aria-label="Cookie notice">
+      <span>We use cookies for analytics and ads to keep shouldiboat.com free. Accept or reject non-essential cookies.{" "}
         <a href="/legal#cookies" target="_blank" rel="noopener" aria-label="Learn more about our cookie and privacy policy">Learn more</a>.</span>
       <div className="consent-actions">
-        <button className="cbtn ghost" onClick={() => onChoose("essential")}>Reject</button>
+        <button className="cbtn" onClick={() => onChoose("essential")}>Reject</button>
         <button className="cbtn" onClick={() => onChoose("all")}>Accept</button>
       </div>
     </div>
