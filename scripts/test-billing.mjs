@@ -64,6 +64,13 @@ let zoneAlertSpan = null; // with zoneAlert "gale": { onsetH, endsH } hours from
 // the gust); "nowind" = no wind/gust layers at all, calm 1 ft waves;
 // "gustonly" = a 9 kt gust but no sustained wind (grid or hourly) and no waves.
 let gridMode = null;
+// NWS grid stub, per sample point: (lat, lon) → a wave layer override for the
+// grid cell at that point, or undefined for the default. Overrides: "filler"
+// (one 0 m value held for 7 days, like DTX/84,67 off Port Huron), "zeros"
+// (several valid times, all 0 m), "calm" (a real 0–1 ft day: 0 m and 0.3 m
+// in turn), or a number = a real forecast of that many metres.
+let gridWavesAt = null;
+let gridCalls = []; // NWS grid stub: the "lat,lon" sample point of each grid fetch
 let hourlyLagH = 0; // hourly stub: lead with this many already-past hours
 let ndbcFiles = {}; // NDBC realtime2 stub: station → file text (unlisted → 404)
 let subGetCancelState = false; // what a GET subscription retrieve reports
@@ -97,7 +104,8 @@ function installFetchStub() {
       pointsCalls++;
       if (pointsFail && pointsFail(...u.split("/points/")[1].split(",").map(Number))) return new Response("", { status: 503 });
       return jsonResp({ properties: { gridId: "CLE", gridX: 1, gridY: 1, timeZone: "America/New_York",
-        forecastGridData: "https://api.weather.gov/gridpoints/CLE/1,1",
+        // The query names the sample point, so the grid stub can vary by cell.
+        forecastGridData: `https://api.weather.gov/gridpoints/CLE/1,1?at=${u.split("/points/")[1]}`,
         forecast: "https://api.weather.gov/gridpoints/CLE/1,1/forecast",
         forecastHourly: "https://api.weather.gov/gridpoints/CLE/1,1/forecast/hourly",
         // Land zones for the launch point (land warnings are issued for these).
@@ -106,12 +114,25 @@ function installFetchStub() {
     if (/api\.weather\.gov\/gridpoints\/[^/]+\/[^/]+$/.test(u)) {
       const start = new Date(Date.now() - 30 * 3600e3); start.setUTCMinutes(0, 0, 0);
       const span = (value) => ({ values: [{ validTime: `${start.toISOString().replace(".000Z", "+00:00")}/PT240H`, value }] });
+      // A real forecast breaks the period into many valid times (a single
+      // 10-day value is a placeholder and is ignored as wave data): 6-hour
+      // steps, value(i) for step i.
+      const steps = (value) => (value == null ? { values: [] } : { values: Array.from({ length: 40 }, (_, i) => ({
+        validTime: `${new Date(start.getTime() + i * 6 * 3600e3).toISOString().replace(".000Z", "+00:00")}/PT6H`, value: typeof value === "function" ? value(i) : value })) });
+      gridCalls.push(new URL(u).searchParams.get("at"));
+      const at = new URL(u).searchParams.get("at")?.split(",").map(Number) || [];
+      const ov = gridWavesAt ? gridWavesAt(...at) : undefined;
+      const waveLayer = ov === "filler" ? { values: [{ validTime: `${start.toISOString().replace(".000Z", "+00:00")}/P7DT4H`, value: 0 }] }
+        : ov === "zeros" ? steps(0)
+        : ov === "calm" ? steps((i) => (i % 2 ? 0.3048 : 0))
+        : typeof ov === "number" ? steps(ov)
+        : steps(gridMode === "gustonly" ? null : gridMode === "gusty" ? 0.457 : stormMode ? 1.83 : 0.3);
       return jsonResp({ properties: {
         windSpeed: { uom: "wmoUnit:km_h-1", ...span(gridMode === "nowind" || gridMode === "gustonly" ? null : gridMode === "gusty" ? 24 : stormMode ? 52 : 15) },
         windGust: { uom: "wmoUnit:km_h-1", ...span(gridMode === "nowind" ? null : gridMode === "gustonly" ? 16.7 : gridMode === "gusty" ? 44.5 : stormMode ? 65 : 20) },
         windDirection: span(225),
-        waveHeight: span(gridMode === "gustonly" ? null : gridMode === "gusty" ? 0.457 : stormMode ? 1.83 : 0.3),
-        wavePeriod: span(5),
+        waveHeight: waveLayer,
+        wavePeriod: ov === "filler" ? { values: [{ validTime: waveLayer.values[0].validTime, value: 0 }] } : steps(5),
         probabilityOfPrecipitation: span(0),
         weather: span([]),
       } });
@@ -2337,6 +2358,111 @@ async function run() {
     check("no buoy: only the 'No live buoy' line, not both", f.reasons.some((x) => NO_BUOY.test(x)) && !f.reasons.some((x) => WAVES_FC.test(x)), JSON.stringify(f.reasons));
     const o = rec(buoyWind, { ft: 1, source: "forecast" }, "ocean");
     check("wind-only shore station on the coast: caveat shown too", o.reasons.some((x) => WAVES_FC.test(x)), JSON.stringify(o.reasons));
+  }
+
+  // ── Placeholder ("filler") grid wave layers are not wave data ──────────────
+  // Some NWS cells carry one 0 m value held for ~7 days (DTX/84,67 off Port
+  // Huron, APX/104,65 near Alpena). That must not read as "0 ft, calm", must
+  // not stop the seaward step search, and must never enable a lake GO.
+  {
+    const { isFillerWaveLayer, gridSamplePoints, SPOTS, fetchSummary, fetchWeeks, fetchTodayWindows, onRequest } = await import("../functions/marine/conditions.js");
+    const L = (...e) => ({ values: e.map(([validTime, value]) => ({ validTime, value })) });
+    // Shapes copied from live cells (Nov 2026).
+    check("filler: DTX/84,67 one 0 m value for P7DT4H", isFillerWaveLayer(L(["2026-11-06T16:00:00+00:00/P7DT4H", 0])));
+    check("filler: one non-zero value for the whole week (MHX/61,90)", isFillerWaveLayer(L(["2026-11-06T18:00:00+00:00/P6DT19H", 0.3048])));
+    check("filler: P6D of 0 plus 1-h stubs (TBW/73,83)", isFillerWaveLayer(L(["2026-11-06T13:00:00+00:00/P6D", 0], ["2026-11-12T18:00:00+00:00/PT1H", 0], ["2026-11-13T00:00:00+00:00/PT1H", 0], ["2026-11-13T06:00:00+00:00/PT1H", 0])));
+    check("filler: many valid times, all 0", isFillerWaveLayer(L(["2026-11-06T00:00:00+00:00/PT12H", 0], ["2026-11-06T12:00:00+00:00/PT12H", 0], ["2026-11-07T00:00:00+00:00/P5D", 0])));
+    check("filler: one small value (1 ft) over 90% of the period", isFillerWaveLayer(L(["2026-11-06T00:00:00+00:00/P6D", 0.3048], ["2026-11-12T00:00:00+00:00/PT6H", 0], ["2026-11-12T06:00:00+00:00/PT6H", 0])));
+    check("real: a 2 ft value held over 90% of the period is kept (real height)", !isFillerWaveLayer(L(["2026-11-06T00:00:00+00:00/P6D", 0.6], ["2026-11-12T00:00:00+00:00/PT6H", 0.3], ["2026-11-12T06:00:00+00:00/PT6H", 0.3])));
+    check("real: a 5 ft trade-wind sea held all week is kept (ocean)", !isFillerWaveLayer(L(["2026-11-06T00:00:00+00:00/P6DT20H", 1.524])));
+    check("real: a single 4 ft entry is kept, never dropped as filler", !isFillerWaveLayer(L(["2026-11-06T00:00:00+00:00/P7D", 1.2192])));
+    check("filler: missing / empty layer", isFillerWaveLayer(null) && isFillerWaveLayer({ values: [] }));
+    check("real: calm 0–1 ft lake week (DLH/93,69: 0, 0.3 m for 7 h, 0)", !isFillerWaveLayer(L(["2026-11-06T17:00:00+00:00/P1DT6H", 0], ["2026-11-07T23:00:00+00:00/PT7H", 0.3048], ["2026-11-08T06:00:00+00:00/P5DT1H", 0])));
+    check("real: a long-held swell (SJU/210,120: 3 ft for 144 of 198 h)", !isFillerWaveLayer(L(["2026-11-06T00:00:00+00:00/P6D", 0.9144], ["2026-11-12T00:00:00+00:00/PT24H", 0.6096], ["2026-11-13T00:00:00+00:00/PT30H", 0.9144])));
+    check("real: two valid times (MOB/56,59)", !isFillerWaveLayer(L(["2026-11-06T15:00:00+00:00/P3DT1H", 0.3048], ["2026-11-09T16:00:00+00:00/P4DT9H", 0])));
+
+    const env = { USERS: makeKV() };
+    stormMode = false; scaMode = false; alertsDown = false; gridMode = null; zoneAlert = null;
+    const pts = gridSamplePoints(SPOTS.sandusky);
+    const stepAt = (lat, lon) => pts.findIndex((p) => Math.abs(p.lat - lat) < 1e-6 && Math.abs(p.lon - lon) < 1e-6);
+    const sanduskyCalls = () => gridCalls.map((a) => stepAt(...a.split(",").map(Number))).filter((i) => i >= 0);
+    const tileOf = async () => (await fetchSummary(env)).spots.find((x) => x.id === "sandusky");
+
+    // 1. First cell filler, second a real 2 ft forecast → the 2 ft cell's waves.
+    gridWavesAt = (lat, lon) => ({ 0: "filler", 1: 0.6096 })[stepAt(lat, lon)];
+    gridCalls = [];
+    const t1 = await tileOf();
+    eq("filler skipped: tile reads the next cell's 2 ft, not 0 ft", t1?.waveFt, 2);
+    eq("filler skipped: wind still from the nearest cell (8 kt)", t1?.windKt, 8);
+    check("filler skipped: the walk went past the filler cell", sanduskyCalls().join() === "0,1", JSON.stringify(sanduskyCalls()));
+    const p1 = await (await onRequest({ request: new Request("https://shouldiboat.com/marine/conditions?spot=sandusky"), env })).json();
+    check("filler skipped: spot page hours carry 2 ft, never 0 ft", (p1.hourly || []).length && p1.hourly.every((h) => h.waveFt === 2), JSON.stringify((p1.hourly || []).slice(0, 2)));
+
+    // 2. Every cell filler (and the all-zero variant) → no waves → no lake GO.
+    for (const mode of ["filler", "zeros"]) {
+      gridWavesAt = (lat, lon) => (stepAt(lat, lon) >= 0 ? mode : undefined);
+      gridCalls = [];
+      const t2 = await tileOf();
+      eq(`all ${mode}: tile has no waves (not 0 ft)`, t2?.waveFt, null);
+      check(`all ${mode}: every step was tried`, sanduskyCalls().join() === "0,1,2", JSON.stringify(sanduskyCalls()));
+      check(`all ${mode}: calm wind but the tile is not GO`, t2 && t2.windKt === 8 && t2.level !== "GO", JSON.stringify(t2));
+      const w2 = (await fetchWeeks(env, ["sandusky"])).sandusky || [];
+      check(`all ${mode}: no week day is GO`, w2.length && w2.every((d) => d.level !== "GO" && d.waveFt == null), JSON.stringify(w2.map((d) => [d.level, d.waveFt])));
+      const wins = await fetchTodayWindows();
+      eq(`all ${mode}: no digest GO window for sandusky`, wins.sandusky ?? null, null);
+      const p2 = await (await onRequest({ request: new Request("https://shouldiboat.com/marine/conditions?spot=sandusky"), env })).json();
+      check(`all ${mode}: spot page hours have no waves and no GO`, (p2.hourly || []).length && p2.hourly.every((h) => h.waveFt == null && h.level !== "GO"), JSON.stringify((p2.hourly || []).slice(0, 2)));
+      check(`all ${mode}: spot headline is not GO`, p2.recommendation?.level && p2.recommendation.level !== "GO", JSON.stringify(p2.recommendation?.level));
+    }
+
+    // 2b. Ocean spot: all-filler (no waves) rates the same level as a real
+    //     1 ft sea, so dropping placeholders changes no ocean verdict.
+    {
+      const jp = gridSamplePoints(SPOTS.jacksonville);
+      const jAt = (lat, lon) => jp.findIndex((p) => Math.abs(p.lat - lat) < 1e-6 && Math.abs(p.lon - lon) < 1e-6);
+      const jTile = async () => (await fetchSummary(env)).spots.find((x) => x.id === "jacksonville");
+      gridWavesAt = (lat, lon) => (jAt(lat, lon) >= 0 ? "filler" : undefined);
+      const jf = await jTile();
+      gridWavesAt = (lat, lon) => (jAt(lat, lon) >= 0 ? 0.3048 : undefined);
+      const j1 = await jTile();
+      check("ocean all-filler: no waves (not 0 ft)", jf?.waveFt == null, JSON.stringify(jf));
+      check("ocean all-filler: same level as a real 1 ft sea (wind decides)", jf?.level && jf.level === j1?.level && j1?.waveFt === 1, JSON.stringify({ filler: jf?.level, oneFt: j1?.level, ft: j1?.waveFt }));
+    }
+
+    // 3. A genuine calm 0–1 ft forecast is kept (and stops the walk).
+    gridWavesAt = (lat, lon) => (stepAt(lat, lon) === 0 ? "calm" : stepAt(lat, lon) > 0 ? 1.2 : undefined);
+    gridCalls = [];
+    const t3 = await tileOf();
+    check("calm kept: tile reads 0–1 ft from the first cell", t3?.waveFt === 0 || t3?.waveFt === 1, JSON.stringify(t3));
+    eq("calm kept: the walk stopped at the first cell", sanduskyCalls().join(), "0");
+    eq("calm kept: calm day is still GO", t3?.level, "GO");
+    const w3 = (await fetchWeeks(env, ["sandusky"])).sandusky || [];
+    check("calm kept: week days read 1 ft and GO", w3.length && w3.every((d) => d.waveFt === 1 && d.level === "GO"), JSON.stringify(w3.map((d) => [d.level, d.waveFt])));
+
+    // 4. Grid-step memo: a remembered cell that turns filler is not reused.
+    const store = new Map();
+    globalThis.caches = { default: {
+      async match(req) { const v = store.get(req.url); return v == null ? undefined : new Response(v); },
+      async put(req, resp) { store.set(req.url, await resp.text()); },
+      async delete(req) { return store.delete(req.url); },
+    } };
+    try {
+      const memoKeys = () => [...store.keys()].filter((k) => k.startsWith("https://grid-step.local/") && k.includes(`${Math.round(SPOTS.sandusky.lat * 1000) / 1000},`));
+      gridWavesAt = (lat, lon) => (stepAt(lat, lon) >= 0 ? 0.3048 : undefined);
+      await tileOf();
+      check("memo: the first real cell is remembered", memoKeys().length === 1 && store.get(memoKeys()[0]) === String(pts[0].step), JSON.stringify(memoKeys()));
+      gridWavesAt = (lat, lon) => ({ 0: "filler", 1: 0.6096 })[stepAt(lat, lon)];
+      gridCalls = [];
+      const t4 = await tileOf();
+      eq("memo: remembered cell gone filler → walks on to the 2 ft cell", t4?.waveFt, 2);
+      check("memo: the stale step is forgotten", memoKeys().length === 0, JSON.stringify(memoKeys().map((k) => store.get(k))));
+      gridWavesAt = (lat, lon) => (stepAt(lat, lon) >= 0 ? "filler" : undefined);
+      await tileOf(); // seed nothing: an all-filler walk memoizes no step
+      check("memo: an all-filler walk remembers no step", memoKeys().length === 0);
+    } finally {
+      delete globalThis.caches;
+    }
+    gridWavesAt = null; gridCalls = [];
   }
 
   console.log(results.join("\n"));
