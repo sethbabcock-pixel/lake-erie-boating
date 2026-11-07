@@ -2044,6 +2044,7 @@ async function run() {
     eq("land alerts: calm day, no land warning → tile GO", calm?.level, "GO");
     const sa = await fetchSpotsAlerts([SPOTS.sandusky]);
     check("land alerts: a curated spot uses its stored land zones", JSON.stringify(sa.land.get(`${SPOTS.sandusky.lat},${SPOTS.sandusky.lon}`)) === JSON.stringify(SPOTS.sandusky.land), JSON.stringify([...sa.land]));
+    eq("land alerts: Mackinaw City watches both Cheboygan and Emmet counties", JSON.stringify(SPOTS.mackinaw.land), JSON.stringify(["MIZ017", "MIC031", "MIZ016", "MIC047"]));
     check("land alerts: every curated spot carries valid land zones", Object.values(SPOTS).every((x) => Array.isArray(x.land) && x.land.length && x.land.every((z) => /^[A-Z]{3}\d{3}$/.test(z))), Object.entries(SPOTS).filter(([, x]) => !Array.isArray(x.land)).map(([k]) => k).join());
     pointsCalls = 0;
     await fetchSpotsAlerts(Object.values(SPOTS));
@@ -2114,6 +2115,18 @@ async function run() {
     eq("land walk budget: 10 resolve, the rest wait (unknown)", [...bud2.land.values()].filter(Boolean).length, 10);
     const bud3 = await fetchSpotsAlerts(many2);
     eq("land walk budget: the next call finishes them (first 10 cached)", [...bud3.land.values()].filter(Boolean).length, 14);
+
+    // Shared budget: two calls in one invocation draw on one budget of 10.
+    const { landWalkBudget } = await import("../functions/marine/conditions.js");
+    const shared = landWalkBudget();
+    const sixA = Array.from({ length: 6 }, (_, i) => ({ lat: 39.1 + i * 0.01, lon: -81.3, zone: "LEZ145", lake: "Lake Erie" }));
+    const sixB = sixA.map((x) => ({ ...x, lon: -81.1 }));
+    const ra = await fetchSpotsAlerts(sixA, shared);
+    const rb = await fetchSpotsAlerts(sixB, shared);
+    eq("land walk budget: shared across calls (6 + 4 resolve, 2 wait)", [...ra.land.values(), ...rb.land.values()].filter(Boolean).length, 10);
+    eq("land walk budget: shared budget spent", shared.walks, 0);
+    const own = await fetchSpotsAlerts(sixB.map((x) => ({ ...x, lon: -80.9 })));
+    eq("land walk budget: a lone call still gets its own 10", [...own.land.values()].filter(Boolean).length, 6);
 
     // An errored closer candidate: use the farther county now, but don't cache it.
     pointsFail = (lat, lon) => lat === 39.5 && lon === -81.5;
