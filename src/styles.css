@@ -1397,10 +1397,6 @@ a, .linklike { color: var(--accent-text); }
 @media (min-width: 1024px) { .dash2 .mapposter { flex: 1 1 auto; } }
 
 /* X3: gear block collapsed on NO-GO (still labeled as affiliate links) */
-.gearfold { padding: 0; }
-.gearfold > summary { min-height: 44px; display: flex; align-items: center; padding: 0 var(--s4); font-size: var(--fs-sm); font-weight: var(--fw-semibold); color: var(--text-muted); cursor: pointer; }
-.gearfold[open] > summary { border-bottom: 1px solid var(--border); }
-.gearfold > .card { border: 0; box-shadow: none; margin-bottom: 0; background: none; }
 
 /* X6: auth modal labels, show/hide password, tap-size close */
 .field-label { display: block; margin: 0 0 4px; font-size: var(--fs-sm); font-weight: var(--fw-semibold); color: var(--text); }

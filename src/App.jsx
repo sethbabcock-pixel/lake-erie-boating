@@ -1470,15 +1470,8 @@ export default function App() {
               </>
             )}
 
-            {rec.level === "NO-GO" ? (
-              // Collapsed on a NO-GO day (the affiliate links stay labeled and one tap away).
-              <details className="card gearfold">
-                <summary>Gear picks · Amazon affiliate links</summary>
-                <GearBlock waterTempF={data.temps?.waterF ?? null} airTempF={data.temps?.airF ?? null} windKt={wind ? wind.speedKt : null} level={rec ? rec.level : null} />
-              </details>
-            ) : (
-              <GearBlock waterTempF={data.temps?.waterF ?? null} airTempF={data.temps?.airF ?? null} windKt={wind ? wind.speedKt : null} level={rec ? rec.level : null} />
-            )}
+            {/* GearBlock folds itself on NO-GO (safety-prep items only, collapsed). */}
+            <GearBlock waterTempF={data.temps?.waterF ?? null} airTempF={data.temps?.airF ?? null} windKt={wind ? wind.speedKt : null} level={rec ? rec.level : null} />
             {showAds && <AdSlot name="detailMid" />}
 
             <footer className="meta">
