@@ -48,6 +48,7 @@ let priceResolves = true;
 let stormMode = false; // Open-Meteo stub: every spot NO-GO (true) vs calm GO (false)
 let scaMode = false; // NWS alerts stub: an active Small Craft Advisory at every point
 let alertsDown = false; // NWS alerts stub: the alerts endpoint fails
+let zoneAlert = null; // NWS alerts stub: "gale" = a Gale Warning on the zone query only; "down" = zone query fails
 // NWS grid stub override: "gusty" = 13 kt gusting 24 kt, 1.5 ft (lake NO-GO on
 // the gust); "nowind" = no wind/gust layers at all, calm 1 ft waves;
 // "gustonly" = a 9 kt gust but no sustained wind (grid or hourly) and no waves.
@@ -108,6 +109,10 @@ function installFetchStub() {
       return jsonResp({ properties: { periods } });
     }
     if (u.includes("api.weather.gov/alerts/active") && alertsDown) return new Response("", { status: 503 });
+    if (u.includes("api.weather.gov/alerts/active?zone=") && zoneAlert === "down") return new Response("", { status: 503 });
+    if (u.includes("api.weather.gov/alerts/active?zone=") && zoneAlert === "gale") {
+      return jsonResp({ features: [{ properties: { event: "Gale Warning", severity: "Moderate", headline: "Gale Warning in effect", sent: new Date().toISOString() } }] });
+    }
     if (u.includes("api.weather.gov/alerts/active") && scaMode) {
       return jsonResp({ features: [{ properties: { event: "Small Craft Advisory", severity: "Minor", headline: "Small Craft Advisory in effect", sent: new Date().toISOString() } }] });
     }
@@ -1786,7 +1791,40 @@ async function run() {
     check("hourly strip: past hours dropped, starts at the current hour", firstH === nowH || firstH === nowH + 1, `got ${firstH}, now ${nowH}`);
   }
 
-  // 58. Grid sampling: a spot's gridSteps override skips an enclosed inner-bay
+  // 58. Alerts are looked up by the spot's marine zone as well as its point:
+  //     zone-issued warnings reach launches outside the zone polygon, and a
+  //     failed zone lookup is never read as "no advisories".
+  {
+    const { onRequest, fetchAlerts, SPOTS } = await import("../functions/marine/conditions.js");
+    stormMode = false; scaMode = false; alertsDown = false; gridMode = null;
+    const page = async () => (await onRequest({ request: new Request("https://shouldiboat.com/marine/conditions?spot=sandusky"), env: { USERS: makeKV() } })).json();
+    zoneAlert = "gale";
+    const g = await page();
+    check("zone alerts: a Gale Warning on the zone only → NO-GO", g.recommendation?.level === "NO-GO", JSON.stringify(g.recommendation));
+    check("zone alerts: the zone's Gale Warning is listed", (g.alerts || []).some((a) => a.event === "Gale Warning") && g.alertsOk === true, JSON.stringify(g.alerts));
+    scaMode = true;
+    const both = await fetchAlerts(SPOTS.sandusky);
+    check("zone alerts: point and zone alerts merge", both.ok && both.alerts.map((a) => a.event).sort().join() === "Gale Warning,Small Craft Advisory", JSON.stringify(both));
+    zoneAlert = null;
+    const dup = await fetchAlerts(SPOTS.sandusky);
+    eq("zone alerts: the same advisory from point and zone shows once", dup.alerts.length, 1);
+    scaMode = false;
+    zoneAlert = "down";
+    const d = await page();
+    check("zone alerts: zone lookup failed → alertsOk false, page not GO", d.alertsOk === false && d.recommendation?.level !== "GO", JSON.stringify({ ok: d.alertsOk, level: d.recommendation?.level }));
+    scaMode = true;
+    const part = await fetchAlerts(SPOTS.sandusky);
+    check("zone alerts: point alerts still shown when only the zone lookup fails", !part.ok && part.alerts?.[0]?.event === "Small Craft Advisory", JSON.stringify(part));
+    scaMode = false; zoneAlert = null;
+    const noZone = await fetchAlerts({ lat: 41.5, lon: -82.7 });
+    check("zone alerts: a spot with no zone uses the point lookup alone", noZone.ok && Array.isArray(noZone.alerts), JSON.stringify(noZone));
+    alertsDown = true;
+    const none = await fetchAlerts(SPOTS.sandusky);
+    check("zone alerts: every lookup failed → alerts null, ok false", none.alerts === null && none.ok === false, JSON.stringify(none));
+    alertsDown = false;
+  }
+
+  // 58b. Grid sampling: a spot's gridSteps override skips an enclosed inner-bay
   //     cell; spots without one (all of Lake Erie) sample exactly as before.
   {
     const { SPOTS, gridStepsFor, gridSamplePoints } = await import("../functions/marine/conditions.js");

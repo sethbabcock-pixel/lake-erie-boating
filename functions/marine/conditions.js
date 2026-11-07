@@ -611,20 +611,37 @@ async function fetchMarineForecast(zone) {
   }
 }
 
-async function fetchAlerts(lat, lon) {
+const toAlert = (f) => ({
+  event: f.properties?.event,
+  severity: f.properties?.severity,
+  headline: f.properties?.headline,
+  description: f.properties?.description,
+  sent: f.properties?.sent || f.properties?.effective || null,
+  ends: f.properties?.ends || f.properties?.expires,
+});
+async function alertsAt(query) {
   try {
-    const data = await getJSON(`${NWS}/alerts/active?point=${lat},${lon}`);
-    return dedupeAlerts((data?.features || []).map((f) => ({
-      event: f.properties?.event,
-      severity: f.properties?.severity,
-      headline: f.properties?.headline,
-      description: f.properties?.description,
-      sent: f.properties?.sent || f.properties?.effective || null,
-      ends: f.properties?.ends || f.properties?.expires,
-    })));
+    const data = await getJSON(`${NWS}/alerts/active?${query}`);
+    return data && Array.isArray(data.features) ? data.features.map(toAlert) : null;
   } catch (e) {
     return null;
   }
+}
+// Active alerts for a spot: by its launch point AND by its marine zone. Marine
+// warnings (SCA, Gale) are issued per marine zone, and a launch point on the
+// shoreline is often outside its zone polygon, so a point-only lookup misses
+// them (Petoskey missed a Gale Warning that way). Returns { alerts, ok }:
+// alerts merges whatever answered (null only if nothing did), and ok is false
+// if any lookup failed, so a partial answer is never read as "no advisories".
+export async function fetchAlerts(spot) {
+  const queries = [`point=${spot.lat},${spot.lon}`];
+  if (spot.zone) queries.push(`zone=${encodeURIComponent(spot.zone)}`);
+  const results = await Promise.all(queries.map(alertsAt));
+  const answered = results.filter((r) => r != null);
+  return {
+    alerts: answered.length ? dedupeAlerts(answered.flat()) : null,
+    ok: answered.length === results.length,
+  };
 }
 
 // NWS re-issues the same advisory repeatedly (e.g. three "Air Quality Alert"
@@ -1220,7 +1237,7 @@ export function computeOutlook(hours) {
 // ---- Recommendation engine ----
 // Thresholds tuned for small/mid recreational power boats (16-26 ft) on the
 // notoriously short, steep chop of Lake Erie's shallow western/central basin.
-export function buildRecommendation({ buoy, alerts, wind, waves, read, hours, profile = "lake", waterF = null }) {
+export function buildRecommendation({ buoy, alerts, wind, waves, read, hours, profile = "lake", waterF = null, alertsOk = true }) {
   const reasons = [];
   let level = "GO"; // GO < CAUTION < NO-GO
   const bump = (to, why) => {
@@ -1244,6 +1261,8 @@ export function buildRecommendation({ buoy, alerts, wind, waves, read, hours, pr
       bump("NO-GO", `Active ${a.event}`);
     } else bump("CAUTION", `Active ${a.event}`);
   }
+  // A failed alerts lookup is missing data, not "no advisories": never GO on it.
+  if (!alertsOk) bump("CAUTION", "Couldn't confirm NWS marine alerts; check for advisories before heading out");
 
   // Wave height — observed buoy if available, else NWS forecast, so it's never
   // blank (the western basin rarely has a reporting wave buoy).
@@ -1750,15 +1769,16 @@ export async function onRequest(context) {
 
   // Fetch all sources concurrently; each resolves to null on failure so one
   // bad source never sinks the whole response.
-  const [{ buoy, tempsObs }, fc, marine, alerts, noaaReport, grid, waterStation] = await Promise.all([
+  const [{ buoy, tempsObs }, fc, marine, alertRes, noaaReport, grid, waterStation] = await Promise.all([
     fetchBuoy(spot.buoys),
     fetchForecastsNear(spot),
     fetchMarineForecast(spot.zone),
-    fetchAlerts(spot.lat, spot.lon),
+    fetchAlerts(spot),
     fetchMarineText(spot.office || "CLE", spot.product || "NSH"), // NSH on the lakes, CWF on the coasts
     fetchSpotGrid(spot),
     spot.waterBuoys && spot.waterBuoys.length ? fetchWaterTemp(spot.waterBuoys) : null,
   ]);
+  const { alerts, ok: alertsOk } = alertRes;
   const point = fc.daily;
   // The nearshore periods, from the marine-zone API or (fallback) the NSH text.
   const marinePeriods = (marine && marine.length) ? marine : nshPeriodsForZone(noaaReport?.text, spot.zone);
@@ -1848,7 +1868,7 @@ export async function onRequest(context) {
   };
 
   const read = windReadFor(spot, wind.dir);
-  const recommendation = buildRecommendation({ buoy, alerts, wind, waves, read, hours: hourly, profile, waterF: waterTempF ?? null });
+  const recommendation = buildRecommendation({ buoy, alerts, wind, waves, read, hours: hourly, profile, waterF: waterTempF ?? null, alertsOk });
 
   // Display-only cleanup, AFTER every verdict above is computed from raw data.
   const showPeriod = (ft, sec) => plausiblePeriod(ft, sec);
@@ -1867,7 +1887,7 @@ export async function onRequest(context) {
     sun,
     buoy,
     alerts: alerts || [],
-    alertsOk: alerts != null, // false = the NWS alerts feed failed (not "no alerts")
+    alertsOk, // false = an NWS alerts lookup failed (not "no alerts")
     marineForecast: marinePeriods,
     pointForecast: point || [],
     noaaReport,
