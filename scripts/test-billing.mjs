@@ -81,6 +81,7 @@ let subGetCancelState = false; // what a GET subscription retrieve reports
 let subStatus = {}; // sub id → status a GET retrieve reports ("missing" → 404); default active
 let subCustomer = {}; // sub id → customer a GET retrieve reports (default: none)
 let stripeDown = false; // every Stripe API call → 500
+let stripeFailIds = new Set(); // sub ids whose GET retrieve returns a 500
 let subInvoice = {}; // sub id → latest_invoice.status when expanded (default "paid")
 let subList = {}; // customer → [{ id, status, purpose, invoice }] for GET /v1/subscriptions?customer=
 let subListDown = false; // the list endpoint → 500
@@ -200,6 +201,7 @@ function installFetchStub() {
       // POST = update (cancel/resume) → mirror the request; GET = retrieve.
       if ((opts.method || "GET") === "POST") return jsonResp(makeSub(body?.cancel_at_period_end === "true"));
       const id = decodeURIComponent(u.split("/v1/subscriptions/")[1].split(/[/?]/)[0]);
+      if (stripeFailIds.has(id)) return jsonResp({ error: { type: "api_error" } }, 500);
       if (subStatus[id] === "missing") return jsonResp({ error: { type: "invalid_request_error", code: "resource_missing" } }, 404);
       const expandInvoice = u.includes("expand") && decodeURIComponent(u).includes("latest_invoice");
       return jsonResp({ ...makeSub(subGetCancelState), status: subStatus[id] || "active", ...(subCustomer[id] ? { customer: subCustomer[id] } : {}),
@@ -1219,15 +1221,15 @@ async function run() {
     eq("past_due other-sub checkout keeps current stripeSubId", (await env.USERS.get("user:current@example.com", "json")).stripeSubId, "sub_cur_live");
 
     // F1: two checkouts (two tabs) leave subs A (older) and B (newer) both
-    // pending. B is stored, then a stale retry for A repoints stripeSubId to
-    // A. When B is paid, its `updated` must still grant (adopt B).
+    // pending. B is stored; a stale retry for A must not displace it while B
+    // is still in grace (R1). When B is paid, its `updated` grants.
     await seedUser(env, "twotabs@example.com");
     subStatus.sub_tA = "past_due"; subCustomer.sub_tA = "cus_tt";
     subStatus.sub_tB = "past_due"; subCustomer.sub_tB = "cus_tt";
     const tabSess = (sub) => ({ ...session, client_reference_id: "twotabs@example.com", customer: "cus_tt", subscription: sub });
     await call(stripeWebhookReq({ id: "evt_tB", type: "checkout.session.completed", data: { object: tabSess("sub_tB") } }, "whsec_right"), env);
     await call(stripeWebhookReq({ id: "evt_tA_retry", type: "checkout.session.completed", data: { object: tabSess("sub_tA") } }, "whsec_right"), env);
-    eq("two tabs: stale retry repointed to A (setup)", (await env.USERS.get("user:twotabs@example.com", "json")).stripeSubId, "sub_tA");
+    eq("two tabs: stale retry for A doesn't displace pending B (R1)", (await env.USERS.get("user:twotabs@example.com", "json")).stripeSubId, "sub_tB");
     emailCalls = [];
     subStatus.sub_tB = "active";
     const bPaid = { id: "evt_tB_upd", type: "customer.subscription.updated", data: { object: { id: "sub_tB", customer: "cus_tt", status: "active", metadata: { purpose: "adfree" } } } };
@@ -1353,6 +1355,103 @@ async function run() {
       eq("G1: unrelated sub deletion keeps ad-free", (await genv.USERS.get("user:g1down@example.com", "json")).adFree, true);
       subList = {};
     }
+
+    // --- Stored-sub live check, duplicate alert, lookup-failure alert ---
+    const notes = () => [...env.USERS._map.keys()].filter((k) => k.startsWith("admin:notification:")).map((k) => JSON.parse(env.USERS._map.get(k)));
+    const ck = (id, who, cus, sub) => ({ id, type: "checkout.session.completed", data: { object: { ...session, client_reference_id: who, customer: cus, subscription: sub } } });
+
+    // R2: admin revoked ad-free but the stored sub is still active → a stale
+    // past_due checkout doesn't displace it.
+    await seedUser(env, "r2@example.com", { adFree: false, stripeCustomerId: "cus_r2", stripeSubId: "sub_r2A" });
+    subStatus.sub_r2A = "active"; subStatus.sub_r2B = "past_due"; subCustomer.sub_r2B = "cus_r2";
+    await call(stripeWebhookReq(ck("evt_r2", "r2@example.com", "cus_r2", "sub_r2B"), "whsec_right"), env);
+    eq("R2: active stored sub not displaced after admin revoke", (await env.USERS.get("user:r2@example.com", "json")).stripeSubId, "sub_r2A");
+
+    // Stored sub ended (unpaid) → a newer past_due checkout does replace it.
+    await seedUser(env, "r1b@example.com", { adFree: false, stripeCustomerId: "cus_r1b", stripeSubId: "sub_r1bB" });
+    subStatus.sub_r1bB = "unpaid"; subStatus.sub_r1bC = "past_due"; subCustomer.sub_r1bC = "cus_r1b";
+    await call(stripeWebhookReq(ck("evt_r1b", "r1b@example.com", "cus_r1b", "sub_r1bC"), "whsec_right"), env);
+    eq("unpaid stored sub replaced by newer past_due sub", (await env.USERS.get("user:r1b@example.com", "json")).stripeSubId, "sub_r1bC");
+
+    // Stored-sub lookup fails on the recoverable path → 503, nothing stored, not recorded.
+    await seedUser(env, "r3@example.com", { adFree: false, stripeCustomerId: "cus_r3", stripeSubId: "sub_r3A" });
+    subStatus.sub_r3B = "past_due"; subCustomer.sub_r3B = "cus_r3";
+    stripeFailIds = new Set(["sub_r3A"]);
+    const r3 = await call(stripeWebhookReq(ck("evt_r3", "r3@example.com", "cus_r3", "sub_r3B"), "whsec_right"), env);
+    stripeFailIds = new Set();
+    eq("stored-sub lookup error → 503", r3.status, 503);
+    check("stored-sub lookup error: event not recorded", !(await env.USERS.get("stripeevt:evt_r3")));
+    eq("stored-sub lookup error: nothing stored", (await env.USERS.get("user:r3@example.com", "json")).stripeSubId, "sub_r3A");
+
+    // L1: already ad-free on active A; a second paid checkout B → ad-free
+    // follows B (main's rule) and the admins are told about the duplicate.
+    await seedUser(env, "dup@example.com", { adFree: true, stripeCustomerId: "cus_dup", stripeSubId: "sub_dupA" });
+    subStatus.sub_dupA = "active"; subCustomer.sub_dupB = "cus_dup";
+    emailCalls = [];
+    eq("L1: duplicate checkout → 200", (await call(stripeWebhookReq(ck("evt_dup", "dup@example.com", "cus_dup", "sub_dupB"), "whsec_right"), env)).status, 200);
+    const dupU = await env.USERS.get("user:dup@example.com", "json");
+    eq("L1: tracks the new sub", dupU.stripeSubId, "sub_dupB");
+    eq("L1: still ad-free", dupU.adFree, true);
+    check("L1: admin emailed about duplicate", emailCalls.some((c) => /Duplicate shouldiboat Pro subscription/.test(c.subject)), JSON.stringify(emailCalls.map((c) => c.subject)));
+    const dn = notes().find((n) => n.type === "adfree_duplicate_subscription" && n.email === "dup@example.com");
+    check("L1: notice names both subs", dn && dn.trackedSub === "sub_dupB" && dn.otherSub === "sub_dupA" && dn.otherStatus === "active", JSON.stringify(dn));
+    // If B ends first, main's switch-back logic finds A (still live, paid).
+    subList = { cus_dup: [{ id: "sub_dupA", status: "active", purpose: "adfree", invoice: "paid" }] };
+    await env.USERS.put("stripecust:cus_dup", "dup@example.com");
+    await call(stripeWebhookReq({ id: "evt_dupB_del", type: "customer.subscription.deleted", data: { object: { id: "sub_dupB", customer: "cus_dup", status: "canceled", metadata: { purpose: "adfree" } } } }, "whsec_right"), env);
+    const dupU2 = await env.USERS.get("user:dup@example.com", "json");
+    check("L1: B ends → ad-free follows A", dupU2.adFree === true && dupU2.stripeSubId === "sub_dupA", JSON.stringify(dupU2));
+    subList = {};
+
+    // Duplicate check is alert-only: a failing stored-sub lookup never blocks the grant.
+    await seedUser(env, "dupdown@example.com", { adFree: false, stripeCustomerId: "cus_dd", stripeSubId: "sub_ddA" });
+    subCustomer.sub_ddB = "cus_dd";
+    stripeFailIds = new Set(["sub_ddA"]);
+    const dd = await call(stripeWebhookReq(ck("evt_dd", "dupdown@example.com", "cus_dd", "sub_ddB"), "whsec_right"), env);
+    stripeFailIds = new Set();
+    eq("dup check lookup error: still 200", dd.status, 200);
+    eq("dup check lookup error: still grants", (await env.USERS.get("user:dupdown@example.com", "json")).adFree, true);
+
+    // Re-subscribe after the old sub ended: no duplicate notice.
+    await seedUser(env, "resub@example.com", { adFree: false, stripeCustomerId: "cus_rs", stripeSubId: "sub_rsOld" });
+    subStatus.sub_rsOld = "canceled"; subCustomer.sub_rsNew = "cus_rs";
+    await call(stripeWebhookReq(ck("evt_rs", "resub@example.com", "cus_rs", "sub_rsNew"), "whsec_right"), env);
+    eq("re-subscribe: grants", (await env.USERS.get("user:resub@example.com", "json")).adFree, true);
+    check("re-subscribe: no duplicate notice", !notes().some((n) => n.type === "adfree_duplicate_subscription" && n.email === "resub@example.com"));
+
+    // Lookup keeps failing → admins alerted once, on the 3rd failed delivery.
+    await seedUser(env, "lf@example.com");
+    subCustomer.sub_lf = "cus_lf";
+    stripeFailIds = new Set(["sub_lf"]);
+    emailCalls = [];
+    const lfEvt = ck("evt_lf", "lf@example.com", "cus_lf", "sub_lf");
+    const alerts = () => emailCalls.filter((c) => /lookup keeps failing/.test(c.subject)).length;
+    eq("lookup failing: 1st → 503", (await call(stripeWebhookReq(lfEvt, "whsec_right"), env)).status, 503);
+    eq("lookup failing: 2nd → 503", (await call(stripeWebhookReq(lfEvt, "whsec_right"), env)).status, 503);
+    eq("lookup failing: no alert after 2", alerts(), 0);
+    await call(stripeWebhookReq(lfEvt, "whsec_right"), env);
+    eq("lookup failing: alert on the 3rd", alerts(), 1);
+    await call(stripeWebhookReq(lfEvt, "whsec_right"), env);
+    eq("lookup failing: no repeat alert", alerts(), 1);
+    check("lookup failing: notification names the lookup", notes().some((n) => n.type === "stripe_lookup_failing" && n.eventId === "evt_lf" && n.where === "checkout" && n.sub === "sub_lf"));
+    stripeFailIds = new Set();
+    eq("lookup recovers: retry → 200", (await call(stripeWebhookReq(lfEvt, "whsec_right"), env)).status, 200);
+    eq("lookup recovers: grants", (await env.USERS.get("user:lf@example.com", "json")).adFree, true);
+    // Same alert on the subscription.updated lookup.
+    await seedUser(env, "lfu@example.com", { adFree: false, stripeCustomerId: "cus_lfu", stripeSubId: "sub_lfu" });
+    await env.USERS.put("stripecust:cus_lfu", "lfu@example.com");
+    stripeFailIds = new Set(["sub_lfu"]);
+    const lfu = { id: "evt_lfu", type: "customer.subscription.updated", data: { object: { id: "sub_lfu", customer: "cus_lfu", status: "active", metadata: { purpose: "adfree" } } } };
+    for (let i = 0; i < 3; i++) await call(stripeWebhookReq(lfu, "whsec_right"), env);
+    stripeFailIds = new Set();
+    check("lookup failing on updated: alerted", notes().some((n) => n.type === "stripe_lookup_failing" && n.eventId === "evt_lfu" && n.where === "subscription-update"));
+
+    // A stored past_due sub that becomes paid sends the welcome email once.
+    emailCalls = [];
+    subStatus.sub_lfu = "active";
+    await call(stripeWebhookReq(lfu, "whsec_right"), env);
+    eq("matched update grant: ad-free on", (await env.USERS.get("user:lfu@example.com", "json")).adFree, true);
+    eq("matched update grant: one welcome", emailCalls.filter((c) => /Welcome to shouldiboat Pro/i.test(c.subject)).length, 1);
 
     // Account deleted, then a late checkout retry: no reverse index re-created.
     subStatus.sub_del = "active";
