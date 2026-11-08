@@ -9,6 +9,7 @@
 // The client reads /spot/<id> from the path (App.jsx) and renders normally.
 import { SPOTS, spotFacts } from "./marine/conditions.js";
 import { REGIONS, regionBySlug, nearMetroBySlug, seasonalRegions, LAKE_GUIDES, regionGuides } from "../src/regions.js";
+import { REGION_INTROS } from "../src/region-intros.js";
 
 const SITE = "https://shouldiboat.com";
 const lakeOf = (s) => s.lake || "Lake Erie";
@@ -29,6 +30,7 @@ const nearestSpotLinks = (pt, limit = 8) =>
     .sort((a, b) => a.mi - b.mi)
     .slice(0, limit)
     .map(({ id, s, mi }) => ({ href: `/spot/${id}`, text: `${s.name} (${Math.round(mi)} mi)` }));
+const launchSpots = (n) => `${n} launch ${n === 1 ? "spot" : "spots"}`;
 const esc = (s) => String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 
 const websiteJsonld = () => ({
@@ -61,7 +63,7 @@ const regionJsonld = (region, count) => ({
   "@type": "WebPage",
   name: `${region.title} boating conditions`,
   url: `${SITE}/${region.slug}`,
-  about: `Boating conditions for ${count} launch spots across ${region.title}`,
+  about: `Boating conditions for ${launchSpots(count)} across ${region.title}`,
   isPartOf: { "@type": "WebSite", name: "shouldiboat.com", url: `${SITE}/` },
   breadcrumb: {
     "@type": "BreadcrumbList",
@@ -232,7 +234,7 @@ export function seoForPath(pathname, live = null) {
   const region = rm && regionBySlug(rm[1]);
   if (region) {
     const count = Object.values(SPOTS).filter((s) => (region.lakes || []).includes(s.lake || "Lake Erie")).length;
-    const description = `Live boating conditions for ${region.title}: a clear GO / CAUTION / NO-GO call for ${count} launch spots, from NOAA wind, waves, gusts, an hour-by-hour risk timeline, marine warnings and live webcams.`;
+    const description = `Live boating conditions for ${region.title}: a clear GO / CAUTION / NO-GO call for ${launchSpots(count)}, from NOAA wind, waves, gusts, an hour-by-hour risk timeline, marine warnings and live webcams.`;
     return {
       url: `${SITE}/${region.slug}`,
       title: `${region.title} boating conditions · GO / CAUTION / NO-GO · shouldiboat.com`,
@@ -246,6 +248,9 @@ export function seoForPath(pathname, live = null) {
           ...(tiles.length
             ? lakeSections(tiles, region.lakes || [])
             : [{ h2: "Launches", html: `<p style="margin:0">${regionSpots(region, 99).map((x) => link(x.href, x.text)).join(" · ")}</p>` }]),
+          // Editorial intro: the unique, non-templated part of a region page.
+          REGION_INTROS[region.slug] && { h2: REGION_INTROS[region.slug].heading, html:
+            REGION_INTROS[region.slug].paragraphs.map((t) => `<p style="margin:0 0 10px">${esc(t)}</p>`).join("") },
         ],
         links: [{ href: "/", text: "All waters" }, { href: "/guides/", text: "Boating guides" }],
       }),
@@ -416,7 +421,7 @@ const GUIDES = [
 // but only trusts it when it's accurate — so BUMP THIS when you ship a change
 // that alters what's on the pages (new content, layout, copy), not on every
 // deploy. W3C date format (YYYY-MM-DD).
-const CONTENT_UPDATED = "2026-11-07";
+const CONTENT_UPDATED = "2026-11-08";
 
 // Launch pages (/spot/*) are noindex and deliberately left out (see seoForPath).
 export async function sitemapXml() {

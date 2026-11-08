@@ -689,6 +689,8 @@ body.has-takeover .app { background: var(--bg); border-radius: var(--r-lg) var(-
 .directory { padding-top: var(--s5); }
 .directory-title { font-size: var(--fs-xl); font-weight: var(--fw-bold); margin: 0 0 var(--s4); color: var(--text); }
 .directory-blurb { margin: calc(-1 * var(--s3)) 0 var(--s4); color: var(--text-muted); font-size: var(--fs-sm); max-width: 60ch; }
+.region-intro { padding-top: var(--s5); max-width: 68ch; }
+.region-intro p { margin: 0 0 var(--s3); color: var(--text); line-height: 1.6; }
 .region-nav { display: flex; flex-wrap: wrap; gap: var(--s2); margin: 0 0 var(--s4); }
 .region-chip { display: inline-flex; align-items: center; padding: 6px 14px; border-radius: 999px; border: 1px solid var(--border);
   background: var(--surface); color: var(--text-muted); font-size: var(--fs-sm); font-weight: var(--fw-semibold); text-decoration: none;

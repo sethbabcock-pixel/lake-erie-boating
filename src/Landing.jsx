@@ -6,6 +6,7 @@ import { scrollBehavior } from "./motion.js";
 import { fmtWaves } from "./units.js";
 import { AdSlot } from "./monetize.jsx";
 import { getSummary } from "./summary.js";
+import { REGION_INTROS } from "./region-intros.js";
 import { LAKE_ORDER, NEAR_METROS, seasonalRegions, seasonalLakeOrder, regionBySlug, regionGuides } from "./regions.js";
 
 const vclass = (v) => (v === "NO-GO" ? "nogo" : v === "CAUTION" ? "caution" : v === "GO" ? "go" : "unknown");
@@ -303,6 +304,19 @@ function RegionNav({ region, onRegion }) {
           onClick={(e) => { if (onRegion) { e.preventDefault(); onRegion(r.slug); } }}>{r.title}</a>
       ))}
     </nav>
+  );
+}
+
+// Editorial intro for a region page — the local knowledge behind the verdicts.
+// Sits after the live directory and before any ad slot.
+function RegionIntro({ region }) {
+  const intro = REGION_INTROS[region.slug];
+  if (!intro) return null;
+  return (
+    <section className="region-intro" aria-labelledby="region-intro-h">
+      <h2 id="region-intro-h" className="directory-title">{intro.heading}</h2>
+      {intro.paragraphs.map((t, i) => <p key={i}>{t}</p>)}
+    </section>
   );
 }
 
@@ -669,7 +683,7 @@ export default function Landing({ adFree, showAds, onSelect, favorites, onCookie
   const regionTally = regionPage && summary ? (() => {
     const mine = summary.filter((s) => (regionPage.lakes || []).includes(s.lake || "Lake Erie"));
     const go = mine.filter((s) => s.level === "GO").length;
-    return mine.length ? `${go} of ${mine.length} launches are GO right now. Live GO / CAUTION / NO-GO calls from NOAA wind, waves and weather.` : null;
+    return mine.length ? `${go} of ${mine.length} ${mine.length === 1 ? "launch is" : "launches are"} GO right now. Live GO / CAUTION / NO-GO calls from NOAA wind, waves and weather.` : null;
   })() : null;
   const directory = <RegionDirectory summary={summary} q="" onSelect={onSelect} deepLake={dirRegion ? null : deepLake} region={dirRegion} onRegion={onRegion} />;
   return (
@@ -689,6 +703,7 @@ export default function Landing({ adFree, showAds, onSelect, favorites, onCookie
             heading={<>Closest launches to {metro.name}</>} />
         )}
         {regionPage && directory}
+        {regionPage && <RegionIntro region={regionPage} />}
         {!metro && !regionPage && <RightNow summary={summary} favorites={favorites} skipId={homeIdFor(favorites)} onSelect={onSelect} />}
         {onJoin && (
           <div className="joinstrip">
