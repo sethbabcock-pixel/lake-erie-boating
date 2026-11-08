@@ -143,6 +143,9 @@ export default {
   async scheduled(event, env, ctx) {
     ctx.waitUntil(runScheduled(env, new Date(event.scheduledTime).getUTCHours(), new Date(event.scheduledTime)).catch(() => {}));
     // Announce changed pages to IndexNow engines (no-op unless CONTENT_UPDATED moved).
-    ctx.waitUntil(indexNowIfChanged(env).catch(() => {}));
+    ctx.waitUntil(indexNowIfChanged(env).catch((e) => {
+      console.log("indexnow error", String(e));
+      return env.USERS && env.USERS.put("indexnow:last", `${new Date().toISOString()} error ${String(e).slice(0, 300)}`);
+    }));
   },
 };

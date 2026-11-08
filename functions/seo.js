@@ -460,6 +460,10 @@ export async function indexNowIfChanged(env) {
       urlList: sitemapUrls().map((x) => x.loc),
     }),
   });
-  // 200/202 = accepted. Anything else retries next hour.
+  // 200/202 = accepted. Anything else retries next hour. The last response is
+  // kept in KV (indexnow:last) so a rejection can be diagnosed without logs.
+  const text = await r.text().catch(() => "");
+  await env.USERS.put("indexnow:last", `${new Date().toISOString()} ${r.status} ${text.slice(0, 300)}`).catch(() => {});
+  console.log("indexnow", r.status, text.slice(0, 300));
   if (r.status === 200 || r.status === 202) await env.USERS.put(mark, CONTENT_UPDATED);
 }
