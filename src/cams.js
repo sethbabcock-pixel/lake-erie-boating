@@ -14,6 +14,8 @@ export const CAMS = [
   { name: "Put-in-Bay · Boardwalk Harbor", lat: 41.653, lon: -82.821, ozolio: "EMB_PSZZ000005DE" },
   { name: "Put-in-Bay · Perry's Monument (West)", lat: 41.654, lon: -82.812, ozolio: "EMB_ULHE00000B88" },
   { name: "Lorain · Black River Landing", lat: 41.47, lon: -82.18, yt: "ZZevIUr2cTk" },
+  { name: "Lorain · Lighthouse & Pier", lat: 41.469, lon: -82.178, yt: "AinDIqEXEu4" },
+  { name: "Lorain · Port Marina", lat: 41.47, lon: -82.18, yt: "1MVB3fgg7kg" },
   { name: "Mentor · Mentor Harbor Yacht Club", lat: 41.73, lon: -81.36, ipcamlive: "mhyc" },
   { name: "Erie, PA · Bayfront", lat: 42.14, lon: -80.09, wetmet: "388190fe4f8b3159810f66712ba47065" },
   // Northern Lake Michigan (Little Traverse Bay)
@@ -21,6 +23,10 @@ export const CAMS = [
   { name: "Petoskey · Bay", lat: 45.37, lon: -84.95, angelcam: "ger25omkrm", lake: "Lake Michigan" },
   { name: "Petoskey · Bayfront", lat: 45.37, lon: -84.96, wetmet: "8e442be557e9221ea31ed33e75a38071", lake: "Lake Michigan" },
   // Lake Michigan (researched + verified live)
+  // Chicago: the old Playpen 4K stream (ATz12otMpf4) is gone (oEmbed 403); Lakefront Live + Michigan City are listed further down.
+  { name: "Gary · Wells Street Beach", lat: 41.62, lon: -87.26, yt: "foVd0uAK3Fg", lake: "Lake Michigan" },
+  // Milwaukee: the EarthCam stream (MT5Og9gOKuM) was dropped — EarthCam is off-limits and it was a city view.
+  { name: "Milwaukee · Summerfest & Harbor (Axis)", lat: 43.03, lon: -87.90, yt: "ctrwip5GIb0", lake: "Lake Michigan" },
   { name: "Sheboygan · Harbor Centre Marina", lat: 43.75, lon: -87.715, yt: "lu-YXDumeps", lake: "Lake Michigan" },
   { name: "Sheboygan · North Beach", lat: 43.75, lon: -87.715, yt: "13j5iZkMpbE", lake: "Lake Michigan" },
   { name: "Traverse City · W Grand Traverse Bay", lat: 44.76, lon: -85.62, yt: "2ETj1sUmEmU", lake: "Lake Michigan" },
@@ -40,13 +46,16 @@ export const CAMS = [
   { name: "Oswego · Lake Ontario (SUNY)", lat: 43.47, lon: -76.51, yt: "wfhQTU0HrpY", lake: "Lake Ontario" },
   { name: "Olcott · Harborcam", lat: 43.34, lon: -78.72, yt: "NpoCG3w-NXI", lake: "Lake Ontario" },
   // Lake Huron
-  { name: "Port Huron · St. Clair River (BoatNerd)", lat: 42.98, lon: -82.42, yt: "dqrwY6i-Zz4", lake: "Lake Huron" },
+  { name: "St. Clair · River (BoatNerd Voyageur)", lat: 42.83, lon: -82.49, yt: "yu0pKQSvYX8", lake: "Lake Huron" },
+  { name: "Marine City · St. Clair River (StreamTime)", lat: 42.72, lon: -82.49, yt: "NqvRpsavyWg", lake: "Lake Huron" },
+  { name: "Detroit River · Dossin Museum (BoatNerd)", lat: 42.34, lon: -82.95, yt: "L73DrCZHJ8A", lake: "Lake Huron" },
   { name: "Port Huron · St. Clair River (StreamTime)", lat: 42.98, lon: -82.42, yt: "AwP_Q6IGwFs", lake: "Lake Huron" },
   { name: "Alpena · Thunder Bay (NOAA GLERL)", lat: 45.06, lon: -83.42, img: "https://www.glerl.noaa.gov/metdata/cams/apn04.jpg", link: "https://www.glerl.noaa.gov/metdata/", lake: "Lake Huron" },
   { name: "DeTour · Drummond Island Ferry", lat: 45.993, lon: -83.899, wetmet: "609fd1e6905ac5196fb8534a64f36993", lake: "Lake Huron" },
   // Lake Superior
   { name: "Duluth · Canal Cam", lat: 46.78, lon: -92.08, yt: "HPS48TMmNag", lake: "Lake Superior" },
-  { name: "Duluth · Western Harbor", lat: 46.78, lon: -92.08, yt: "mpMdJJjw59E", lake: "Lake Superior" },
+  { name: "Duluth · Western Harbor", lat: 46.78, lon: -92.08, yt: "SBElcRmgVjw", lake: "Lake Superior" },
+  { name: "Duluth · South Pier Lighthouse", lat: 46.78, lon: -92.08, yt: "a-ADUhRp0yk", lake: "Lake Superior" },
   { name: "Duluth · Pier B", lat: 46.78, lon: -92.08, yt: "c1kfkIoF0k0", lake: "Lake Superior" },
   { name: "Marquette · Lower Harbor", lat: 46.54, lon: -87.38, wetmet: "08a47e963e2f369ca92e4fe022b7f329", lake: "Lake Superior" },
   { name: "Houghton · Portage Lift Bridge", lat: 47.12, lon: -88.57, wetmet: "040f3085e8b73aa13a4d4c98fdc7f0ac", lake: "Lake Superior" },

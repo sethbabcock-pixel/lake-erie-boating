@@ -1387,15 +1387,6 @@ a, .linklike { color: var(--accent-text); }
 .nearby-promoted .nname { flex: 1 1 auto; text-align: left; }
 .nearby-promoted .nearby-chip small { margin-left: auto; text-align: right; }
 
-/* X3: map poster (embed loads on tap) */
-.mapposter { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; width: 100%; min-height: 132px; padding: var(--s4);
-  background: var(--surface-sunk); border: 1px dashed var(--border-strong); border-radius: var(--r-md); color: var(--text);
-  font-family: var(--font-sans); font-size: var(--fs-sm); cursor: pointer; }
-.mapposter:hover { border-color: var(--accent); }
-.mapposter-ico { color: var(--accent); }
-.mapposter small { color: var(--text-muted); font-size: var(--fs-xs); }
-@media (min-width: 1024px) { .dash2 .mapposter { flex: 1 1 auto; } }
-
 /* X3: gear block collapsed on NO-GO (still labeled as affiliate links) */
 
 /* X6: auth modal labels, show/hide password, tap-size close */

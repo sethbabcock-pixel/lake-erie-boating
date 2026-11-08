@@ -2426,11 +2426,19 @@ async function run() {
     const { fetchTodayWindows } = await import("../functions/marine/conditions.js");
     stormMode = false; scaMode = false; alertsDown = false; gridMode = null; zoneAlert = null; gridWavesAt = null;
     nshMock = null;
-    check("digest floor: calm grid, no NSH text → Sandusky gets a window", (await fetchTodayWindows()).sandusky != null);
-    const per = ["TODAY", "TONIGHT", "SUNDAY", "SUNDAY NIGHT", "MONDAY", "MONDAY NIGHT"].map((n) => `.${n}...Northeast wind 20 to 25 knots. Waves 5 to 7 feet.`);
-    nshMock = ["LEZ144>148-072115-", "Vermilion to Avon Point OH-", "", ...per, "", "$$"].join("\n");
-    eq("digest floor: NSH 5-7 ft for LEZ144 → no Sandusky window", (await fetchTodayWindows()).sandusky, null);
-    nshMock = null;
+    // The digest is built in the morning; pin the clock to 7 AM Eastern (12:00
+    // UTC) so the floor's "current half-day" is today's daytime. Run in the
+    // evening, the day's earlier hours fall before the floor and the test
+    // flipped with the time of day.
+    const realNow = Date.now;
+    const pinned = Date.UTC(new Date().getUTCFullYear(), new Date().getUTCMonth(), new Date().getUTCDate(), 12);
+    Date.now = () => pinned;
+    try {
+      check("digest floor: calm grid, no NSH text → Sandusky gets a window", (await fetchTodayWindows()).sandusky != null);
+      const per = ["TODAY", "TONIGHT", "SUNDAY", "SUNDAY NIGHT", "MONDAY", "MONDAY NIGHT"].map((n) => `.${n}...Northeast wind 20 to 25 knots. Waves 5 to 7 feet.`);
+      nshMock = ["LEZ144>148-072115-", "Vermilion to Avon Point OH-", "", ...per, "", "$$"].join("\n");
+      eq("digest floor: NSH 5-7 ft for LEZ144 → no Sandusky window", (await fetchTodayWindows()).sandusky, null);
+    } finally { Date.now = realNow; nshMock = null; }
   }
 
   // ── Launch-facts card: a configured buoy is not a live buoy ──
