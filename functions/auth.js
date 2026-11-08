@@ -1462,6 +1462,34 @@ export async function handleAuth(request, env, url, ctx) {
     // Only the ad-free subscription may flip ad-free. Other checkouts on the
     // same Stripe account (e.g. one-time merch payments) must not grant it or
     // overwrite a subscriber's stored subscription id.
+    // Stripe lookups that fail return 503 so Stripe retries. Stripe gives up
+    // after ~3 days, so a lookup that keeps failing would silently leave a
+    // paying customer without ad-free. Alert the admins once per event, on
+    // its 3rd failed delivery (ignores one-off blips).
+    const lookupFailed = async (where, info = {}) => {
+      if (evtKey) {
+        const fk = `stripelookupfail:${event.id}`;
+        const n = (parseInt(await env.USERS.get(fk), 10) || 0) + 1;
+        await env.USERS.put(fk, String(n), { expirationTtl: 7 * 86400 });
+        if (n === 3) {
+          await runBg(ctx, notify(env, "stripe_lookup_failing",
+            { where, eventId: event.id, eventType: event.type || null, ...info },
+            { to: await adminEmails(env), subject: "shouldiboat: Stripe subscription lookup keeps failing",
+              html: `<div style="font-family:system-ui,sans-serif"><h2>Stripe lookup keeps failing</h2><p>Webhook event <code>${htmlEscape(event.id)}</code> (${htmlEscape(event.type || "?")}) has failed 3 times because Stripe could not answer a subscription lookup (${htmlEscape(where)}) for <b>${htmlEscape(info.email || "?")}</b>, subscription <code>${htmlEscape(info.sub || "?")}</code>. Until this is fixed the event isn't applied, so ad-free may be wrong for this user. Stripe stops retrying after about 3 days.</p></div>`,
+              ttlDays: 30 }));
+        }
+      }
+      return json({ error: "Could not confirm subscription with Stripe; retry later." }, 503);
+    };
+    // Live status of the user's stored sub when it differs from `subId`:
+    // "none" when there's nothing else stored, null when Stripe can't answer,
+    // else Stripe's status ("missing" for a 404).
+    const SUB_HOLDS = ["active", "trialing", "past_due"];
+    const storedSubStatus = async (user, subId) => {
+      if (!user || !user.stripeSubId || user.stripeSubId === subId) return "none";
+      const s = await stripeSubLive(env, user.stripeSubId);
+      return s ? s.status : null;
+    };
     const purpose = obj.metadata?.purpose;
     const notAdFree = purpose != null && purpose !== "adfree";
     if (event.type === "checkout.session.completed" || event.type === "checkout.session.async_payment_succeeded") {
@@ -1482,7 +1510,7 @@ export async function handleAuth(request, env, url, ctx) {
       // the email in KV) after the account was deleted.
       if (obj.customer && owner) await env.USERS.put(`stripecust:${obj.customer}`, email);
       const live = await stripeSubLive(env, obj.subscription);
-      if (live === null) return json({ error: "Could not confirm subscription with Stripe; retry later." }, 503);
+      if (live === null) return lookupFailed("checkout", { email, sub: obj.subscription });
       const customerOk = !(obj.customer && live.customer && live.customer !== obj.customer);
       if (!live.ok || !customerOk) {
         // Paid checkout, but the sub isn't active/trialing yet (e.g. a retry
@@ -1494,9 +1522,30 @@ export async function handleAuth(request, env, url, ctx) {
         const recoverable = ["past_due", "unpaid", "incomplete"].includes(live.status);
         const strictCustomer = !!(obj.customer && live.customer === obj.customer);
         if (owner && recoverable && strictCustomer && !(owner.adFree && owner.stripeSubId && owner.stripeSubId !== obj.subscription)) {
-          await saveUser(env, { ...owner, stripeCustomerId: obj.customer, stripeSubId: obj.subscription });
+          // Nor over a different stored sub that is still live or in grace
+          // (checked with Stripe, not the adFree flag): a stale retry for an
+          // old unpaid sub must not displace a pending sub that's about to
+          // be paid, or an active one after an admin revoke.
+          const stored = await storedSubStatus(owner, obj.subscription);
+          if (stored === null) return lookupFailed("checkout-stored", { email, sub: owner.stripeSubId });
+          if (!SUB_HOLDS.includes(stored)) {
+            await saveUser(env, { ...owner, stripeCustomerId: obj.customer, stripeSubId: obj.subscription });
+          }
         }
         return done({ received: true, ignored: true });
+      }
+      // A different stored sub that is still billing means two live Pro
+      // subscriptions (e.g. two checkout tabs). Ad-free follows the new one
+      // (and switches back if it ends first); tell the admins so one can be
+      // refunded/canceled by hand. Alert-only: if Stripe can't answer here,
+      // grant anyway rather than hold up a paying customer.
+      const storedNow = await storedSubStatus(owner, obj.subscription);
+      if (storedNow && SUB_HOLDS.includes(storedNow)) {
+        await runBg(ctx, notify(env, "adfree_duplicate_subscription",
+          { email, customer: obj.customer || null, storedCustomer: owner.stripeCustomerId || null, trackedSub: obj.subscription, otherSub: owner.stripeSubId, otherStatus: storedNow },
+          { to: await adminEmails(env), subject: "Duplicate shouldiboat Pro subscription",
+            html: `<div style="font-family:system-ui,sans-serif"><h2>Duplicate Pro subscription</h2><p><b>${htmlEscape(email)}</b> now has two live ad-free subscriptions. Ad-free follows the new one, <code>${htmlEscape(obj.subscription)}</code> (customer <code>${htmlEscape(obj.customer || "?")}</code>). The other, <code>${htmlEscape(owner.stripeSubId)}</code> (${htmlEscape(storedNow)}${owner.stripeCustomerId && owner.stripeCustomerId !== obj.customer ? `, customer <code>${htmlEscape(owner.stripeCustomerId)}</code>` : ""}), is still billing. Please refund/cancel one in Stripe.</p></div>`,
+            ttlDays: 30 }));
       }
       const prev = await setAdFree(email, true, { stripeCustomerId: obj.customer || null, stripeSubId: obj.subscription });
       // Welcome only on a real state change, not on every redelivery.
@@ -1520,7 +1569,7 @@ export async function handleAuth(request, env, url, ctx) {
         // Revokes need no check: failing toward revocation is safe.
         if (active && obj.id) {
           const live = await stripeSubLive(env, obj.id);
-          if (live === null) return json({ error: "Could not confirm subscription with Stripe; retry later." }, 503);
+          if (live === null) return lookupFailed("subscription-update", { email, sub: obj.id });
           active = ["active", "trialing", "past_due"].includes(live.status);
         }
         // The recorded sub ended while the user was ad-free. If they're still
@@ -1554,7 +1603,12 @@ export async function handleAuth(request, env, url, ctx) {
             return done();
           }
         }
-        await setAdFree(email, active);
+        const prevU = await setAdFree(email, active);
+        // A recorded ad-free sub that becomes paid (e.g. stored while past_due
+        // at checkout) is a real grant: welcome, once.
+        if (active && purpose === "adfree" && prevU && !prevU.adFree) {
+          await runBg(ctx, notify(env, "adfree_activated", { email }, { to: email, subject: "Welcome to shouldiboat Pro", html: adFreeHtml(), ttlDays: 30 }));
+        }
       } else if (user && event.type === "customer.subscription.updated" && purpose === "adfree" && obj.id
                  && !user.adFree && ["active", "trialing"].includes(obj.status)
                  && (!user.stripeCustomerId || user.stripeCustomerId === obj.customer)) {
@@ -1569,7 +1623,7 @@ export async function handleAuth(request, env, url, ctx) {
         // payment settled, an ACH/SEPA sub that is "active" while its first
         // payment is still processing must not grant early.
         const live = await stripeSubLive(env, obj.id, { invoice: true });
-        if (live === null) return json({ error: "Could not confirm subscription with Stripe; retry later." }, 503);
+        if (live === null) return lookupFailed("subscription-adopt", { email, sub: obj.id });
         if (live.ok && live.customer === obj.customer && live.invoicePaid === true) {
           const prev = await setAdFree(email, true, { stripeCustomerId: obj.customer, stripeSubId: obj.id });
           if (prev && !prev.adFree) {

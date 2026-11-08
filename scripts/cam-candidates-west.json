@@ -1,0 +1,394 @@
+[
+  {
+    "spot": "sausalito",
+    "name": "Angel Island · Ayala Cove",
+    "lake": "San Francisco Bay",
+    "lat": 37.8615,
+    "lon": -122.4325,
+    "kind": "yt",
+    "id": "OIyy1ZmRryM",
+    "view": "Cove and Raccoon Strait water from the beach; also serves berkeley, alameda"
+  },
+  {
+    "spot": "berkeley",
+    "name": "Treasure Island · Alcatraz & bay (ABC7)",
+    "lake": "San Francisco Bay",
+    "lat": 37.823,
+    "lon": -122.37,
+    "kind": "yt",
+    "id": "_VqvVJfmyfs",
+    "view": "Open bay water toward Alcatraz; also serves sausalito, alameda, redwood-city"
+  },
+  {
+    "spot": "alameda",
+    "name": "Treasure Island · Mersea bay view",
+    "lake": "San Francisco Bay",
+    "lat": 37.8225,
+    "lon": -122.3705,
+    "kind": "yt",
+    "id": "BSWhGNXxT9A",
+    "view": "Bay shoreline, Bay Bridge/Golden Gate beyond; thumbnail was a title card; also serves berkeley, redwood-city"
+  },
+  {
+    "spot": "redwood-city",
+    "name": "San Francisco · Pier 23 Cafe waterfront (StreamTime)",
+    "lake": "San Francisco Bay",
+    "lat": 37.8095,
+    "lon": -122.4005,
+    "kind": "yt",
+    "id": "PDKGik7Np88",
+    "view": "Embarcadero piers and Central Bay water; Central Bay, not South Bay; also serves sausalito, berkeley, alameda"
+  },
+  {
+    "spot": "half-moon-bay",
+    "name": "Pacifica · Pier close-up (Chamberlin Nature)",
+    "lake": "Northern California Coast",
+    "lat": 37.6322,
+    "lon": -122.4965,
+    "kind": "yt",
+    "id": "BrUaOjjXgZM",
+    "view": "Pier and surf zone; live timestamp seen 2026-11-07"
+  },
+  {
+    "spot": "half-moon-bay",
+    "name": "Pacifica · Pier & beach (Chamberlin Nature)",
+    "lake": "Northern California Coast",
+    "lat": 37.6315,
+    "lon": -122.4965,
+    "kind": "yt",
+    "id": "_-_hg_aJrKU",
+    "view": "Wide surf and pier view; thumbnail was dated 2020, recheck live"
+  },
+  {
+    "spot": "half-moon-bay",
+    "name": "Pacifica · Mori Point (Chamberlin Nature)",
+    "lake": "Northern California Coast",
+    "lat": 37.6,
+    "lon": -122.5,
+    "kind": "yt",
+    "id": "iQ7XJDXYSMo",
+    "view": "Surf and coastline; thumbnail was dated 2026-02, recheck live"
+  },
+  {
+    "spot": "half-moon-bay",
+    "name": "Pacifica · Linda Mar Beach cam",
+    "lake": "Northern California Coast",
+    "lat": 37.592,
+    "lon": -122.5,
+    "kind": "yt",
+    "id": "TDcKozRHlKs",
+    "view": "Linda Mar surf beach; thumbnail was a title card, recheck"
+  },
+  {
+    "spot": "bodega-bay",
+    "name": "Point Reyes · Marine Mammal Center shoreline cam",
+    "lake": "Northern California Coast",
+    "lat": 38.03,
+    "lon": -122.8,
+    "kind": "yt",
+    "id": "k-rsgU8-Inw",
+    "view": "Cove water and rocky shore, Point Reyes National Seashore; lat/lon approximate; also serves half-moon-bay, sausalito"
+  },
+  {
+    "spot": "humboldt-bay",
+    "name": "Trinidad Harbor · Trinidad Bay",
+    "lake": "Northern California Coast",
+    "lat": 41.0587,
+    "lon": -124.1436,
+    "kind": "yt",
+    "id": "31ViUog5FV4",
+    "view": "Trinidad Bay and harbor mouth, 20 mi north of Humboldt Bay"
+  },
+  {
+    "spot": "humboldt-bay",
+    "name": "Offshore · Eel River buoy cam 46022 (NDBC)",
+    "lake": "Northern California Coast",
+    "lat": 40.716,
+    "lon": -124.54,
+    "kind": "img",
+    "id": "https://www.ndbc.noaa.gov/buoycam.php?station=46022",
+    "link": "https://www.ndbc.noaa.gov/station_page.php?station=46022",
+    "view": "NOAA offshore panorama 17 NM WSW of Eureka; dark at night"
+  },
+  {
+    "spot": "bodega-bay",
+    "name": "Offshore · Bodega Bay buoy cam 46013 (NDBC)",
+    "lake": "Northern California Coast",
+    "lat": 38.235,
+    "lon": -123.317,
+    "kind": "img",
+    "id": "https://www.ndbc.noaa.gov/buoycam.php?station=46013",
+    "link": "https://www.ndbc.noaa.gov/station_page.php?station=46013",
+    "view": "NOAA offshore panorama 48 NM NW of SF; dark at night"
+  },
+  {
+    "spot": "half-moon-bay",
+    "name": "Offshore · San Francisco buoy cam 46026 (NDBC)",
+    "lake": "Northern California Coast",
+    "lat": 37.75,
+    "lon": -122.838,
+    "kind": "img",
+    "id": "https://www.ndbc.noaa.gov/buoycam.php?station=46026",
+    "link": "https://www.ndbc.noaa.gov/station_page.php?station=46026",
+    "view": "NOAA offshore panorama 18 NM W of SF; shows sea state"
+  },
+  {
+    "spot": "monterey",
+    "name": "Offshore · Monterey buoy cam 46042 (NDBC)",
+    "lake": "Northern California Coast",
+    "lat": 36.787,
+    "lon": -122.408,
+    "kind": "img",
+    "id": "https://www.ndbc.noaa.gov/buoycam.php?station=46042",
+    "link": "https://www.ndbc.noaa.gov/station_page.php?station=46042",
+    "view": "NOAA offshore panorama 27 NM WNW of Monterey; shows sea state"
+  },
+  {
+    "spot": "astoria",
+    "name": "Offshore · Columbia River Bar buoy cam 46029 (NDBC)",
+    "lake": "Oregon Coast",
+    "lat": 46.148,
+    "lon": -124.508,
+    "kind": "img",
+    "id": "https://www.ndbc.noaa.gov/buoycam.php?station=46029",
+    "link": "https://www.ndbc.noaa.gov/station_page.php?station=46029",
+    "view": "NOAA offshore panorama 20 NM W of the Columbia River mouth; also serves garibaldi; dark at night"
+  },
+  {
+    "spot": "newport-or",
+    "name": "Offshore · Stonewall Bank buoy cam 46050 (NDBC)",
+    "lake": "Oregon Coast",
+    "lat": 44.679,
+    "lon": -124.535,
+    "kind": "img",
+    "id": "https://www.ndbc.noaa.gov/buoycam.php?station=46050",
+    "link": "https://www.ndbc.noaa.gov/station_page.php?station=46050",
+    "view": "NOAA offshore panorama 20 NM W of Newport; also serves depoe-bay; dark at night"
+  },
+  {
+    "spot": "coos-bay",
+    "name": "Offshore · Port Orford buoy cam 46015 (NDBC)",
+    "lake": "Oregon Coast",
+    "lat": 42.754,
+    "lon": -124.839,
+    "kind": "img",
+    "id": "https://www.ndbc.noaa.gov/buoycam.php?station=46015",
+    "link": "https://www.ndbc.noaa.gov/station_page.php?station=46015",
+    "view": "NOAA offshore panorama 15 NM W of Port Orford; also serves brookings; dark at night"
+  },
+  {
+    "spot": "brookings",
+    "name": "Offshore · St Georges buoy cam 46027 (NDBC)",
+    "lake": "Oregon Coast",
+    "lat": 41.84,
+    "lon": -124.382,
+    "kind": "img",
+    "id": "https://www.ndbc.noaa.gov/buoycam.php?station=46027",
+    "link": "https://www.ndbc.noaa.gov/station_page.php?station=46027",
+    "view": "NOAA offshore panorama 8 NM NW of Crescent City; dark at night"
+  },
+  {
+    "spot": "newport-or",
+    "name": "Newport · Yaquina Bay from Oregon Coast Aquarium (KOIN 6)",
+    "lake": "Oregon Coast",
+    "lat": 44.6,
+    "lon": -124.05,
+    "kind": "yt",
+    "id": "lc8LAAh2jMI",
+    "view": "Yaquina Bay estuary in lower third of frame, town beyond; also serves depoe-bay"
+  },
+  {
+    "spot": "westport",
+    "name": "Offshore · Cape Elizabeth buoy cam 46041 (NDBC)",
+    "lake": "Washington Coast",
+    "lat": 47.351,
+    "lon": -124.741,
+    "kind": "img",
+    "id": "https://www.ndbc.noaa.gov/buoycam.php?station=46041",
+    "link": "https://www.ndbc.noaa.gov/station_page.php?station=46041",
+    "view": "NOAA offshore panorama 45 NM NW of Aberdeen; dark at night"
+  },
+  {
+    "spot": "seattle",
+    "name": "Seattle · Union Bay & Lake Washington (UW)",
+    "lake": "Puget Sound",
+    "lat": 47.655,
+    "lon": -122.305,
+    "kind": "yt",
+    "id": "NCzKkn0wD30",
+    "view": "Union Bay/Lake Washington water, 520 bridge; fresh water, not the Sound; also serves everett, tacoma"
+  },
+  {
+    "spot": "olympia",
+    "name": "Union · Hood Canal boat ramp (Hood Canal Communications)",
+    "lake": "Puget Sound",
+    "lat": 47.357,
+    "lon": -123.097,
+    "kind": "yt",
+    "id": "sFX2tlGIl_Y",
+    "view": "Hood Canal shoreline and boat ramp; also serves tacoma, seattle"
+  },
+  {
+    "spot": "olympia",
+    "name": "Union · Hood Canal water & mountain cam (Hood Canal Communications)",
+    "lake": "Puget Sound",
+    "lat": 47.357,
+    "lon": -123.097,
+    "kind": "yt",
+    "id": "DNz4t_CRxuI",
+    "view": "Hood Canal water; fog-bound at capture; also serves tacoma, seattle"
+  },
+  {
+    "spot": "honolulu",
+    "name": "Waikiki · South Shore 180° (Waikiki Aquarium / UH SOEST)",
+    "lake": "Hawaii",
+    "lat": 21.2655,
+    "lon": -157.8225,
+    "kind": "yt",
+    "id": "WIUg8wzhq1g",
+    "view": "Panoramic Waikiki surf break and reef; university cam"
+  },
+  {
+    "spot": "honolulu",
+    "name": "Waikiki Beach · Marriott (Ozolio)",
+    "lake": "Hawaii",
+    "lat": 21.275,
+    "lon": -157.825,
+    "kind": "yt",
+    "id": "4CK0CsimBHs",
+    "view": "Waikiki beach, reef break, Diamond Head"
+  },
+  {
+    "spot": "honolulu",
+    "name": "Waikiki · Park Shore Hotel (Ozolio Plus)",
+    "lake": "Hawaii",
+    "lat": 21.2735,
+    "lon": -157.8235,
+    "kind": "yt",
+    "id": "kCPppYpcY_s",
+    "view": "Beach, pier and water; night frame only seen"
+  },
+  {
+    "spot": "honolulu",
+    "name": "Ala Moana · Magic Island lagoon (WOZ ERE)",
+    "lake": "Hawaii",
+    "lat": 21.2885,
+    "lon": -157.8445,
+    "kind": "yt",
+    "id": "y5XS3fMISRk",
+    "view": "Magic Island lagoon and open water off Ala Moana, next to Kewalo Basin"
+  },
+  {
+    "spot": "honolulu",
+    "name": "Ala Moana · Concessions surf break",
+    "lake": "Hawaii",
+    "lat": 21.2865,
+    "lon": -157.851,
+    "kind": "yt",
+    "id": "EuR8OkQxOgk",
+    "view": "Surf break off Ala Moana Beach Park; thumbnail was a title card"
+  },
+  {
+    "spot": "honolulu",
+    "name": "Honolulu Harbor webcam (The Bridge Guy)",
+    "lake": "Hawaii",
+    "lat": 21.31,
+    "lon": -157.87,
+    "kind": "yt",
+    "id": "eCHeZDEVSeU",
+    "view": "Harbor and channel with timestamp overlay; night frame seen, stamp 2026-11-07"
+  },
+  {
+    "spot": "honolulu",
+    "name": "Kahala · Resort beach & reef (Ozolio)",
+    "lake": "Hawaii",
+    "lat": 21.2745,
+    "lon": -157.7835,
+    "kind": "yt",
+    "id": "TZAvviB_o-4",
+    "view": "Oahu south shore reef and ocean; 7 mi east of Honolulu"
+  },
+  {
+    "spot": "maalaea",
+    "name": "Kihei · Hale Pau Hana surf cam",
+    "lake": "Hawaii",
+    "lat": 20.7545,
+    "lon": -156.4579,
+    "kind": "yt",
+    "id": "hPvl6IACa2k",
+    "view": "Kihei shoreline on Ma'alaea Bay; night frame only seen"
+  },
+  {
+    "spot": "maalaea",
+    "name": "Wailea · Fairmont Kea Lani (Ozolio)",
+    "lake": "Hawaii",
+    "lat": 20.6558,
+    "lon": -156.4415,
+    "kind": "yt",
+    "id": "G1zgkkguCyc",
+    "view": "Polo Beach and channel toward Kahoolawe"
+  },
+  {
+    "spot": "maalaea",
+    "name": "Kaanapali · Sheraton Maui (Ozolio)",
+    "lake": "Hawaii",
+    "lat": 20.9167,
+    "lon": -156.6944,
+    "kind": "yt",
+    "id": "YXji6UQ0bwY",
+    "view": "West Maui beach and Au'au Channel; 14 mi NW"
+  },
+  {
+    "spot": "maalaea",
+    "name": "Napili · Napili Kai Beach Resort (Ozolio)",
+    "lake": "Hawaii",
+    "lat": 20.9925,
+    "lon": -156.6675,
+    "kind": "yt",
+    "id": "fwX04Gsb8W4",
+    "view": "Napili Bay beach and water; 17 mi NW"
+  },
+  {
+    "spot": "kona",
+    "name": "Kohanaiki · Web Camera",
+    "lake": "Hawaii",
+    "lat": 19.7235,
+    "lon": -156.0535,
+    "kind": "yt",
+    "id": "Sb6v9lXIDjc",
+    "view": "Coast south of Kona airport; blurry/dark at capture, recheck"
+  },
+  {
+    "spot": "sitka",
+    "name": "Offshore · Cape Edgecumbe buoy cam 46084 (NDBC)",
+    "lake": "Southeast Alaska",
+    "lat": 56.614,
+    "lon": -136.04,
+    "kind": "img",
+    "id": "https://www.ndbc.noaa.gov/buoycam.php?station=46084",
+    "link": "https://www.ndbc.noaa.gov/station_page.php?station=46084",
+    "view": "NOAA offshore panorama 25 NM SSW of Cape Edgecumbe; dark at capture"
+  },
+  {
+    "spot": "whittier",
+    "name": "Western Prince William Sound buoy cam 46081 (NDBC)",
+    "lake": "Southcentral Alaska",
+    "lat": 60.802,
+    "lon": -148.283,
+    "kind": "img",
+    "id": "https://www.ndbc.noaa.gov/buoycam.php?station=46081",
+    "link": "https://www.ndbc.noaa.gov/station_page.php?station=46081",
+    "view": "NOAA panorama in western Prince William Sound; dark at capture"
+  },
+  {
+    "spot": "valdez",
+    "name": "West Orca Bay buoy cam 46060 (NDBC)",
+    "lake": "Southcentral Alaska",
+    "lat": 60.571,
+    "lon": -146.795,
+    "kind": "img",
+    "id": "https://www.ndbc.noaa.gov/buoycam.php?station=46060",
+    "link": "https://www.ndbc.noaa.gov/station_page.php?station=46060",
+    "view": "NOAA panorama in Orca Bay, Prince William Sound; dark at capture"
+  }
+]

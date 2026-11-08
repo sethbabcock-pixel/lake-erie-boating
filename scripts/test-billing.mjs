@@ -71,6 +71,7 @@ let gridMode = null;
 // (one 0 m value held for 7 days, like DTX/84,67 off Port Huron), "zeros"
 // (several valid times, all 0 m), "calm" (a real 0–1 ft day: 0 m and 0.3 m
 // in turn), or a number = a real forecast of that many metres.
+let nshMock = null; // NWS products stub: CLE NSH text (null = no product)
 let gridWavesAt = null;
 let gridCalls = []; // NWS grid stub: the "lat,lon" sample point of each grid fetch
 let hourlyLagH = 0; // hourly stub: lead with this many already-past hours
@@ -81,6 +82,7 @@ let subGetCancelState = false; // what a GET subscription retrieve reports
 let subStatus = {}; // sub id → status a GET retrieve reports ("missing" → 404); default active
 let subCustomer = {}; // sub id → customer a GET retrieve reports (default: none)
 let stripeDown = false; // every Stripe API call → 500
+let stripeFailIds = new Set(); // sub ids whose GET retrieve returns a 500
 let subInvoice = {}; // sub id → latest_invoice.status when expanded (default "paid")
 let subList = {}; // customer → [{ id, status, purpose, invoice }] for GET /v1/subscriptions?customer=
 let subListDown = false; // the list endpoint → 500
@@ -177,6 +179,8 @@ function installFetchStub() {
     if (u.includes("api.weather.gov/alerts/active") && scaMode) {
       return jsonResp({ features: [{ properties: { event: "Small Craft Advisory", severity: "Minor", headline: "Small Craft Advisory in effect", sent: new Date().toISOString() } }] });
     }
+    if (nshMock && u.includes("api.weather.gov/products/types/NSH/locations/CLE")) return jsonResp({ "@graph": [{ id: "nsh-cle-test" }] });
+    if (nshMock && u.endsWith("api.weather.gov/products/nsh-cle-test")) return jsonResp({ productText: nshMock, issuanceTime: new Date().toISOString() });
     if (u.includes("api.weather.gov")) return jsonResp({ features: [], "@graph": [], properties: { periods: [] } });
     if (u.includes("ndbc.noaa.gov")) {
       const st = u.match(/realtime2\/([^/.]+)\.txt$/)?.[1];
@@ -200,6 +204,7 @@ function installFetchStub() {
       // POST = update (cancel/resume) → mirror the request; GET = retrieve.
       if ((opts.method || "GET") === "POST") return jsonResp(makeSub(body?.cancel_at_period_end === "true"));
       const id = decodeURIComponent(u.split("/v1/subscriptions/")[1].split(/[/?]/)[0]);
+      if (stripeFailIds.has(id)) return jsonResp({ error: { type: "api_error" } }, 500);
       if (subStatus[id] === "missing") return jsonResp({ error: { type: "invalid_request_error", code: "resource_missing" } }, 404);
       const expandInvoice = u.includes("expand") && decodeURIComponent(u).includes("latest_invoice");
       return jsonResp({ ...makeSub(subGetCancelState), status: subStatus[id] || "active", ...(subCustomer[id] ? { customer: subCustomer[id] } : {}),
@@ -1219,15 +1224,15 @@ async function run() {
     eq("past_due other-sub checkout keeps current stripeSubId", (await env.USERS.get("user:current@example.com", "json")).stripeSubId, "sub_cur_live");
 
     // F1: two checkouts (two tabs) leave subs A (older) and B (newer) both
-    // pending. B is stored, then a stale retry for A repoints stripeSubId to
-    // A. When B is paid, its `updated` must still grant (adopt B).
+    // pending. B is stored; a stale retry for A must not displace it while B
+    // is still in grace (R1). When B is paid, its `updated` grants.
     await seedUser(env, "twotabs@example.com");
     subStatus.sub_tA = "past_due"; subCustomer.sub_tA = "cus_tt";
     subStatus.sub_tB = "past_due"; subCustomer.sub_tB = "cus_tt";
     const tabSess = (sub) => ({ ...session, client_reference_id: "twotabs@example.com", customer: "cus_tt", subscription: sub });
     await call(stripeWebhookReq({ id: "evt_tB", type: "checkout.session.completed", data: { object: tabSess("sub_tB") } }, "whsec_right"), env);
     await call(stripeWebhookReq({ id: "evt_tA_retry", type: "checkout.session.completed", data: { object: tabSess("sub_tA") } }, "whsec_right"), env);
-    eq("two tabs: stale retry repointed to A (setup)", (await env.USERS.get("user:twotabs@example.com", "json")).stripeSubId, "sub_tA");
+    eq("two tabs: stale retry for A doesn't displace pending B (R1)", (await env.USERS.get("user:twotabs@example.com", "json")).stripeSubId, "sub_tB");
     emailCalls = [];
     subStatus.sub_tB = "active";
     const bPaid = { id: "evt_tB_upd", type: "customer.subscription.updated", data: { object: { id: "sub_tB", customer: "cus_tt", status: "active", metadata: { purpose: "adfree" } } } };
@@ -1353,6 +1358,103 @@ async function run() {
       eq("G1: unrelated sub deletion keeps ad-free", (await genv.USERS.get("user:g1down@example.com", "json")).adFree, true);
       subList = {};
     }
+
+    // --- Stored-sub live check, duplicate alert, lookup-failure alert ---
+    const notes = () => [...env.USERS._map.keys()].filter((k) => k.startsWith("admin:notification:")).map((k) => JSON.parse(env.USERS._map.get(k)));
+    const ck = (id, who, cus, sub) => ({ id, type: "checkout.session.completed", data: { object: { ...session, client_reference_id: who, customer: cus, subscription: sub } } });
+
+    // R2: admin revoked ad-free but the stored sub is still active → a stale
+    // past_due checkout doesn't displace it.
+    await seedUser(env, "r2@example.com", { adFree: false, stripeCustomerId: "cus_r2", stripeSubId: "sub_r2A" });
+    subStatus.sub_r2A = "active"; subStatus.sub_r2B = "past_due"; subCustomer.sub_r2B = "cus_r2";
+    await call(stripeWebhookReq(ck("evt_r2", "r2@example.com", "cus_r2", "sub_r2B"), "whsec_right"), env);
+    eq("R2: active stored sub not displaced after admin revoke", (await env.USERS.get("user:r2@example.com", "json")).stripeSubId, "sub_r2A");
+
+    // Stored sub ended (unpaid) → a newer past_due checkout does replace it.
+    await seedUser(env, "r1b@example.com", { adFree: false, stripeCustomerId: "cus_r1b", stripeSubId: "sub_r1bB" });
+    subStatus.sub_r1bB = "unpaid"; subStatus.sub_r1bC = "past_due"; subCustomer.sub_r1bC = "cus_r1b";
+    await call(stripeWebhookReq(ck("evt_r1b", "r1b@example.com", "cus_r1b", "sub_r1bC"), "whsec_right"), env);
+    eq("unpaid stored sub replaced by newer past_due sub", (await env.USERS.get("user:r1b@example.com", "json")).stripeSubId, "sub_r1bC");
+
+    // Stored-sub lookup fails on the recoverable path → 503, nothing stored, not recorded.
+    await seedUser(env, "r3@example.com", { adFree: false, stripeCustomerId: "cus_r3", stripeSubId: "sub_r3A" });
+    subStatus.sub_r3B = "past_due"; subCustomer.sub_r3B = "cus_r3";
+    stripeFailIds = new Set(["sub_r3A"]);
+    const r3 = await call(stripeWebhookReq(ck("evt_r3", "r3@example.com", "cus_r3", "sub_r3B"), "whsec_right"), env);
+    stripeFailIds = new Set();
+    eq("stored-sub lookup error → 503", r3.status, 503);
+    check("stored-sub lookup error: event not recorded", !(await env.USERS.get("stripeevt:evt_r3")));
+    eq("stored-sub lookup error: nothing stored", (await env.USERS.get("user:r3@example.com", "json")).stripeSubId, "sub_r3A");
+
+    // L1: already ad-free on active A; a second paid checkout B → ad-free
+    // follows B (main's rule) and the admins are told about the duplicate.
+    await seedUser(env, "dup@example.com", { adFree: true, stripeCustomerId: "cus_dup", stripeSubId: "sub_dupA" });
+    subStatus.sub_dupA = "active"; subCustomer.sub_dupB = "cus_dup";
+    emailCalls = [];
+    eq("L1: duplicate checkout → 200", (await call(stripeWebhookReq(ck("evt_dup", "dup@example.com", "cus_dup", "sub_dupB"), "whsec_right"), env)).status, 200);
+    const dupU = await env.USERS.get("user:dup@example.com", "json");
+    eq("L1: tracks the new sub", dupU.stripeSubId, "sub_dupB");
+    eq("L1: still ad-free", dupU.adFree, true);
+    check("L1: admin emailed about duplicate", emailCalls.some((c) => /Duplicate shouldiboat Pro subscription/.test(c.subject)), JSON.stringify(emailCalls.map((c) => c.subject)));
+    const dn = notes().find((n) => n.type === "adfree_duplicate_subscription" && n.email === "dup@example.com");
+    check("L1: notice names both subs", dn && dn.trackedSub === "sub_dupB" && dn.otherSub === "sub_dupA" && dn.otherStatus === "active", JSON.stringify(dn));
+    // If B ends first, main's switch-back logic finds A (still live, paid).
+    subList = { cus_dup: [{ id: "sub_dupA", status: "active", purpose: "adfree", invoice: "paid" }] };
+    await env.USERS.put("stripecust:cus_dup", "dup@example.com");
+    await call(stripeWebhookReq({ id: "evt_dupB_del", type: "customer.subscription.deleted", data: { object: { id: "sub_dupB", customer: "cus_dup", status: "canceled", metadata: { purpose: "adfree" } } } }, "whsec_right"), env);
+    const dupU2 = await env.USERS.get("user:dup@example.com", "json");
+    check("L1: B ends → ad-free follows A", dupU2.adFree === true && dupU2.stripeSubId === "sub_dupA", JSON.stringify(dupU2));
+    subList = {};
+
+    // Duplicate check is alert-only: a failing stored-sub lookup never blocks the grant.
+    await seedUser(env, "dupdown@example.com", { adFree: false, stripeCustomerId: "cus_dd", stripeSubId: "sub_ddA" });
+    subCustomer.sub_ddB = "cus_dd";
+    stripeFailIds = new Set(["sub_ddA"]);
+    const dd = await call(stripeWebhookReq(ck("evt_dd", "dupdown@example.com", "cus_dd", "sub_ddB"), "whsec_right"), env);
+    stripeFailIds = new Set();
+    eq("dup check lookup error: still 200", dd.status, 200);
+    eq("dup check lookup error: still grants", (await env.USERS.get("user:dupdown@example.com", "json")).adFree, true);
+
+    // Re-subscribe after the old sub ended: no duplicate notice.
+    await seedUser(env, "resub@example.com", { adFree: false, stripeCustomerId: "cus_rs", stripeSubId: "sub_rsOld" });
+    subStatus.sub_rsOld = "canceled"; subCustomer.sub_rsNew = "cus_rs";
+    await call(stripeWebhookReq(ck("evt_rs", "resub@example.com", "cus_rs", "sub_rsNew"), "whsec_right"), env);
+    eq("re-subscribe: grants", (await env.USERS.get("user:resub@example.com", "json")).adFree, true);
+    check("re-subscribe: no duplicate notice", !notes().some((n) => n.type === "adfree_duplicate_subscription" && n.email === "resub@example.com"));
+
+    // Lookup keeps failing → admins alerted once, on the 3rd failed delivery.
+    await seedUser(env, "lf@example.com");
+    subCustomer.sub_lf = "cus_lf";
+    stripeFailIds = new Set(["sub_lf"]);
+    emailCalls = [];
+    const lfEvt = ck("evt_lf", "lf@example.com", "cus_lf", "sub_lf");
+    const alerts = () => emailCalls.filter((c) => /lookup keeps failing/.test(c.subject)).length;
+    eq("lookup failing: 1st → 503", (await call(stripeWebhookReq(lfEvt, "whsec_right"), env)).status, 503);
+    eq("lookup failing: 2nd → 503", (await call(stripeWebhookReq(lfEvt, "whsec_right"), env)).status, 503);
+    eq("lookup failing: no alert after 2", alerts(), 0);
+    await call(stripeWebhookReq(lfEvt, "whsec_right"), env);
+    eq("lookup failing: alert on the 3rd", alerts(), 1);
+    await call(stripeWebhookReq(lfEvt, "whsec_right"), env);
+    eq("lookup failing: no repeat alert", alerts(), 1);
+    check("lookup failing: notification names the lookup", notes().some((n) => n.type === "stripe_lookup_failing" && n.eventId === "evt_lf" && n.where === "checkout" && n.sub === "sub_lf"));
+    stripeFailIds = new Set();
+    eq("lookup recovers: retry → 200", (await call(stripeWebhookReq(lfEvt, "whsec_right"), env)).status, 200);
+    eq("lookup recovers: grants", (await env.USERS.get("user:lf@example.com", "json")).adFree, true);
+    // Same alert on the subscription.updated lookup.
+    await seedUser(env, "lfu@example.com", { adFree: false, stripeCustomerId: "cus_lfu", stripeSubId: "sub_lfu" });
+    await env.USERS.put("stripecust:cus_lfu", "lfu@example.com");
+    stripeFailIds = new Set(["sub_lfu"]);
+    const lfu = { id: "evt_lfu", type: "customer.subscription.updated", data: { object: { id: "sub_lfu", customer: "cus_lfu", status: "active", metadata: { purpose: "adfree" } } } };
+    for (let i = 0; i < 3; i++) await call(stripeWebhookReq(lfu, "whsec_right"), env);
+    stripeFailIds = new Set();
+    check("lookup failing on updated: alerted", notes().some((n) => n.type === "stripe_lookup_failing" && n.eventId === "evt_lfu" && n.where === "subscription-update"));
+
+    // A stored past_due sub that becomes paid sends the welcome email once.
+    emailCalls = [];
+    subStatus.sub_lfu = "active";
+    await call(stripeWebhookReq(lfu, "whsec_right"), env);
+    eq("matched update grant: ad-free on", (await env.USERS.get("user:lfu@example.com", "json")).adFree, true);
+    eq("matched update grant: one welcome", emailCalls.filter((c) => /Welcome to shouldiboat Pro/i.test(c.subject)).length, 1);
 
     // Account deleted, then a late checkout retry: no reverse index re-created.
     subStatus.sub_del = "active";
@@ -2254,6 +2356,91 @@ async function run() {
     eq("grid steps: an empty override falls back to the defaults", gridStepsFor({ ...SPOTS.alpena, gridSteps: [] }).join(), "0.035,0.1,0.22");
   }
 
+  // 58c. Spot geometry (Nov 2026 live audit): zones that cover the launch,
+  //      sea bearings whose grid walk reaches real wave cells, and exposure
+  //      lists that match the shoreline.
+  {
+    const { SPOTS, gridSamplePoints, windExposure, alertZonesFor, ugcZones, nshPeriodsForZone } = await import("../functions/marine/conditions.js");
+    const { regionForLake } = await import("../src/regions.js");
+    const h = SPOTS.houghton;
+    eq("geometry: Houghton's zone is LSZ242 (Ontonagon to the Portage Canal upper entrance), not LSZ267", h.zone, "LSZ242");
+    eq("geometry: Houghton is forecast by MQT's NSH", `${h.office}|${h.product || "NSH"}`, "MQT|NSH");
+    check("geometry: Houghton also watches LSZ243 (east of the North Entry)", alertZonesFor(h).includes("LSZ243") && alertZonesFor(h).includes("LSZ242"), JSON.stringify(alertZonesFor(h)));
+    check("geometry: Houghton also watches LSZ246 (Portage waterway / Keweenaw Bay)", alertZonesFor(h).includes("LSZ246"), JSON.stringify(alertZonesFor(h)));
+    eq("geometry: Houghton's walk starts in Superior off the North Entry", JSON.stringify(gridSamplePoints(h)[0]), JSON.stringify({ step: 0.13, lat: 47.2326, lon: -88.6655 }));
+    const exp = (id) => { const e = windExposure(SPOTS[id]); return `${e.onshore.join()}|${e.offshore.join()}`; };
+    const bearings = {
+      mackinaw: [20, "N,NNE,NE,ENE,NNW|SSE,S,SSW,SW,WSW"],          // the Straits, north of the tip
+      petoskey: [300, "WSW,W,WNW,NW,NNW|ENE,E,ESE,SE,SSE"],          // out Little Traverse Bay
+      "traverse-city": [15, "N,NNE,NE,ENE,NNW|SSE,S,SSW,SW,WSW"],   // up West Grand Traverse Bay
+      houghton: [330, "N,NNE,WNW,NW,NNW|ESE,SE,SSE,S,SSW"],          // toward the North Entry
+      muskegon: [270, "SW,WSW,W,WNW,NW|NE,ENE,E,ESE,SE"],            // west-facing shore
+      holland: [270, "SW,WSW,W,WNW,NW|NE,ENE,E,ESE,SE"],
+      "cross-village": [270, "SW,WSW,W,WNW,NW|NE,ENE,E,ESE,SE"],
+    };
+    for (const [id, [sea, want]] of Object.entries(bearings)) {
+      eq(`geometry: ${id} sea bearing`, SPOTS[id].sea, sea);
+      eq(`geometry: ${id} onshore|offshore`, exp(id), want);
+    }
+    eq("geometry: Muskegon's zone is LMZ847 (Grand Haven to Whitehall), not St Joseph's LMZ844", SPOTS.muskegon.zone, "LMZ847");
+    eq("geometry: Bayfield's zone is LSZ147 (Sand Island to Bayfield), not Silver Bay MN's LSZ143", SPOTS.bayfield.zone, "LSZ147");
+    eq("geometry: Sandusky's zone is LEZ144 (Sandusky Bay, Cedar Point)", SPOTS.sandusky.zone, "LEZ144");
+    check("geometry: Sandusky still watches LEZ143 (the islands)", alertZonesFor(SPOTS.sandusky).includes("LEZ143"));
+    check("geometry: Vermilion watches LEZ144 and LEZ145", ["LEZ144", "LEZ145"].every((z) => alertZonesFor(SPOTS.vermilion).includes(z)));
+    // Every curated zone is a well-formed marine zone whose prefix belongs to
+    // its region (a Superior spot can't carry an Erie zone, etc.).
+    const PREFIXES = {
+      greatlakes: /^L[EOHMS]Z/, florida: /^(AMZ|GMZ)/, "gulf-coast": /^GMZ/, southeast: /^AMZ/, socal: /^PZZ/,
+      islands: /^(PHZ|AMZ)/, pnw: /^PZZ/, oregon: /^PZZ/, norcal: /^PZZ/, northeast: /^ANZ/, alaska: /^PKZ/,
+      chesapeake: /^ANZ/, carolina: /^AMZ/,
+    };
+    const bad = Object.entries(SPOTS).filter(([, s]) => {
+      const r = regionForLake(s.lake || "Lake Erie");
+      const zones = [s.zone, ...(s.alertZones || []), ...(s.bar?.zone ? [s.bar.zone] : [])];
+      return !r || !PREFIXES[r.slug] || !zones.every((z) => /^[A-Z]{3}\d{3}$/.test(String(z)) && PREFIXES[r.slug].test(z));
+    }).map(([id, s]) => `${id}:${s.zone}`);
+    check("geometry: every spot zone is ^[A-Z]{3}\\d{3}$ with its region's prefix", Object.keys(SPOTS).length >= 90 && bad.length === 0, bad.join(", "));
+    const glNsh = Object.entries(SPOTS).filter(([, s]) => /^L[EOHMS]Z/.test(s.zone) !== ((s.product || "NSH") === "NSH")).map(([id]) => id);
+    check("geometry: Great Lakes zones read NSH, coastal zones CWF", glNsh.length === 0, glNsh.join(", "));
+
+    // UGC parsing keeps the zone prefix: APX's NSH carries LMZ345 (Point
+    // Betsie to Sleeping Bear) ahead of LHZ345 (Straits of Mackinac).
+    eq("ugc: range", ugcZones("LEZ144>148").join(), "LEZ144,LEZ145,LEZ146,LEZ147,LEZ148");
+    eq("ugc: list", ugcZones("LMZ344-345").join(), "LMZ344,LMZ345");
+    eq("ugc: prefix change mid-list", ugcZones("LMZ344-345-LHZ345>346").join(), "LMZ344,LMZ345,LHZ345,LHZ346");
+    const apx = [
+      "LMZ344-345-071930-", "Sleeping Bear Point to Grand Traverse Light MI-", "626 AM EST Sat Nov 7 2026", "",
+      ".TODAY...West wind 10 knots. Waves 2 feet or less.", ".TONIGHT...Southwest wind 15 to 20 knots. Waves 4 to 6 feet.", "", "$$",
+      "LHZ345-071930-", "Straits of Mackinac within 5 nm of Mackinac Bridge-", "626 AM EST Sat Nov 7 2026", "",
+      ".TODAY...West wind 10 to 15 knots. Waves 1 foot or less.", ".TONIGHT...Southwest wind 15 to 25 knots. Waves 3 to 5 feet.", "", "$$",
+    ].join("\n");
+    eq("nsh: LHZ345 reads the Straits forecast, not LMZ345's", nshPeriodsForZone(apx, "LHZ345")[1]?.forecast, "Southwest wind 15 to 25 knots. Waves 3 to 5 feet.");
+    eq("nsh: LMZ345 still reads its own block", nshPeriodsForZone(apx, "LMZ345")[1]?.forecast, "Southwest wind 15 to 20 knots. Waves 4 to 6 feet.");
+    eq("nsh: a zone that isn't in the product reads nothing", nshPeriodsForZone(apx, "LHZ346").length, 0);
+    eq("nsh: a range header still matches (LEZ144>148)", nshPeriodsForZone("LEZ144>148-072115-\n.TODAY...NE wind 10 knots. Waves 2 feet.\n$$", "LEZ146")[0]?.name, "Today");
+  }
+
+  // 58d. Digest windows use the same nearshore wave floor as tiles and weeks:
+  //      no window on a calm grid cell when the official NSH says 5-7 ft.
+  {
+    const { fetchTodayWindows } = await import("../functions/marine/conditions.js");
+    stormMode = false; scaMode = false; alertsDown = false; gridMode = null; zoneAlert = null; gridWavesAt = null;
+    nshMock = null;
+    // The digest is built in the morning; pin the clock to 7 AM Eastern (12:00
+    // UTC) so the floor's "current half-day" is today's daytime. Run in the
+    // evening, the day's earlier hours fall before the floor and the test
+    // flipped with the time of day.
+    const realNow = Date.now;
+    const pinned = Date.UTC(new Date().getUTCFullYear(), new Date().getUTCMonth(), new Date().getUTCDate(), 12);
+    Date.now = () => pinned;
+    try {
+      check("digest floor: calm grid, no NSH text → Sandusky gets a window", (await fetchTodayWindows()).sandusky != null);
+      const per = ["TODAY", "TONIGHT", "SUNDAY", "SUNDAY NIGHT", "MONDAY", "MONDAY NIGHT"].map((n) => `.${n}...Northeast wind 20 to 25 knots. Waves 5 to 7 feet.`);
+      nshMock = ["LEZ144>148-072115-", "Vermilion to Avon Point OH-", "", ...per, "", "$$"].join("\n");
+      eq("digest floor: NSH 5-7 ft for LEZ144 → no Sandusky window", (await fetchTodayWindows()).sandusky, null);
+    } finally { Date.now = realNow; nshMock = null; }
+  }
+
   // ── Launch-facts card: a configured buoy is not a live buoy ──
   {
     const { SPOTS, spotFacts } = await import("../functions/marine/conditions.js");
@@ -2391,7 +2578,7 @@ async function run() {
 
   // ── N1/N2/X4 (2026-11 UX review): one wind story, freshness, no-data state ──
   {
-    const { buildRecommendation, windPhrase, onRequest, fetchSummary, fetchTodayWindows, STALE_LIMITS } = await import("../functions/marine/conditions.js");
+    const { buildRecommendation, windPhrase, onRequest, fetchSummary, fetchTodayWindows, fetchWeeks, capStaleGo, STALE_LIMITS } = await import("../functions/marine/conditions.js");
     const R = (o) => buildRecommendation({ buoy: null, alerts: [], read: null, hours: [], profile: "lake", ...o });
 
     // N1: the reason names sustained AND gust with sources; the level still
@@ -2430,6 +2617,12 @@ async function run() {
     const sfNo = R({ wind: { speedKt: 25, source: "forecast" }, waves: { ft: 5, source: "forecast" }, forecastAgeMin: 30 * 60 });
     check("stale forecast: NO-GO stays NO-GO, not flagged as a stale cap", sfNo.level === "NO-GO" && sfNo.stale === false && sfNo.reasons.some((x) => /hasn't been updated/.test(x)), JSON.stringify(sfNo));
 
+    // Strip/email cap: GO → CAUTION (flagged stale) on an overdue forecast;
+    // CAUTION, NO-GO, no call and alert-raised rows are left alone.
+    const rows = [{ level: "GO" }, { level: "CAUTION" }, { level: "NO-GO", alert: true }, { level: null }];
+    eq("capStaleGo: stale → GO capped, others untouched", JSON.stringify(capStaleGo(rows, true)), JSON.stringify([{ level: "CAUTION", stale: true }, { level: "CAUTION" }, { level: "NO-GO", alert: true }, { level: null }]));
+    check("capStaleGo: fresh → same rows", capStaleGo(rows, false) === rows);
+
     // X4: a no-data CAUTION is flagged so the page can show it as NO DATA.
     const nd = R({ wind: { speedKt: null, source: null }, waves: { ft: null, source: null } });
     check("no data: level CAUTION (never GO), flagged noData", nd.level === "CAUTION" && nd.noData === true, JSON.stringify(nd));
@@ -2444,6 +2637,9 @@ async function run() {
       fcUpdateAgeH = 3;
       let d = await page();
       eq("page: fresh forecast, calm → GO", d.recommendation?.level, "GO");
+      check("page: fresh forecast → hourly strip has GO hours", (d.hourly || []).some((h) => h.level === "GO"), JSON.stringify((d.hourly || []).slice(0, 3).map((h) => h.level)));
+      check("page: fresh forecast → week strip has GO days", (d.week || []).some((x) => x.level === "GO"), JSON.stringify((d.week || []).map((x) => x.level)));
+      check("weekend email: fresh grid → GO days", ((await fetchWeeks({ USERS: makeKV() }, ["sandusky"])).sandusky || []).some((x) => x.level === "GO"));
       check("page: freshness reports the forecast issue time and age", d.freshness && d.freshness.forecastIssuedAt && d.freshness.forecastAgeMinutes >= 179 && d.freshness.forecastAgeMinutes <= 181 && d.freshness.stale.length === 0 && d.freshness.buoy === null, JSON.stringify(d.freshness));
       eq("page: wind basis is the hourly forecast", d.wind?.basis, "hour");
       fcUpdateAgeH = 20;
@@ -2453,6 +2649,22 @@ async function run() {
       const tile = (await fetchSummary({ USERS: makeKV() })).spots.find((x) => x.id === "sandusky");
       check("summary tile: stale grid → no call, not GO", tile && tile.level === null, JSON.stringify(tile));
       check("digest: stale grid → no GO window", Object.values(await fetchTodayWindows()).every((w) => w == null));
+      check("page: stale forecast → no GO hour in the hourly strip", (d.hourly || []).length && d.hourly.every((h) => h.level !== "GO"), JSON.stringify((d.hourly || []).map((h) => h.level)));
+      check("page: stale forecast → capped hours are CAUTION, flagged stale", d.hourly.some((h) => h.level === "CAUTION" && h.stale === true), JSON.stringify(d.hourly.slice(0, 3)));
+      check("page: stale forecast → no GO day in the week strip", (d.week || []).length && d.week.every((x) => x.level !== "GO"), JSON.stringify((d.week || []).map((x) => x.level)));
+      check("page: stale forecast → capped days are CAUTION, flagged stale", d.week.some((x) => x.level === "CAUTION" && x.stale === true), JSON.stringify(d.week));
+      eq("page: stale forecast → outlook's current hour isn't GO either", d.outlook?.nowLevel === "GO", false);
+      const sw = (await fetchWeeks({ USERS: makeKV() }, ["sandusky"])).sandusky || [];
+      check("weekend email: stale grid → no GO day (CAUTION, flagged stale)", sw.length && sw.every((x) => x.level !== "GO") && sw.some((x) => x.level === "CAUTION" && x.stale === true), JSON.stringify(sw.map((x) => x.level)));
+      // An advisory still raises a stale strip to its own level.
+      stormMode = true;
+      d = await page();
+      check("page: stale + storm → NO-GO hours/days stay NO-GO", d.hourly.some((h) => h.level === "NO-GO") && d.week.some((x) => x.level === "NO-GO"), JSON.stringify({ h: d.hourly.slice(0, 3).map((h) => h.level), w: d.week.map((x) => x.level) }));
+      stormMode = false;
+      alertsDown = true;
+      d = await page();
+      check("page: stale + alerts unknown → no GO hour or day", d.hourly.every((h) => h.level !== "GO") && d.week.every((x) => x.level !== "GO"), JSON.stringify({ h: d.hourly.slice(0, 3).map((h) => h.level), w: d.week.map((x) => x.level) }));
+      alertsDown = false;
       fcUpdateAgeH = null;
       d = await page();
       eq("page: no updateTime sent → age unknown, not stale", d.freshness?.forecastAgeMinutes, null);

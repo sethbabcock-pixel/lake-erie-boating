@@ -1,0 +1,562 @@
+[
+ {
+  "spot": "portland-me",
+  "name": "Portland Head Light · Casco Bay",
+  "lake": "New England Coast",
+  "lat": 43.623,
+  "lon": -70.208,
+  "kind": "yt",
+  "id": "rArvNLNmhOo",
+  "view": "Fort Williams Park cam, rocks and Casco Bay in frame; daylight seen"
+ },
+ {
+  "spot": "portland-me",
+  "name": "Scarborough Beach · Surf",
+  "lake": "New England Coast",
+  "lat": 43.55,
+  "lon": -70.32,
+  "kind": "yt",
+  "id": "-JZf3deL-Rs",
+  "view": "Surf cam on the open Atlantic; thumbnail was a surf photo, confirm live frame"
+ },
+ {
+  "spot": "portland-me",
+  "name": "Cape Porpoise · Outer Harbor",
+  "lake": "New England Coast",
+  "lat": 43.362,
+  "lon": -70.428,
+  "kind": "yt",
+  "id": "xROnFN6dIZQ",
+  "view": "Working harbor, moored boats; thumbnail is title card over harbor"
+ },
+ {
+  "spot": "boston",
+  "name": "Weymouth · Fore River",
+  "lake": "New England Coast",
+  "lat": 42.25,
+  "lon": -70.95,
+  "kind": "yt",
+  "id": "dtIcEq1itmU",
+  "view": "Fore River / Boston Harbor south shore; title card over water"
+ },
+ {
+  "spot": "boston",
+  "name": "Nahant · Ocean House Surf & Skate",
+  "lake": "New England Coast",
+  "lat": 42.425,
+  "lon": -70.93,
+  "kind": "yt",
+  "id": "KziwCV7db9s",
+  "view": "Open water view from Nahant, daylight frame seen"
+ },
+ {
+  "spot": "boston",
+  "name": "Plum Island · Beach South (Newburyport)",
+  "lake": "New England Coast",
+  "lat": 42.79,
+  "lon": -70.81,
+  "kind": "yt",
+  "id": "ZPbgf9jLD4E",
+  "view": "Beach and surf, daylight frame seen"
+ },
+ {
+  "spot": "boston",
+  "name": "Beverly · Jubilee Yacht Club (southwest)",
+  "lake": "New England Coast",
+  "lat": 42.55,
+  "lon": -70.85,
+  "kind": "yt",
+  "id": "ZlmEdBfHqsM",
+  "view": "Second Jubilee YC camera, harbor water and docks"
+ },
+ {
+  "spot": "hyannis",
+  "name": "Cape Cod Canal · Mass Maritime Academy",
+  "lake": "New England Coast",
+  "lat": 41.74,
+  "lon": -70.5,
+  "kind": "yt",
+  "id": "_OeFhA2XqqA",
+  "view": "Canal channel and bridge, daylight frame seen"
+ },
+ {
+  "spot": "hyannis",
+  "name": "Edgartown · Harbor & Lighthouse (GOMV)",
+  "lake": "New England Coast",
+  "lat": 41.39,
+  "lon": -70.51,
+  "kind": "yt",
+  "id": "FoAvYeGRjU4",
+  "view": "Aerial of Edgartown harbor, daylight seen"
+ },
+ {
+  "spot": "hyannis",
+  "name": "Vineyard Haven · Harbor & Ferry (GOMV)",
+  "lake": "New England Coast",
+  "lat": 41.455,
+  "lon": -70.6,
+  "kind": "yt",
+  "id": "bdjXsDufCQY",
+  "view": "Aerial of Vineyard Haven harbor, daylight seen"
+ },
+ {
+  "spot": "buzzards-bay",
+  "name": "Cape Cod Canal · Mass Maritime Academy",
+  "lake": "New England Coast",
+  "lat": 41.74,
+  "lon": -70.5,
+  "kind": "yt",
+  "id": "_OeFhA2XqqA",
+  "view": "Same cam as Hyannis; serves Buzzards Bay (0.2 deg)"
+ },
+ {
+  "spot": "newport-ri",
+  "name": "Edgartown · Harbor & Lighthouse (GOMV)",
+  "lake": "New England Coast",
+  "lat": 41.39,
+  "lon": -70.51,
+  "kind": "yt",
+  "id": "FoAvYeGRjU4",
+  "view": "Same cam as Hyannis; ~0.62 deg from Newport"
+ },
+ {
+  "spot": "ny-harbor",
+  "name": "East River · NYC Ferry (E 34th St)",
+  "lake": "New York & New Jersey Coast",
+  "lat": 40.745,
+  "lon": -73.97,
+  "kind": "yt",
+  "id": "roEn_E6sMfc",
+  "view": "East River water, ferry landing; borderline (river not harbor)"
+ },
+ {
+  "spot": "cape-may",
+  "name": "Sea Isle City · Beach Patrol",
+  "lake": "New York & New Jersey Coast",
+  "lat": 39.153,
+  "lon": -74.693,
+  "kind": "yt",
+  "id": "FYOGiFH60uM",
+  "view": "Beach and surf, daylight seen"
+ },
+ {
+  "spot": "cape-may",
+  "name": "Sea Isle City · Spinnaker beach",
+  "lake": "New York & New Jersey Coast",
+  "lat": 39.153,
+  "lon": -74.693,
+  "kind": "yt",
+  "id": "BY_Lar5zLr8",
+  "view": "Beach and surf, daylight seen"
+ },
+ {
+  "spot": "cape-may",
+  "name": "Margate · Beach (Atlantic City skyline cam)",
+  "lake": "New York & New Jersey Coast",
+  "lat": 39.33,
+  "lon": -74.51,
+  "kind": "yt",
+  "id": "2MNsMmfdpx8",
+  "view": "Beach and surf daylight seen; beyond-ish range for Barnegat"
+ },
+ {
+  "spot": "tybee",
+  "name": "Savannah River · Upper East River",
+  "lake": "Georgia & South Carolina Coast",
+  "lat": 32.08,
+  "lon": -81.09,
+  "kind": "yt",
+  "id": "Nto6QNZZnQ0",
+  "view": "River view with bridge; title says Savannah River, location unconfirmed"
+ },
+ {
+  "spot": "tybee",
+  "name": "Hilton Head · Sea Pines Beach Club",
+  "lake": "Georgia & South Carolina Coast",
+  "lat": 32.13,
+  "lon": -80.78,
+  "kind": "yt",
+  "id": "QIJku1LZGRE",
+  "view": "Beach and Atlantic; also serves Hilton Head"
+ },
+ {
+  "spot": "hilton-head",
+  "name": "Hilton Head · Sea Pines Beach Club",
+  "lake": "Georgia & South Carolina Coast",
+  "lat": 32.13,
+  "lon": -80.78,
+  "kind": "yt",
+  "id": "QIJku1LZGRE",
+  "view": "Beach and Atlantic, daylight seen"
+ },
+ {
+  "spot": "hilton-head",
+  "name": "Hilton Head · Westin (Ozolio)",
+  "lake": "Georgia & South Carolina Coast",
+  "lat": 32.2,
+  "lon": -80.74,
+  "kind": "ozolio",
+  "id": "EMB_YQCM0000134E",
+  "view": "Ozolio page id YQCM0000134E seen; EMB_ prefix assumed, needs Action check"
+ },
+ {
+  "spot": "murrells-inlet",
+  "name": "Surfside Beach · Pier",
+  "lake": "Georgia & South Carolina Coast",
+  "lat": 33.605,
+  "lon": -78.975,
+  "kind": "yt",
+  "id": "hXqjUfQJf9U",
+  "view": "Town pier looking over the surf, daylight seen"
+ },
+ {
+  "spot": "murrells-inlet",
+  "name": "Murrells Inlet · Express Watersports dock",
+  "lake": "Georgia & South Carolina Coast",
+  "lat": 33.54,
+  "lon": -79.03,
+  "kind": "yt",
+  "id": "En6HTsRLAAU",
+  "view": "Ozolio page confirms Murrells Inlet; YouTube thumbnail is an ad card"
+ },
+ {
+  "spot": "murrells-inlet",
+  "name": "North Myrtle Beach · Elliott Beach Rentals",
+  "lake": "Georgia & South Carolina Coast",
+  "lat": 33.69,
+  "lon": -78.88,
+  "kind": "yt",
+  "id": "6NofiKBWXIk",
+  "view": "Beach and surf, dim frame; ~0.3 deg away"
+ },
+ {
+  "spot": "wrightsville",
+  "name": "Wrightsville Beach · Johnnie Mercer's Pier (south)",
+  "lake": "North Carolina Coast",
+  "lat": 34.21,
+  "lon": -77.79,
+  "kind": "yt",
+  "id": "itXoEFJZtD0",
+  "view": "Beach and surf, daylight seen"
+ },
+ {
+  "spot": "wrightsville",
+  "name": "Wrightsville Beach · Johnnie Mercer's Pier (north)",
+  "lake": "North Carolina Coast",
+  "lat": 34.21,
+  "lon": -77.79,
+  "kind": "yt",
+  "id": "yQG1M1GU_pI",
+  "view": "Pier deck looking out over water"
+ },
+ {
+  "spot": "wrightsville",
+  "name": "Bald Head Island · Beach Access 15",
+  "lake": "North Carolina Coast",
+  "lat": 33.86,
+  "lon": -77.97,
+  "kind": "yt",
+  "id": "lcANlrXCR0Q",
+  "view": "Cape Fear mouth beach and ocean, daylight seen"
+ },
+ {
+  "spot": "morehead-city",
+  "name": "Beaufort · Rhumbar waterfront deck",
+  "lake": "North Carolina Coast",
+  "lat": 34.717,
+  "lon": -76.66,
+  "kind": "yt",
+  "id": "ATYJsuZqEUU",
+  "view": "Deck over Taylor Creek with docks; bar exterior, not interior"
+ },
+ {
+  "spot": "jupiter",
+  "name": "Jupiter · Reef Club oceanfront (cam 2)",
+  "lake": "Florida Atlantic Coast",
+  "lat": 26.921,
+  "lon": -80.067,
+  "kind": "yt",
+  "id": "4y7kDbwBuh0",
+  "view": "Beach and surf; also serves Palm Beach and Fort Pierce"
+ },
+ {
+  "spot": "palm-beach",
+  "name": "Jupiter · Reef Club oceanfront (cam 2)",
+  "lake": "Florida Atlantic Coast",
+  "lat": 26.921,
+  "lon": -80.067,
+  "kind": "yt",
+  "id": "4y7kDbwBuh0",
+  "view": "Same cam; 0.16 deg"
+ },
+ {
+  "spot": "palm-beach",
+  "name": "Deerfield Beach · Fishing pier",
+  "lake": "Florida Atlantic Coast",
+  "lat": 26.318,
+  "lon": -80.075,
+  "kind": "yt",
+  "id": "H33wtprQqSM",
+  "view": "Pier over surf; title card thumbnail; ~0.45 deg"
+ },
+ {
+  "spot": "palm-beach",
+  "name": "Deerfield Beach · Beach camera",
+  "lake": "Florida Atlantic Coast",
+  "lat": 26.318,
+  "lon": -80.075,
+  "kind": "yt",
+  "id": "rdeoEeJ00xA",
+  "view": "Beach and ocean; title card thumbnail; ~0.45 deg"
+ },
+ {
+  "spot": "palm-beach",
+  "name": "Dania Beach · Pier",
+  "lake": "Florida Atlantic Coast",
+  "lat": 26.06,
+  "lon": -80.11,
+  "kind": "yt",
+  "id": "o1eTLR7Degs",
+  "view": "Pier and surf daylight seen; ~0.7 deg"
+ },
+ {
+  "spot": "fort-pierce",
+  "name": "Jupiter · Reef Club oceanfront (cam 2)",
+  "lake": "Florida Atlantic Coast",
+  "lat": 26.921,
+  "lon": -80.067,
+  "kind": "yt",
+  "id": "4y7kDbwBuh0",
+  "view": "~0.55 deg south, only embeddable cam in range"
+ },
+ {
+  "spot": "naples",
+  "name": "Fort Myers Beach · Visit Fort Myers webcam",
+  "lake": "Florida Gulf Coast",
+  "lat": 26.45,
+  "lon": -81.95,
+  "kind": "yt",
+  "id": "nj9jdOXXhEo",
+  "view": "Beach and Gulf, daylight seen; ~0.38 deg"
+ },
+ {
+  "spot": "naples",
+  "name": "Fort Myers Beach · Margaritaville License to Chill",
+  "lake": "Florida Gulf Coast",
+  "lat": 26.45,
+  "lon": -81.95,
+  "kind": "yt",
+  "id": "2qd9j2CbIpg",
+  "view": "Beach and Gulf, daylight seen"
+ },
+ {
+  "spot": "fort-myers-beach",
+  "name": "Fort Myers Beach · Visit Fort Myers webcam",
+  "lake": "Florida Gulf Coast",
+  "lat": 26.45,
+  "lon": -81.95,
+  "kind": "yt",
+  "id": "nj9jdOXXhEo",
+  "view": "Beach and Gulf"
+ },
+ {
+  "spot": "fort-myers-beach",
+  "name": "Fort Myers Beach · Margaritaville License to Chill",
+  "lake": "Florida Gulf Coast",
+  "lat": 26.45,
+  "lon": -81.95,
+  "kind": "yt",
+  "id": "2qd9j2CbIpg",
+  "view": "Beach and Gulf"
+ },
+ {
+  "spot": "fort-myers-beach",
+  "name": "Pine Island · Four Winds Marina",
+  "lake": "Florida Gulf Coast",
+  "lat": 26.65,
+  "lon": -82.1,
+  "kind": "yt",
+  "id": "xp1b7w3qPd8",
+  "view": "Marina basin and docks, daylight seen"
+ },
+ {
+  "spot": "marco-island",
+  "name": "Fort Myers Beach · Visit Fort Myers webcam",
+  "lake": "Florida Gulf Coast",
+  "lat": 26.45,
+  "lon": -81.95,
+  "kind": "yt",
+  "id": "nj9jdOXXhEo",
+  "view": "~0.6 deg north; nearest embeddable"
+ },
+ {
+  "spot": "orange-beach",
+  "name": "Orange Beach · Gulf (FOX10)",
+  "lake": "Alabama & Mississippi Coast",
+  "lat": 30.27,
+  "lon": -87.58,
+  "kind": "yt",
+  "id": "5Ijk8QsR-nw",
+  "view": "Aerial beach and Gulf, daylight seen"
+ },
+ {
+  "spot": "orange-beach",
+  "name": "Orange Beach · The Moorings marina",
+  "lake": "Alabama & Mississippi Coast",
+  "lat": 30.29,
+  "lon": -87.57,
+  "kind": "yt",
+  "id": "nkA40olKP5s",
+  "view": "Marina slips and water, daylight seen"
+ },
+ {
+  "spot": "orange-beach",
+  "name": "Orange Beach · Turquoise Place beach",
+  "lake": "Alabama & Mississippi Coast",
+  "lat": 30.27,
+  "lon": -87.6,
+  "kind": "yt",
+  "id": "pJqrjIuvGFE",
+  "view": "Beach and Gulf, daylight seen"
+ },
+ {
+  "spot": "orange-beach",
+  "name": "Perdido Key · Gulf beach (ENCO)",
+  "lake": "Alabama & Mississippi Coast",
+  "lat": 30.28,
+  "lon": -87.44,
+  "kind": "yt",
+  "id": "Qoouv_9QG5Q",
+  "view": "Dune and Gulf, daylight seen"
+ },
+ {
+  "spot": "mobile-bay",
+  "name": "Fairhope · Municipal Pier",
+  "lake": "Alabama & Mississippi Coast",
+  "lat": 30.52,
+  "lon": -87.91,
+  "kind": "yt",
+  "id": "N5wWOVOTHmQ",
+  "view": "Pier and Mobile Bay, daylight seen"
+ },
+ {
+  "spot": "biloxi",
+  "name": "D'Iberville · Back Bay of Biloxi (FOX10)",
+  "lake": "Alabama & Mississippi Coast",
+  "lat": 30.43,
+  "lon": -88.89,
+  "kind": "yt",
+  "id": "fYsEy6RFskY",
+  "view": "Back Bay water with bridge; Biloxi is 0.05 deg away"
+ },
+ {
+  "spot": "galveston",
+  "name": "Galveston · Seawall surf cam",
+  "lake": "Louisiana & Texas Coast",
+  "lat": 29.29,
+  "lon": -94.79,
+  "kind": "yt",
+  "id": "r9PwbZwEFas",
+  "view": "Gulf surf frame (gray daylight), seen"
+ },
+ {
+  "spot": "galveston",
+  "name": "Galveston · Yacht Basin marina",
+  "lake": "Louisiana & Texas Coast",
+  "lat": 29.31,
+  "lon": -94.79,
+  "kind": "yt",
+  "id": "YIkt_L2YFPY",
+  "view": "Yacht basin water, daylight seen"
+ },
+ {
+  "spot": "galveston",
+  "name": "Galveston · Ship Channel (Emerald cam)",
+  "lake": "Louisiana & Texas Coast",
+  "lat": 29.31,
+  "lon": -94.79,
+  "kind": "yt",
+  "id": "LwKESRa1f-c",
+  "view": "Ship channel traffic, daylight seen"
+ },
+ {
+  "spot": "galveston",
+  "name": "Galveston · Cruise terminals",
+  "lake": "Louisiana & Texas Coast",
+  "lat": 29.31,
+  "lon": -94.79,
+  "kind": "yt",
+  "id": "Mnj84qrUbXc",
+  "view": "Ship at terminal with channel water"
+ },
+ {
+  "spot": "kemah",
+  "name": "Galveston · Yacht Basin marina",
+  "lake": "Louisiana & Texas Coast",
+  "lat": 29.31,
+  "lon": -94.79,
+  "kind": "yt",
+  "id": "YIkt_L2YFPY",
+  "view": "~0.25 deg SE of Kemah"
+ },
+ {
+  "spot": "kemah",
+  "name": "Galveston · Ship Channel (Emerald cam)",
+  "lake": "Louisiana & Texas Coast",
+  "lat": 29.31,
+  "lon": -94.79,
+  "kind": "yt",
+  "id": "LwKESRa1f-c",
+  "view": "~0.3 deg from Kemah"
+ },
+ {
+  "spot": "port-aransas",
+  "name": "Aransas Pass · Harbor Park",
+  "lake": "Louisiana & Texas Coast",
+  "lat": 27.91,
+  "lon": -97.15,
+  "kind": "yt",
+  "id": "Mn3vY8bordE",
+  "view": "Dock and harbor water, daylight seen; ~0.12 deg"
+ },
+ {
+  "spot": "port-aransas",
+  "name": "Corpus Christi · Packery Channel surf cam",
+  "lake": "Louisiana & Texas Coast",
+  "lat": 27.6,
+  "lon": -97.2,
+  "kind": "yt",
+  "id": "5s6X2045OTs",
+  "view": "Packery Channel beach; thumbnail is a logo card; ~0.27 deg"
+ },
+ {
+  "spot": "south-padre",
+  "name": "South Padre · Courtyard beach cam",
+  "lake": "Louisiana & Texas Coast",
+  "lat": 26.1,
+  "lon": -97.17,
+  "kind": "yt",
+  "id": "dzylsC0KcOE",
+  "view": "Beach and Gulf, daylight seen"
+ },
+ {
+  "spot": "south-padre",
+  "name": "South Padre · Queen Isabella Causeway",
+  "lake": "Louisiana & Texas Coast",
+  "lat": 26.08,
+  "lon": -97.17,
+  "kind": "yt",
+  "id": "bvL_3W7F4Fk",
+  "view": "Laguna Madre and causeway, daylight seen"
+ },
+ {
+  "spot": "south-padre",
+  "name": "South Padre · Isla Blanca (South Padre Surf Co)",
+  "lake": "Louisiana & Texas Coast",
+  "lat": 26.07,
+  "lon": -97.16,
+  "kind": "yt",
+  "id": "0FaRaPPTS8M",
+  "view": "Surf cam; thumbnail is a logo card"
+ }
+]
