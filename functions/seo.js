@@ -445,25 +445,34 @@ export async function sitemapXml() {
 // it by fetching /<key>.txt from this host. The hourly cron calls
 // indexNowIfChanged(); it submits the sitemap URLs once per CONTENT_UPDATED
 // value (remembered in KV), so bumping CONTENT_UPDATED re-announces the site.
+const INDEXNOW_ENDPOINTS = ["https://www.bing.com/indexnow", "https://yandex.com/indexnow", "https://api.indexnow.org/indexnow"];
 export const INDEXNOW_KEY = "5cf89e27949d900bf42a833bc8d025d9";
 export async function indexNowIfChanged(env) {
   if (!env.USERS) return;
   const mark = "indexnow:submitted";
   if ((await env.USERS.get(mark).catch(() => null)) === CONTENT_UPDATED) return;
-  const r = await fetch("https://api.indexnow.org/indexnow", {
-    method: "POST",
-    headers: { "Content-Type": "application/json; charset=utf-8" },
-    body: JSON.stringify({
-      host: "shouldiboat.com",
-      key: INDEXNOW_KEY,
-      keyLocation: `${SITE}/${INDEXNOW_KEY}.txt`,
-      urlList: sitemapUrls().map((x) => x.loc),
-    }),
+  const body = JSON.stringify({
+    host: "shouldiboat.com",
+    key: INDEXNOW_KEY,
+    keyLocation: `${SITE}/${INDEXNOW_KEY}.txt`,
+    urlList: sitemapUrls().map((x) => x.loc),
   });
-  // 200/202 = accepted. Anything else retries next hour. The last response is
-  // kept in KV (indexnow:last) so a rejection can be diagnosed without logs.
-  const text = await r.text().catch(() => "");
-  await env.USERS.put("indexnow:last", `${new Date().toISOString()} ${r.status} ${text.slice(0, 300)}`).catch(() => {});
-  console.log("indexnow", r.status, text.slice(0, 300));
-  if (r.status === 200 || r.status === 202) await env.USERS.put(mark, CONTENT_UPDATED);
+  // Engines share submissions with each other, so one acceptance is enough.
+  // Bing first: the shared api.indexnow.org endpoint rate-limits by IP, and
+  // Workers share egress IPs (we got a 429 there on the first runs).
+  const log = [];
+  for (const ep of INDEXNOW_ENDPOINTS) {
+    let r;
+    try { r = await fetch(ep, { method: "POST", headers: { "Content-Type": "application/json; charset=utf-8" }, body }); }
+    catch (e) { log.push(`${new URL(ep).host} error ${String(e).slice(0, 120)}`); continue; }
+    const text = await r.text().catch(() => "");
+    log.push(`${new URL(ep).host} ${r.status} ${text.slice(0, 120)}`);
+    if (r.status === 200 || r.status === 202) {
+      await env.USERS.put(mark, CONTENT_UPDATED);
+      break;
+    }
+  }
+  // Last attempt per endpoint, readable via the KV API (no Worker logs).
+  await env.USERS.put("indexnow:last", `${new Date().toISOString()} | ${log.join(" | ")}`).catch(() => {});
+  console.log("indexnow", log.join(" | "));
 }
