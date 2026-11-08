@@ -424,8 +424,7 @@ const GUIDES = [
 const CONTENT_UPDATED = "2026-11-08";
 
 // Launch pages (/spot/*) are noindex and deliberately left out (see seoForPath).
-export async function sitemapXml() {
-  const urls = [
+const sitemapUrls = () => [
     { loc: `${SITE}/`, freq: "hourly", priority: "1.0" },
     ...REGIONS.map((r) => ({ loc: `${SITE}/${r.slug}`, freq: "hourly", priority: "0.9" })),
     { loc: `${SITE}/guides/`, freq: "weekly", priority: "0.6" },
@@ -433,9 +432,34 @@ export async function sitemapXml() {
     { loc: `${SITE}/about`, freq: "monthly", priority: "0.3" },
     { loc: `${SITE}/advertise`, freq: "monthly", priority: "0.3" },
     { loc: `${SITE}/legal`, freq: "yearly", priority: "0.2" },
-  ];
-  const body = urls
+];
+export async function sitemapXml() {
+  const body = sitemapUrls()
     .map((x) => `  <url><loc>${x.loc}</loc><lastmod>${CONTENT_UPDATED}</lastmod><changefreq>${x.freq}</changefreq><priority>${x.priority}</priority></url>`)
     .join("\n");
   return `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${body}\n</urlset>\n`;
+}
+
+// IndexNow (Bing, Yandex, Seznam…): tell search engines our pages changed
+// instead of waiting for a crawl. The key is public by design: engines verify
+// it by fetching /<key>.txt from this host. The hourly cron calls
+// indexNowIfChanged(); it submits the sitemap URLs once per CONTENT_UPDATED
+// value (remembered in KV), so bumping CONTENT_UPDATED re-announces the site.
+export const INDEXNOW_KEY = "5cf89e27949d900bf42a833bc8d025d9";
+export async function indexNowIfChanged(env) {
+  if (!env.USERS) return;
+  const mark = "indexnow:submitted";
+  if ((await env.USERS.get(mark).catch(() => null)) === CONTENT_UPDATED) return;
+  const r = await fetch("https://api.indexnow.org/indexnow", {
+    method: "POST",
+    headers: { "Content-Type": "application/json; charset=utf-8" },
+    body: JSON.stringify({
+      host: "shouldiboat.com",
+      key: INDEXNOW_KEY,
+      keyLocation: `${SITE}/${INDEXNOW_KEY}.txt`,
+      urlList: sitemapUrls().map((x) => x.loc),
+    }),
+  });
+  // 200/202 = accepted. Anything else retries next hour.
+  if (r.status === 200 || r.status === 202) await env.USERS.put(mark, CONTENT_UPDATED);
 }

@@ -7,7 +7,7 @@
 import { onRequest, cachedSummary } from "./functions/marine/conditions.js";
 import { handleAuth } from "./functions/auth.js";
 import { runScheduled } from "./functions/digest.js";
-import { robotsTxt, sitemapXml, seoForPath, seoForBuiltSpot, injectSeo } from "./functions/seo.js";
+import { robotsTxt, sitemapXml, seoForPath, seoForBuiltSpot, injectSeo, INDEXNOW_KEY, indexNowIfChanged } from "./functions/seo.js";
 
 // Baseline security headers applied to every response. These are intentionally
 // conservative: no script/style CSP directives, so the Google Ads/Analytics/
@@ -64,7 +64,18 @@ async function route(request, env, ctx) {
     url.hostname = url.hostname.slice(4);
     return Response.redirect(url.toString(), 301);
   }
+  // Plain http on the real domain: one permanent hop to https, so Google
+  // doesn't see an http copy of every page (Search Console "alternate page").
+  if (url.protocol === "http:" && url.hostname.endsWith("shouldiboat.com")) {
+    url.protocol = "https:";
+    return Response.redirect(url.toString(), 301);
+  }
   const p = url.pathname;
+  // Guide URLs with .html: a permanent redirect to the clean URL (the assets
+  // layer's own redirect is a temporary 307, which keeps both in Google's view).
+  const gm = p.match(/^\/guides\/([a-z0-9-]+)\.html$/);
+  if (gm) return Response.redirect(`${url.origin}/guides/${gm[1] === "index" ? "" : gm[1]}`, 301);
+  if (p === `/${INDEXNOW_KEY}.txt`) return new Response(INDEXNOW_KEY, { headers: { "Content-Type": "text/plain; charset=utf-8" } });
   if (p.startsWith("/marine/")) return onRequest({ request, env, ctx });
   if (p.startsWith("/auth/") || p.startsWith("/api/") || p.startsWith("/stripe/") || p === "/unsubscribe") return handleAuth(request, env, url, ctx);
   // SEO endpoints (see functions/seo.js).
@@ -131,5 +142,7 @@ export default {
   // Hourly cron (wrangler.jsonc triggers): daily digest + NO-GO alert emails.
   async scheduled(event, env, ctx) {
     ctx.waitUntil(runScheduled(env, new Date(event.scheduledTime).getUTCHours(), new Date(event.scheduledTime)).catch(() => {}));
+    // Announce changed pages to IndexNow engines (no-op unless CONTENT_UPDATED moved).
+    ctx.waitUntil(indexNowIfChanged(env).catch(() => {}));
   },
 };
