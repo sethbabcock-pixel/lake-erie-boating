@@ -3,11 +3,22 @@
 //
 //   node scripts/check-cams.mjs
 //
-// Exit code 0 = all healthy; 1 = at least one cam is DEAD (or the run errored).
-// WARN (stream currently offline, but the cam still exists) does not fail the
-// run on its own. The cam-health GitHub Action runs this weekly; a non-zero
-// exit turns the workflow red and notifies the repo owner.
+// Exit codes: 0 = no DEAD cams; 1 = at least one cam is DEAD (or the run
+// errored); 2 = nothing could be verified at all (every cam WARN, e.g. rate
+// limited or no network) -- not healthy, but not a DEAD finding either.
+// WARN (offline right now / unverified / rate limited) never counts as DEAD.
+// The summary reports verified vs unverified so an all-WARN run can't look green.
+// The cam-health GitHub Action runs this weekly and opens an issue only on
+// DEAD results (exit 1).
+//
+// Proxied sandboxes: set HTTPS_PROXY (and NODE_EXTRA_CA_CERTS for a re-signing
+// proxy). Node's fetch only honors the proxy with NODE_USE_ENV_PROXY=1; this
+// script enables it itself via scripts/lib/cam-net.mjs when HTTPS_PROXY is set.
 import { CAMS, camSrc } from "../src/cams.js";
+import { setupProxy, isRateLimited, summarize, RATE_LIMITED } from "./lib/cam-net.mjs";
+
+const proxyNote = await setupProxy();
+if (proxyNote) console.log(proxyNote);
 
 const UA = "Mozilla/5.0 (compatible; ShouldIBoat-CamHealth/1.0)";
 const TIMEOUT_MS = 20000;
@@ -54,6 +65,7 @@ async function checkImage(c) {
 
 async function checkYouTube(id) {
   const res = await fetchT(`https://www.youtube.com/watch?v=${id}`);
+  if (isRateLimited(res)) return { status: "WARN", detail: `${RATE_LIMITED} (HTTP ${res.status})` };
   if (!res.ok) return { status: "DEAD", detail: `watch HTTP ${res.status}` };
   const body = await res.text();
   // YouTube increasingly serves a bot-wall (consent/challenge page) to
@@ -65,10 +77,11 @@ async function checkYouTube(id) {
     // 401/403/404/400 = embedding disabled, private or deleted.
     try {
       const oe = await fetchT(`https://www.youtube.com/oembed?format=json&url=${encodeURIComponent(`https://www.youtube.com/watch?v=${id}`)}`);
+      if (oe.status === 429) return { status: "WARN", detail: `${RATE_LIMITED} (oEmbed 429)` };
       if (oe.ok) return { status: "WARN", detail: "embeddable (oEmbed ok), liveness unconfirmed — YouTube bot-wall" };
       if ([400, 401, 403, 404].includes(oe.status)) return { status: "DEAD", detail: `oEmbed HTTP ${oe.status} — embedding disabled / video gone` };
     } catch { /* fall through */ }
-    return { status: "WARN", detail: "YouTube bot-wall — can't verify from this IP" };
+    return { status: "WARN", detail: `${RATE_LIMITED} (YouTube bot-wall)` };
   }
   const embeddable = body.includes('"playableInEmbed":true');
   const liveNow = body.includes('"isLiveNow":true');
@@ -135,13 +148,13 @@ async function run() {
     console.log(`${icon[r.status]} [${r.status.padEnd(4)}] ${lake.padEnd(9)} ${r.cam.name}  —  ${r.detail}`);
   }
   const dead = results.filter((r) => r.status === "DEAD");
-  const warn = results.filter((r) => r.status === "WARN");
-  console.log(`\n${results.length} cams · ${results.length - dead.length - warn.length} OK · ${warn.length} WARN · ${dead.length} DEAD`);
+  const sum = summarize("cams", results);
   if (dead.length) {
     console.log("\nDEAD cams need replacing in src/cams.js:");
     for (const r of dead) console.log(`  - ${r.cam.name} (${r.detail})`);
     process.exit(1);
   }
+  if (sum.allUnverified) process.exit(2);
 }
 
 run().catch((e) => { console.error(e); process.exit(1); });

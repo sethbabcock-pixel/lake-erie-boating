@@ -2234,6 +2234,8 @@ export async function fetchWindyCams(env, lat, lon, lake) {
         cam: {
           name: `${label} (${live ? "Windy" : "Windy · replay"})`, lat: loc.latitude ?? lat, lon: loc.longitude ?? lon, lake,
           embed, link: safeWindyLink(w.urls, id), source: "windy",
+          // Not a live stream (24 h day/month/year player): the UI labels it "Replay".
+          ...(live ? {} : { replay: true }),
         },
       });
     }

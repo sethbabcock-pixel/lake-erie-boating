@@ -2471,6 +2471,8 @@ async function run() {
       const cams = await fetchWindyCams({ WINDY_WEBCAMS_KEY: "test" }, 41.5, -82.7, "Lake Erie");
       const by = Object.fromEntries((cams || []).map((c) => [c.link.match(/\d+$/)?.[0], c]));
       eq("windy cams: hostile live+day → id-built day player", by["111"]?.embed, "https://webcams.windy.com/webcams/public/embed/player/111/day");
+      eq("windy cams: replay player flagged replay:true", by["111"]?.replay, true);
+      check("windy cams: live player not flagged replay", !by["222"]?.replay);
       check("windy cams: rejected live URL is not labeled live", /replay/.test(by["111"]?.name || ""), by["111"]?.name);
       eq("windy cams: valid live player kept", by["222"]?.embed, ok);
       eq("windy cams: hostile v2 embed object → id-built day player", by["333"]?.embed, "https://webcams.windy.com/webcams/public/embed/player/333/day");
@@ -3100,6 +3102,40 @@ async function run() {
       delete globalThis.caches;
     }
     gridWavesAt = null; gridCalls = [];
+  }
+
+  // ── /api/request-cam: per-cam report validation + admin grouping ──
+  {
+    const { groupCamReports } = await import("../functions/auth.js");
+    const env = { USERS: makeKV(), ADMIN_EMAIL: "admin@example.com" };
+    const post = (body) => call(req("POST", "/api/request-cam", { body }), env);
+    const reports = () => [...env.USERS._map.entries()].filter(([k]) => k.startsWith("camreq:")).map(([, v]) => JSON.parse(v));
+    eq("request-cam: legacy suggestion still ok", (await post({ spot: "Sandusky", webcam: "https://example.com/cam" })).status, 200);
+    check("request-cam: legacy record has no cam/reason", reports()[0] && reports()[0].cam === undefined && reports()[0].reason === undefined);
+    eq("request-cam: bad reason → 400", (await post({ spot: "Sandusky", cam: "Cam A", reason: "spam" })).status, 400);
+    eq("request-cam: reason without cam → 400", (await post({ spot: "Sandusky", reason: "offline" })).status, 400);
+    eq("request-cam: spot only → 400", (await post({ spot: "Sandusky" })).status, 400);
+    eq("request-cam: cam+reason ok", (await post({ spot: "Sandusky", cam: "Cam A", reason: "Offline" })).status, 200);
+    eq("request-cam: cam alone defaults reason=other", (await post({ spot: "Sandusky", cam: "Cam A" })).status, 200);
+    await post({ spot: "Sandusky", cam: "Cam A\u0000" + "x".repeat(400), reason: "not-water" });
+    const stored = reports().filter((r) => r.cam);
+    check("request-cam: reason normalised to lowercase", stored.some((r) => r.reason === "offline"));
+    check("request-cam: cam name length-limited + control chars stripped", stored.every((r) => r.cam.length <= 160 && !/[\u0000-\u001f]/.test(r.cam)));
+    await post({ spot: "Duluth", cam: "Cam B", reason: "wrong-place" });
+    // admin: gated, and grouped per cam
+    eq("cam-requests: signed out → 401", (await call(req("GET", "/api/admin/cam-requests"), env)).status, 401);
+    const other = await seedUser(env, "rando@example.com");
+    eq("cam-requests: non-admin → 403", (await call(req("GET", "/api/admin/cam-requests", { cookie: other }), env)).status, 403);
+    const admin = await seedUser(env, "admin@example.com");
+    const d = await (await call(req("GET", "/api/admin/cam-requests", { cookie: admin }), env)).json();
+    eq("cam-requests: Cam A count", d.byCam["Cam A"]?.count, 2);
+    eq("cam-requests: Cam A offline reason", d.byCam["Cam A"]?.reasons.offline, 1);
+    eq("cam-requests: Cam B grouped", d.byCam["Cam B"]?.reasons["wrong-place"], 1);
+    check("cam-requests: raw list still returned", Array.isArray(d.requests) && d.requests.length >= 5);
+    const g = groupCamReports([{ cam: "__proto__", reason: "offline", at: "2026-01-02" }, { cam: "X", reason: "bogus", at: "2026-01-01" }, { cam: "X", reason: "offline", at: "2026-01-03" }, { spot: "no cam" }]);
+    eq("groupCamReports: unknown reason → other", g.X.reasons.other, 1);
+    eq("groupCamReports: last = newest", g.X.last, "2026-01-03");
+    eq("groupCamReports: __proto__ name is just a key", g["__proto__"]?.count, 1);
   }
 
   console.log(results.join("\n"));

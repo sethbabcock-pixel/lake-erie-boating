@@ -241,6 +241,25 @@ function sanitizeSiteConfig(input) {
   };
 }
 
+// Per-cam reports (POST /api/request-cam with { cam, reason }).
+export const CAM_REPORT_REASONS = ["not-water", "offline", "wrong-place", "other"];
+
+// Group stored camreq records by cam name for the admin cams page:
+// { [cam]: { count, reasons: { reason: n }, last } }. Records without a cam
+// (plain suggestions, and every record written before this existed) are skipped.
+export function groupCamReports(requests) {
+  const out = Object.create(null);
+  for (const r of Array.isArray(requests) ? requests : []) {
+    if (!r || typeof r.cam !== "string" || !r.cam) continue;
+    const g = (out[r.cam] ||= { count: 0, reasons: {}, last: "" });
+    const reason = CAM_REPORT_REASONS.includes(r.reason) ? r.reason : "other";
+    g.count++;
+    g.reasons[reason] = (g.reasons[reason] || 0) + 1;
+    if ((r.at || "") > g.last) g.last = r.at || "";
+  }
+  return { ...out };
+}
+
 async function createSession(env, email) {
   const token = randHex(32);
   await env.USERS.put(sessKey(token), email, { expirationTtl: SESSION_DAYS * 86400 });
@@ -885,16 +904,22 @@ export async function handleAuth(request, env, url, ctx) {
     const spot = clean(body.spot, 120);
     const webcam = clean(body.webcam, 300);
     const note = clean(body.note, 500);
-    if (!spot || (!webcam && !note)) return json({ error: "Add a webcam link or a note." }, 400);
+    // Optional per-cam report: { cam, reason }. reason must be one of
+    // CAM_REPORT_REASONS; an unknown reason is a 400, not silently stored.
+    const camName = clean(body.cam, 160);
+    const reason = clean(body.reason, 20).toLowerCase();
+    if (reason && !CAM_REPORT_REASONS.includes(reason)) return json({ error: "Unknown report reason." }, 400);
+    if (reason && !camName) return json({ error: "Say which cam you are reporting." }, 400);
+    if (!spot || (!webcam && !note && !camName)) return json({ error: "Add a webcam link or a note." }, 400);
     const u = await userFromRequest(env, request).catch(() => null);
     let email = clean(body.email, 254); if (email && !validEmail(email)) email = "";
     email = email || (u && u.email) || "";
     const lat = Number(body.lat), lon = Number(body.lon);
-    const rec = { spot, lat: Number.isFinite(lat) ? lat : null, lon: Number.isFinite(lon) ? lon : null, webcam, note, current: clean(body.current, 300), email, at: new Date().toISOString() };
+    const rec = { spot, lat: Number.isFinite(lat) ? lat : null, lon: Number.isFinite(lon) ? lon : null, webcam, note, current: clean(body.current, 300), email, ...(camName ? { cam: camName, reason: reason || "other" } : {}), at: new Date().toISOString() };
     const ts = Date.now();
     try { await env.USERS.put(`camreq:${ts}:${randHex(3)}`, JSON.stringify(rec), { expirationTtl: 180 * 86400 }); } catch (e) { /* ignore */ }
     const esc = (s) => String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
-    const rows = [["Spot", spot], ["Suggested cam", webcam || "(none)"], ["Note", note || "(none)"], ["Currently showing", rec.current || "(unknown)"], ["From", email || "(not given)"]]
+    const rows = [["Spot", spot], ...(camName ? [["Reported cam", `${camName} (${rec.reason})`]] : []), ["Suggested cam", webcam || "(none)"], ["Note", note || "(none)"], ["Currently showing", rec.current || "(unknown)"], ["From", email || "(not given)"]]
       .map(([k, v]) => `<tr><td style="padding:2px 12px 2px 0;color:#5b6b78">${k}</td><td><b>${esc(v)}</b></td></tr>`).join("");
     const html = `<div style="font-family:system-ui,sans-serif;color:#1a2b38"><h2 style="margin:0 0 8px">Webcam suggestion</h2><table style="border-collapse:collapse;font-size:14px">${rows}</table></div>`;
     const to = (await adminEmails(env))[0];
@@ -909,7 +934,7 @@ export async function handleAuth(request, env, url, ctx) {
     const requests = [];
     for (const k of list.keys.slice(-200).reverse()) { const r = await env.USERS.get(k.name, "json"); if (r) requests.push(r); }
     requests.sort((a, b) => (b.at || "").localeCompare(a.at || ""));
-    return json({ requests: requests.slice(0, 150) });
+    return json({ requests: requests.slice(0, 150), byCam: groupCamReports(requests) });
   }
 
   // ---- public: build a page for a point (self-serve publish) ----
