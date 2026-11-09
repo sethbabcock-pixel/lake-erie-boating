@@ -2079,14 +2079,14 @@ async function camLiveness(c) {
       return (r.headers.get("content-type") || "").startsWith("image/") ? "live" : "offline";
     }
     if (c.yt) {
-      const r = await camFetch(`https://www.youtube.com/watch?v=${c.yt}`);
+      const r = await camFetch(`https://www.youtube.com/watch?v=${encodeURIComponent(c.yt)}`);
       if (!r.ok) return "unknown";
       const b = await r.text();
       if (!b.includes('"playableInEmbed":true')) return "offline"; // embedding disabled / video gone
       return b.includes('"isLiveNow":true') ? "live" : "offline";  // stream ended / not broadcasting
     }
     if (c.ipcamlive) {
-      const r = await camFetch(`https://www.ipcamlive.com/player/player.php?alias=${c.ipcamlive}&autoplay=1`);
+      const r = await camFetch(`https://www.ipcamlive.com/player/player.php?alias=${encodeURIComponent(c.ipcamlive)}&autoplay=1`);
       if (!r.ok) return "unknown";
       const b = await r.text();
       const sid = (b.match(/var streamid = '([^']+)'/) || [])[1];
@@ -2154,12 +2154,27 @@ async function effectiveCams(env) {
 // host, unparseable) returns null and the caller falls back to the id-built
 // player URL. Defense in depth: the API is trusted, but its output isn't.
 export function safeWindyPlayer(u) {
+  const url = httpsUrlOf(u);
+  if (!url) return null;
+  const h = url.hostname.toLowerCase();
+  return h === "windy.com" || h.endsWith(".windy.com") ? url.href : null;
+}
+
+// Parse u as an absolute https: URL; null for anything else.
+function httpsUrlOf(u) {
   if (typeof u !== "string" || !u) return null;
   let url;
   try { url = new URL(u); } catch { return null; }
-  if (url.protocol !== "https:") return null;
-  const h = url.hostname.toLowerCase();
-  return h === "windy.com" || h.endsWith(".windy.com") ? url.href : null;
+  return url.protocol === "https:" ? url : null;
+}
+
+// A Windy cam's "Open this cam" link becomes an <a href> in the client
+// (camLink in src/cams.js). urls.detail must be an https windy.com page;
+// urls.provider is the cam owner's own site, passed through by Windy, so it
+// is only kept if it is https. Otherwise link to the cam's Windy page.
+export function safeWindyLink(urls, id) {
+  return safeWindyPlayer(urls?.detail) || httpsUrlOf(urls?.provider)?.href
+    || `https://www.windy.com/webcams/${encodeURIComponent(id)}`;
 }
 
 export async function fetchWindyCams(env, lat, lon, lake) {
@@ -2218,7 +2233,7 @@ export async function fetchWindyCams(env, lat, lon, lake) {
         live: !!live,
         cam: {
           name: `${label} (${live ? "Windy" : "Windy · replay"})`, lat: loc.latitude ?? lat, lon: loc.longitude ?? lon, lake,
-          embed, link: w.urls?.detail || w.urls?.provider || `https://www.windy.com/webcams/${id}`, source: "windy",
+          embed, link: safeWindyLink(w.urls, id), source: "windy",
         },
       });
     }

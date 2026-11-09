@@ -2479,6 +2479,92 @@ async function run() {
     }
   }
 
+  // ── Windy cam links: only https windy.com detail / https provider reach <a href> ──
+  {
+    const { safeWindyLink, fetchWindyCams } = await import("../functions/marine/conditions.js");
+    const detail = "https://www.windy.com/webcams/123";
+    const fb = (id) => `https://www.windy.com/webcams/${id}`;
+    eq("windy link: https windy.com detail kept", safeWindyLink({ detail, provider: "https://owner.test/" }, 123), detail);
+    eq("windy link: https provider used when detail missing", safeWindyLink({ provider: "https://owner.test/cam" }, 123), "https://owner.test/cam");
+    eq("windy link: off-host detail skipped for https provider", safeWindyLink({ detail: "https://evil.example/d", provider: "https://owner.test/" }, 1), "https://owner.test/");
+    eq("windy link: http detail rejected", safeWindyLink({ detail: "http://www.windy.com/webcams/1" }, 1), fb(1));
+    eq("windy link: javascript: provider rejected", safeWindyLink({ provider: "javascript:alert(1)" }, 7), fb(7));
+    eq("windy link: data: provider rejected", safeWindyLink({ provider: "data:text/html,x" }, 7), fb(7));
+    eq("windy link: http provider rejected", safeWindyLink({ provider: "http://owner.test/" }, 7), fb(7));
+    eq("windy link: lookalike detail host rejected", safeWindyLink({ detail: "https://windy.com.evil.example/x" }, 7), fb(7));
+    eq("windy link: no urls → id-built page", safeWindyLink(undefined, 7), fb(7));
+    eq("windy link: fallback id is URI-encoded", safeWindyLink({}, "1/../x?y"), "https://www.windy.com/webcams/1%2F..%2Fx%3Fy");
+    const realFetch = globalThis.fetch;
+    const water = [{ id: "harbor", name: "Harbor" }];
+    globalThis.fetch = async (u) => (String(u).startsWith("https://api.windy.com/")
+      ? new Response(JSON.stringify({ webcams: [
+          { webcamId: 444, title: "Marina", categories: water, urls: { detail: "javascript:alert(1)", provider: "javascript:alert(2)" } },
+          { webcamId: 555, title: "Beach", categories: water, urls: { detail: "https://www.windy.com/webcams/555" } },
+        ] }), { status: 200, headers: { "content-type": "application/json" } })
+      : realFetch(u));
+    try {
+      const cams = await fetchWindyCams({ WINDY_WEBCAMS_KEY: "test" }, 41.5, -82.7, "Lake Erie");
+      const by = Object.fromEntries((cams || []).map((c) => [c.embed.match(/player\/(\d+)/)?.[1], c]));
+      eq("windy cams: hostile detail+provider → windy page link", by["444"]?.link, fb(444));
+      eq("windy cams: valid detail link kept", by["555"]?.link, "https://www.windy.com/webcams/555");
+    } finally {
+      globalThis.fetch = realFetch;
+    }
+  }
+
+  // ── Custom cams: admin-entered image/link URLs must be https; ids are URI-encoded ──
+  {
+    const env = { USERS: makeKV(), ADMIN_EMAIL: "admin@example.com" };
+    const admin = await seedUser(env, "admin@example.com");
+    const base = { lake: "Lake Erie", lat: 41.5, lon: -82.7 };
+    const config = { cams: { disabled: [], custom: [
+      { ...base, name: "Good photo", kind: "img", id: "https://cams.test/a.jpg", link: "https://cams.test/" },
+      { ...base, name: "Bad link", kind: "img", id: "https://cams.test/b.jpg", link: "javascript:alert(1)" },
+      { ...base, name: "Http link", kind: "img", id: "https://cams.test/c.jpg", link: "http://cams.test/" },
+      { ...base, name: "JS image", kind: "img", id: "javascript:alert(1)" },
+      { ...base, name: "Data image", kind: "img", id: "data:image/svg+xml,<svg onload=alert(1)>" },
+      { ...base, name: "Http image", kind: "img", id: "http://cams.test/d.jpg" },
+      { ...base, name: "YT", kind: "yt", id: "abc123", link: "javascript:alert(1)" },
+    ] } };
+    const r = await call(req("PUT", "/api/admin/config", { cookie: admin, body: { config } }), env);
+    eq("custom cams PUT: → 200", r.status, 200);
+    const by = Object.fromEntries((await r.json()).config.cams.custom.map((e) => [e.name, e]));
+    eq("custom cams: https image + link kept", JSON.stringify([by["Good photo"]?.id, by["Good photo"]?.link]), JSON.stringify(["https://cams.test/a.jpg", "https://cams.test/"]));
+    eq("custom cams: javascript: link dropped, cam kept", JSON.stringify([by["Bad link"]?.id, by["Bad link"]?.link]), JSON.stringify(["https://cams.test/b.jpg", ""]));
+    eq("custom cams: http link dropped", by["Http link"]?.link, "");
+    check("custom cams: javascript:/data:/http: image URLs drop the entry", !by["JS image"] && !by["Data image"] && !by["Http image"], JSON.stringify(Object.keys(by)));
+    eq("custom cams: non-image id untouched, bad link dropped", JSON.stringify([by.YT?.id, by.YT?.link]), JSON.stringify(["abc123", ""]));
+
+    // Client repeats the checks (config could predate the server fix).
+    const { normalizeCustomCam, camLink, camSrc, safeHttps } = await import("../src/cams.js");
+    const n = (e) => normalizeCustomCam({ ...base, ...e });
+    eq("normalizeCustomCam: https image + link kept", camLink(n({ name: "a", kind: "img", id: "https://cams.test/a.jpg", link: "https://cams.test/" })), "https://cams.test/");
+    eq("normalizeCustomCam: javascript: image rejected", n({ name: "a", kind: "img", id: "javascript:alert(1)" }), null);
+    eq("normalizeCustomCam: data: image rejected", n({ name: "a", kind: "img", id: "data:image/png;base64,AA" }), null);
+    eq("normalizeCustomCam: http image rejected", n({ name: "a", kind: "img", id: "http://cams.test/a.jpg" }), null);
+    const badLink = n({ name: "a", kind: "img", id: "https://cams.test/a.jpg", link: "javascript:alert(1)" });
+    check("normalizeCustomCam: javascript: link dropped", badLink && !("link" in badLink), JSON.stringify(badLink));
+    eq("camLink: unsafe link falls back to the https image", camLink(badLink), "https://cams.test/a.jpg");
+    eq("camLink: unsafe link on a raw cam object never returned", camLink({ img: "https://cams.test/a.jpg", link: "javascript:alert(1)" }), "https://cams.test/a.jpg");
+    eq("camLink: unsafe embed link falls back to the embed", camLink({ embed: "https://webcams.windy.com/p/1", link: "javascript:x" }), "https://webcams.windy.com/p/1");
+    eq("safeHttps: protocol-relative rejected", safeHttps("//cams.test/a.jpg"), "");
+    // Provider ids are URI-encoded, so they can't inject params or paths.
+    const evil = "x&autoplay=0#\"/../y";
+    const e = encodeURIComponent(evil);
+    for (const kind of ["angelcam", "wetmet", "ipcamlive", "ozolio", "ytChannel", "yt"]) {
+      check(`camSrc: ${kind} id URI-encoded`, camSrc({ [kind]: evil }).includes(e) && !camSrc({ [kind]: evil }).includes(evil), camSrc({ [kind]: evil }));
+      check(`camLink: ${kind} id URI-encoded`, camLink({ [kind]: evil }).includes(e) && !camLink({ [kind]: evil }).includes(evil), camLink({ [kind]: evil }));
+    }
+    eq("normalizeCustomCam: valid yt id kept", n({ name: "a", kind: "yt", id: "ZZevIUr2cTk" })?.yt, "ZZevIUr2cTk");
+    eq("normalizeCustomCam: path-like yt id rejected", n({ name: "a", kind: "yt", id: "x/../../somepath" }), null);
+    eq("normalizeCustomCam: odd-case kind rejected", n({ name: "a", kind: "IMG", id: "https://cams.test/a.jpg" }), null);
+    const { CAMS } = await import("../src/cams.js");
+    eq("camSrc: built-in yt id unchanged by encoding", camSrc({ yt: "ZZevIUr2cTk" }), "https://www.youtube.com/embed/ZZevIUr2cTk?autoplay=1&mute=1&rel=0");
+    const kinds = ["angelcam", "wetmet", "ipcamlive", "ozolio", "ytChannel", "yt"];
+    const changed = CAMS.filter((c) => kinds.some((k) => c[k] != null && encodeURIComponent(c[k]) !== String(c[k])));
+    check("cams: built-in provider ids are already URL-safe (encoding is a no-op)", !changed.length, JSON.stringify(changed.map((c) => c.name)));
+  }
+
   // ── Launch-facts card: a configured buoy is not a live buoy ──
   {
     const { SPOTS, spotFacts } = await import("../functions/marine/conditions.js");
