@@ -14,7 +14,7 @@ const PhotoIcon = (p) => (
 );
 const CamTypeIcon = ({ cam, ...p }) => (camIsImage(cam) ? <PhotoIcon {...p} /> : <VideoIcon {...p} />);
 const saveDataOn = () => typeof navigator !== "undefined" && Boolean(navigator.connection && navigator.connection.saveData);
-const SAFETY_LINE = "One view, one moment — a calm harbor doesn't mean calm water outside it.";
+const SAFETY_LINE = "One view, one moment, possibly delayed — calm water on camera doesn't mean calm water where you're headed.";
 const REPORT_REASONS = ["Not water", "Offline", "Wrong place", "Other"];
 const ExternalIcon = (p) => (
   <svg viewBox="0 0 24 24" width="1em" height="1em" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" {...p}>
@@ -280,16 +280,17 @@ export default function Cams({ lat, lon, spotName, lake }) {
     return () => clearTimeout(t);
   }, [cam, loaded, needsTap, iframeFail]);
 
-  const heading = isFar && cam && miles[cam.name] != null ? `Nearest cam · ${Math.round(miles[cam.name])} mi away` : "Live cams";
+  // Not "Live cams": the list mixes photos and replays, and a heading must not vouch for currency.
+  const heading = isFar && cam && miles[cam.name] != null ? `Nearest cam · ${Math.round(miles[cam.name])} mi away` : "Webcams";
 
   if (status === null) {
     return (
       <section className="card">
-        <div className="card-head"><h2>Live cams</h2></div>
+        <div className="card-head"><h2>Webcams</h2></div>
         {/* Inside a sized .camwrap: reserves the player's 16:9 space and keeps the
             absolutely-positioned spinner in the card (it once anchored to the
             viewport, and React reused that node, scoring a full-screen layout shift). */}
-        <div className="camwrap" key="cam-pending"><div className="camloading" role="status" aria-live="polite"><span className="spinner" />finding live cams…</div></div>
+        <div className="camwrap" key="cam-pending"><div className="camloading" role="status" aria-live="polite"><span className="spinner" />finding cams…</div></div>
       </section>
     );
   }
@@ -297,7 +298,7 @@ export default function Cams({ lat, lon, spotName, lake }) {
   if (!cams.length) {
     return (
       <section className="card">
-        <div className="card-head"><h2>Live cams</h2></div>
+        <div className="card-head"><h2>Webcams</h2></div>
         <div className="camempty">No live webcams for this spot right now; they come and go. Check the directory links below, or point us at one.</div>
         <CamLinks lat={lat} lon={lon} lake={lake} spotName={spotName} />
         <CamSuggest spotName={spotName} lat={lat} lon={lon} current="" />
@@ -312,9 +313,11 @@ export default function Cams({ lat, lon, spotName, lake }) {
   if (failedNow) chip = { cls: "warn", text: "Can't confirm live" };
   else if (camIsReplay(cam)) chip = { cls: "replay", text: "Replay" };
   else if (isImg) {
-    const mins = loadedAt ? Math.floor((Date.now() - loadedAt) / 60000) : null;
-    chip = { cls: "photo", text: !loadedAt ? `Photo · refreshes every ${saveData ? 60 : 15} sec` : mins < 1 ? "Photo · updated just now" : `Photo · updated ${mins}m ago` };
-  } else if (loaded) chip = { cls: "video", text: "Live" };
+    // We only know when OUR browser fetched the file, not when the camera took
+    // it: a frozen upstream frame re-fetches fine forever. Never call it "updated".
+    chip = { cls: "photo", text: loaded ? "Photo · time taken unknown" : "Photo · loading…" };
+  } else if (loaded && (cam.yt || (status && status[cam.name] === "live"))) chip = { cls: "video", text: "Live" };
+  else if (loaded) chip = { cls: "photo", text: "Video · live not confirmed" };
   else chip = { cls: "photo", text: needsTap ? "Tap to play" : "Loading…" };
 
   const mi = miles[cam.name];
@@ -384,7 +387,7 @@ export default function Cams({ lat, lon, spotName, lake }) {
       <CamLinks cam={cam} lat={lat} lon={lon} lake={lake} spotName={spotName} />
       <div className="hint">
         {isImg
-          ? `Still image, refreshes about every ${saveData ? 60 : 15} seconds.`
+          ? `Still image, re-fetched about every ${saveData ? 60 : 15} seconds. We can't tell when the camera took it; check any time stamp on the image.`
           : camIsReplay(cam) ? "Recorded replay or timelapse, not a live view." : "Video. Some players need a tap to start."}
         {hiddenCount > 0 && ` ${hiddenCount} cam${hiddenCount > 1 ? "s" : ""} not responding, hidden.`}
       </div>

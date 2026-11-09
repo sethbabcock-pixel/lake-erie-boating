@@ -392,10 +392,27 @@ export const haversineMi = (la, lo, la2, lo2) => {
   return 3958.8 * 2 * Math.asin(Math.min(1, Math.sqrt(a)));
 };
 
+// Coastal regions whose cams may stand in for each other: same open water, no
+// barrier island / peninsula / bar between them. Deliberately NOT paired, because
+// a sheltered cam would read calm for an exposed launch (or the reverse):
+// Pamlico Sound vs NC ocean coast (Outer Banks), SF Bay vs the open coast
+// (Golden Gate / peninsula), Washington Coast vs Puget Sound (Hood Canal cam for
+// the Westport/Astoria bars), Louisiana Gulf vs Biloxi Back Bay.
+const COAST_NEIGHBORS = [
+  ["Florida Gulf Coast", "Alabama & Mississippi Coast"],
+  ["Florida Atlantic Coast", "Florida Keys"],
+  ["Georgia & South Carolina Coast", "North Carolina Coast"],
+  ["Long Island Sound", "New York & New Jersey Coast"],
+  ["Puget Sound", "San Juan Islands & Admiralty Inlet"],
+  ["Washington Coast", "Oregon Coast"],
+  ["Oregon Coast", "Northern California Coast"],
+];
+const coastMatch = (spot, cam) =>
+  spot === cam || COAST_NEIGHBORS.some(([x, y]) => (x === spot && y === cam) || (y === spot && x === cam));
+
 // Cams near the selected spot, nearest first, with distances. Great Lakes spots
 // ("Lake …") stay same-lake-only (cams without a `lake` default to Lake Erie).
-// Coastal spots match any non-Great-Lakes cam by distance, whatever its region
-// string, so neighbouring regions (e.g. Beaufort for bath-nc) are visible.
+// Coastal spots match same-region cams plus the COAST_NEIGHBORS above, by distance.
 // Scoped to the launch area: prefer cams within ~0.85° (≈60 mi); if none are
 // that close, just the single nearest within ~1.6° (≈110 mi, `far: true`);
 // beyond that, empty. ~1° ≈ 69 mi.
@@ -405,7 +422,7 @@ export const nearestCamsWithDist = (lat, lon, lake, n = 6, list = CAMS) => {
   const want = lake || "Lake Erie";
   const lakeSpot = isGreatLake(want);
   const ranked = list
-    .filter((c) => (lakeSpot ? (c.lake || "Lake Erie") === want : c.lake && !isGreatLake(c.lake)))
+    .filter((c) => (lakeSpot ? (c.lake || "Lake Erie") === want : Boolean(c.lake) && coastMatch(want, c.lake)))
     .map((c) => [c, dist(lat, lon, c.lat, c.lon)])
     .sort((a, b) => a[1] - b[1]);
   const near = ranked.filter(([, d]) => d <= NEAR_DEG);
