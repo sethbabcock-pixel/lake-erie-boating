@@ -238,12 +238,14 @@ export default function Cams({ lat, lon, spotName, lake }) {
 
   // Hide cams confirmed offline (server) or reported dead (player). Fall back to
   // the full list if that would leave nothing, so the section is never empty.
-  const cams = useMemo(() => {
+  // hiddenCount counts only cams dropped for not responding, never the ones
+  // merely cut by the 8-cam cap (a healthy 10-cam spot must not claim "2 hidden").
+  const { cams, hiddenCount } = useMemo(() => {
     const base = status ? candidates.filter((c) => status[c.name] !== "offline") : candidates.slice();
     const ok = base.filter((c) => !failed[c.name]);
-    return (ok.length ? ok : base).slice(0, 8);
+    const shown = ok.length ? ok : base;
+    return { cams: shown.slice(0, 8), hiddenCount: candidates.length - shown.length };
   }, [candidates, status, failed]);
-  const hiddenCount = candidates.length - cams.length;
 
   const [sel, setSel] = useState(0);
   const [loaded, setLoaded] = useState(false);
@@ -367,7 +369,7 @@ export default function Cams({ lat, lon, spotName, lake }) {
               </div>
             )}
             {isImg ? (
-              <img key={cam.name} alt={`Still from ${cam.name}`} src={`${cam.img}?t=${bust}`}
+              <img key={cam.name} alt={`Still from ${cam.name}`} src={`${cam.img}${cam.img.includes("?") ? "&" : "?"}t=${bust}`}
                 onLoad={() => { setLoaded(true); setLoadedAt(Date.now()); setTimedOut(false); setIframeFail(false); }} onError={() => setIframeFail(true)}
                 style={{ opacity: loaded ? 1 : 0 }} />
             ) : cam.yt ? (
