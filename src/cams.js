@@ -1,71 +1,91 @@
-// Great Lakes live cams. The property present decides how each renders:
+// Live cams (Great Lakes + coastal regions). The property present decides how each renders:
 //   iframe  → angelcam / wetmet / ipcamlive / ozolio / youtube (channel or video)
 //   image   → refreshing JPEG snapshot (NOAA GLERL, etc.)
 // All entries are verified live + embeddable (no X-Frame-Options) by
 // scripts/check-cams.mjs, which the cam-health GitHub Action runs weekly.
+// Great Lakes entries were re-audited 2026-11-09 for what each cam actually SHOWS
+// (not the host site's name) — see docs/ops/cams-great-lakes-audit-2026-11.md.
 export const CAMS = [
+  // Lake Erie (2026-11-09 audit: every entry reviewed against what the cam shows, not the host site's name.
+  // Removed: Lorain Black River Landing (bridge/park), duplicate Toledo Channel Marker JPEG, Erie WetMet "Bayfront" (view unconfirmed).)
   { name: "Edgewater Beach · Cleveland", lat: 41.49, lon: -81.74, angelcam: "91yx8ek0ro" },
-  // Western basin — Toledo Harbor Light + Channel Marker 2 (NOAA GLERL snapshots)
-  { name: "Western Basin · Toledo Light (NOAA)", lat: 41.776, lon: -83.326, img: "https://www.glerl.noaa.gov/metdata/tol2/tol2-01.jpg", link: "https://www.glerl.noaa.gov/metdata/" },
-  { name: "Western Basin · Toledo Channel Marker 2 (NOAA)", lat: 41.74, lon: -83.34, img: "https://www.glerl.noaa.gov/res/recon/plots/cmt/webcam1.jpg", link: "https://www.glerl.noaa.gov/res/recon/station-cmt-webcam-boats.html" },
-  // Port Clinton waterfront (Ozolio embed, via offtherockportclinton.com)
-  { name: "Port Clinton · Waterfront", lat: 41.512, lon: -82.937, ozolio: "EMB_IMGT00000FED" },
-  // Put-in-Bay / South Bass Island (Ozolio — HTTPS, the feeds putinbay.com embeds)
-  { name: "Put-in-Bay · Boardwalk Harbor", lat: 41.653, lon: -82.821, ozolio: "EMB_PSZZ000005DE" },
-  { name: "Put-in-Bay · Perry's Monument (West)", lat: 41.654, lon: -82.812, ozolio: "EMB_ULHE00000B88" },
-  { name: "Lorain · Black River Landing", lat: 41.47, lon: -82.18, yt: "ZZevIUr2cTk" },
+  // Western basin: NOAA GLERL Toledo Light No. 2 tower (4 cams; these two are open water)
+  { name: "Western Basin · Toledo Light, channel view (NOAA)", lat: 41.826, lon: -83.194, img: "https://www.glerl.noaa.gov/metdata/tol2/tol2-03.jpg", link: "https://www.glerl.noaa.gov/metdata/tol2/" },
+  { name: "Western Basin · Toledo Light, West Sister view (NOAA)", lat: 41.826, lon: -83.194, img: "https://www.glerl.noaa.gov/metdata/tol2/tol2-01.jpg", link: "https://www.glerl.noaa.gov/metdata/tol2/" },
+  // Port Clinton docks (Ozolio embed, via offtherockportclinton.com)
+  { name: "Port Clinton · Docks (Off The Rock)", lat: 41.512, lon: -82.937, ozolio: "EMB_IMGT00000FED" },
+  // Put-in-Bay / South Bass Island (Ozolio, the feeds putinbay.com embeds)
+  { name: "Put-in-Bay · Harbor (Boardwalk cam)", lat: 41.653, lon: -82.821, ozolio: "EMB_PSZZ000005DE" },
+  { name: "Put-in-Bay · Perry's Monument harbor view (West)", lat: 41.654, lon: -82.812, ozolio: "EMB_ULHE00000B88" },
+  { name: "Put-in-Bay · Ship House (open lake)", lat: 41.65, lon: -82.83, ozolio: "EMB_SGLW000005D4" },
+  { name: "Put-in-Bay · Condo cam (mainland & Cedar Point across the water)", lat: 41.655, lon: -82.82, ozolio: "EMB_QMOL000005D9" },
   { name: "Lorain · Lighthouse & Pier", lat: 41.469, lon: -82.178, yt: "AinDIqEXEu4" },
   { name: "Lorain · Port Marina", lat: 41.47, lon: -82.18, yt: "1MVB3fgg7kg" },
-  { name: "Mentor · Mentor Harbor Yacht Club", lat: 41.73, lon: -81.36, ipcamlive: "mhyc" },
-  { name: "Erie, PA · Bayfront", lat: 42.14, lon: -80.09, wetmet: "388190fe4f8b3159810f66712ba47065" },
-  // Northern Lake Michigan (Little Traverse Bay)
-  { name: "Harbor Springs · Steeple", lat: 45.43, lon: -84.99, yt: "iPm4jZcBKPU", lake: "Lake Michigan" },
-  { name: "Petoskey · Bay", lat: 45.37, lon: -84.95, angelcam: "ger25omkrm", lake: "Lake Michigan" },
-  { name: "Petoskey · Bayfront", lat: 45.37, lon: -84.96, wetmet: "8e442be557e9221ea31ed33e75a38071", lake: "Lake Michigan" },
-  // Lake Michigan (researched + verified live)
-  // Chicago: the old Playpen 4K stream (ATz12otMpf4) is gone (oEmbed 403); Lakefront Live + Michigan City are listed further down.
-  { name: "Gary · Wells Street Beach", lat: 41.62, lon: -87.26, yt: "foVd0uAK3Fg", lake: "Lake Michigan" },
-  // Milwaukee: the EarthCam stream (MT5Og9gOKuM) was dropped — EarthCam is off-limits and it was a city view.
-  { name: "Milwaukee · Summerfest & Harbor (Axis)", lat: 43.03, lon: -87.90, yt: "ctrwip5GIb0", lake: "Lake Michigan" },
-  { name: "Sheboygan · Harbor Centre Marina", lat: 43.75, lon: -87.715, yt: "lu-YXDumeps", lake: "Lake Michigan" },
-  { name: "Sheboygan · North Beach", lat: 43.75, lon: -87.715, yt: "13j5iZkMpbE", lake: "Lake Michigan" },
-  { name: "Traverse City · W Grand Traverse Bay", lat: 44.76, lon: -85.62, yt: "2ETj1sUmEmU", lake: "Lake Michigan" },
-  { name: "Mackinaw City · Straits & Bridge", lat: 45.78, lon: -84.72, yt: "Mf_qId_7mlM", lake: "Lake Michigan" },
+  { name: "Mentor · Mentor Harbor Yacht Club channel", lat: 41.73, lon: -81.36, ipcamlive: "mhyc" },
+  // Erie Yacht Club "Basin Web Cams" (erieyachtclub.org/basin-web-cams, operator-labelled EYC Basin Cam North/West)
+  { name: "Erie, PA · Erie Yacht Club basin (North)", lat: 42.125, lon: -80.133, ipcamlive: "38af29740fe2" },
+  { name: "Erie, PA · Erie Yacht Club basin (West)", lat: 42.125, lon: -80.133, ipcamlive: "f4b1c208de59" },
+  { name: "North East, PA · Sunset Cam (Lake Erie)", lat: 42.215, lon: -79.83, yt: "Hg56IYpaF2A" },
+  // Lake Ontario (2026-11-09 audit). Removed: Oswego SUNY Hart Hall (campus view), Olcott Harborcam (YouTube id 404).
+  { name: "Rochester · Charlotte-Genesee Light", lat: 43.22, lon: -77.62, yt: "NHDgasBPtRY", lake: "Lake Ontario" },
+  { name: "Sodus Bay · Sodus Point marina (WROC)", lat: 43.27, lon: -76.97, yt: "68XVh5TcgBk", lake: "Lake Ontario" },
+  { name: "Lyndonville · Lake Ontario shore", lat: 43.36, lon: -78.39, yt: "w2COKOM5USU", lake: "Lake Ontario" },
+  // Navy Point Marine's own YouTube stream (embedded on navypointmarine.com/live); oEmbed 200, current thumbnail = dock basin + boats
+  { name: "Sackets Harbor · Navy Point Marine docks", lat: 43.95, lon: -76.123, yt: "DzhFkmug-Ec", lake: "Lake Ontario" },
+  // Lake Michigan - audited 2026-11-09 (docs/ops/cams). Every entry is a water view; no ski/street/skyline-only cams.
+  // Removed: Harbor Springs Steeple (video gone), Petoskey Bay (Nub's Nob ski cam), Leland (restaurant cam, no water),
+  //   Port Washington wetmet e6c8abb0... (actually downtown Milwaukee). HOLD: Petoskey Visitors Bureau wetmet 8e442be557e9221ea31ed33e75a38071
+  //   (daylight check), Little Traverse Bay Ferry yt _2NHpXiC6v4 (seasonal).
+  // Northern Lake Michigan / Little Traverse Bay & Straits
+  { name: "Inn at Bay Harbor · Little Traverse Bay", lat: 45.364, lon: -85.003, yt: "VwTFodAY_aE", lake: "Lake Michigan" },
   { name: "Charlevoix · Pine River Channel", lat: 45.32, lon: -85.26, yt: "HeZbPbqO-6M", lake: "Lake Michigan" },
-  { name: "Leland · Leelanau Harbor", lat: 45.02, lon: -85.76, yt: "s7sY1waeOf4", lake: "Lake Michigan" },
-  { name: "Muskegon · Harbor (NOAA GLERL)", lat: 43.23, lon: -86.34, img: "https://www.glerl.noaa.gov/metdata/cams/mkg08.jpg", link: "https://www.glerl.noaa.gov/metdata/", lake: "Lake Michigan" },
-  { name: "New Buffalo · Harbor", lat: 41.79, lon: -86.74, ipcamlive: "cnbharbor", lake: "Lake Michigan" },
-  // Found via the lakerart.com directory scout (all official embed players)
-  { name: "Muskegon · Channel (USS Silversides)", lat: 43.228, lon: -86.331, wetmet: "75d6541617a2c940bd4d8a798aa35a69", lake: "Lake Michigan" },
-  { name: "Port Washington · Harbor", lat: 43.387, lon: -87.868, wetmet: "e6c8abb0ca38a3035b522d5e7c316241", lake: "Lake Michigan" },
+  { name: "Mackinaw City · Straits & Bridge", lat: 45.78, lon: -84.72, yt: "Mf_qId_7mlM", lake: "Lake Michigan" },
+  // Grand Traverse Bay / Sleeping Bear / Manistee
+  { name: "Traverse City · W Grand Traverse Bay", lat: 44.76, lon: -85.62, yt: "2ETj1sUmEmU", lake: "Lake Michigan" },
+  { name: "Traverse City · Pinestead Reef Beach", lat: 44.79, lon: -85.57, angelcam: "1eyv49k9y7", lake: "Lake Michigan" },
+  { name: "Empire · Beach & Surf (Sleeping Bear Surf)", lat: 44.81, lon: -86.06, angelcam: "17ldg92dle", lake: "Lake Michigan" },
+  { name: "Manistee · First Street Beach (City of Manistee)", lat: 44.25, lon: -86.35, ipcamlive: "firststbeach", lake: "Lake Michigan" },
+  // Door County (no launch spot in range yet)
   { name: "Sturgeon Bay · Westwood Shores", lat: 44.811, lon: -87.39, angelcam: "24r4vn43r0", lake: "Lake Michigan" },
   { name: "Sturgeon Bay · Bay Shore Inn", lat: 44.87, lon: -87.331, angelcam: "17yd2417le", lake: "Lake Michigan" },
-  // Lake Ontario
-  { name: "Rochester · Charlotte-Genesee Light", lat: 43.22, lon: -77.62, yt: "NHDgasBPtRY", lake: "Lake Ontario" },
-  { name: "Sodus Bay · Sodus Lighthouse", lat: 43.27, lon: -76.97, yt: "68XVh5TcgBk", lake: "Lake Ontario" },
-  { name: "Oswego · Lake Ontario (SUNY)", lat: 43.47, lon: -76.51, yt: "wfhQTU0HrpY", lake: "Lake Ontario" },
-  { name: "Olcott · Harborcam", lat: 43.34, lon: -78.72, yt: "NpoCG3w-NXI", lake: "Lake Ontario" },
-  // Lake Huron
+  // West Michigan shore
+  { name: "Muskegon · Channel (NOAA GLERL)", lat: 43.23, lon: -86.34, img: "https://www.glerl.noaa.gov/metdata/cams/mkg08.jpg", link: "https://www.glerl.noaa.gov/metdata/", lake: "Lake Michigan" },
+  { name: "Muskegon · Channel (USS Silversides)", lat: 43.228, lon: -86.331, wetmet: "75d6541617a2c940bd4d8a798aa35a69", lake: "Lake Michigan" },
+  { name: "North Muskegon · Muskegon Lake", lat: 43.26, lon: -86.27, yt: "itIkc0INogQ", lake: "Lake Michigan" },
+  { name: "Grand Haven · Beach (WGHN)", lat: 43.0635, lon: -86.2545, ipcamlive: "646fb1edafc6c", lake: "Lake Michigan" },
+  { name: "Grand Haven · Channel (WGHN)", lat: 43.0605, lon: -86.2455, ipcamlive: "62851eba65dbc", lake: "Lake Michigan" },
+  { name: "South Haven · South Beach & Piers", lat: 42.4, lon: -86.28, yt: "G-tlKF32_p4", lake: "Lake Michigan" },
+  // Southern Lake Michigan
+  { name: "New Buffalo · Harbor", lat: 41.79, lon: -86.74, ipcamlive: "cnbharbor", lake: "Lake Michigan" },
+  { name: "Michigan City · Lighthouse & Beach (Access LaPorte County)", lat: 41.73, lon: -86.91, yt: "Y2VkN45kj_0", lake: "Lake Michigan" },
+  { name: "Gary · Wells Street Beach", lat: 41.62, lon: -87.26, yt: "foVd0uAK3Fg", lake: "Lake Michigan" },
+  { name: "Chicago · Lakefront (Lakefront Live)", lat: 41.895, lon: -87.61, yt: "dBGt-W7onQ8", lake: "Lake Michigan" }, // weak: lake ~40% of frame
+  // Wisconsin shore
+  { name: "Milwaukee · Summerfest & Harbor (Axis)", lat: 43.03, lon: -87.90, yt: "ctrwip5GIb0", lake: "Lake Michigan" }, // weak: lake ~1/3 of frame
+  { name: "Sheboygan · Harbor Centre Marina", lat: 43.75, lon: -87.715, yt: "lu-YXDumeps", lake: "Lake Michigan" },
+  { name: "Sheboygan · North Beach & Pier", lat: 43.75, lon: -87.715, yt: "13j5iZkMpbE", lake: "Lake Michigan" },
+  // Lake Huron (audited 2026-11-09: every cam below was seen on a thumbnail/snapshot or has an operator label naming a water view)
+  // St. Clair River — the head of the river at Port Huron out to Algonac. Shipping-channel views, tagged Lake Huron for the Port Huron launch.
+  { name: "Port Huron · St. Clair River (StreamTime)", lat: 42.98, lon: -82.42, yt: "AwP_Q6IGwFs", lake: "Lake Huron" },
+  { name: "Port Huron · St. Clair River shipping (BoatNerd PTZ)", lat: 42.98, lon: -82.42, yt: "SrL74LPoXF8", lake: "Lake Huron" },
   { name: "St. Clair · River (BoatNerd Voyageur)", lat: 42.83, lon: -82.49, yt: "yu0pKQSvYX8", lake: "Lake Huron" },
   { name: "Marine City · St. Clair River (StreamTime)", lat: 42.72, lon: -82.49, yt: "NqvRpsavyWg", lake: "Lake Huron" },
-  { name: "Detroit River · Dossin Museum (BoatNerd)", lat: 42.34, lon: -82.95, yt: "L73DrCZHJ8A", lake: "Lake Huron" },
-  { name: "Port Huron · St. Clair River (StreamTime)", lat: 42.98, lon: -82.42, yt: "AwP_Q6IGwFs", lake: "Lake Huron" },
-  { name: "Alpena · Thunder Bay (NOAA GLERL)", lat: 45.06, lon: -83.42, img: "https://www.glerl.noaa.gov/metdata/cams/apn04.jpg", link: "https://www.glerl.noaa.gov/metdata/", lake: "Lake Huron" },
-  { name: "DeTour · Drummond Island Ferry", lat: 45.993, lon: -83.899, wetmet: "609fd1e6905ac5196fb8534a64f36993", lake: "Lake Huron" },
-  // Lake Superior
+  { name: "Algonac · St. Clair River (StreamTime)", lat: 42.62, lon: -82.53, yt: "g4mpc2I5lhc", lake: "Lake Huron" },
+  // Alpena / Thunder Bay — NOAA GLERL snapshots (overlay labels: Marina, Thunder Bay, River) + one marina stream
+  { name: "Alpena · Marina (NOAA GLERL)", lat: 45.06, lon: -83.42, img: "https://www.glerl.noaa.gov/metdata/cams/apn04.jpg", link: "https://www.glerl.noaa.gov/metdata/", lake: "Lake Huron" },
+  { name: "Alpena · Thunder Bay breakwater (NOAA GLERL)", lat: 45.06, lon: -83.42, img: "https://www.glerl.noaa.gov/metdata/cams/apn03.jpg", link: "https://www.glerl.noaa.gov/metdata/", lake: "Lake Huron" },
+  { name: "Alpena · Thunder Bay River mouth (NOAA GLERL)", lat: 45.06, lon: -83.42, img: "https://www.glerl.noaa.gov/metdata/cams/apn05.jpg", link: "https://www.glerl.noaa.gov/metdata/", lake: "Lake Huron" },
+  { name: "Alpena · Thunder Bay Harbor Camera (105.7 The Bird)", lat: 45.063, lon: -83.43, yt: "cTL6RHF3WDs", lake: "Lake Huron" },
+  // Lake Superior (audited 2026-11-09: every cam below was seen on a thumbnail/snapshot or has an operator label naming a water view)
   { name: "Duluth · Canal Cam", lat: 46.78, lon: -92.08, yt: "HPS48TMmNag", lake: "Lake Superior" },
-  { name: "Duluth · Western Harbor", lat: 46.78, lon: -92.08, yt: "SBElcRmgVjw", lake: "Lake Superior" },
   { name: "Duluth · South Pier Lighthouse", lat: 46.78, lon: -92.08, yt: "a-ADUhRp0yk", lake: "Lake Superior" },
   { name: "Duluth · Pier B", lat: 46.78, lon: -92.08, yt: "c1kfkIoF0k0", lake: "Lake Superior" },
-  { name: "Marquette · Lower Harbor", lat: 46.54, lon: -87.38, wetmet: "08a47e963e2f369ca92e4fe022b7f329", lake: "Lake Superior" },
-  { name: "Houghton · Portage Lift Bridge", lat: 47.12, lon: -88.57, wetmet: "040f3085e8b73aa13a4d4c98fdc7f0ac", lake: "Lake Superior" },
+  { name: "Silver Bay · Marina (Duluth Harbor Cam)", lat: 47.295, lon: -91.257, yt: "zTVWJ3Mc0Ag", lake: "Lake Superior" },
   { name: "Grand Marais · Harbor Cam", lat: 47.75, lon: -90.33, yt: "n0H5FkWkjjs", lake: "Lake Superior" },
-  // Found via the lakerart.com directory scout (official embed players + NPS)
-  { name: "Bayfield · Bayfield Inn", lat: 46.812, lon: -90.818, angelcam: "v8ypjjj8y6", lake: "Lake Superior" },
   { name: "Bayfield · Port Superior Marina", lat: 46.757, lon: -90.864, angelcam: "m1ervgoxr7", lake: "Lake Superior" },
+  { name: "Bayfield · Pikes Bay Marina", lat: 46.83, lon: -90.83, yt: "O8kPCPZEFE4", lake: "Lake Superior" },
   { name: "Saxon Harbor, WI · Marina", lat: 46.565, lon: -90.437, ipcamlive: "saxonharbor", lake: "Lake Superior" },
-  { name: "Whitefish Point · Shipwreck Museum", lat: 46.771, lon: -84.958, wetmet: "977a312d5da91e21bc63f295c0b12cc7", lake: "Lake Superior" },
-  { name: "Isle Royale · Mott Island (NPS)", lat: 48.108, lon: -88.556, img: "https://www.nps.gov/webcams-isro/mottmain.jpg", link: "https://www.nps.gov/isro/learn/photosmultimedia/webcams.htm", lake: "Lake Superior" },
+  { name: "Isle Royale · Mott Island dock (NPS)", lat: 48.108, lon: -88.556, img: "https://www.nps.gov/webcams-isro/mottmain.jpg", link: "https://www.nps.gov/isro/learn/photosmultimedia/webcams.htm", lake: "Lake Superior" },
   // Florida Atlantic Coast (2026-11 water-cam audit — every entry is a 24/7 water view;
   // YouTube confirmed it exists + allows embedding; the player hides any that are offline)
   { name: "St. Augustine · Matanzas River & Bridge of Lions", lat: 29.892, lon: -81.31, yt: "uLJBad4vSno", lake: "Florida Atlantic Coast" },
@@ -225,17 +245,6 @@ export const CAMS = [
   { name: "South Padre · Courtyard beach cam", lat: 26.1, lon: -97.17, yt: "dzylsC0KcOE", lake: "Louisiana & Texas Coast" },
   { name: "South Padre · Queen Isabella Causeway", lat: 26.08, lon: -97.17, yt: "bvL_3W7F4Fk", lake: "Louisiana & Texas Coast" },
   { name: "South Padre · Isla Blanca (South Padre Surf Co)", lat: 26.07, lon: -97.16, yt: "0FaRaPPTS8M", lake: "Louisiana & Texas Coast" },
-  { name: "Alpena · Thunder Bay Camera (WATZ)", lat: 45.063, lon: -83.43, yt: "BluUW4pk2ek", lake: "Lake Huron" },
-  { name: "Alpena · Thunder Bay Harbor Camera (105.7 The Bird)", lat: 45.063, lon: -83.43, yt: "cTL6RHF3WDs", lake: "Lake Huron" },
-  { name: "Algonac · St. Clair River (StreamTime)", lat: 42.62, lon: -82.53, yt: "g4mpc2I5lhc", lake: "Lake Huron" },
-  { name: "Port Huron · St. Clair River shipping (BoatNerd PTZ)", lat: 42.98, lon: -82.42, yt: "SrL74LPoXF8", lake: "Lake Huron" },
-  { name: "North East, PA · Sunset Cam (Lake Erie)", lat: 42.215, lon: -79.83, yt: "Hg56IYpaF2A" },
-  { name: "Lyndonville · Lake Ontario Livestream", lat: 43.33, lon: -78.39, yt: "w2COKOM5USU", lake: "Lake Ontario" },
-  { name: "Silver Bay · Marina (Duluth Harbor Cam)", lat: 47.295, lon: -91.257, yt: "zTVWJ3Mc0Ag", lake: "Lake Superior" },
-  { name: "Chicago · Lakefront Skyline 4K (Lakefront Live)", lat: 41.895, lon: -87.61, yt: "dBGt-W7onQ8", lake: "Lake Michigan" },
-  { name: "Michigan City · Lighthouse & Beach (Access LaPorte County)", lat: 41.73, lon: -86.91, yt: "Y2VkN45kj_0", lake: "Lake Michigan" },
-  { name: "North Muskegon · Muskegon Lake (Muskegon Waterfront)", lat: 43.26, lon: -86.27, yt: "itIkc0INogQ", lake: "Lake Michigan" },
-  { name: "South Haven · South Beach & Piers (City of South Haven)", lat: 42.4, lon: -86.28, yt: "G-tlKF32_p4", lake: "Lake Michigan" },
 ];
 
 // Extra cam directories to link out to, per lake (sites that block embedding).
@@ -243,24 +252,39 @@ export const LINK_CAMS = {
   "Lake Erie": [
     { name: "Shores & Islands cams", url: "https://www.shoresandislands.com/plan-your-visit/webcams/" },
     { name: "Put-in-Bay", url: "https://putinbay.com/put-in-bay-webcams/" },
-    { name: "Mentor Harbor", url: "https://www.ipcamlive.com/mhyc" },
+    { name: "FishUSA Erie cams (Lampe Marina, Avonia Beach, Walnut Creek)", url: "https://www.fishusa.com/webcams" },
+    { name: "Lake Metroparks (Fairport Harbor, Lake Erie Bluffs)", url: "https://lakemetroparks.com/webcams" },
+    { name: "Erie News Now Presque Isle cam", url: "https://www.erienewsnow.com/weather/cameras/presque-isle/" },
+    { name: "Great Lakes cam directory", url: "https://lakerart.com/links.htm" },
   ],
   "Lake Michigan": [
     { name: "Petoskey Area cams", url: "https://petoskeyarea.com/planning/live-area-webcams/" },
+    { name: "West Michigan live cams (WMTA)", url: "https://www.wmta.org/live-west-michigan-camera-gallery/" },
+    { name: "Manistee beach cams", url: "https://www.manisteemi.gov/136/Beaches" },
     { name: "Grand Haven (EarthCam)", url: "https://www.earthcam.com/usa/michigan/grandhaven/lakemichigan/" },
+    { name: "Sturgeon Bay cams", url: "https://sturgeonbay.net/webcams/" },
+    { name: "Milwaukee Sailing Center dock cam", url: "https://sailingcenter.org/cam/" },
+    { name: "Kenosha Southport Marina", url: "https://www.spmarina.net/marina-webcam" },
     { name: "Great Lakes cam directory", url: "https://lakerart.com/links.htm" },
   ],
   "Lake Huron": [
     { name: "Tawas Bay dock cam", url: "https://www.tawasbayweather.com/dockcamera.htm" },
+    { name: "Caseville breakwater cams", url: "https://www.casevillewebcams.com/" },
     { name: "Goderich sunset cams", url: "https://exploregoderich.ca/sunset-cameras/" },
     { name: "Great Lakes cam directory", url: "https://lakerart.com/links.htm" },
   ],
   "Lake Ontario": [
     { name: "1000 Islands cams", url: "https://www.1000islandswebcams.com/" },
+    { name: "Olcott Harborcam (Town of Newfane)", url: "https://townofnewfaneny.gov/OlcottHarborcam/" },
+    { name: "Youngstown / Niagara River cam", url: "https://www.youngstownny.com/webcam" },
     { name: "Great Lakes cam directory", url: "https://lakerart.com/links.htm" },
   ],
   "Lake Superior": [
     { name: "Duluth Harbor Cam hub", url: "https://www.duluthharborcam.com/p/canal-park-cams.html" },
+    { name: "Marquette · Presque Isle Middle Bay (Superior Watershed Partnership)", url: "https://superiorwatersheds.org/superior-buoys" },
+    { name: "Michigan Tech webcams (Keweenaw)", url: "https://www.mtu.edu/webcams/" },
+    { name: "Munising / Pictured Rocks cams", url: "https://www.exploremunising.com/web-cams/" },
+    { name: "Isle Royale NPS webcams", url: "https://www.nps.gov/isro/learn/photosmultimedia/webcams.htm" },
     { name: "Great Lakes cam directory", url: "https://lakerart.com/links.htm" },
   ],
 };
