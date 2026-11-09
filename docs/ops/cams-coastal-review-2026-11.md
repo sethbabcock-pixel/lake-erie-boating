@@ -265,3 +265,31 @@ Fix: let `nearestCams` match a region's `neighbors` list, or drop the lake filte
 3. Add Duke x2 (after a daylight look), USCG Coos, Depoe Bay and Umpqua (after an ODOT terms check), and the Northport pair as last-rank stopgaps.
 4. Add `lakes` aliases to `nearestCams` so existing cams reach nearby spots.
 5. Draft outreach emails (owner sends) to WebCOOS/SECOORA, the City of Santa Barbara, Santa Cruz Harbor, Kenai Fjords Tours, and the Express Watersports (Murrells Inlet) Ozolio owner.
+
+## 6. Applied 2026-11-09
+
+Edited `src/cams.js` (non-Great Lakes `CAMS` entries and `LINK_CAMS` only; Great Lakes entries and every function below the arrays are byte-identical). Coastal cams went from 136 to 103 (total list 161).
+
+**Removed (38 entries):**
+- All 14 REMOVEs.
+- 22 WEAK cams, where the spot keeps other cams: Sombrero Beach, Marathon Sunset Grille, Frenchy's, Fort Lauderdale PTZtv, both Fort Myers Beach cams, Galveston Yacht Basin and Ship Channel, South Padre Sand Rose and Queen Isabella, Fairhope, Sea Pines, Surfside Pier, Pacifica Pier close-up, Angel Island, Channel Islands Harbor, Everett, Union Bay, Hood Canal ramp, Oregon Coast Aquarium, Newport RI Sightsailing and Cape Cod Canal.
+- 2 FIX cams that could not be re-verified: Honolulu Harbor (frame clock still stuck on 7 Nov) and Concessions surf break (personal channel, rights unconfirmed). Honolulu keeps 5+ other cams.
+
+**Kept WEAK because the spot would have 0 cams:** Galveston ABC13 (galveston, kemah), Trinidad Bay (humboldt-bay), Isla Verde Royal Sonesta (san-juan, fajardo).
+
+**Renamed (FIX):** Isla Verde · Royal Sonesta resort, Old Orchard Beach · Saco Bay (Abellona Inn), Cape Elizabeth · rocky shore & Casco Bay, Margate · Beach. Comments added on Magic Island (WOZ ERE), Murrells Inlet, Packery and Isla Blanca (label-only, thumbnail is a logo or slate).
+
+**Added (5):** USCG Coos Bay, Depoe Bay and Winchester Bay (Umpqua) via ODOT TripCheck JPEGs. Real frames stamped 2026-11-09 1:04-1:07 PM, 19-25 KB, against about 15.8-16.2 KB for the "This image is currently unavailable" placeholder. Plus the two Northport ferry-dock cams (WEAK stopgaps for norwalk and new-haven; oEmbed 200, "NORTHPORT PIER FERRY DOCK CAMERA #1/#2", author Michael Street).
+
+**New `LINK_CAMS`:** Oregon Coast (NWS Portland bar cams), Southcentral Alaska (Alaska Collection). All URLs returned 200.
+
+**Coverage (0-1 cam spots):** 25 before, 34 after (8 with 0, 26 with 1). The rise is the WEAK/REMOVE drops: marco-island, naples, fort-myers-beach, biloxi, galveston, kemah, port-aransas, tybee, hilton-head, kona, everett, bodega-bay now sit at 1. They are not at 0, per the keep rule. brookings went 0 to 1 via the far (1.3 degree) fallback to Coos Bay.
+
+**Still open:**
+- **Duke Marine Lab (Beaufort):** not added. The IPCamLive snapshot hosts returned 404 from here, so no real frame was seen. Needs the Run-script workflow and a daylight look.
+- **Placeholder USCG cams:** Barview, Chetco (brookings), Grays Harbor Westport (westport), Siuslaw and Yaquina Bay still serve the placeholder. Retry periodically.
+- **ODOT hotlink terms:** unchecked for the three TripCheck JPEGs. Check before shipping.
+- **No allowed embed found:** fort-pierce (Visit St. Lucie jetty cams are down and use VistaWebCams, not on the approved list), charleston (WebCOOS has no public JPEG; the Pelicam is a bird cam), st-simons, grand-isle, santa-barbara (NPS Anacapa is an explore.org video), monterey, the Alaska spots, san-juan and fajardo. Outreach drafts are still to be written.
+- **Unverified liveness:** Old Orchard (promo still), Murrells Inlet, Packery and Isla Blanca are label-only. WOZ ERE provenance unconfirmed.
+- **Program fixes** (section 4: `lakes` aliases, data-model fields, the `cam-health` workflow and 429 mapping) are not touched here.
+- The file header still says "All entries are verified live", which is untrue for label-only cams. It is outside the scope of this pass.
