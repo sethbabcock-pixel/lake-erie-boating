@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
-import { getLinkCams, camSrc, camLink, camIsImage, camKind, camKindLabel, nearestCams } from "./cams.js";
+import { relevantLinkCams, camSrc, camLink, camIsImage, camIsReplay, camPlace, fmtMiles, nearestCamsWithDist } from "./cams.js";
 
 // Monochrome currentColor icons (Lucide-style), sized in em so they track text.
 const VideoIcon = (p) => (
@@ -13,31 +13,80 @@ const PhotoIcon = (p) => (
   </svg>
 );
 const CamTypeIcon = ({ cam, ...p }) => (camIsImage(cam) ? <PhotoIcon {...p} /> : <VideoIcon {...p} />);
+const saveDataOn = () => typeof navigator !== "undefined" && Boolean(navigator.connection && navigator.connection.saveData);
+const SAFETY_LINE = "One view, one moment, possibly delayed — calm water on camera doesn't mean calm water where you're headed.";
+// [label, slug]: slugs must match CAM_REPORT_REASONS in functions/auth.js (anything else is a 400).
+const REPORT_REASONS = [["Not water", "not-water"], ["Offline", "offline"], ["Wrong place", "wrong-place"], ["Other", "other"]];
 const ExternalIcon = (p) => (
   <svg viewBox="0 0 24 24" width="1em" height="1em" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" {...p}>
     <path d="M15 3h6v6" /><path d="M10 14 21 3" /><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" />
   </svg>
 );
 
-// Footer under the player: the current cam's direct link plus curated per-lake
-// cam directories, as quiet chip buttons instead of bare inline links.
-function CamLinks({ cam, lake }) {
-  const dirs = getLinkCams(lake);
+// Report the selected cam. Sends the existing /api/request-cam fields (spot +
+// note are what the endpoint requires today) plus { cam, reason } for the
+// extended endpoint, so it works before and after that change.
+function CamReport({ cam, spotName, lat, lon }) {
+  const [open, setOpen] = useState(false);
+  const [state, setState] = useState("idle");
+  const [err, setErr] = useState("");
+  useEffect(() => { setOpen(false); setState("idle"); setErr(""); }, [cam && cam.name]);
+  const send = async (reason) => {
+    setState("sending"); setErr("");
+    try {
+      const r = await fetch("/api/request-cam", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ spot: spotName, lat, lon, webcam: "", note: `Cam report: ${reason} — ${cam.name}`, email: "", current: cam.name, cam: cam.name, reason }),
+      });
+      const d = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(d.error || "Something went wrong.");
+      setState("done");
+    } catch (e) { setState("idle"); setErr(e.message); }
+  };
+  if (state === "done") return <div className="camreport-done" role="status">Thanks — we'll check it.</div>;
+  return (
+    <div className="camreport">
+      <button type="button" className="camlink" aria-expanded={open} onClick={() => setOpen((o) => !o)}>Report this cam</button>
+      {open && (
+        <div className="camreport-reasons" role="group" aria-label="What's wrong with this cam?">
+          {REPORT_REASONS.map(([label, slug]) => (
+            <button key={slug} type="button" className="camlink" disabled={state === "sending"} onClick={() => send(slug)}>{label}</button>
+          ))}
+        </div>
+      )}
+      {err && <div className="modal-err" role="alert">{err}</div>}
+    </div>
+  );
+}
+
+// Footer under the player: the current cam's direct link, a report button, and
+// spot-relevant cam directories collapsed behind a disclosure.
+function CamLinks({ cam, lat, lon, lake, spotName }) {
+  const dirs = relevantLinkCams(lat, lon, lake);
   if (!cam && !dirs.length) return null;
   return (
-    <div className="camlinks">
+    <>
       {cam && (
-        <a className="camlink primary" href={camLink(cam)} target="_blank" rel="noopener">
-          Open this cam <ExternalIcon />
-        </a>
+        <div className="camlinks">
+          <a className="camlink primary" href={camLink(cam)} target="_blank" rel="noopener noreferrer">
+            Open this cam <ExternalIcon />
+          </a>
+          <CamReport cam={cam} spotName={spotName} lat={lat} lon={lon} />
+        </div>
       )}
-      {dirs.length > 0 && <span className="camlinks-label">More cams</span>}
-      {dirs.map((c) => (
-        <a key={c.name} className="camlink" href={c.url} target="_blank" rel="noopener">
-          {c.name} <ExternalIcon />
-        </a>
-      ))}
-    </div>
+      {dirs.length > 0 && (
+        <details className="camdirs">
+          <summary>More cams nearby ({dirs.length})</summary>
+          <div className="camlinks">
+            {dirs.map((c) => (
+              <a key={c.name} className="camlink" href={c.url} target="_blank" rel="noopener noreferrer" title={c.name}>
+                {c.name} <ExternalIcon />
+              </a>
+            ))}
+          </div>
+        </details>
+      )}
+    </>
   );
 }
 
@@ -102,7 +151,7 @@ function loadYT() {
   return ytApiPromise;
 }
 
-function YouTubeCam({ videoId, onLoaded, onFail }) {
+function YouTubeCam({ videoId, title, onLoaded, onFail }) {
   const holder = useRef(null);
   useEffect(() => {
     let player, watchdog, cancelled = false;
@@ -116,6 +165,7 @@ function YouTubeCam({ videoId, onLoaded, onFail }) {
         playerVars: { autoplay: 1, mute: 1, rel: 0, playsinline: 1, modestbranding: 1 },
         events: {
           onReady: () => {
+            try { const f = player.getIframe && player.getIframe(); if (f && title) f.title = title; } catch {}
             // If it never actually starts playing/buffering, the stream is dead.
             watchdog = setTimeout(() => {
               const st = player && player.getPlayerState && player.getPlayerState();
@@ -142,9 +192,11 @@ function YouTubeCam({ videoId, onLoaded, onFail }) {
       cancelled = true; clearTimeout(watchdog);
       try { player && player.destroy(); } catch {}
     };
-  }, [videoId]);
+  }, [videoId, title]);
   return <div ref={holder} className="ytholder" />;
 }
+
+const ytPoster = (id) => `https://i.ytimg.com/vi/${encodeURIComponent(id)}/hqdefault_live.jpg`;
 
 export default function Cams({ lat, lon, spotName, lake }) {
   // The effective cam list comes back with the status check (built-ins minus
@@ -152,10 +204,13 @@ export default function Cams({ lat, lon, spotName, lake }) {
   // fallback while loading or if the endpoint is unreachable.
   const [serverCams, setServerCams] = useState(null);
   // Pull more than we'll show so we can drop any that are offline right now.
-  const candidates = useMemo(
-    () => nearestCams(lat, lon, lake, 12, serverCams || undefined),
+  const ranked = useMemo(
+    () => nearestCamsWithDist(lat, lon, lake, 12, serverCams || undefined),
     [lat, lon, lake, serverCams]
   );
+  const candidates = useMemo(() => ranked.map((r) => r.cam), [ranked]);
+  const miles = useMemo(() => Object.fromEntries(ranked.map((r) => [r.cam.name, r.miles])), [ranked]);
+  const isFar = ranked.length > 0 && ranked[0].far;
 
   // Server-side liveness for the NON-YouTube feeds (images, ipcamlive, wetmet,
   // pixelcaster): { "<cam name>": "live" | "offline" | "unknown" }.
@@ -193,37 +248,50 @@ export default function Cams({ lat, lon, spotName, lake }) {
   const [sel, setSel] = useState(0);
   const [loaded, setLoaded] = useState(false);
   const [iframeFail, setIframeFail] = useState(false);
+  const [timedOut, setTimedOut] = useState(false);
+  const [started, setStarted] = useState(false); // user tapped play
+  const [loadedAt, setLoadedAt] = useState(null); // image cams: last successful load
   const cam = cams[sel] || cams[0];
+  const saveData = saveDataOn();
+  // Images load straight away (they are the poster) unless Data Saver is on.
+  const needsTap = cam && !started && (!camIsImage(cam) || saveData);
 
   useEffect(() => { setSel(0); }, [lat, lon, lake]);
   useEffect(() => { setSel(0); }, [cams.length]); // a cam dropped out → jump to a working one
-  useEffect(() => { setLoaded(false); setIframeFail(false); }, [cam]);
+  useEffect(() => { setLoaded(false); setIframeFail(false); setTimedOut(false); setStarted(false); setLoadedAt(null); }, [cam]);
 
   const markFailed = (name) => setFailed((f) => (f[name] ? f : { ...f, [name]: true }));
 
-  // Refresh snapshot (image) cams on a timer with a cache-buster.
+  // Refresh snapshot (image) cams on a timer with a cache-buster. Paused while
+  // the tab is hidden; slower on Data Saver.
   const [bust, setBust] = useState(0);
+  const refreshMs = saveData ? 60000 : 15000;
   useEffect(() => {
-    if (!camIsImage(cam)) return;
-    const t = setInterval(() => setBust((b) => b + 1), 15000);
-    return () => clearInterval(t);
-  }, [cam]);
+    if (!camIsImage(cam) || needsTap) return;
+    const tick = () => { if (!document.hidden) setBust((b) => b + 1); };
+    const t = setInterval(tick, refreshMs);
+    document.addEventListener("visibilitychange", tick);
+    return () => { clearInterval(t); document.removeEventListener("visibilitychange", tick); };
+  }, [cam, needsTap, refreshMs]);
 
-  // Spinner safety for image/non-YT-iframe cams (YouTube manages its own).
+  // No load signal in time → say we can't confirm (never silently claim "Live").
   useEffect(() => {
-    if (loaded || !cam || cam.yt) return;
-    const t = setTimeout(() => setLoaded(true), 4000);
+    if (loaded || !cam || needsTap || iframeFail) return;
+    const t = setTimeout(() => setTimedOut(true), camIsImage(cam) ? 10000 : 15000);
     return () => clearTimeout(t);
-  }, [cam, loaded]);
+  }, [cam, loaded, needsTap, iframeFail]);
+
+  // Not "Live cams": the list mixes photos and replays, and a heading must not vouch for currency.
+  const heading = isFar && cam && miles[cam.name] != null ? `Nearest cam · ${Math.round(miles[cam.name])} mi away` : "Webcams";
 
   if (status === null) {
     return (
       <section className="card">
-        <div className="card-head"><h2>Live cams</h2></div>
+        <div className="card-head"><h2>Webcams</h2></div>
         {/* Inside a sized .camwrap: reserves the player's 16:9 space and keeps the
             absolutely-positioned spinner in the card (it once anchored to the
             viewport, and React reused that node, scoring a full-screen layout shift). */}
-        <div className="camwrap" key="cam-pending"><div className="camloading"><span className="spinner" />finding live cams…</div></div>
+        <div className="camwrap" key="cam-pending"><div className="camloading" role="status" aria-live="polite"><span className="spinner" />finding cams…</div></div>
       </section>
     );
   }
@@ -231,58 +299,98 @@ export default function Cams({ lat, lon, spotName, lake }) {
   if (!cams.length) {
     return (
       <section className="card">
-        <div className="card-head"><h2>Live cams</h2></div>
-        <div className="camempty">No live webcams for this spot right now; they come and go. Check the directory links below, or point us at one.</div>
-        <CamLinks lake={lake} />
+        <div className="card-head"><h2>Webcams</h2></div>
+        <div className="camempty">No live webcams for this spot right now; they come and go. {relevantLinkCams(lat, lon, lake).length ? "Check the directory links below, or point us at one." : "If you know a good one, point us at it."}</div>
+        <CamLinks lat={lat} lon={lon} lake={lake} spotName={spotName} />
         <CamSuggest spotName={spotName} lat={lat} lon={lon} current="" />
       </section>
     );
   }
 
+  // Chip driven by actual state, never by feed shape alone.
+  const failedNow = iframeFail || timedOut;
+  const isImg = camIsImage(cam);
+  let chip;
+  if (failedNow) chip = { cls: "warn", text: "Can't confirm live" };
+  else if (camIsReplay(cam)) chip = { cls: "replay", text: "Replay" };
+  else if (isImg) {
+    // We only know when OUR browser fetched the file, not when the camera took
+    // it: a frozen upstream frame re-fetches fine forever. Never call it "updated".
+    chip = { cls: "photo", text: loaded ? "Photo · time taken unknown" : "Photo · loading…" };
+  } else if (loaded && (cam.yt || (status && status[cam.name] === "live"))) chip = { cls: "video", text: "Live" };
+  else if (loaded) chip = { cls: "photo", text: "Video · live not confirmed" };
+  else chip = { cls: "photo", text: needsTap ? "Tap to play" : "Loading…" };
+
+  const mi = miles[cam.name];
+  const place = camPlace(cam);
+  const where = mi != null ? `${place} · ${fmtMiles(mi)} away` : place;
+  const title = `Webcam: ${cam.name}${mi != null ? `, ${fmtMiles(mi)} from ${spotName || "this spot"}` : ""}`;
+  const go = (i) => setSel((i + cams.length) % cams.length);
+
   return (
     <section className="card">
       <div className="card-head">
-        <h2>Live cams</h2>
-        <span className={`cam-kind ${camKind(cam)}`}><CamTypeIcon cam={cam} /> {camKindLabel(cam)}</span>
+        <h2>{heading}</h2>
+        <span className={`cam-kind ${chip.cls}`} role="status" aria-live="polite"><CamTypeIcon cam={cam} /> {chip.text}</span>
       </div>
 
       <div className="camsel-wrap">
         <CamTypeIcon cam={cam} className="camsel-ic" />
-        <select className="sel camsel" value={sel} onChange={(e) => setSel(Number(e.target.value))} aria-label="Choose a webcam">
+        <select className="sel camsel" value={sel} onChange={(e) => setSel(Number(e.target.value))} aria-label="Choose a webcam" title={cam.name}>
           {cams.map((c, i) => (
-            <option key={c.name} value={i}>{c.name}</option>
+            <option key={c.name} value={i} title={c.name}>{c.name}</option>
           ))}
         </select>
       </div>
+      {cams.length > 1 && (
+        <div className="camnav">
+          <button type="button" className="camlink" onClick={() => go(sel - 1)} aria-label="Previous cam">‹ Prev</button>
+          <span>{sel + 1} of {cams.length}</span>
+          <button type="button" className="camlink" onClick={() => go(sel + 1)} aria-label="Next cam">Next ›</button>
+        </div>
+      )}
 
-      <div className="camwrap">
-        {!loaded && !iframeFail && <div className="camloading"><span className="spinner" />loading {cam.name}…</div>}
-        {iframeFail && (
-          <div className="camloading">
-            This cam isn't responding right now.{" "}
-            <a href={camLink(cam)} target="_blank" rel="noopener">Open it directly ↗</a>
-          </div>
-        )}
-        {camIsImage(cam) ? (
-          <img key={cam.name} alt={cam.name} src={`${cam.img}?t=${bust}`}
-            onLoad={() => setLoaded(true)} onError={() => setIframeFail(true)}
-            style={{ opacity: loaded ? 1 : 0 }} />
-        ) : cam.yt ? (
-          <YouTubeCam key={cam.name} videoId={cam.yt}
-            onLoaded={() => setLoaded(true)} onFail={() => markFailed(cam.name)} />
+      <div className={`camwrap${isImg && !needsTap ? " photo" : ""}${isImg && loaded ? " ready" : ""}`}>
+        {needsTap ? (
+          <button type="button" className="campost" onClick={() => setStarted(true)} aria-label={`${isImg ? "Load photo" : "Play"}: ${cam.name}`}>
+            {cam.yt && <img src={ytPoster(cam.yt)} alt="" loading="lazy" decoding="async" />}
+            <span className="campost-name">{cam.name}</span>
+            <span className="campost-play" aria-hidden="true">▶</span>
+          </button>
         ) : (
-          <iframe key={cam.name} title={cam.name} src={camSrc(cam)} loading="eager"
-            allow="autoplay; fullscreen; encrypted-media"
-            onLoad={() => setLoaded(true)} style={{ opacity: loaded ? 1 : 0 }} />
+          <>
+            {!loaded && !failedNow && <div className="camloading" role="status" aria-live="polite"><span className="spinner" />loading {cam.name}…</div>}
+            {failedNow && (
+              <div className="camloading" role="status" aria-live="polite">
+                <span>{iframeFail ? "This cam isn't responding right now." : "Can't confirm this cam is live."}{" "}
+                  <a href={camLink(cam)} target="_blank" rel="noopener noreferrer">Open it directly ↗</a></span>
+              </div>
+            )}
+            {isImg ? (
+              <img key={cam.name} alt={`Still from ${cam.name}`} src={`${cam.img}?t=${bust}`}
+                onLoad={() => { setLoaded(true); setLoadedAt(Date.now()); setTimedOut(false); setIframeFail(false); }} onError={() => setIframeFail(true)}
+                style={{ opacity: loaded ? 1 : 0 }} />
+            ) : cam.yt ? (
+              <YouTubeCam key={cam.name} videoId={cam.yt} title={title}
+                onLoaded={() => setLoaded(true)} onFail={() => markFailed(cam.name)} />
+            ) : (
+              <iframe key={cam.name} title={title} src={camSrc(cam)} loading="lazy"
+                allow="autoplay; fullscreen; encrypted-media"
+                onLoad={() => setLoaded(true)} style={{ opacity: loaded || failedNow ? 1 : 0 }} />
+            )}
+          </>
         )}
       </div>
 
-      <CamLinks cam={cam} lake={lake} />
+      <div className={`camwhere${mi != null && mi > 25 ? " far" : ""}`} title={cam.name}>{where}</div>
+      <div className="camsafety">{SAFETY_LINE}</div>
+
+      <CamLinks cam={cam} lat={lat} lon={lon} lake={lake} spotName={spotName} />
       <div className="hint">
-        {camIsImage(cam)
-          ? "Still image, refreshes every 15 seconds."
-          : "Live video. Some players need a tap to start."}
-        {hiddenCount > 0 && ` ${hiddenCount} offline cam${hiddenCount > 1 ? "s" : ""} hidden.`}
+        {isImg
+          ? `Still image, re-fetched about every ${saveData ? 60 : 15} seconds. We can't tell when the camera took it; check any time stamp on the image.`
+          : camIsReplay(cam) ? "Recorded replay or timelapse, not a live view." : "Video. Some players need a tap to start."}
+        {hiddenCount > 0 && ` ${hiddenCount} cam${hiddenCount > 1 ? "s" : ""} not responding, hidden.`}
       </div>
       <CamSuggest spotName={spotName} lat={lat} lon={lon} current={cams.map((c) => c.name).join(", ")} />
     </section>

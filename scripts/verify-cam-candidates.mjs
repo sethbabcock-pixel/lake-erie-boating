@@ -11,9 +11,17 @@
 // `title` is the provider's own title (YouTube oEmbed / page <title>) — read it
 // to confirm the cam is a WATER view, not a street or traffic cam.
 //
-// The dev sandbox has no outbound network; run this from the "Run script"
-// GitHub Action (workflow_dispatch, ref = your branch).
+// Needs outbound network. In a proxied sandbox set HTTPS_PROXY (and
+// NODE_EXTRA_CA_CERTS for a re-signing proxy); the proxy is enabled
+// automatically (Node's fetch alone needs NODE_USE_ENV_PROXY=1). YouTube HTTP
+// 429 / bot-walls are reported as WARN "unverified — rate limited", never DEAD,
+// and the summary shows verified vs unverified. Exit 2 = nothing verified.
+// The "Run script" GitHub Action (workflow_dispatch) also works.
 import { readFileSync } from "node:fs";
+import { setupProxy, isRateLimited, summarize, RATE_LIMITED } from "./lib/cam-net.mjs";
+
+const proxyNote = await setupProxy();
+if (proxyNote) console.log(proxyNote);
 
 const FILE = process.argv[2] || "scripts/cam-candidates.json";
 const UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Safari/537.36";
@@ -49,6 +57,7 @@ const pageTitle = (body) => ((body.match(/<title[^>]*>([^<]*)<\/title>/i) || [])
 // 200 + title = exists and embeddable; 401 = embedding disabled; 404 = gone.
 async function ytOembed(id) {
   const r = await fetchT(`https://www.youtube.com/oembed?format=json&url=${encodeURIComponent(`https://www.youtube.com/watch?v=${id}`)}`);
+  if (r.status === 429) return { limited: true };
   if (r.status === 401 || r.status === 403) return { embeddable: false };
   if (!r.ok) return { gone: true, status: r.status };
   const d = await r.json().catch(() => ({}));
@@ -57,10 +66,12 @@ async function ytOembed(id) {
 
 async function checkYouTube(id) {
   const o = await ytOembed(id);
+  if (o.limited) return { v: "WARN", detail: `${RATE_LIMITED} (oEmbed 429)` };
   if (o.gone) return { v: "DEAD", detail: `oEmbed HTTP ${o.status} (video gone/private)` };
   if (!o.embeddable) return { v: "DEAD", detail: "embedding disabled" };
   const res = await fetchT(`https://www.youtube.com/watch?v=${id}`);
   const body = res.ok ? await res.text() : "";
+  if (isRateLimited(res, body)) return { v: "WARN", detail: `embeddable; live status ${RATE_LIMITED}`, title: o.title };
   if (!body.includes("playableInEmbed")) return { v: "WARN", detail: "embeddable; live status unverified (bot-wall)", title: o.title };
   if (body.includes('"isLiveNow":true')) return { v: "OK", detail: "live + embeddable", title: o.title };
   if (body.includes('"isLiveContent":true')) return { v: "WARN", detail: "live stream, offline right now", title: o.title };
@@ -69,6 +80,7 @@ async function checkYouTube(id) {
 
 async function checkYtChannel(id) {
   const res = await fetchT(`https://www.youtube.com/channel/${id}/live`);
+  if (isRateLimited(res)) return { v: "WARN", detail: `${RATE_LIMITED} (channel HTTP ${res.status})` };
   if (!res.ok) return { v: "DEAD", detail: `channel HTTP ${res.status}` };
   const body = await res.text();
   const vid = (body.match(/<link rel="canonical" href="https:\/\/www\.youtube\.com\/watch\?v=([\w-]{11})"/) || [])[1];
@@ -141,10 +153,9 @@ await Promise.all(Array.from({ length: CONCURRENCY }, async () => {
     out[i] = await check(list[i]);
   }
 }));
-const n = { OK: 0, WARN: 0, DEAD: 0 };
 list.forEach((c, i) => {
   const r = out[i];
-  n[r.v]++;
   console.log(`${r.v}|${c.kind}|${c.id}|${c.name}|${r.detail}|${(r.title || "").slice(0, 120)}`);
 });
-console.log(`\n${list.length} candidates · ${n.OK} OK · ${n.WARN} WARN · ${n.DEAD} DEAD`);
+const sum = summarize("candidates", out.map((r) => ({ status: r.v, detail: r.detail })));
+if (sum.allUnverified) process.exit(2);

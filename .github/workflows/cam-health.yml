@@ -1,8 +1,14 @@
 name: Cam health
 
 # Keeps the live-cams in sync: verifies every feed in src/cams.js is still
-# live + embeddable. Runs weekly and on demand. A DEAD cam fails the run and
-# opens (or updates) an issue so a stale/spinning feed gets noticed and swapped.
+# live + embeddable. Runs weekly and on demand. Only a real DEAD result fails
+# the run and opens (or updates) an issue. WARN (offline right now, rate
+# limited, bot-walled, unreachable) never does; an all-unverified run is
+# surfaced as a warning annotation instead.
+#
+# NOTE: GitHub auto-disables scheduled workflows after 60 days without repo
+# activity. If this one shows as disabled, re-enable it in GitHub > Actions >
+# "Cam health" > Enable workflow. Any push to the default branch resets the clock.
 
 on:
   schedule:
@@ -11,11 +17,13 @@ on:
 
 permissions:
   contents: read
-  issues: write
 
 jobs:
   check:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      issues: write
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -24,10 +32,18 @@ jobs:
       - name: Run cam health check
         id: check
         run: |
-          set -o pipefail
-          node scripts/check-cams.mjs | tee cam-report.txt
-      - name: Open/update issue on failure
-        if: failure()
+          # Exit codes from check-cams.mjs: 0 ok, 1 = DEAD cams, 2 = nothing verifiable.
+          set +e
+          node scripts/check-cams.mjs 2>&1 | tee cam-report.txt
+          code=${PIPESTATUS[0]}
+          echo "code=$code" >> "$GITHUB_OUTPUT"
+          if [ "$code" = "2" ]; then
+            echo "::warning title=Cam health unverified::No cam could be verified from this runner (rate limited or blocked). Not a DEAD finding."
+          fi
+          if [ "$code" = "1" ]; then exit 1; fi
+          exit 0
+      - name: Open/update issue on DEAD cams
+        if: failure() && steps.check.outputs.code == '1'
         uses: actions/github-script@v7
         with:
           script: |

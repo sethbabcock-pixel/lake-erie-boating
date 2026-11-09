@@ -88,24 +88,29 @@ export const CAMS = [
   { name: "Isle Royale · Mott Island dock (NPS)", lat: 48.108, lon: -88.556, img: "https://www.nps.gov/webcams-isro/mottmain.jpg", link: "https://www.nps.gov/isro/learn/photosmultimedia/webcams.htm", lake: "Lake Superior" },
   // Florida Atlantic Coast (2026-11 water-cam audit — every entry is a 24/7 water view;
   // YouTube confirmed it exists + allows embedding; the player hides any that are offline)
+  // Coastal review applied 2026-11-09 (docs/ops/cams-coastal-review-2026-11.md), non-Great Lakes entries:
+  //   REMOVED (not water / stale / no frame): Gulf Shores-Fairhope SkyCams, Oceanside Rooftop Bar, Pacifica Sharp Park / Pier & beach / Mori Point,
+  //   Highlands NJ Bahrs Landing, East River NYC Ferry, Kohanaiki, Beverly Jubilee (southwest), Beaufort Rhumbar, Dania Beach Pier,
+  //   Galveston Seawall surf / Cruise terminals, Aransas Pass Harbor Park. Also dropped (unverifiable, spot well covered): Honolulu Harbor
+  //   (eCHeZDEVSeU, frame clock stuck on 7 Nov) and Concessions surf break (EuR8OkQxOgk, personal channel, rights unconfirmed).
+  //   WEAK, dropped because the spot keeps other cams: Sombrero Beach, Marathon Sunset Grille, Frenchy's, Fort Lauderdale PTZtv, both Fort Myers Beach cams,
+  //   Galveston Yacht Basin + Ship Channel, South Padre Sand Rose + Queen Isabella, Fairhope pier, Sea Pines, Surfside Pier, Pacifica Pier close-up,
+  //   Angel Island, Channel Islands Harbor, Everett launch, Union Bay (freshwater), Hood Canal ramp, Oregon Coast Aquarium, Newport RI Sightsailing, Cape Cod Canal.
+  //   WEAK, kept as the spot's only cam: Galveston ABC13, Trinidad Bay, Isla Verde (Royal Sonesta).
   { name: "St. Augustine · Matanzas River & Bridge of Lions", lat: 29.892, lon: -81.31, yt: "uLJBad4vSno", lake: "Florida Atlantic Coast" },
   { name: "St. Augustine Beach · Surf Station surf cam", lat: 29.85, lon: -81.264, yt: "H2q_DJc33kg", lake: "Florida Atlantic Coast" },
   { name: "Port Canaveral · Harbor (Gator's Dockside)", lat: 28.41, lon: -80.62, yt: "mQnOcuGV334", lake: "Florida Atlantic Coast" },
   { name: "Cocoa Beach · Surf", lat: 28.32, lon: -80.607, yt: "6QmQtFXG9vM", lake: "Florida Atlantic Coast" },
   { name: "Cocoa Beach · Surfer's View", lat: 28.33, lon: -80.607, yt: "gAvFqhNwZm0", lake: "Florida Atlantic Coast" },
-  { name: "Fort Lauderdale · Beach (PTZtv)", lat: 26.1, lon: -80.105, yt: "pXx3YQVSUGg", lake: "Florida Atlantic Coast" },
   { name: "Miami · PortMiami channel", lat: 25.77, lon: -80.16, yt: "i8ScwT2PT-0", lake: "Florida Atlantic Coast" },
   { name: "Miami · Biscayne Bay", lat: 25.79, lon: -80.18, yt: "4mM_w7P5cWw", lake: "Florida Atlantic Coast" },
   // Florida Keys
   { name: "Islamorada · Little Basin (Florida Bay)", lat: 24.93, lon: -80.62, yt: "HfSOXLUtYmA", lake: "Florida Keys" },
   { name: "Islamorada · Charter boat docks", lat: 24.93, lon: -80.6, yt: "8ShFKuTCmhQ", lake: "Florida Keys" },
   { name: "Islamorada · Lazy Days oceanfront", lat: 24.91, lon: -80.64, yt: "5pFDytRb4Qc", lake: "Florida Keys" },
-  { name: "Marathon · Sombrero Beach", lat: 24.69, lon: -81.08, yt: "jE4og3o_SXs", lake: "Florida Keys" },
-  { name: "Marathon · Sunset Grille (7 Mile Bridge)", lat: 24.705, lon: -81.115, yt: "SXMC-MzSncI", lake: "Florida Keys" },
   { name: "Key West · Harbor (PTZtv)", lat: 24.56, lon: -81.808, yt: "iHJbTrQSZys", lake: "Florida Keys" },
   { name: "Key West · Bight Marina", lat: 24.561, lon: -81.801, yt: "Y5ypYTZs-7o", lake: "Florida Keys" },
   // Florida Gulf Coast
-  { name: "Clearwater Beach · Frenchy's", lat: 27.98, lon: -82.83, yt: "rxBBRLWF0mM", lake: "Florida Gulf Coast" },
   { name: "Clearwater Beach · Pier 60 (FOX 13)", lat: 27.977, lon: -82.829, yt: "S8-G3uJOqZw", lake: "Florida Gulf Coast" },
   { name: "St. Petersburg · Waterfront (FOX 13)", lat: 27.76, lon: -82.633, yt: "OeYHEp9_KYk", lake: "Florida Gulf Coast" },
   { name: "Siesta Key · Beach", lat: 27.265, lon: -82.553, yt: "GU5CkKxOPbM", lake: "Florida Gulf Coast" },
@@ -114,10 +119,9 @@ export const CAMS = [
   { name: "Pensacola Beach · Pier", lat: 30.328, lon: -87.142, yt: "O6fLjzZLALY", lake: "Florida Gulf Coast" },
   { name: "Pensacola · Bay", lat: 30.4, lon: -87.2, yt: "O-tdY-lbISg", lake: "Florida Gulf Coast" },
   // Alabama & Mississippi Coast
-  { name: "Gulf Shores → Fairhope · Coastal SkyCams (rotating)", lat: 30.35, lon: -87.75, yt: "3Rp_9FUKH4I", lake: "Alabama & Mississippi Coast" },
   // Louisiana & Texas Coast
+  // WEAK, kept 2026-11-09: ~40% road, but it is the only Galveston/Kemah cam left (the Yacht Basin and Ship Channel cams were weaker and dropped). Frame carried a live clock.
   { name: "Galveston · Seawall beach (ABC13)", lat: 29.29, lon: -94.79, yt: "HkHhXsWci7Q", lake: "Louisiana & Texas Coast" },
-  { name: "South Padre · North Beach (Sand Rose)", lat: 26.13, lon: -97.17, yt: "kJ_EXhKsH30", lake: "Louisiana & Texas Coast" },
   // Georgia & South Carolina / North Carolina / Chesapeake
   { name: "Nags Head · Jennette's Pier", lat: 35.91, lon: -75.6, yt: "sgnlB7lhknM", lake: "North Carolina Coast" },
   { name: "Kitty Hawk · Oceanfront (Twiddy)", lat: 36.07, lon: -75.7, yt: "WEhuDqlxHmM", lake: "North Carolina Coast" },
@@ -126,16 +130,15 @@ export const CAMS = [
   // shows water. South to north.)
   { name: "San Diego Bay · Shelter Island", lat: 32.714, lon: -117.227, yt: "ct7IRmzDggk", lake: "Southern California Coast" },
   { name: "Mission Bay · San Diego Rowing Club", lat: 32.7835, lon: -117.254, yt: "7esMbPeSjpk", lake: "Southern California Coast" },
-  { name: "Oceanside · Pier & surf (Rooftop Bar)", lat: 33.1945, lon: -117.3815, yt: "cvP_F-c2Upw", lake: "Southern California Coast" },
   { name: "Huntington Beach · Pier & surf (City of HB)", lat: 33.6555, lon: -118.0033, yt: "mhQjsLBfOoY", lake: "Southern California Coast" },
   { name: "Redondo Beach · King Harbor (City)", lat: 33.846, lon: -118.393, yt: "Ni7v-aIa3bw", lake: "Southern California Coast" },
   { name: "Redondo Beach · King Harbor Yacht Club channel", lat: 33.845, lon: -118.395, yt: "g1IHHYlgzy8", lake: "Southern California Coast" },
   { name: "Santa Monica · Beach & Pier (explore.org)", lat: 34.0095, lon: -118.4975, yt: "v97JpT3ZA0w", lake: "Southern California Coast" },
-  { name: "Channel Islands Harbor · Boat launch (Oxnard)", lat: 34.157, lon: -119.2265, yt: "5LEWwFzJ6rg", lake: "Southern California Coast" },
   // Hawaii & Puerto Rico
   { name: "Kona · Keauhou Bay", lat: 19.56, lon: -155.96, yt: "RxDQLIwxyhA", lake: "Hawaii" },
   { name: "Maui · Wailea Beach", lat: 20.68, lon: -156.44, yt: "mrUciA_XZxA", lake: "Hawaii" },
-  { name: "San Juan · Isla Verde beach", lat: 18.445, lon: -66.02, yt: "taI7GiyvDxE", lake: "Puerto Rico" },
+  // FIX 2026-11-09: oEmbed title is "Royal Sonesta San Juan Live Cam" (pool/hotel, beach strip <10% of frame). WEAK: kept only because it is the sole Puerto Rico cam.
+  { name: "Isla Verde · Royal Sonesta resort (beach strip)", lat: 18.4455, lon: -66.0185, yt: "taI7GiyvDxE", lake: "Puerto Rico" },
   // Added after a visual frame check (2026-11-06)
   { name: "Havre de Grace · Upper Chesapeake (Decoy Museum)", lat: 39.545, lon: -76.09, yt: "uOC4CPHiOFM", lake: "Chesapeake Bay" },
   { name: "Baltimore · Shipping channel (StreamTime)", lat: 39.22, lon: -76.52, yt: "t_VfYNtprYE", lake: "Chesapeake Bay" },
@@ -144,106 +147,92 @@ export const CAMS = [
   // checked for a water view; YouTube confirmed it exists + allows embedding.
   // Puget Sound / San Juans / Admiralty Inlet
   { name: "Seattle · Shilshole Bay (Ballard Elks Paddling Club)", lat: 47.68, lon: -122.41, yt: "JVTvtCZcSWk", lake: "Puget Sound" },
-  { name: "Everett · Port of Everett boat launch", lat: 47.99, lon: -122.226, yt: "ywLLbC8AUyQ", lake: "Puget Sound" },
   { name: "Friday Harbor · Port of Friday Harbor", lat: 48.535, lon: -123.012, yt: "pr2p_uvmXh8", lake: "San Juan Islands & Admiralty Inlet" },
   { name: "Friday Harbor · Shipyard Cove Marina", lat: 48.526, lon: -123.017, yt: "g2_KQNjZ0vg", lake: "San Juan Islands & Admiralty Inlet" },
   { name: "Port Angeles · Harbor (Port of Port Angeles)", lat: 48.12, lon: -123.43, yt: "TXGu1Kv2bao", lake: "San Juan Islands & Admiralty Inlet" },
   { name: "Bellingham Bay · Marine Park (Port of Bellingham)", lat: 48.72, lon: -122.51, yt: "DH0x6KOTreU", lake: "San Juan Islands & Admiralty Inlet" },
   // Oregon coast
   { name: "Newport · Yaquina Bay (OSU Hatfield)", lat: 44.625, lon: -124.045, yt: "sRPP5b3J_VY", lake: "Oregon Coast" },
+  // USCG bar cams via ODOT TripCheck (government JPEGs; frames seen 2026-11-09, timestamps current, not the "This image is currently unavailable" placeholder).
+  // NOT added: Barview Jetty, Chetco River (brookings), Grays Harbor Westport (westport), Siuslaw River, Yaquina Bay: all serve the placeholder (stale since Oct 5-17). Retry periodically; list at weather.gov/pqr/barcams.
+  { name: "Coos Bay · Charleston bar & jetties (USCG)", lat: 43.345, lon: -124.322, img: "https://tripcheck.com/RoadCams/cams/Coos%20River%20Charleston%20USCG_pid4908.jpg", link: "https://www.weather.gov/pqr/barcams", lake: "Oregon Coast" },
+  { name: "Depoe Bay · Harbor entrance & surf (USCG)", lat: 44.809, lon: -124.063, img: "https://tripcheck.com/RoadCams/cams/Depoe%20Bay%20USCG_pid4906.jpg", link: "https://www.weather.gov/pqr/barcams", lake: "Oregon Coast" },
+  { name: "Winchester Bay · Umpqua River bar & jetty (USCG)", lat: 43.667, lon: -124.2, img: "https://tripcheck.com/RoadCams/cams/Umpqua%20River%20Winchester%20Bay%20(USCG)_pid4922.jpg", link: "https://www.weather.gov/pqr/barcams", lake: "Oregon Coast" },
   // Northern California coast
-  { name: "Pacifica · Sharp Park Beach surf", lat: 37.62, lon: -122.5, yt: "lmec_rcEIL4", lake: "Northern California Coast" },
   { name: "Monterey Bay · Shoreline (Monterey Bay Aquarium)", lat: 36.618, lon: -121.902, yt: "fVa6-zCBR7A", lake: "Northern California Coast" },
   // New England coast
   { name: "Boston · Gloucester Annisquam Yacht Club", lat: 42.66, lon: -70.68, yt: "_j1qgdMnifk", lake: "New England Coast" },
   { name: "Beverly · Jubilee Yacht Club dock", lat: 42.55, lon: -70.85, yt: "5Vf5cSVHtQA", lake: "New England Coast" },
-  { name: "Old Orchard Beach · Casco Bay coast", lat: 43.52, lon: -70.38, yt: "HSQpqIWLViI", lake: "New England Coast" },
+  // FIX 2026-11-09: Old Orchard Beach is on Saco Bay (open Atlantic), not Casco Bay. Operator: Abellona Inn ("Old Orchard Maine Beach Cam"); frame seen is a summer promo still, so liveness is label-only.
+  { name: "Old Orchard Beach · Saco Bay beach (Abellona Inn)", lat: 43.52, lon: -70.38, yt: "HSQpqIWLViI", lake: "New England Coast" },
   { name: "Woods Hole · Harbor (GOMV)", lat: 41.523, lon: -70.671, yt: "5-ClAzUV2UA", lake: "New England Coast" },
   { name: "Barnstable · Harbor", lat: 41.71, lon: -70.3, yt: "cCg-J04fSuQ", lake: "New England Coast" },
   { name: "Provincetown · MacMillan Pier (Dolphin Fleet)", lat: 42.05, lon: -70.18, yt: "Yy-Eo5NMkVE", lake: "New England Coast" },
-  { name: "Newport, RI · Sightsailing waterfront", lat: 41.484, lon: -71.315, yt: "yvJlIBJ5m1o", lake: "New England Coast" },
   { name: "Block Island · North Lighthouse", lat: 41.227, lon: -71.58, yt: "ejDld-hWwiU", lake: "New England Coast" },
   // Long Island Sound
   { name: "Rocky Point · Tides Beach (Long Island Sound)", lat: 40.96, lon: -72.95, yt: "rBWBGg2c5Jg", lake: "Long Island Sound" },
+  // WEAK stopgaps for norwalk / new-haven (1 cam each otherwise): frames seen 2026-11-09 with on-frame clock, harbor/Sound in the top ~45%, ferry ramp and lot below. Operator unconfirmed (overlay "Ferry Line, Northport"). Rank last.
+  { name: "Northport · Ferry dock & harbor (queue cam)", lat: 40.9, lon: -73.345, yt: "Zot8ShPuuKg", lake: "Long Island Sound" },
+  { name: "Northport · Ferry dock ramp & Sound", lat: 40.9, lon: -73.345, yt: "TXQcLxneF5A", lake: "Long Island Sound" },
   // New York & New Jersey coast
   { name: "New York Harbor · Brooklyn (StreamTime)", lat: 40.7, lon: -74.0, yt: "l7b5RFAkKhY", lake: "New York & New Jersey Coast" },
   { name: "New York Harbor · Brooklyn Navy Yard", lat: 40.7, lon: -73.97, yt: "obqnslJKrxc", lake: "New York & New Jersey Coast" },
-  { name: "Highlands NJ · Shrewsbury River (Bahrs Landing)", lat: 40.4, lon: -73.99, yt: "Str1003ecZU", lake: "New York & New Jersey Coast" },
   { name: "Holgate · Little Egg Harbor Bay", lat: 39.5, lon: -74.28, yt: "fkE4O-5qsKU", lake: "New York & New Jersey Coast" },
   // Alaska
   { name: "Valdez · South Boat Harbor (City of Valdez, rotating)", lat: 61.125, lon: -146.35, yt: "JsgsCLKnwB8", lake: "Southcentral Alaska" },
   // Coverage pass (Nov 2026): verified embeddable via the Run script Action;
   // water views confirmed from daytime thumbnails. See docs/ops/cams-*-candidates.md.
-  { name: "Angel Island · Ayala Cove", lat: 37.8615, lon: -122.4325, yt: "OIyy1ZmRryM", lake: "San Francisco Bay" },
   { name: "Treasure Island · Alcatraz & bay (ABC7)", lat: 37.823, lon: -122.37, yt: "_VqvVJfmyfs", lake: "San Francisco Bay" },
   { name: "Treasure Island · Mersea bay view", lat: 37.8225, lon: -122.3705, yt: "BSWhGNXxT9A", lake: "San Francisco Bay" },
   { name: "San Francisco · Pier 23 Cafe waterfront (StreamTime)", lat: 37.8095, lon: -122.4005, yt: "PDKGik7Np88", lake: "San Francisco Bay" },
-  { name: "Pacifica · Pier close-up (Chamberlin Nature)", lat: 37.6322, lon: -122.4965, yt: "BrUaOjjXgZM", lake: "Northern California Coast" },
-  { name: "Pacifica · Pier & beach (Chamberlin Nature)", lat: 37.6315, lon: -122.4965, yt: "_-_hg_aJrKU", lake: "Northern California Coast" },
-  { name: "Pacifica · Mori Point (Chamberlin Nature)", lat: 37.6, lon: -122.5, yt: "iQ7XJDXYSMo", lake: "Northern California Coast" },
   { name: "Pacifica · Linda Mar Beach cam", lat: 37.592, lon: -122.5, yt: "TDcKozRHlKs", lake: "Northern California Coast" },
   { name: "Point Reyes · Marine Mammal Center shoreline cam", lat: 38.03, lon: -122.8, yt: "k-rsgU8-Inw", lake: "Northern California Coast" },
+  // WEAK, kept 2026-11-09: trees fill ~60% of the frame, but it is the only humboldt-bay cam.
   { name: "Trinidad Harbor · Trinidad Bay", lat: 41.0587, lon: -124.1436, yt: "31ViUog5FV4", lake: "Northern California Coast" },
-  { name: "Newport · Yaquina Bay from Oregon Coast Aquarium (KOIN 6)", lat: 44.6, lon: -124.05, yt: "lc8LAAh2jMI", lake: "Oregon Coast" },
-  { name: "Seattle · Union Bay & Lake Washington (UW)", lat: 47.655, lon: -122.305, yt: "NCzKkn0wD30", lake: "Puget Sound" },
-  { name: "Union · Hood Canal boat ramp (Hood Canal Communications)", lat: 47.357, lon: -123.097, yt: "sFX2tlGIl_Y", lake: "Puget Sound" },
   { name: "Union · Hood Canal water & mountain cam (Hood Canal Communications)", lat: 47.357, lon: -123.097, yt: "DNz4t_CRxuI", lake: "Puget Sound" },
   { name: "Waikiki · South Shore 180° (Waikiki Aquarium / UH SOEST)", lat: 21.2655, lon: -157.8225, yt: "WIUg8wzhq1g", lake: "Hawaii" },
   { name: "Waikiki Beach · Marriott (Ozolio)", lat: 21.275, lon: -157.825, yt: "4CK0CsimBHs", lake: "Hawaii" },
   { name: "Waikiki · Park Shore Hotel (Ozolio Plus)", lat: 21.2735, lon: -157.8235, yt: "kCPppYpcY_s", lake: "Hawaii" },
+  // FIX 2026-11-09: "WOZ ERE" is an individual's channel (not a known re-stream brand); good lagoon view but ownership of the feed is unconfirmed. Drop if the owner objects.
   { name: "Ala Moana · Magic Island lagoon (WOZ ERE)", lat: 21.2885, lon: -157.8445, yt: "y5XS3fMISRk", lake: "Hawaii" },
-  { name: "Ala Moana · Concessions surf break", lat: 21.2865, lon: -157.851, yt: "EuR8OkQxOgk", lake: "Hawaii" },
-  { name: "Honolulu Harbor webcam (The Bridge Guy)", lat: 21.31, lon: -157.87, yt: "eCHeZDEVSeU", lake: "Hawaii" },
   { name: "Kahala · Resort beach & reef (Ozolio)", lat: 21.2745, lon: -157.7835, yt: "TZAvviB_o-4", lake: "Hawaii" },
   { name: "Kihei · Hale Pau Hana surf cam", lat: 20.7545, lon: -156.4579, yt: "hPvl6IACa2k", lake: "Hawaii" },
   { name: "Wailea · Fairmont Kea Lani (Ozolio)", lat: 20.6558, lon: -156.4415, yt: "G1zgkkguCyc", lake: "Hawaii" },
   { name: "Kaanapali · Sheraton Maui (Ozolio)", lat: 20.9167, lon: -156.6944, yt: "YXji6UQ0bwY", lake: "Hawaii" },
   { name: "Napili · Napili Kai Beach Resort (Ozolio)", lat: 20.9925, lon: -156.6675, yt: "fwX04Gsb8W4", lake: "Hawaii" },
-  { name: "Kohanaiki · Web Camera", lat: 19.7235, lon: -156.0535, yt: "Sb6v9lXIDjc", lake: "Hawaii" },
-  { name: "Portland Head Light · Casco Bay", lat: 43.623, lon: -70.208, yt: "rArvNLNmhOo", lake: "New England Coast" },
+  // FIX 2026-11-09: lighthouse is not in frame (roof, rocks, open water; overlay "Cape Elizabeth"), so named for what it shows.
+  { name: "Cape Elizabeth · rocky shore & Casco Bay", lat: 43.623, lon: -70.208, yt: "rArvNLNmhOo", lake: "New England Coast" },
   { name: "Scarborough Beach · Surf", lat: 43.55, lon: -70.32, yt: "-JZf3deL-Rs", lake: "New England Coast" },
   { name: "Cape Porpoise · Outer Harbor", lat: 43.362, lon: -70.428, yt: "xROnFN6dIZQ", lake: "New England Coast" },
   { name: "Weymouth · Fore River", lat: 42.25, lon: -70.95, yt: "dtIcEq1itmU", lake: "New England Coast" },
   { name: "Nahant · Ocean House Surf & Skate", lat: 42.425, lon: -70.93, yt: "KziwCV7db9s", lake: "New England Coast" },
   { name: "Plum Island · Beach South (Newburyport)", lat: 42.79, lon: -70.81, yt: "ZPbgf9jLD4E", lake: "New England Coast" },
-  { name: "Beverly · Jubilee Yacht Club (southwest)", lat: 42.55, lon: -70.85, yt: "ZlmEdBfHqsM", lake: "New England Coast" },
-  { name: "Cape Cod Canal · Mass Maritime Academy", lat: 41.74, lon: -70.5, yt: "_OeFhA2XqqA", lake: "New England Coast" },
   { name: "Edgartown · Harbor & Lighthouse (GOMV)", lat: 41.39, lon: -70.51, yt: "FoAvYeGRjU4", lake: "New England Coast" },
   { name: "Vineyard Haven · Harbor & Ferry (GOMV)", lat: 41.455, lon: -70.6, yt: "bdjXsDufCQY", lake: "New England Coast" },
-  { name: "East River · NYC Ferry (E 34th St)", lat: 40.745, lon: -73.97, yt: "roEn_E6sMfc", lake: "New York & New Jersey Coast" },
   { name: "Sea Isle City · Beach Patrol", lat: 39.153, lon: -74.693, yt: "FYOGiFH60uM", lake: "New York & New Jersey Coast" },
   { name: "Sea Isle City · Spinnaker beach", lat: 39.153, lon: -74.693, yt: "BY_Lar5zLr8", lake: "New York & New Jersey Coast" },
-  { name: "Margate · Beach (Atlantic City skyline cam)", lat: 39.33, lon: -74.51, yt: "2MNsMmfdpx8", lake: "New York & New Jersey Coast" },
+  // FIX 2026-11-09: frame is beach and surf with no skyline; renamed to match.
+  { name: "Margate · Beach", lat: 39.3326, lon: -74.51, yt: "2MNsMmfdpx8", lake: "New York & New Jersey Coast" },
   { name: "Savannah River · Upper East River", lat: 32.08, lon: -81.09, yt: "Nto6QNZZnQ0", lake: "Georgia & South Carolina Coast" },
-  { name: "Hilton Head · Sea Pines Beach Club", lat: 32.13, lon: -80.78, yt: "QIJku1LZGRE", lake: "Georgia & South Carolina Coast" },
-  { name: "Surfside Beach · Pier", lat: 33.605, lon: -78.975, yt: "hXqjUfQJf9U", lake: "Georgia & South Carolina Coast" },
+  // FIX 2026-11-09: operator's own channel (oEmbed "Express Watersports Dock Cam") but thumbnail is an ad slate, not a frame: label-only. Operator's real feed is Ozolio EQPH00001687; ask them for the embed.
   { name: "Murrells Inlet · Express Watersports dock", lat: 33.54, lon: -79.03, yt: "En6HTsRLAAU", lake: "Georgia & South Carolina Coast" },
   { name: "North Myrtle Beach · Elliott Beach Rentals", lat: 33.69, lon: -78.88, yt: "6NofiKBWXIk", lake: "Georgia & South Carolina Coast" },
   { name: "Wrightsville Beach · Johnnie Mercer's Pier (south)", lat: 34.21, lon: -77.79, yt: "itXoEFJZtD0", lake: "North Carolina Coast" },
   { name: "Wrightsville Beach · Johnnie Mercer's Pier (north)", lat: 34.21, lon: -77.79, yt: "yQG1M1GU_pI", lake: "North Carolina Coast" },
   { name: "Bald Head Island · Beach Access 15", lat: 33.86, lon: -77.97, yt: "lcANlrXCR0Q", lake: "North Carolina Coast" },
-  { name: "Beaufort · Rhumbar waterfront deck", lat: 34.717, lon: -76.66, yt: "ATYJsuZqEUU", lake: "North Carolina Coast" },
   { name: "Jupiter · Reef Club oceanfront (cam 2)", lat: 26.921, lon: -80.067, yt: "4y7kDbwBuh0", lake: "Florida Atlantic Coast" },
   { name: "Deerfield Beach · Fishing pier", lat: 26.318, lon: -80.075, yt: "H33wtprQqSM", lake: "Florida Atlantic Coast" },
   { name: "Deerfield Beach · Beach camera", lat: 26.318, lon: -80.075, yt: "rdeoEeJ00xA", lake: "Florida Atlantic Coast" },
-  { name: "Dania Beach · Pier", lat: 26.06, lon: -80.11, yt: "o1eTLR7Degs", lake: "Florida Atlantic Coast" },
-  { name: "Fort Myers Beach · Visit Fort Myers webcam", lat: 26.45, lon: -81.95, yt: "nj9jdOXXhEo", lake: "Florida Gulf Coast" },
-  { name: "Fort Myers Beach · Margaritaville License to Chill", lat: 26.45, lon: -81.95, yt: "2qd9j2CbIpg", lake: "Florida Gulf Coast" },
   { name: "Pine Island · Four Winds Marina", lat: 26.65, lon: -82.1, yt: "xp1b7w3qPd8", lake: "Florida Gulf Coast" },
   { name: "Orange Beach · Gulf (FOX10)", lat: 30.27, lon: -87.58, yt: "5Ijk8QsR-nw", lake: "Alabama & Mississippi Coast" },
   { name: "Orange Beach · The Moorings marina", lat: 30.29, lon: -87.57, yt: "nkA40olKP5s", lake: "Alabama & Mississippi Coast" },
   { name: "Orange Beach · Turquoise Place beach", lat: 30.27, lon: -87.6, yt: "pJqrjIuvGFE", lake: "Alabama & Mississippi Coast" },
   { name: "Perdido Key · Gulf beach (ENCO)", lat: 30.28, lon: -87.44, yt: "Qoouv_9QG5Q", lake: "Alabama & Mississippi Coast" },
-  { name: "Fairhope · Municipal Pier", lat: 30.52, lon: -87.91, yt: "N5wWOVOTHmQ", lake: "Alabama & Mississippi Coast" },
   { name: "D'Iberville · Back Bay of Biloxi (FOX10)", lat: 30.43, lon: -88.89, yt: "fYsEy6RFskY", lake: "Alabama & Mississippi Coast" },
-  { name: "Galveston · Seawall surf cam", lat: 29.29, lon: -94.79, yt: "r9PwbZwEFas", lake: "Louisiana & Texas Coast" },
-  { name: "Galveston · Yacht Basin marina", lat: 29.31, lon: -94.79, yt: "YIkt_L2YFPY", lake: "Louisiana & Texas Coast" },
-  { name: "Galveston · Ship Channel (Emerald cam)", lat: 29.31, lon: -94.79, yt: "LwKESRa1f-c", lake: "Louisiana & Texas Coast" },
-  { name: "Galveston · Cruise terminals", lat: 29.31, lon: -94.79, yt: "Mnj84qrUbXc", lake: "Louisiana & Texas Coast" },
-  { name: "Aransas Pass · Harbor Park", lat: 27.91, lon: -97.15, yt: "Mn3vY8bordE", lake: "Louisiana & Texas Coast" },
+  // FIX 2026-11-09: operator (packerysurfcam) labels it a surf cam; thumbnail is a logo, so label-only. Sole cam for port-aransas: needs a daylight look.
   { name: "Corpus Christi · Packery Channel surf cam", lat: 27.6, lon: -97.2, yt: "5s6X2045OTs", lake: "Louisiana & Texas Coast" },
   { name: "South Padre · Courtyard beach cam", lat: 26.1, lon: -97.17, yt: "dzylsC0KcOE", lake: "Louisiana & Texas Coast" },
-  { name: "South Padre · Queen Isabella Causeway", lat: 26.08, lon: -97.17, yt: "bvL_3W7F4Fk", lake: "Louisiana & Texas Coast" },
+  // FIX 2026-11-09: operator title "South Padre Surf Cam 4K Isla Blanca Beach Park" (South Padre Surf Company); thumbnail is a logo, so label-only.
   { name: "South Padre · Isla Blanca (South Padre Surf Co)", lat: 26.07, lon: -97.16, yt: "0FaRaPPTS8M", lake: "Louisiana & Texas Coast" },
 ];
 
@@ -286,6 +275,14 @@ export const LINK_CAMS = {
     { name: "Munising / Pictured Rocks cams", url: "https://www.exploremunising.com/web-cams/" },
     { name: "Isle Royale NPS webcams", url: "https://www.nps.gov/isro/learn/photosmultimedia/webcams.htm" },
     { name: "Great Lakes cam directory", url: "https://lakerart.com/links.htm" },
+  ],
+  // Coastal regions (2026-11-09; every URL returned HTTP 200). Pages that can't be embedded or aren't on the approved player list.
+  "Oregon Coast": [
+    { name: "NWS Portland bar cams (USCG, Oregon & SW Washington bars)", url: "https://www.weather.gov/pqr/barcams" },
+  ],
+  // (Visit St. Lucie's Fort Pierce jetty cams say they are down as of 2026-10-26, so no link yet.)
+  "Southcentral Alaska": [
+    { name: "Alaska Collection webcams (Seward area)", url: "https://alaskacollection.com/plan-your-trip/webcams" },
   ],
 };
 export const getLinkCams = (lake) => LINK_CAMS[lake] || [];
@@ -348,7 +345,12 @@ export function applyCamConfig(camCfg) {
 
 export const camIsImage = (c) => Boolean(c && c.img);
 export const camKind = (c) => (c && c.img ? "photo" : "video");
+// Legacy shape-derived label; the UI now uses camStatusLabel() (state-driven).
 export const camKindLabel = (c) => (c && c.img ? "Refreshing photo" : "Live video");
+// Replays/timelapses: explicit flag (server-added Windy cams) or name fallback.
+export const camIsReplay = (c) => Boolean(c && (c.replay || /replay|timelapse/i.test(c.name || "")));
+// "Bayfield · Port Superior Marina" -> "Bayfield" (place = text before the first " · " / " › ").
+export const camPlace = (c) => String((c && c.name) || "").split(/\s[·›]\s/)[0].trim();
 
 // Provider ids are interpolated into URLs, so they are URI-encoded: an id
 // can't add query parameters or change the path. (Built-in ids are plain
@@ -381,20 +383,69 @@ export const dist = (la, lo, la2, lo2) => {
   return Math.hypot(dx, la - la2);
 };
 
-// Cams near the selected spot (same lake; cams without a `lake` default to Lake
-// Erie), nearest first. Scoped to the launch area — the Great Lakes are huge, so
-// showing every cam on a lake is too broad. Prefer cams within ~0.85° (≈60 mi);
-// if none are that close, show just the single nearest within ~1.6° (≈110 mi);
-// beyond that the UI shows an empty state. ~1° ≈ 69 mi.
+// Great Lakes regions are "Lake …"; a cam with no `lake` defaults to Lake Erie.
+const isGreatLake = (l) => /^Lake /.test(l || "");
+// Great-circle distance in miles.
+export const haversineMi = (la, lo, la2, lo2) => {
+  const r = Math.PI / 180, dLa = (la2 - la) * r, dLo = (lo2 - lo) * r;
+  const a = Math.sin(dLa / 2) ** 2 + Math.cos(la * r) * Math.cos(la2 * r) * Math.sin(dLo / 2) ** 2;
+  return 3958.8 * 2 * Math.asin(Math.min(1, Math.sqrt(a)));
+};
+
+// Coastal regions whose cams may stand in for each other: same open water, no
+// barrier island / peninsula / bar between them. Deliberately NOT paired, because
+// a sheltered cam would read calm for an exposed launch (or the reverse):
+// Pamlico Sound vs NC ocean coast (Outer Banks), SF Bay vs the open coast
+// (Golden Gate / peninsula), Washington Coast vs Puget Sound (Hood Canal cam for
+// the Westport/Astoria bars), Louisiana Gulf vs Biloxi Back Bay.
+const COAST_NEIGHBORS = [
+  ["Florida Gulf Coast", "Alabama & Mississippi Coast"],
+  ["Florida Atlantic Coast", "Florida Keys"],
+  ["Georgia & South Carolina Coast", "North Carolina Coast"],
+  ["Long Island Sound", "New York & New Jersey Coast"],
+  ["Puget Sound", "San Juan Islands & Admiralty Inlet"],
+  ["Washington Coast", "Oregon Coast"],
+  ["Oregon Coast", "Northern California Coast"],
+];
+const coastMatch = (spot, cam) =>
+  spot === cam || COAST_NEIGHBORS.some(([x, y]) => (x === spot && y === cam) || (y === spot && x === cam));
+
+// Cams near the selected spot, nearest first, with distances. Great Lakes spots
+// ("Lake …") stay same-lake-only (cams without a `lake` default to Lake Erie).
+// Coastal spots match same-region cams plus the COAST_NEIGHBORS above, by distance.
+// Scoped to the launch area: prefer cams within ~0.85° (≈60 mi); if none are
+// that close, just the single nearest within ~1.6° (≈110 mi, `far: true`);
+// beyond that, empty. ~1° ≈ 69 mi.
 const NEAR_DEG = 0.85;
 const MAX_DEG = 1.6;
-export const nearestCams = (lat, lon, lake, n = 6, list = CAMS) => {
+export const nearestCamsWithDist = (lat, lon, lake, n = 6, list = CAMS) => {
   const want = lake || "Lake Erie";
+  const lakeSpot = isGreatLake(want);
   const ranked = list
-    .filter((c) => (c.lake || "Lake Erie") === want)
+    .filter((c) => (lakeSpot ? (c.lake || "Lake Erie") === want : Boolean(c.lake) && coastMatch(want, c.lake)))
     .map((c) => [c, dist(lat, lon, c.lat, c.lon)])
     .sort((a, b) => a[1] - b[1]);
   const near = ranked.filter(([, d]) => d <= NEAR_DEG);
-  const chosen = near.length ? near : ranked.filter(([, d]) => d <= MAX_DEG).slice(0, 1);
-  return chosen.slice(0, n).map(([c]) => c);
+  const far = !near.length;
+  const chosen = far ? ranked.filter(([, d]) => d <= MAX_DEG).slice(0, 1) : near;
+  return chosen.slice(0, n).map(([c]) => ({ cam: c, miles: haversineMi(lat, lon, c.lat, c.lon), far }));
+};
+export const nearestCams = (lat, lon, lake, n = 6, list = CAMS) =>
+  nearestCamsWithDist(lat, lon, lake, n, list).map((x) => x.cam);
+
+export const fmtMiles = (m) => (m < 10 ? `${m.toFixed(1)} mi` : `${Math.round(m)} mi`);
+
+// Link-out directories: drop ones whose name clearly names another place (a
+// "Marquette · …" chip on a Duluth page) when the name matches a CAMS place we
+// can locate and it is far from the spot. Generic directories (no match) stay.
+export const relevantLinkCams = (lat, lon, lake, list = CAMS) => {
+  const links = getLinkCams(lake);
+  if (lat == null || lon == null) return links;
+  return links.filter((l) => {
+    const head = String(l.name).split(/\s[·›(]\s?|\s\(/)[0].trim().toLowerCase();
+    if (head.length < 4) return true;
+    const hit = list.filter((c) => camPlace(c).toLowerCase() === head);
+    if (!hit.length) return true;
+    return hit.some((c) => dist(lat, lon, c.lat, c.lon) <= MAX_DEG);
+  });
 };
