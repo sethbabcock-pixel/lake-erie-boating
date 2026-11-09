@@ -36,6 +36,7 @@
 import { resolveMarineContext } from "./marine/conditions.js";
 import { ADSENSE_DEFAULTS, AD_PLACEMENTS, sanitizeAds } from "../src/ads-config.js";
 import { REGIONS } from "../src/regions.js";
+import { CAMS, applyCamConfig } from "../src/cams.js";
 
 const SESSION_DAYS = 30;
 const enc = new TextEncoder();
@@ -251,12 +252,14 @@ export function groupCamReports(requests) {
   const out = Object.create(null);
   for (const r of Array.isArray(requests) ? requests : []) {
     if (!r || typeof r.cam !== "string" || !r.cam) continue;
-    const g = (out[r.cam] ||= { count: 0, reasons: {}, last: "" });
+    const g = (out[r.cam] ||= { count: 0, reporters: 0, reasons: {}, last: "", _rh: new Set() });
+    if (r.rh) g._rh.add(r.rh);
     const reason = CAM_REPORT_REASONS.includes(r.reason) ? r.reason : "other";
     g.count++;
     g.reasons[reason] = (g.reasons[reason] || 0) + 1;
     if ((r.at || "") > g.last) g.last = r.at || "";
   }
+  for (const g of Object.values(out)) { g.reporters = g._rh.size || Math.min(g.count, 1); delete g._rh; }
   return { ...out };
 }
 
@@ -911,13 +914,22 @@ export async function handleAuth(request, env, url, ctx) {
     if (reason && !CAM_REPORT_REASONS.includes(reason)) return json({ error: "Unknown report reason." }, 400);
     if (reason && !camName) return json({ error: "Say which cam you are reporting." }, 400);
     if (!spot || (!webcam && !note && !camName)) return json({ error: "Add a webcam link or a note." }, 400);
+    if (camName) {
+      // Only cams the site actually lists (built-in or admin-added) can be reported.
+      const cfg = await env.USERS.get("site:config", "json").catch(() => null);
+      const known = new Set([...CAMS, ...applyCamConfig(cfg?.cams)].map((c) => c.name));
+      if (!known.has(camName)) return json({ error: "Unknown cam." }, 400);
+    }
     const u = await userFromRequest(env, request).catch(() => null);
     let email = clean(body.email, 254); if (email && !validEmail(email)) email = "";
     email = email || (u && u.email) || "";
     const lat = Number(body.lat), lon = Number(body.lon);
-    const rec = { spot, lat: Number.isFinite(lat) ? lat : null, lon: Number.isFinite(lon) ? lon : null, webcam, note, current: clean(body.current, 300), email, ...(camName ? { cam: camName, reason: reason || "other" } : {}), at: new Date().toISOString() };
+    // Hashed IP (never the raw address) so the admin can count unique reporters.
+    const ipRaw = request.headers.get("CF-Connecting-IP") || request.headers.get("X-Forwarded-For") || "unknown";
+    const rh = camName ? [...new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(`camreq:${ipRaw}`)))].slice(0, 8).map((b) => b.toString(16).padStart(2, "0")).join("") : "";
+    const rec = { spot, lat: Number.isFinite(lat) ? lat : null, lon: Number.isFinite(lon) ? lon : null, webcam, note, current: clean(body.current, 300), email, ...(camName ? { cam: camName, reason: reason || "other", rh } : {}), at: new Date().toISOString() };
     const ts = Date.now();
-    try { await env.USERS.put(`camreq:${ts}:${randHex(3)}`, JSON.stringify(rec), { expirationTtl: 180 * 86400 }); } catch (e) { /* ignore */ }
+    try { await env.USERS.put(`camreq:r${String(1e13 - ts).padStart(14, "0")}:${randHex(3)}`, JSON.stringify(rec), { expirationTtl: 180 * 86400 }); } catch (e) { /* ignore */ }
     const esc = (s) => String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
     const rows = [["Spot", spot], ...(camName ? [["Reported cam", `${camName} (${rec.reason})`]] : []), ["Suggested cam", webcam || "(none)"], ["Note", note || "(none)"], ["Currently showing", rec.current || "(unknown)"], ["From", email || "(not given)"]]
       .map(([k, v]) => `<tr><td style="padding:2px 12px 2px 0;color:#5b6b78">${k}</td><td><b>${esc(v)}</b></td></tr>`).join("");
@@ -930,11 +942,16 @@ export async function handleAuth(request, env, url, ctx) {
     const u = await userFromRequest(env, request);
     if (!u) return json({ error: "Not signed in." }, 401);
     if (!isAdmin(env, u)) return json({ error: "Forbidden — not an admin account." }, 403);
-    const list = await env.USERS.list({ prefix: "camreq:", limit: 1000 });
+    // New keys are reverse-time ("camreq:r…", newest sort first); legacy keys
+    // are "camreq:<ms>" (oldest first) and age out within 180 days.
+    const fresh = await env.USERS.list({ prefix: "camreq:r", limit: 200 });
+    const legacy = await env.USERS.list({ prefix: "camreq:1", limit: 1000 });
+    const names = [...fresh.keys.map((k) => k.name), ...legacy.keys.slice(-200).map((k) => k.name)];
     const requests = [];
-    for (const k of list.keys.slice(-200).reverse()) { const r = await env.USERS.get(k.name, "json"); if (r) requests.push(r); }
+    for (const n of names) { const r = await env.USERS.get(n, "json"); if (r) requests.push(r); }
     requests.sort((a, b) => (b.at || "").localeCompare(a.at || ""));
-    return json({ requests: requests.slice(0, 150), byCam: groupCamReports(requests) });
+    const newest = requests.slice(0, 200);
+    return json({ requests: newest.slice(0, 150).map(({ rh, ...r }) => r), byCam: groupCamReports(newest) });
   }
 
   // ---- public: build a page for a point (self-serve publish) ----

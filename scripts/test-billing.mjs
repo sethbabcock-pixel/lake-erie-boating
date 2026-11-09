@@ -34,7 +34,7 @@ function makeKV(seed = {}) {
     async put(k, v) { m.set(k, v); }, // store as-is (strings stay strings; ArrayBuffers stay binary)
     async delete(k) { m.delete(k); },
     async list({ prefix = "", limit = 1000 } = {}) {
-      const keys = [...m.keys()].filter((k) => k.startsWith(prefix)).slice(0, limit).map((name) => ({ name }));
+      const keys = [...m.keys()].filter((k) => k.startsWith(prefix)).sort().slice(0, limit).map((name) => ({ name }));
       return { keys, list_complete: true, cursor: "" };
     },
     _map: m,
@@ -3108,7 +3108,13 @@ async function run() {
   {
     const { groupCamReports } = await import("../functions/auth.js");
     const env = { USERS: makeKV(), ADMIN_EMAIL: "admin@example.com" };
-    const post = (body) => call(req("POST", "/api/request-cam", { body }), env);
+    const mkCam = (name) => ({ name, lake: "Lake Erie", lat: 41.5, lon: -82.7, kind: "yt", id: "abcdefghijk" });
+    await env.USERS.put("site:config", JSON.stringify({ cams: { disabled: [], custom: [mkCam("Cam A"), mkCam("Cam B")] } }));
+    let ipN = 0;
+    const post = (body, ip = "203.0.113.1") => {
+      const url = new URL(ORIGIN + "/api/request-cam");
+      return handleAuth(new Request(url, { method: "POST", headers: { "Content-Type": "application/json", "CF-Connecting-IP": ip }, body: JSON.stringify(body) }), env, url);
+    };
     const reports = () => [...env.USERS._map.entries()].filter(([k]) => k.startsWith("camreq:")).map(([, v]) => JSON.parse(v));
     eq("request-cam: legacy suggestion still ok", (await post({ spot: "Sandusky", webcam: "https://example.com/cam" })).status, 200);
     check("request-cam: legacy record has no cam/reason", reports()[0] && reports()[0].cam === undefined && reports()[0].reason === undefined);
@@ -3121,7 +3127,11 @@ async function run() {
     const stored = reports().filter((r) => r.cam);
     check("request-cam: reason normalised to lowercase", stored.some((r) => r.reason === "offline"));
     check("request-cam: cam name length-limited + control chars stripped", stored.every((r) => r.cam.length <= 160 && !/[\u0000-\u001f]/.test(r.cam)));
-    await post({ spot: "Duluth", cam: "Cam B", reason: "wrong-place" });
+    await post({ spot: "Duluth", cam: "Cam B", reason: "wrong-place" }, "203.0.113.9");
+    eq("request-cam: cam not in any list → 400", (await post({ spot: "Duluth", cam: "Nope cam", reason: "offline" })).status, 400);
+    eq("request-cam: built-in cam name accepted", (await post({ spot: "Cleveland", cam: "Edgewater Beach · Cleveland", reason: "offline" }, "203.0.113.5")).status, 200);
+    check("request-cam: reporter stored as hash, not raw IP", reports().filter((r) => r.cam).every((r) => /^[0-9a-f]{16}$/.test(r.rh)) && !JSON.stringify(reports()).includes("203.0.113"));
+    check("request-cam: new keys are reverse-time", [...env.USERS._map.keys()].filter((k) => k.startsWith("camreq:")).every((k) => k.startsWith("camreq:r")));
     // admin: gated, and grouped per cam
     eq("cam-requests: signed out → 401", (await call(req("GET", "/api/admin/cam-requests"), env)).status, 401);
     const other = await seedUser(env, "rando@example.com");
@@ -3131,6 +3141,16 @@ async function run() {
     eq("cam-requests: Cam A count", d.byCam["Cam A"]?.count, 2);
     eq("cam-requests: Cam A offline reason", d.byCam["Cam A"]?.reasons.offline, 1);
     eq("cam-requests: Cam B grouped", d.byCam["Cam B"]?.reasons["wrong-place"], 1);
+    eq("cam-requests: Cam A unique reporters (same IP twice)", d.byCam["Cam A"]?.reporters, 1);
+    eq("cam-requests: Cam B unique reporters", d.byCam["Cam B"]?.reporters, 1);
+    check("cam-requests: hashed IP not exposed", !JSON.stringify(d).includes('"rh"'));
+    // newest-first beyond the legacy cap: 250 newer reports, then one very old legacy key
+    await env.USERS.put("camreq:1700000000000:abc", JSON.stringify({ spot: "Old", cam: "Cam B", reason: "offline", at: "2023-11-14T00:00:00Z" }));
+    for (let i = 0; i < 250; i++) await env.USERS.put(`camreq:r${String(1e13 - (Date.now() + i + 1)).padStart(14, "0")}:${i}`, JSON.stringify({ spot: "S", cam: "Cam A", reason: "offline", at: new Date(Date.now() + i + 1).toISOString(), rh: "h" + i }));
+    const d2 = await (await call(req("GET", "/api/admin/cam-requests", { cookie: admin }), env)).json();
+    eq("cam-requests: newest 200 shown past 250 records", d2.requests.length, 150);
+    check("cam-requests: newest first", d2.requests[0].at > d2.requests[1].at);
+    check("cam-requests: oldest legacy record dropped from newest 200", d2.byCam["Cam B"] === undefined, JSON.stringify(d2.byCam["Cam B"]) + d2.requests.length);
     check("cam-requests: raw list still returned", Array.isArray(d.requests) && d.requests.length >= 5);
     const g = groupCamReports([{ cam: "__proto__", reason: "offline", at: "2026-01-02" }, { cam: "X", reason: "bogus", at: "2026-01-01" }, { cam: "X", reason: "offline", at: "2026-01-03" }, { spot: "no cam" }]);
     eq("groupCamReports: unknown reason → other", g.X.reasons.other, 1);

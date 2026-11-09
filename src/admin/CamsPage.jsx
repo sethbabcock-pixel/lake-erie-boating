@@ -108,6 +108,7 @@ export default function CamsPage({ cfg, setCfg }) {
   const builtinNames = new Set(CAMS.map((c) => c.name));
   const row = (cam, extra, key) => {
     const st = s?.status?.[cam.name];
+    const rep = Object.hasOwn(reports, cam.name) ? reports[cam.name] : null;
     const open = preview === cam.name;
     return (
       <div key={key} className="adm-camwrap">
@@ -116,13 +117,13 @@ export default function CamsPage({ cfg, setCfg }) {
           <div className="adm-row-main">
             <div className="adm-row-title">{cam.name}</div>
             <div className="adm-row-sub">{camKindLabelOf(cam)}</div>
-            {reports[cam.name] && (
+            {rep && (
               <div className="adm-row-sub" title="Reports from visitors in the last 180 days">
-                <Badge tone="warn">{reports[cam.name].count} report{reports[cam.name].count === 1 ? "" : "s"}</Badge> {reasonText(reports[cam.name])}
+                <Badge tone="warn">{rep.count} report{rep.count === 1 ? "" : "s"}{rep.reporters ? ` · ${rep.reporters} reporter${rep.reporters === 1 ? "" : "s"}` : ""}</Badge> {reasonText(rep)}
               </div>
             )}
           </div>
-          {reports[cam.name] && builtinNames.has(cam.name) && !disabled.has(cam.name) && (
+          {rep && builtinNames.has(cam.name) && !disabled.has(cam.name) && (
             <button className="adm-btn ghost sm danger" onClick={() => toggleBuiltin(cam.name, false)}>Disable this cam</button>
           )}
           <button className="adm-btn ghost sm" onClick={() => setPreview(open ? null : cam.name)}>{open ? "Hide" : "Preview"}</button>
