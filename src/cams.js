@@ -302,10 +302,18 @@ export const CAM_KINDS = [
   { kind: "wetmet", label: "WetMet", hint: "stream uid (32 hex chars)" },
   { kind: "ipcamlive", label: "IPCamLive", hint: "alias, e.g. mhyc" },
   { kind: "ozolio", label: "Ozolio", hint: "embed id, e.g. EMB_PSZZ000005DE" },
-  { kind: "img", label: "Refreshing photo (JPEG URL)", hint: "full image URL" },
+  { kind: "img", label: "Refreshing photo (JPEG URL)", hint: "full https:// image URL" },
 ];
 
 // A stored custom entry → the property-keyed cam shape the site renders.
+// Absolute https: URL (normalized) or "". Admin-entered image/link URLs end
+// up as an <img src> / <a href>, so nothing else (javascript:, data:, http:)
+// gets through. Mirrors httpsUrl() in functions/auth.js.
+export function safeHttps(u) {
+  if (typeof u !== "string" || !u) return "";
+  try { const url = new URL(u); return url.protocol === "https:" ? url.href : ""; } catch { return ""; }
+}
+
 export function normalizeCustomCam(e) {
   if (!e || typeof e !== "object") return null;
   const name = String(e.name || "").trim();
@@ -314,9 +322,18 @@ export function normalizeCustomCam(e) {
   const id = String(e.id || "").trim();
   if (!name || !id || !Number.isFinite(lat) || !Number.isFinite(lon)) return null;
   if (!CAM_KINDS.some((k) => k.kind === kind)) return null;
+  // The main player hands yt ids straight to YT.Player({ videoId }), not
+  // through camSrc(), so only accept the shape of a real YouTube video id.
+  if (kind === "yt" && !/^[A-Za-z0-9_-]{6,20}$/.test(id)) return null;
   const cam = { name, lat, lon, custom: true };
   if (e.lake && e.lake !== "Lake Erie") cam.lake = String(e.lake);
-  if (kind === "img") { cam.img = id; if (e.link) cam.link = String(e.link); }
+  if (kind === "img") {
+    const img = safeHttps(id);
+    if (!img) return null;
+    cam.img = img;
+    const link = safeHttps(String(e.link || "").trim());
+    if (link) cam.link = link;
+  }
   else cam[kind] = id;
   return cam;
 }
@@ -333,24 +350,30 @@ export const camIsImage = (c) => Boolean(c && c.img);
 export const camKind = (c) => (c && c.img ? "photo" : "video");
 export const camKindLabel = (c) => (c && c.img ? "Refreshing photo" : "Live video");
 
+// Provider ids are interpolated into URLs, so they are URI-encoded: an id
+// can't add query parameters or change the path. (Built-in ids are plain
+// [A-Za-z0-9_-] and encode to themselves.)
+const enc = (v) => encodeURIComponent(String(v ?? ""));
+
 export const camSrc = (c) =>
   c.embed ? c.embed // ready-made embed URL (e.g. a Windy webcam player)
-    : c.angelcam ? `https://v.angelcam.com/iframe?v=${c.angelcam}&autoplay=1`
-    : c.wetmet ? `https://api.wetmet.net/widgets/stream/frame.php?uid=${c.wetmet}`
-      : c.ipcamlive ? `https://www.ipcamlive.com/player/player.php?alias=${c.ipcamlive}&autoplay=1&disablehd=0`
-        : c.ozolio ? `https://relay.ozolio.com/pub.api?cmd=embed&oid=${c.ozolio}`
-          : c.ytChannel ? `https://www.youtube.com/embed/live_stream?channel=${c.ytChannel}&autoplay=1&mute=1`
-            : `https://www.youtube.com/embed/${c.yt}?autoplay=1&mute=1&rel=0`;
+    : c.angelcam ? `https://v.angelcam.com/iframe?v=${enc(c.angelcam)}&autoplay=1`
+    : c.wetmet ? `https://api.wetmet.net/widgets/stream/frame.php?uid=${enc(c.wetmet)}`
+      : c.ipcamlive ? `https://www.ipcamlive.com/player/player.php?alias=${enc(c.ipcamlive)}&autoplay=1&disablehd=0`
+        : c.ozolio ? `https://relay.ozolio.com/pub.api?cmd=embed&oid=${enc(c.ozolio)}`
+          : c.ytChannel ? `https://www.youtube.com/embed/live_stream?channel=${enc(c.ytChannel)}&autoplay=1&mute=1`
+            : `https://www.youtube.com/embed/${enc(c.yt)}?autoplay=1&mute=1&rel=0`;
 
+// The "Open this cam" href. Explicit links are only used if they are https.
 export const camLink = (c) =>
-  c.img ? (c.link || c.img)
-    : c.embed ? (c.link || c.embed)
-    : c.angelcam ? `https://v.angelcam.com/${c.angelcam}`
-      : c.wetmet ? `https://api.wetmet.net/widgets/stream/frame.php?uid=${c.wetmet}`
-        : c.ipcamlive ? `https://www.ipcamlive.com/${c.ipcamlive}`
-          : c.ozolio ? `https://relay.ozolio.com/pub.api?cmd=embed&oid=${c.ozolio}`
-            : c.ytChannel ? `https://www.youtube.com/channel/${c.ytChannel}/live`
-              : `https://www.youtube.com/watch?v=${c.yt}`;
+  c.img ? (safeHttps(c.link) || safeHttps(c.img))
+    : c.embed ? (safeHttps(c.link) || c.embed)
+    : c.angelcam ? `https://v.angelcam.com/${enc(c.angelcam)}`
+      : c.wetmet ? `https://api.wetmet.net/widgets/stream/frame.php?uid=${enc(c.wetmet)}`
+        : c.ipcamlive ? `https://www.ipcamlive.com/${enc(c.ipcamlive)}`
+          : c.ozolio ? `https://relay.ozolio.com/pub.api?cmd=embed&oid=${enc(c.ozolio)}`
+            : c.ytChannel ? `https://www.youtube.com/channel/${enc(c.ytChannel)}/live`
+              : `https://www.youtube.com/watch?v=${enc(c.yt)}`;
 
 // Rough planar distance for "nearest cam" sorting.
 export const dist = (la, lo, la2, lo2) => {

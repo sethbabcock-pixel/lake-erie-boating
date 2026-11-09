@@ -168,6 +168,12 @@ const adminUserView = (u) => ({
   favoriteSpots: u.favorites || [],
 });
 const safeUrl = (u) => (/^(https?:\/\/|\/(?!\/))/i.test(u || "") ? u : "");
+// Absolute https: URL (normalized) or "". Used for admin-entered links that
+// end up as an href/src on public pages.
+export const httpsUrl = (u) => {
+  if (typeof u !== "string" || !u) return "";
+  try { const url = new URL(u); return url.protocol === "https:" ? url.href : ""; } catch { return ""; }
+};
 // Header photos are uploads or bundled files only: never a third-party host
 // that every visitor's browser would hit.
 const ownImageUrl = (u) => (/^\/(api\/asset\/[a-z0-9]+|spots\/[a-z0-9-]+\.(jpe?g|webp|png))$/i.test(u || "") ? u : "");
@@ -218,11 +224,18 @@ function sanitizeSiteConfig(input) {
       return {
         disabled: (Array.isArray(cams.disabled) ? cams.disabled : []).slice(0, 300)
           .map((n) => str(n, 160)).filter(Boolean),
-        custom: (Array.isArray(cams.custom) ? cams.custom : []).slice(0, 100).map((e) => ({
-          name: str(e.name, 160), lake: str(e.lake, 40) || "Lake Erie",
-          lat: Number(e.lat) || 0, lon: Number(e.lon) || 0,
-          kind: str(e.kind, 20), id: str(e.id, 500), link: str(e.link, 500),
-        })).filter((e) => e.name && e.id),
+        // A snapshot cam's id is its image URL and its link is where "Open
+        // this cam" goes (an <a href> on the site), so both must be https URLs;
+        // a bad link is dropped, a bad image URL drops the entry.
+        custom: (Array.isArray(cams.custom) ? cams.custom : []).slice(0, 100).map((e) => {
+          const kind = str(e.kind, 20);
+          const id = str(e.id, 500).trim();
+          return {
+            name: str(e.name, 160), lake: str(e.lake, 40) || "Lake Erie",
+            lat: Number(e.lat) || 0, lon: Number(e.lon) || 0,
+            kind, id: kind === "img" ? httpsUrl(id) : id, link: httpsUrl(str(e.link, 500).trim()),
+          };
+        }).filter((e) => e.name && e.id),
       };
     })(),
   };

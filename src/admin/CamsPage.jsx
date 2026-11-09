@@ -46,7 +46,7 @@ function CamEditor({ initial, onSave, onCancel }) {
           <input className="adm-input mono" value={e.id} onChange={(ev) => set("id", ev.target.value)} />
         </Field>
         {e.kind === "img" && (
-          <Field label="Source page URL" hint="where “Open this cam” goes" wide>
+          <Field label="Source page URL" hint="https:// page where “Open this cam” goes" wide>
             <input className="adm-input" value={e.link} onChange={(ev) => set("link", ev.target.value)} placeholder="https://…" />
           </Field>
         )}
