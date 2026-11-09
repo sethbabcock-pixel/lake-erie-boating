@@ -242,6 +242,11 @@ function sanitizeSiteConfig(input) {
   };
 }
 
+// Server-added Windy fallback cams (fetchWindyCams in marine/conditions.js) are
+// named `${label} (Windy)` or `${label} (Windy · replay)` with label <= 72 chars.
+// They are not in the cam lists, so request-cam accepts exactly that shape.
+export const WINDY_CAM_NAME = /^[^\u0000-\u001f]{1,72} \(Windy(?: · replay)?\)$/;
+
 // Per-cam reports (POST /api/request-cam with { cam, reason }).
 export const CAM_REPORT_REASONS = ["not-water", "offline", "wrong-place", "other"];
 
@@ -918,7 +923,7 @@ export async function handleAuth(request, env, url, ctx) {
       // Only cams the site actually lists (built-in or admin-added) can be reported.
       const cfg = await env.USERS.get("site:config", "json").catch(() => null);
       const known = new Set([...CAMS, ...applyCamConfig(cfg?.cams)].map((c) => c.name));
-      if (!known.has(camName)) return json({ error: "Unknown cam." }, 400);
+      if (!known.has(camName) && !WINDY_CAM_NAME.test(camName)) return json({ error: "Unknown cam." }, 400);
     }
     const u = await userFromRequest(env, request).catch(() => null);
     let email = clean(body.email, 254); if (email && !validEmail(email)) email = "";

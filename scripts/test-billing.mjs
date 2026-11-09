@@ -3130,6 +3130,11 @@ async function run() {
     await post({ spot: "Duluth", cam: "Cam B", reason: "wrong-place" }, "203.0.113.9");
     eq("request-cam: cam not in any list → 400", (await post({ spot: "Duluth", cam: "Nope cam", reason: "offline" })).status, 400);
     eq("request-cam: built-in cam name accepted", (await post({ spot: "Cleveland", cam: "Edgewater Beach · Cleveland", reason: "offline" }, "203.0.113.5")).status, 200);
+    eq("request-cam: Windy replay fallback name accepted", (await post({ spot: "Marquette", cam: "Big Bay › South-east (Windy · replay)", reason: "not-water" }, "203.0.113.6")).status, 200);
+    eq("request-cam: Windy live fallback name accepted", (await post({ spot: "Marquette", cam: "Presque Isle (Windy)", reason: "offline" }, "203.0.113.6")).status, 200);
+    eq("request-cam: arbitrary text mimicking Windy rejected", (await post({ spot: "x", cam: "anything (Windy) extra", reason: "other" })).status, 400);
+    eq("request-cam: over-long Windy-style label rejected", (await post({ spot: "x", cam: "a".repeat(73) + " (Windy)", reason: "other" })).status, 400);
+    eq("request-cam: bare suffix rejected", (await post({ spot: "x", cam: " (Windy)", reason: "other" })).status, 400);
     check("request-cam: reporter stored as hash, not raw IP", reports().filter((r) => r.cam).every((r) => /^[0-9a-f]{16}$/.test(r.rh)) && !JSON.stringify(reports()).includes("203.0.113"));
     check("request-cam: new keys are reverse-time", [...env.USERS._map.keys()].filter((k) => k.startsWith("camreq:")).every((k) => k.startsWith("camreq:r")));
     // admin: gated, and grouped per cam
