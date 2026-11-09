@@ -1,10 +1,12 @@
 import React, { useState } from "react";
 import { CAMS, CAM_KINDS, camSrc, camIsImage, normalizeCustomCam } from "../cams.js";
-import { PageHead, Panel, Field, Switch, Badge, Icon } from "./ui.jsx";
+import { PageHead, Panel, Field, Switch, Badge, Icon, useAdminFetch } from "./ui.jsx";
 
 const LAKES = ["Lake Erie", "Lake Michigan", "Lake Huron", "Lake Ontario", "Lake Superior"];
 const camKindOf = (c) => (c.img ? "img" : c.yt ? "yt" : c.ytChannel ? "ytChannel" : c.angelcam ? "angelcam" : c.wetmet ? "wetmet" : c.ipcamlive ? "ipcamlive" : c.ozolio ? "ozolio" : "");
 const camKindLabelOf = (c) => (CAM_KINDS.find((k) => k.kind === camKindOf(c)) || {}).label || "—";
+const REASON_LABEL = { "not-water": "not water", offline: "offline", "wrong-place": "wrong place", other: "other" };
+const reasonText = (g) => Object.entries(g.reasons || {}).map(([r, n]) => `${n}× ${REASON_LABEL[r] || r}`).join(", ");
 const blankCustomCam = () => ({ name: "", lake: "Lake Erie", lat: "", lon: "", kind: "yt", id: "", link: "" });
 
 function CamPreview({ cam }) {
@@ -72,6 +74,8 @@ export default function CamsPage({ cfg, setCfg }) {
   const [preview, setPreview] = useState(null);
   const [editing, setEditing] = useState(null);
   const [adding, setAdding] = useState(false);
+  // User reports grouped per cam name (from /api/admin/cam-requests).
+  const reports = useAdminFetch("/api/admin/cam-requests", (d) => d.byCam || {}).data || {};
 
   const toggleBuiltin = (name, on) => {
     const d = new Set(disabled);
@@ -101,8 +105,10 @@ export default function CamsPage({ cfg, setCfg }) {
   const s = stat[lake];
   const count = (l) => CAMS.filter((c) => (c.lake || "Lake Erie") === l).length + custom.filter((c) => (c.lake || "Lake Erie") === l).length;
 
+  const builtinNames = new Set(CAMS.map((c) => c.name));
   const row = (cam, extra, key) => {
     const st = s?.status?.[cam.name];
+    const rep = Object.hasOwn(reports, cam.name) ? reports[cam.name] : null;
     const open = preview === cam.name;
     return (
       <div key={key} className="adm-camwrap">
@@ -111,7 +117,15 @@ export default function CamsPage({ cfg, setCfg }) {
           <div className="adm-row-main">
             <div className="adm-row-title">{cam.name}</div>
             <div className="adm-row-sub">{camKindLabelOf(cam)}</div>
+            {rep && (
+              <div className="adm-row-sub" title="Reports from visitors in the last 180 days">
+                <Badge tone="warn">{rep.count} report{rep.count === 1 ? "" : "s"}{rep.reporters ? ` · ${rep.reporters} reporter${rep.reporters === 1 ? "" : "s"}` : ""}</Badge> {reasonText(rep)}
+              </div>
+            )}
           </div>
+          {rep && builtinNames.has(cam.name) && !disabled.has(cam.name) && (
+            <button className="adm-btn ghost sm danger" onClick={() => toggleBuiltin(cam.name, false)}>Disable this cam</button>
+          )}
           <button className="adm-btn ghost sm" onClick={() => setPreview(open ? null : cam.name)}>{open ? "Hide" : "Preview"}</button>
           {extra}
         </div>
