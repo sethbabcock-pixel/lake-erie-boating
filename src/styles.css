@@ -206,6 +206,8 @@ svg.ico { vertical-align: -0.15em; flex: 0 0 auto; }
 .cam-kind { display: inline-flex; align-items: center; gap: 5px; font-size: var(--fs-xs); font-weight: var(--fw-semibold); padding: 3px 10px; border-radius: var(--r-pill); }
 .cam-kind svg { font-size: 13px; }
 .cam-kind.video { color: var(--accent); background: color-mix(in srgb, var(--accent) 15%, transparent); }
+.cam-kind.replay { color: var(--text-muted); background: var(--surface-sunk); }
+.cam-kind.warn { color: var(--warning-text); background: color-mix(in srgb, var(--warning) 18%, transparent); }
 .cam-kind.photo { color: var(--text-muted); background: var(--surface-sunk); }
 .camsel-wrap { position: relative; margin-bottom: var(--s3); }
 .camsel-wrap .camsel-ic { position: absolute; left: 13px; top: 50%; transform: translateY(-50%); font-size: 16px; color: var(--text-muted); pointer-events: none; }
@@ -291,6 +293,29 @@ details.card[open] > summary { margin-bottom: var(--s3); }
 .camloading { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; gap: var(--s2);
   font-size: var(--fs-sm); color: var(--text-muted); text-align: center; padding: var(--s3); z-index: 1; }
 .spinner { width: 18px; height: 18px; border: 2px solid var(--border-strong); border-top-color: var(--accent); border-radius: 50%; animation: spin 0.8s linear infinite; }
+@media (prefers-reduced-motion: reduce) { .spinner { animation: none; } }
+/* Photo cams size to the image (no 16:9 letterbox on 4:3 feeds); reserve 16:9 until it loads. */
+.camwrap.photo { aspect-ratio: auto; }
+.camwrap.photo:not(.ready) { aspect-ratio: 16 / 9; }
+.camwrap.photo.ready img { position: relative; inset: auto; height: auto; display: block; }
+.campost { position: absolute; inset: 0; width: 100%; border: 0; padding: var(--s3); cursor: pointer; color: var(--text); background: var(--surface-sunk);
+  display: flex; align-items: center; justify-content: center; text-align: center; font: inherit; font-size: var(--fs-sm); font-weight: var(--fw-semibold); }
+.campost img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+.campost-name { position: relative; max-width: 80%; padding: 4px 10px; border-radius: var(--r-sm); background: color-mix(in srgb, var(--surface) 85%, transparent); }
+.campost-play { position: absolute; right: var(--s3); bottom: var(--s3); width: 56px; height: 56px; border-radius: 50%; display: flex; align-items: center; justify-content: center;
+  background: var(--accent); color: #fff; font-size: 22px; }
+.campost:focus-visible, .camlink:focus-visible, .camdirs summary:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.camnav { display: flex; align-items: center; justify-content: space-between; gap: var(--s2); margin-bottom: var(--s3); font-size: var(--fs-xs); color: var(--text-muted); }
+.camwhere { margin-top: var(--s2); font-size: var(--fs-sm); color: var(--text-muted); overflow-wrap: anywhere; }
+.camwhere.far { color: var(--warning-text); }
+.camsafety { margin-top: 4px; font-size: var(--fs-xs); color: var(--text-faint); line-height: var(--lh-snug); }
+.camreport { display: contents; }
+.camreport-reasons { display: flex; flex-wrap: wrap; gap: var(--s2); flex-basis: 100%; }
+.camreport-done { font-size: var(--fs-sm); color: var(--success); }
+.camdirs { margin-top: var(--s3); }
+.camdirs summary { cursor: pointer; min-height: 44px; display: flex; align-items: center; font-size: var(--fs-xs); font-weight: var(--fw-semibold); color: var(--text-muted); }
+.camdirs .camlinks { margin-top: 0; }
+.camlink { max-width: 100%; text-align: left; cursor: pointer; font-family: inherit; }
 @keyframes spin { to { transform: rotate(360deg); } }
 .camtabs { display: flex; flex-wrap: wrap; gap: var(--s2); margin-bottom: var(--s3); }
 .camtabs button { min-height: 34px; padding: 5px 11px; font-size: var(--fs-xs); font-weight: var(--fw-semibold); cursor: pointer;
@@ -1282,7 +1307,8 @@ a, .linklike { color: var(--accent-text); }
 .comfort.ok { color: var(--success-text); }
 .comfort.over { color: var(--danger-text); }
 .alert .ev, .acct-danger h2 { color: var(--danger-text); }
-.camsuggest-done { color: var(--success-text); }
+.camsuggest-done, .camreport-done { color: var(--success-text); }
+.camsuggest > .linklike { min-height: 44px; }
 .region-tally em.go { color: var(--success-text); }
 .region-tally em.caution { color: var(--warning-text); }
 .region-tally em.nogo { color: var(--danger-text); }

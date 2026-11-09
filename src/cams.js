@@ -348,7 +348,12 @@ export function applyCamConfig(camCfg) {
 
 export const camIsImage = (c) => Boolean(c && c.img);
 export const camKind = (c) => (c && c.img ? "photo" : "video");
+// Legacy shape-derived label; the UI now uses camStatusLabel() (state-driven).
 export const camKindLabel = (c) => (c && c.img ? "Refreshing photo" : "Live video");
+// Replays/timelapses: explicit flag (server-added Windy cams) or name fallback.
+export const camIsReplay = (c) => Boolean(c && (c.replay || /replay|timelapse/i.test(c.name || "")));
+// "Bayfield · Port Superior Marina" -> "Bayfield" (place = text before the first " · " / " › ").
+export const camPlace = (c) => String((c && c.name) || "").split(/\s[·›]\s/)[0].trim();
 
 // Provider ids are interpolated into URLs, so they are URI-encoded: an id
 // can't add query parameters or change the path. (Built-in ids are plain
@@ -381,20 +386,52 @@ export const dist = (la, lo, la2, lo2) => {
   return Math.hypot(dx, la - la2);
 };
 
-// Cams near the selected spot (same lake; cams without a `lake` default to Lake
-// Erie), nearest first. Scoped to the launch area — the Great Lakes are huge, so
-// showing every cam on a lake is too broad. Prefer cams within ~0.85° (≈60 mi);
-// if none are that close, show just the single nearest within ~1.6° (≈110 mi);
-// beyond that the UI shows an empty state. ~1° ≈ 69 mi.
+// Great Lakes regions are "Lake …"; a cam with no `lake` defaults to Lake Erie.
+const isGreatLake = (l) => /^Lake /.test(l || "");
+// Great-circle distance in miles.
+export const haversineMi = (la, lo, la2, lo2) => {
+  const r = Math.PI / 180, dLa = (la2 - la) * r, dLo = (lo2 - lo) * r;
+  const a = Math.sin(dLa / 2) ** 2 + Math.cos(la * r) * Math.cos(la2 * r) * Math.sin(dLo / 2) ** 2;
+  return 3958.8 * 2 * Math.asin(Math.min(1, Math.sqrt(a)));
+};
+
+// Cams near the selected spot, nearest first, with distances. Great Lakes spots
+// ("Lake …") stay same-lake-only (cams without a `lake` default to Lake Erie).
+// Coastal spots match any non-Great-Lakes cam by distance, whatever its region
+// string, so neighbouring regions (e.g. Beaufort for bath-nc) are visible.
+// Scoped to the launch area: prefer cams within ~0.85° (≈60 mi); if none are
+// that close, just the single nearest within ~1.6° (≈110 mi, `far: true`);
+// beyond that, empty. ~1° ≈ 69 mi.
 const NEAR_DEG = 0.85;
 const MAX_DEG = 1.6;
-export const nearestCams = (lat, lon, lake, n = 6, list = CAMS) => {
+export const nearestCamsWithDist = (lat, lon, lake, n = 6, list = CAMS) => {
   const want = lake || "Lake Erie";
+  const lakeSpot = isGreatLake(want);
   const ranked = list
-    .filter((c) => (c.lake || "Lake Erie") === want)
+    .filter((c) => (lakeSpot ? (c.lake || "Lake Erie") === want : c.lake && !isGreatLake(c.lake)))
     .map((c) => [c, dist(lat, lon, c.lat, c.lon)])
     .sort((a, b) => a[1] - b[1]);
   const near = ranked.filter(([, d]) => d <= NEAR_DEG);
-  const chosen = near.length ? near : ranked.filter(([, d]) => d <= MAX_DEG).slice(0, 1);
-  return chosen.slice(0, n).map(([c]) => c);
+  const far = !near.length;
+  const chosen = far ? ranked.filter(([, d]) => d <= MAX_DEG).slice(0, 1) : near;
+  return chosen.slice(0, n).map(([c]) => ({ cam: c, miles: haversineMi(lat, lon, c.lat, c.lon), far }));
+};
+export const nearestCams = (lat, lon, lake, n = 6, list = CAMS) =>
+  nearestCamsWithDist(lat, lon, lake, n, list).map((x) => x.cam);
+
+export const fmtMiles = (m) => (m < 10 ? `${m.toFixed(1)} mi` : `${Math.round(m)} mi`);
+
+// Link-out directories: drop ones whose name clearly names another place (a
+// "Marquette · …" chip on a Duluth page) when the name matches a CAMS place we
+// can locate and it is far from the spot. Generic directories (no match) stay.
+export const relevantLinkCams = (lat, lon, lake, list = CAMS) => {
+  const links = getLinkCams(lake);
+  if (lat == null || lon == null) return links;
+  return links.filter((l) => {
+    const head = String(l.name).split(/\s[·›(]\s?|\s\(/)[0].trim().toLowerCase();
+    if (head.length < 4) return true;
+    const hit = list.filter((c) => camPlace(c).toLowerCase() === head);
+    if (!hit.length) return true;
+    return hit.some((c) => dist(lat, lon, c.lat, c.lon) <= MAX_DEG);
+  });
 };
