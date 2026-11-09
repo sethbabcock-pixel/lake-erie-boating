@@ -15,7 +15,8 @@ const PhotoIcon = (p) => (
 const CamTypeIcon = ({ cam, ...p }) => (camIsImage(cam) ? <PhotoIcon {...p} /> : <VideoIcon {...p} />);
 const saveDataOn = () => typeof navigator !== "undefined" && Boolean(navigator.connection && navigator.connection.saveData);
 const SAFETY_LINE = "One view, one moment, possibly delayed — calm water on camera doesn't mean calm water where you're headed.";
-const REPORT_REASONS = ["Not water", "Offline", "Wrong place", "Other"];
+// [label, slug]: slugs must match CAM_REPORT_REASONS in functions/auth.js (anything else is a 400).
+const REPORT_REASONS = [["Not water", "not-water"], ["Offline", "offline"], ["Wrong place", "wrong-place"], ["Other", "other"]];
 const ExternalIcon = (p) => (
   <svg viewBox="0 0 24 24" width="1em" height="1em" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" {...p}>
     <path d="M15 3h6v6" /><path d="M10 14 21 3" /><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" />
@@ -48,8 +49,8 @@ function CamReport({ cam, spotName, lat, lon }) {
       <button type="button" className="camlink" aria-expanded={open} onClick={() => setOpen((o) => !o)}>Report this cam</button>
       {open && (
         <div className="camreport-reasons" role="group" aria-label="What's wrong with this cam?">
-          {REPORT_REASONS.map((r) => (
-            <button key={r} type="button" className="camlink" disabled={state === "sending"} onClick={() => send(r)}>{r}</button>
+          {REPORT_REASONS.map(([label, slug]) => (
+            <button key={slug} type="button" className="camlink" disabled={state === "sending"} onClick={() => send(slug)}>{label}</button>
           ))}
         </div>
       )}
@@ -299,7 +300,7 @@ export default function Cams({ lat, lon, spotName, lake }) {
     return (
       <section className="card">
         <div className="card-head"><h2>Webcams</h2></div>
-        <div className="camempty">No live webcams for this spot right now; they come and go. Check the directory links below, or point us at one.</div>
+        <div className="camempty">No live webcams for this spot right now; they come and go. {relevantLinkCams(lat, lon, lake).length ? "Check the directory links below, or point us at one." : "If you know a good one, point us at it."}</div>
         <CamLinks lat={lat} lon={lon} lake={lake} spotName={spotName} />
         <CamSuggest spotName={spotName} lat={lat} lon={lon} current="" />
       </section>

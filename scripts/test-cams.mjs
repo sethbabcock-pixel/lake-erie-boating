@@ -24,4 +24,14 @@ check("Pamlico Sound spot never gets an ocean-side Outer Banks cam", nearestCams
 check("Washington Coast spot never gets a Puget Sound cam", nearestCams(46.9, -124.1, "Washington Coast", 6, xs).length === 0);
 check("SF Bay spot never gets an open-coast cam", nearestCams(37.5, -122.2, "San Francisco Bay", 6, xs).length === 0);
 check("Louisiana Gulf spot never gets a Biloxi cam", nearestCams(29.26, -89.96, "Louisiana & Texas Coast", 6, xs).length === 0);
+// Report buttons must send slugs the server accepts (a label like "Not water" is a 400).
+{
+  const { readFileSync } = await import("node:fs");
+  const { CAM_REPORT_REASONS } = await import("../functions/auth.js");
+  const src = readFileSync(new URL("../src/Cams.jsx", import.meta.url), "utf8");
+  const m = src.match(/const REPORT_REASONS = (\[\[[^;]*\]\]);/);
+  const slugs = m ? JSON.parse(m[1]).map((r) => r[1]) : [];
+  const ok = slugs.length === 4 && slugs.every((s) => CAM_REPORT_REASONS.includes(s));
+  check("Cams.jsx report reasons are server slugs", ok);
+}
 process.exit(failed ? 1 : 0);
