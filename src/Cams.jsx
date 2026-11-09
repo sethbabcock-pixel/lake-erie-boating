@@ -319,7 +319,7 @@ export default function Cams({ lat, lon, spotName, lake }) {
     // We only know when OUR browser fetched the file, not when the camera took
     // it: a frozen upstream frame re-fetches fine forever. Never call it "updated".
     chip = { cls: "photo", text: loaded ? "Photo · time taken unknown" : "Photo · loading…" };
-  } else if (loaded && (cam.yt || (status && status[cam.name] === "live"))) chip = { cls: "video", text: "Live" };
+  } else if (loaded && cam.yt) chip = { cls: "video", text: "Live" }; // only the YouTube player reports real playback of a live stream
   else if (loaded) chip = { cls: "photo", text: "Video · live not confirmed" };
   else chip = { cls: "photo", text: needsTap ? "Tap to play" : "Loading…" };
 
