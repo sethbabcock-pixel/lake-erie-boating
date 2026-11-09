@@ -2441,6 +2441,44 @@ async function run() {
     } finally { Date.now = realNow; nshMock = null; }
   }
 
+  // ── Windy player URLs: only https windy.com hosts reach the iframe src ──
+  {
+    const { safeWindyPlayer } = await import("../functions/marine/conditions.js");
+    const ok = "https://webcams.windy.com/webcams/public/embed/player/123/live";
+    eq("windy player: https webcams.windy.com kept", safeWindyPlayer(ok), ok);
+    eq("windy player: https windy.com apex kept", safeWindyPlayer("https://windy.com/x"), "https://windy.com/x");
+    eq("windy player: javascript: rejected", safeWindyPlayer("javascript:alert(1)"), null);
+    eq("windy player: data: rejected", safeWindyPlayer("data:text/html,<script>alert(1)</script>"), null);
+    eq("windy player: http: rejected", safeWindyPlayer("http://webcams.windy.com/p/1"), null);
+    eq("windy player: lookalike host rejected", safeWindyPlayer("https://evilwindy.com/p/1"), null);
+    eq("windy player: windy.com as subdomain of another host rejected", safeWindyPlayer("https://windy.com.evil.example/p"), null);
+    eq("windy player: userinfo trick rejected", safeWindyPlayer("https://windy.com@evil.example/p"), null);
+    eq("windy player: unparseable rejected", safeWindyPlayer("not a url"), null);
+    eq("windy player: non-string rejected", safeWindyPlayer({ embed: ok }), null);
+    eq("windy player: protocol-relative rejected", safeWindyPlayer("//webcams.windy.com/p/1"), null);
+    // End to end: a hostile player entry never reaches a cam's embed.
+    const { fetchWindyCams } = await import("../functions/marine/conditions.js");
+    const realFetch = globalThis.fetch;
+    const water = [{ id: "harbor", name: "Harbor" }];
+    globalThis.fetch = async (u) => (String(u).startsWith("https://api.windy.com/")
+      ? new Response(JSON.stringify({ webcams: [
+          { webcamId: 111, title: "Marina", categories: water, player: { live: "javascript:alert(1)", day: "https://evil.example/day" } },
+          { webcamId: 222, title: "Beach", categories: water, player: { live: ok } },
+          { webcamId: 333, title: "Pier", categories: water, player: { day: { embed: "data:text/html,x" } } },
+        ] }), { status: 200, headers: { "content-type": "application/json" } })
+      : realFetch(u));
+    try {
+      const cams = await fetchWindyCams({ WINDY_WEBCAMS_KEY: "test" }, 41.5, -82.7, "Lake Erie");
+      const by = Object.fromEntries((cams || []).map((c) => [c.link.match(/\d+$/)?.[0], c]));
+      eq("windy cams: hostile live+day → id-built day player", by["111"]?.embed, "https://webcams.windy.com/webcams/public/embed/player/111/day");
+      check("windy cams: rejected live URL is not labeled live", /replay/.test(by["111"]?.name || ""), by["111"]?.name);
+      eq("windy cams: valid live player kept", by["222"]?.embed, ok);
+      eq("windy cams: hostile v2 embed object → id-built day player", by["333"]?.embed, "https://webcams.windy.com/webcams/public/embed/player/333/day");
+    } finally {
+      globalThis.fetch = realFetch;
+    }
+  }
+
   // ── Launch-facts card: a configured buoy is not a live buoy ──
   {
     const { SPOTS, spotFacts } = await import("../functions/marine/conditions.js");
