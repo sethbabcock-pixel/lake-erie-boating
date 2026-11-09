@@ -2148,7 +2148,21 @@ async function effectiveCams(env) {
 // Returns an array on success (possibly empty) or null on API failure, so the
 // caller can report "no key" / "error" / "ok" distinctly in the response's
 // `windy` field — otherwise a missing key and a dead API look identical.
-async function fetchWindyCams(env, lat, lon, lake) {
+// A Windy player URL from the API is used as an iframe src in the client
+// (camSrc in src/cams.js), so it is only kept when it is an https URL on
+// windy.com or a subdomain. Anything else (javascript:, data:, http:, another
+// host, unparseable) returns null and the caller falls back to the id-built
+// player URL. Defense in depth: the API is trusted, but its output isn't.
+export function safeWindyPlayer(u) {
+  if (typeof u !== "string" || !u) return null;
+  let url;
+  try { url = new URL(u); } catch { return null; }
+  if (url.protocol !== "https:") return null;
+  const h = url.hostname.toLowerCase();
+  return h === "windy.com" || h.endsWith(".windy.com") ? url.href : null;
+}
+
+export async function fetchWindyCams(env, lat, lon, lake) {
   const key = env?.WINDY_WEBCAMS_KEY;
   if (!key || lat == null || lon == null) return null;
   try {
@@ -2184,11 +2198,13 @@ async function fetchWindyCams(env, lat, lon, lake) {
       // objects with an .embed property. Accept both. Live stream first —
       // the day player is a 24 h replay, not a live view — and only fall back
       // to the id-built day player when no player was listed at all.
+      // Every player URL goes through safeWindyPlayer(): the value becomes an
+      // iframe src on the client, so only https Windy hosts are kept.
       const p = w.player || {};
-      const asUrl = (v) => (typeof v === "string" ? v : v?.embed);
+      const asUrl = (v) => safeWindyPlayer(typeof v === "string" ? v : v?.embed);
       const live = asUrl(p.live);
       const embed = live || asUrl(p.day) || asUrl(p.lifetime) || asUrl(p.month) || asUrl(p.year)
-        || `https://webcams.windy.com/webcams/public/embed/player/${id}/day`;
+        || `https://webcams.windy.com/webcams/public/embed/player/${encodeURIComponent(id)}/day`;
       const loc = w.location || {};
       // Windy sometimes returns the literal string "unknown" for city/region.
       const clean = (v) => (v && !/^unknown$/i.test(String(v).trim()) ? v : "");
